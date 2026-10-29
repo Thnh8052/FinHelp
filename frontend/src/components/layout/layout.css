@@ -5,11 +5,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  height: 52px;
-  background-color: var(--bg-sidebar);
-  border-bottom: 1px solid var(--border-medium);
-  z-index: 20;
+  padding: 0 16px;
+  height: 54px;
+  background-color: var(--bg-sidebar, #101726);
+  border-bottom: 1px solid var(--border-medium, #22304d);
+  z-index: 25;
+  user-select: none;
 }
 
 .navbar-brand {
@@ -18,21 +19,66 @@
   gap: 10px;
 }
 
+.navbar-brand-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb 0%, #4338ca 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+.navbar-brand-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navbar-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .navbar-brand-title {
   font-weight: 700;
-  font-size: 15px;
-  color: var(--text-primary);
-  letter-spacing: -0.3px;
+  font-size: 14px;
+  color: var(--text-primary, #f8fafc);
+  letter-spacing: -0.2px;
+}
+
+.navbar-version-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: rgba(37, 99, 235, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  text-transform: uppercase;
 }
 
 .navbar-brand-subtitle {
   font-size: 11px;
-  color: var(--text-dim);
+  color: var(--text-dim, #94a3b8);
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border-medium);
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navbar-notebook-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .navbar-status-dot {
@@ -41,32 +87,76 @@
   border-radius: 50%;
   background-color: #10b981;
   box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  flex-shrink: 0;
 }
 
 .navbar-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   position: relative;
 }
 
-.navbar-export-btn {
+/* Nút Toggle Nguồn & Split-View trên Navbar */
+.navbar-action-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-medium);
-  color: var(--text-secondary);
-  font-size: 12px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background-color: var(--bg-card, #162034);
+  border: 1px solid var(--border-medium, #22304d);
+  color: var(--text-primary, #f8fafc);
+  font-size: 11.5px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.navbar-export-btn:hover {
-  color: var(--text-primary);
-  background-color: var(--bg-card-hover);
+.navbar-action-btn:hover {
+  background-color: #1c2840;
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #ffffff;
+}
+
+.navbar-action-btn.active {
+  background-color: #1c2840;
+  border-color: var(--accent-primary, #2563eb);
+  color: #60a5fa;
+}
+
+.navbar-action-btn.split-toggle {
+  background-color: rgba(37, 99, 235, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+.navbar-action-btn.split-toggle:hover {
+  background-color: rgba(37, 99, 235, 0.25);
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.navbar-source-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #64748b;
+  transition: background-color 0.2s ease;
+}
+
+.navbar-source-indicator.ready {
+  background-color: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
+}
+
+.navbar-divider {
+  width: 1px;
+  height: 16px;
+  background-color: var(--border-medium, #22304d);
+  margin: 0 2px;
 }
 
 .navbar-user-chip {
@@ -75,28 +165,28 @@
   gap: 8px;
   padding: 3px 8px 3px 4px;
   border-radius: 20px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-medium);
+  background-color: var(--bg-card, #162034);
+  border: 1px solid var(--border-medium, #22304d);
   cursor: pointer;
-  transition: all var(--transition);
+  transition: all 0.2s ease;
 }
 
 .navbar-user-chip:hover {
-  border-color: var(--text-dim);
+  border-color: #3b82f6;
 }
 
 .navbar-avatar {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background-color: var(--bg-card-hover);
-  border: 1.5px solid var(--border-medium);
+  background-color: #1e293b;
+  border: 1.5px solid var(--border-medium, #22304d);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text-primary, #f8fafc);
 }
 
 .navbar-avatar.admin {
@@ -108,7 +198,7 @@
 .navbar-username {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-primary, #f8fafc);
 }
 
 .navbar-role-badge {
@@ -116,8 +206,8 @@
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 3px;
-  background-color: var(--border-medium);
-  color: var(--text-muted);
+  background-color: var(--border-medium, #22304d);
+  color: var(--text-muted, #94a3b8);
   text-transform: uppercase;
 }
 
@@ -128,11 +218,11 @@
 
 .navbar-guest-badge {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-muted, #94a3b8);
   padding: 3px 8px;
   border-radius: 4px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-medium);
+  background-color: var(--bg-card, #162034);
+  border: 1px solid var(--border-medium, #22304d);
 }
 
 .navbar-guest-actions {
@@ -147,120 +237,195 @@
   gap: 5px;
   padding: 5px 12px;
   border-radius: 6px;
-  background-color: var(--accent-primary);
+  background-color: var(--accent-primary, #2563eb);
   color: #ffffff;
   border: none;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color var(--transition);
+  transition: background-color 0.2s ease;
 }
 
 .navbar-login-btn:hover {
-  background-color: var(--accent-hover);
+  background-color: #1d4ed8;
 }
 
-/* SplitLayout */
+/* SplitLayout 4-Zone Container */
 .split-layout {
   display: flex;
-  height: calc(100vh - 52px);
+  height: calc(100vh - 54px);
   width: 100%;
   overflow: hidden;
   position: relative;
+  background-color: var(--bg-app, #090d16);
 }
 
+/* 1. Sidebar Trái: Không còn gạch trắng, transition êm ái */
 .split-sidebar {
   width: 270px;
   min-width: 270px;
-  border-right: 1px solid var(--border-medium);
+  border-right: 1px solid var(--border-medium, #22304d);
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-sidebar);
+  background-color: var(--bg-sidebar, #101726);
   overflow: hidden;
-  transition: width 0.2s ease, min-width 0.2s ease;
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
-  z-index: 10;
+  z-index: 15;
 }
 
 .split-sidebar.collapsed {
-  width: 0;
-  min-width: 0;
+  width: 0 !important;
+  min-width: 0 !important;
   border-right: none;
-  display: none;
+  transform: translateX(-100%);
+  visibility: hidden;
+  pointer-events: none;
 }
 
-.split-toggle-btn {
-  position: absolute;
-  left: 258px;
-  top: 12px;
-  z-index: 30;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-medium);
+/* Nút Toggle Sidebar trên Navbar (Mockup V3) */
+.navbar-sidebar-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim, #94a3b8);
   cursor: pointer;
-  transition: left 0.2s ease, color var(--transition), background-color var(--transition);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-right: 4px;
+  flex-shrink: 0;
 }
 
-.split-toggle-btn:hover {
-  color: var(--text-primary);
-  background-color: var(--bg-card-hover);
+.navbar-sidebar-btn:hover {
+  color: #ffffff;
+  background-color: #162034;
+  border-color: var(--border-medium, #22304d);
 }
 
-.split-toggle-btn.collapsed {
-  left: 12px;
+.navbar-sidebar-btn.active {
+  color: #60a5fa;
+  background-color: rgba(37, 99, 235, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
+/* 2. Main Workspace: Chat Stream với co giãn linh hoạt */
 .split-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-app, #090d16);
+  overflow: hidden;
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), flex 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.split-main.flex-full {
+  flex: 1;
+}
+
+.split-main.chat-both-open {
+  width: 38%;
+  flex: none;
+  border-right: 1px solid var(--border-medium, #22304d);
+}
+
+.split-main.chat-split-open {
+  width: 45%;
+  flex: none;
+  border-right: 1px solid var(--border-medium, #22304d);
+}
+
+.split-main.chat-sources-open {
+  flex: 1;
+  border-right: 1px solid var(--border-medium, #22304d);
+}
+
+/* 3. Panel Nguồn phiên này (Sources Drawer ~320px bên phải - Chuẩn Mockup V3) */
+.split-sources-pane {
+  width: 320px;
+  min-width: 320px;
+  max-width: 340px;
+  border-left: 1px solid var(--border-medium, #22304d);
+  background-color: var(--bg-sidebar, #101726);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+              min-width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+              max-width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.2s ease;
+  z-index: 12;
+  opacity: 1;
+}
+
+.split-sources-pane.closed {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  border-left: none !important;
+  border-right: none !important;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* 4. Trình đọc BCTC PDF Split-View (~50-55% bên phải - Chuẩn Mockup V3) */
+.split-pdf-pane {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--bg-app);
-  overflow: hidden;
-}
-
-.split-evidence {
-  width: 360px;
-  min-width: 360px;
-  border-left: 1px solid var(--border-medium);
-  background-color: var(--bg-sidebar);
+  border-left: 1px solid var(--border-medium, #22304d);
+  background-color: var(--bg-app, #090d16);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: flex 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+              width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.2s ease;
   z-index: 10;
+  opacity: 1;
 }
 
-.split-evidence.closed {
-  width: 0;
-  min-width: 0;
-  border-left: none;
-  display: none;
+.split-pdf-pane.closed {
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  border-left: none !important;
+  border-right: none !important;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 /* Responsive Layout */
 @media (max-width: 1100px) {
-  .split-evidence {
+  .split-sources-pane {
     position: fixed;
-    top: 52px;
+    top: 54px;
     right: 0;
     bottom: 0;
-    width: 380px;
-    max-width: calc(100vw - 30px);
+    width: 320px;
     z-index: 45;
-    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+    box-shadow: -8px 0 25px rgba(0, 0, 0, 0.6);
+  }
+
+  .split-pdf-pane {
+    position: fixed;
+    top: 54px;
+    right: 0;
+    bottom: 0;
+    width: 600px;
+    max-width: 90vw;
+    z-index: 40;
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.7);
   }
 }
 
 @media (max-width: 768px) {
   .navbar {
-    padding: 0 12px;
+    padding: 0 10px;
   }
 
   .navbar-brand-subtitle {
@@ -271,61 +436,47 @@
     display: none;
   }
 
-  .navbar-export-btn span {
-    display: none;
-  }
-
-  .navbar-export-btn {
-    padding: 6px 8px;
-  }
-
   .split-sidebar {
     position: fixed;
-    top: 52px;
+    top: 54px;
     left: 0;
     bottom: 0;
     width: 270px;
     max-width: 85vw;
     z-index: 50;
-    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.6);
-    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.7);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     transform: translateX(0);
-    display: flex !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
   }
 
   .split-sidebar.collapsed {
-    transform: translateX(-100%);
-    display: flex !important;
+    transform: translateX(-100%) !important;
+    visibility: hidden !important;
     width: 270px !important;
     min-width: 270px !important;
   }
 
   .split-toggle-btn {
-    left: 12px;
+    left: 10px;
     top: 8px;
-    z-index: 35;
+    z-index: 55;
   }
 
   .split-toggle-btn:not(.collapsed) {
-    left: 256px;
+    left: 250px;
   }
 
   .split-sidebar-backdrop {
     position: fixed;
-    top: 52px;
+    top: 54px;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.65);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
     z-index: 48;
   }
-
-  .split-evidence {
-    width: 100vw;
-    max-width: 100vw;
-    top: 52px;
-  }
 }
-

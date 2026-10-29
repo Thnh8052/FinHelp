@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ChatMessage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
-import { CheckIcon, CopyIcon, PlusIcon, SendIcon } from "../common/Icons";
+import { MarkdownRenderer } from "./MarkdownRenderer";
+import { CheckIcon, ChevronRightIcon, CopyIcon, SendIcon } from "../common/Icons";
 import "./chat.css";
 
 interface ChatContainerProps {
@@ -12,6 +13,9 @@ interface ChatContainerProps {
   onClearChat?: () => void;
   sessionTitle?: string;
   onNewChat?: () => void;
+  onOpenSources?: () => void;
+  onToggleSources?: () => void;
+  isSourcesOpen?: boolean;
   /** Chưa chọn tài liệu nguồn: không cho gửi (hệ thống không tự đoán phạm vi). */
   hasSources?: boolean;
   /** Tài liệu nguồn đã chọn, để tag bằng @ (câu hỏi chỉ về các tài liệu được tag). */
@@ -24,12 +28,17 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   isLoading,
   onSelectCitation,
   sessionTitle,
-  onNewChat,
+  onNewChat: _onNewChat,
+  onOpenSources,
+  onToggleSources,
+  isSourcesOpen = false,
   hasSources = true,
   mentionOptions = [],
 }) => {
   const [input, setInput] = useState("");
   const [mentions, setMentions] = useState<string[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   // "@" vừa gõ ở cuối ô nhập: hiện danh sách tài liệu nguồn để chọn
   const mentionQuery = /(?:^|\s)@([^\s@]*)$/.exec(input)?.[1];
   const mentionMatches =
@@ -52,42 +61,57 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Tự động mở rộng độ cao thanh chat theo nội dung (Gemini & NotebookLM style)
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      const scrollHeight = textareaRef.current.scrollHeight;
+      // Min 26px (1 dòng), mở rộng tối đa 220px (~8-9 dòng), cuộn êm khi vượt quá
+      const newHeight = Math.min(Math.max(scrollHeight, 26), 220);
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  }, [input]);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!input.trim() || isLoading || !hasSources) return;
-    const tagged = mentions.filter((id) => mentionOptions.some((o) => o.document_id === id));
-    onSendMessage(input.trim(), tagged.length ? tagged : undefined);
+    const toSend = input;
+    const usedMentions = mentions.length > 0 ? mentions : undefined;
     setInput("");
     setMentions([]);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "26px";
+    }
+    onSendMessage(toSend, usedMentions);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      handleSubmit();
     }
   };
 
-  const handleCopyMessage = (msgId: string, content: string) => {
+  const handleCopy = (content: string, msgId: string) => {
     navigator.clipboard.writeText(content);
     setCopiedMsgId(msgId);
     setTimeout(() => setCopiedMsgId(null), 2000);
   };
 
   const samplePrompts = [
-    "So sánh Doanh thu (Total Revenue) giữa 2 kỳ gần nhất",
+    "So sánh Doanh thu (Total Revenue) giữa các kỳ gần nhất",
     "Biên lợi nhuận hoạt động (Operating Margin) đạt bao nhiêu?",
     "Phân tích Đòn bẩy tài chính và Nợ dài hạn (Long-term Debt)",
-    "Tóm tắt các rủi ro trọng yếu (Risk Factors) trong Form 10-K",
+    "Tóm tắt các rủi ro trọng yếu (Risk Factors) trong BCTC",
   ];
 
   const canSubmit = !isLoading && hasSources && !!input.trim();
 
   return (
     <div className="chat-container">
-      {/* Top Header Bar inside Chat Container (ChatGPT / Claude Style) */}
+      {/* Top Header Bar inside Chat Container: Context Bar Tinh Gọn (Mockup V3) */}
       <div className="chat-header">
         <div className="chat-header-title-box">
           <span className="chat-header-title">
@@ -95,12 +119,32 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           </span>
         </div>
 
-        {onNewChat && (
-          <button onClick={onNewChat} className="chat-new-btn">
-            <PlusIcon size={13} color="var(--accent-primary)" />
-            <span>Thêm đoạn chat mới</span>
-          </button>
-        )}
+        {/* Thanh Context hiển thị các nguồn đang được chọn để hỏi */}
+        <div className="chat-header-sources">
+          <span className="chat-sources-label">Đang hỏi trên:</span>
+          <div className="chat-sources-tags">
+            {mentionOptions && mentionOptions.length > 0 ? (
+              mentionOptions.map((opt) => (
+                <span key={opt.document_id} className="chat-source-tag">
+                  {opt.label}
+                </span>
+              ))
+            ) : (
+              <span className="chat-source-tag muted">Chưa chọn nguồn</span>
+            )}
+          </div>
+          {(onToggleSources || onOpenSources) && (
+            <button
+              type="button"
+              onClick={onToggleSources || onOpenSources}
+              className={`chat-manage-sources-btn ${isSourcesOpen ? "active" : ""}`}
+              title={isSourcesOpen ? "Đóng danh sách quản lý BCTC" : "Mở danh sách quản lý BCTC"}
+            >
+              <span>{isSourcesOpen ? "Đóng quản lý nguồn" : "Quản lý nguồn"}</span>
+              <ChevronRightIcon size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages Stream (Centered ChatGPT / Claude reading column) */}
@@ -132,7 +176,15 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 {/* Message Box */}
                 <div className={`chat-message-bubble ${isUser ? "user" : "assistant"}`}>
                   {!isUser && msg.understood && <div className="chat-understood">{msg.understood}</div>}
-                  <div className="chat-message-text">{msg.content}</div>
+                  {isUser ? (
+                    <div className="chat-message-text">{msg.content}</div>
+                  ) : (
+                    <MarkdownRenderer
+                      content={msg.content}
+                      citations={msg.citations}
+                      onSelectCitation={onSelectCitation}
+                    />
+                  )}
                   {!isUser && msg.alternatives && msg.alternatives.length > 0 && msg.query && (
                     <div className="chat-alternatives">
                       {msg.alternatives.map((a) => (
@@ -149,34 +201,37 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     </div>
                   )}
 
-                  {/* Citations (NotebookLM / Claude Style) */}
+                  {/* Grounded Evidence Citations */}
                   {msg.citations && msg.citations.length > 0 && (
-                    <div className="chat-citations-bar">
-                      <span className="chat-citations-label">Nguồn:</span>
-                      {/* Chỉ hiện đoạn câu trả lời thật sự dùng; số [n] giữ theo vị trí trong danh sách đầy đủ. Không đoạn nào được đánh dấu: hiện hết */}
-                      {(msg.citations.some((c) => c.cited) ? msg.citations.filter((c) => c.cited) : msg.citations).map((cite) => (
-                        <CitationBadge
-                          key={cite.citation_id}
-                          citation={cite}
-                          index={msg.citations!.indexOf(cite) + 1}
-                          onClick={() => onSelectCitation(cite)}
-                        />
-                      ))}
+                    <div className="chat-citations-container">
+                      <div className="chat-citations-title">
+                        Nguồn đối chiếu ({msg.citations.length}):
+                      </div>
+                      <div className="chat-citations-list">
+                        {msg.citations.map((cite, idx) => (
+                          <CitationBadge
+                            key={cite.citation_id}
+                            citation={cite}
+                            index={idx + 1}
+                            onClick={() => onSelectCitation(cite)}
+                          />
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  {/* Assistant Message Actions (Copy) */}
+                  {/* Actions: Copy */}
                   {!isUser && (
                     <div className="chat-message-actions">
                       <button
-                        onClick={() => handleCopyMessage(msg.message_id, msg.content)}
-                        className={`chat-action-btn ${copiedMsgId === msg.message_id ? "copied" : ""}`}
-                        title="Sao chép nội dung câu trả lời"
+                        onClick={() => handleCopy(msg.content, msg.message_id)}
+                        className="chat-copy-btn"
+                        title="Sao chép câu trả lời"
                       >
                         {copiedMsgId === msg.message_id ? (
                           <>
                             <CheckIcon size={12} color="#10b981" />
-                            <span>Đã sao chép</span>
+                            <span className="chat-copied-text">Đã sao chép</span>
                           </>
                         ) : (
                           <>
@@ -192,11 +247,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             );
           })}
 
-          {/* Loading Indicator */}
+          {/* Assistant Typing / Streaming Skeleton */}
           {isLoading && (
-            <div className="chat-loading-indicator">
-              <span className="chat-spinner" />
-              <span>Đang đối chiếu tài liệu và tính toán...</span>
+            <div className="chat-loading-row">
+              <span className="chat-sender-label">FinAnalyst</span>
+              <div className="chat-loading-bubble">
+                <div className="chat-loading-spinner" />
+                <span>Đang tra cứu dữ liệu BCTC và lập luận đối chiếu...</span>
+              </div>
             </div>
           )}
 
@@ -207,15 +265,21 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       {/* Floating Prompt Input Box (ChatGPT / Claude Style) */}
       <div className="chat-input-wrapper">
         <div className="chat-input-column">
-          {/* Quick suggestions when input is empty */}
+          {/* Quick suggestions when input is empty (Điền vào textarea thay vì gửi ngay) */}
           {messages.length <= 3 && (
             <div className="chat-sample-prompts">
+              <span className="chat-prompts-label">Gợi ý:</span>
               {samplePrompts.map((p, idx) => (
                 <button
                   key={idx}
-                  onClick={() => onSendMessage(p)}
+                  type="button"
+                  onClick={() => {
+                    setInput(p);
+                    textareaRef.current?.focus();
+                  }}
                   disabled={isLoading || !hasSources}
                   className="chat-sample-btn"
+                  title="Điền câu hỏi mẫu vào ô nhập"
                 >
                   {p}
                 </button>
@@ -245,13 +309,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           {/* Clean Input Pill Container */}
           <form onSubmit={handleSubmit} className="chat-input-form">
             <textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
                 hasSources
                   ? "Đặt câu hỏi về BCTC (ví dụ: So sánh doanh thu và tính tốc độ tăng trưởng)..."
-                  : "Hãy chọn tài liệu nguồn ở thanh phía trên trước khi đặt câu hỏi"
+                  : "Hãy chọn tài liệu nguồn ở thanh bên phải trước khi đặt câu hỏi"
               }
               disabled={isLoading || !hasSources}
               rows={1}

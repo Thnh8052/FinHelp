@@ -1,38 +1,48 @@
-import React, { useState, useEffect } from "react";
-import { ChevronLeftIcon, ChevronRightIcon } from "../common/Icons";
+import React, { useEffect } from "react";
 import "./layout.css";
 
 interface SplitLayoutProps {
   sidebar: React.ReactNode;
   main: React.ReactNode;
-  evidencePane?: React.ReactNode;
-  isEvidenceOpen?: boolean;
+  sourcesPane?: React.ReactNode;
+  isSourcesOpen?: boolean;
+  pdfViewerPane?: React.ReactNode;
+  isSplitViewOpen?: boolean;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export const SplitLayout: React.FC<SplitLayoutProps> = ({
   sidebar,
   main,
-  evidencePane,
-  isEvidenceOpen = false,
+  sourcesPane,
+  isSourcesOpen = false,
+  pdfViewerPane,
+  isSplitViewOpen = false,
+  isSidebarOpen = true,
+  onToggleSidebar,
 }) => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.innerWidth > 900;
-    }
-    return true;
-  });
-
   // Keyboard shortcut Ctrl+B / Cmd+B to toggle sidebar (ChatGPT/VSCode standard)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
-        setIsSidebarOpen((prev) => !prev);
+        onToggleSidebar?.();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [onToggleSidebar]);
+
+  // Compute dynamic width modifier for Main Chat workspace
+  let mainLayoutClass = "flex-full";
+  if (isSplitViewOpen && isSourcesOpen) {
+    mainLayoutClass = "chat-both-open"; // ~38% width
+  } else if (isSplitViewOpen && !isSourcesOpen) {
+    mainLayoutClass = "chat-split-open"; // ~45% width
+  } else if (!isSplitViewOpen && isSourcesOpen) {
+    mainLayoutClass = "chat-sources-open"; // flex-1 alongside sources
+  }
 
   return (
     <div className="split-layout">
@@ -40,34 +50,32 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
       {isSidebarOpen && (
         <div
           className="split-sidebar-backdrop"
-          onClick={() => setIsSidebarOpen(false)}
+          onClick={() => onToggleSidebar?.()}
         />
       )}
 
-      {/* 1. Left Sidebar: Chat Sessions History (Claude / ChatGPT Style) */}
+      {/* 1. Left Sidebar: Chat Sessions History */}
       <aside className={`split-sidebar ${!isSidebarOpen ? "collapsed" : ""}`}>
         {sidebar}
       </aside>
 
-      {/* Toggle Sidebar Button */}
-      <button
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        title={isSidebarOpen ? "Thu gọn danh sách chat (Ctrl+B)" : "Mở danh sách chat (Ctrl+B)"}
-        className={`split-toggle-btn ${!isSidebarOpen ? "collapsed" : ""}`}
-      >
-        {isSidebarOpen ? <ChevronLeftIcon size={12} /> : <ChevronRightIcon size={12} />}
-      </button>
-
-      {/* 2. Main Workspace: Active Document Banner & Chat Stream */}
-      <main className="split-main">
+      {/* 2. Main Workspace: Chat Stream */}
+      <main className={`split-main ${mainLayoutClass}`}>
         {main}
       </main>
 
-      {/* 3. Right Evidence Panel: Source Grounding Inspector (NotebookLM Style) */}
-      {evidencePane && (
-        <aside className={`split-evidence ${!isEvidenceOpen ? "closed" : ""}`}>
-          {evidencePane}
+      {/* 3. Sources Drawer: Session-Scoped Documents Manager (~320px) */}
+      {sourcesPane && (
+        <aside className={`split-sources-pane ${!isSourcesOpen ? "closed" : ""}`}>
+          {sourcesPane}
         </aside>
+      )}
+
+      {/* 4. PDF Split-View Pane: Audited Financial Statements Reader (~50-55%) */}
+      {pdfViewerPane && (
+        <section className={`split-pdf-pane ${!isSplitViewOpen ? "closed" : ""}`}>
+          {pdfViewerPane}
+        </section>
       )}
     </div>
   );

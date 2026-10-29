@@ -85,8 +85,12 @@ class RAGWorkflowOrchestrator:
         notes += targets.notes
         typed = [document_label(d) for d in scope if d.metadata.user_override_unverified]
         if typed:
-            notes.append("The identity of these sources was typed by the user and is not printed in the documents: " + "; ".join(typed)
-                         + ". When you name them, say that the company / period comes from the user's input.")
+            if decision.lang == "vi":
+                notes.append("Thông tin nhận diện của các tài liệu này do người dùng nhập và không có trong tài liệu: " + "; ".join(typed)
+                             + ". Khi nêu tên chúng, hãy nêu rõ công ty / kỳ báo cáo xuất phát từ thông tin người dùng nhập.")
+            else:
+                notes.append("The identity of these sources was typed by the user and is not printed in the documents: " + "; ".join(typed)
+                             + ". When you name them, say that the company / period comes from the user's input.")
         # the unlisted-company check (an LLM call when the question writes a name no source carries) runs while the search runs;
         # a refusal cancels the search and answers at once
         search = asyncio.create_task(self.retrieve(query, notebook_id, scope, targets.document_ids, targets.uncertain))

@@ -1,4 +1,5 @@
 import threading
+from pathlib import Path
 from typing import List, Sequence, Tuple
 
 import numpy as np
@@ -39,13 +40,21 @@ class QwenRerankerService:
                 from transformers import AutoModelForCausalLM, AutoTokenizer
 
                 device = resolve_device()
-                logger.info(f"Loading reranker {settings.RERANKER_MODEL} on {device}...")
-                tok = AutoTokenizer.from_pretrained(settings.RERANKER_MODEL, padding_side="left")
+                local_dir = Path(settings.RERANKER_LOCAL_DIR) if getattr(settings, "RERANKER_LOCAL_DIR", None) else None
+                use_local = bool(local_dir and (local_dir / "model.safetensors").exists())
+                source = str(local_dir) if use_local else settings.RERANKER_MODEL
+
+                logger.info(f"Loading reranker {source} on {device} (local={use_local})...")
+                tok = AutoTokenizer.from_pretrained(source, padding_side="left", local_files_only=use_local)
                 dtype = torch.float16 if device == "cuda" else torch.float32
                 if device.startswith("cuda"):  # the weights go straight to the card, not through a copy in RAM
-                    model = AutoModelForCausalLM.from_pretrained(settings.RERANKER_MODEL, dtype=dtype, device_map=device).eval()
+                    model = AutoModelForCausalLM.from_pretrained(
+                        source, dtype=dtype, device_map=device, local_files_only=use_local
+                    ).eval()
                 else:
-                    model = AutoModelForCausalLM.from_pretrained(settings.RERANKER_MODEL, dtype=dtype).to(device).eval()
+                    model = AutoModelForCausalLM.from_pretrained(
+                        source, dtype=dtype, local_files_only=use_local
+                    ).to(device).eval()
                 cls._tok, cls._model = tok, model
                 cls._ids = (tok.convert_tokens_to_ids("no"), tok.convert_tokens_to_ids("yes"))
             return cls._tok, cls._model, cls._ids

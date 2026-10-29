@@ -11,11 +11,13 @@ interface CitationBadgeProps {
 export const CitationBadge: React.FC<CitationBadgeProps> = ({ citation, onClick, index }) => {
   return (
     <button
+      type="button"
       onClick={onClick}
-      title={`Xem nguồn tại Trang ${citation.page}`}
+      title={`Xem nguồn trích dẫn [${index || ""}] tại Trang ${citation.page}`}
       className="citation-badge"
     >
-      <span>{index ? `[${index}]` : `[Trang ${citation.page}]`}</span>
+      {index && <span className="citation-badge-index">[{index}]</span>}
+      <span className="citation-badge-page">Trang {citation.page}</span>
     </button>
   );
 };

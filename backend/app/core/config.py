@@ -1,3 +1,6 @@
+import os
+# PyTorch CUDA Allocator: chong phan manh VRAM va tu dong nha cache tren Windows
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:128,garbage_collection_threshold:0.8")
 from pathlib import Path
 from typing import List, Optional
 from pydantic import Field, model_validator
@@ -76,6 +79,7 @@ class Settings(BaseSettings):
     EMBEDDING_MAX_LENGTH: int = 1280
     QUERY_MAX_LENGTH: int = 512
     RERANKER_MODEL: str = "Qwen/Qwen3-Reranker-0.6B"
+    RERANKER_LOCAL_DIR: str = str(BASE_DIR / "storage" / "models" / "qwen3-reranker-0.6b")  # local safetensors copy; empty or missing = load RERANKER_MODEL from hub
     RERANK_ENABLED: bool = True
     SUBQUERY_COUNT: int = 3
     FIRST_STAGE_LIMIT: int = 200
@@ -137,7 +141,7 @@ class Settings(BaseSettings):
     GPU_MEMORY_FRACTION: float = 0.85
 
     # Generation: prompt "v2" is the measured one (121/150). "v1" is the stricter, refusal-prone prompt (118/150).
-    GENERATION_PROMPT: str = "v3"  # production: v3 (answer first, [n] citations, says what is missing, excerpts are data; docs/GENERATOR_PROMPT_V3_DRAFT.md)
+    GENERATION_PROMPT: str = "v4"
     # A2: an answer with a figure the excerpts do not show, a citation to no excerpt or to another company / period is rewritten once
     # with the list of problems; what is still wrong after that is flagged in the answer ("chưa kiểm chứng"), never silently kept.
     ANSWER_REPAIR_ENABLED: bool = True

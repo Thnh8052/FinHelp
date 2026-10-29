@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Navbar } from "./components/layout/Navbar";
 import { SplitLayout } from "./components/layout/SplitLayout";
-import { DocumentContextBar } from "./components/notebook/DocumentContextBar";
+import { DocumentManager } from "./components/notebook/DocumentManager";
 import { SourceViewer } from "./components/notebook/SourceViewer";
 import { ChatContainer } from "./components/chat/ChatContainer";
 import { ChatHistoryList } from "./components/chat/ChatHistoryList";
@@ -17,9 +17,13 @@ import "./App.css";
 export const App: React.FC = () => {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [adminDashboardOpen, setAdminDashboardOpen] = useState(false);
-  // Panel đối chiếu trích dẫn nguồn bên phải (Evidence Viewer)
-  const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
+
+  // Trạng thái điều khiển các Panel (Mockup V3)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSourcesOpen, setIsSourcesOpen] = useState(false);
+  const [isSplitViewOpen, setIsSplitViewOpen] = useState(false);
   const [activeCitation, setActiveCitation] = useState<CitationItem | null>(null);
+
   // Mẫu xác nhận / sửa thông tin tài liệu (catalog) đang mở cho tài liệu nào
   const [catalogDocId, setCatalogDocId] = useState<string | null>(null);
 
@@ -29,13 +33,18 @@ export const App: React.FC = () => {
   const activeSession = chat.sessions.find((s) => s.session_id === chat.currentSessionId);
   const activeSessionTitle = activeSession?.title || (isAuthenticated ? "Hội thoại tài chính" : "Phiên dùng thử (Khách)");
 
+  // Khi click vào trích dẫn [1] Trang 12: Tự động mở Split-View, chuyển đúng tài liệu và nhảy tới trang đó
   const handleSelectCitation = (citation: CitationItem) => {
     setActiveCitation(citation);
-    setIsEvidenceOpen(true);
+    if (citation.document_id) {
+      docs.setActiveDocId(citation.document_id);
+    }
+    setIsSplitViewOpen(true);
   };
 
   return (
     <div className="app-container">
+      {/* Modal chỉnh sửa thông tin BCTC (Catalog) */}
       <CatalogForm
         documentId={catalogDocId}
         onClose={() => setCatalogDocId(null)}
@@ -45,19 +54,28 @@ export const App: React.FC = () => {
         }}
       />
 
-      {/* Top-Center Toast Notification (Không dùng Pop-up Confirm) */}
+      {/* Top-Center Toast Notification */}
       <Toast toast={toast} onClose={closeToast} />
 
-      {/* Top Minimalist Header */}
+      {/* Top Minimalist Header với 2 nút Toggle (Mockup V3) */}
       <Navbar
         notebookTitle={notebookTitle}
+        sourcesCount={docs.documents.length}
+        isSourcesOpen={isSourcesOpen}
+        onToggleSources={() => setIsSourcesOpen((prev) => !prev)}
+        isSplitViewOpen={isSplitViewOpen}
+        onToggleSplitView={() => setIsSplitViewOpen((prev) => !prev)}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         onExportReport={() => showToast("Báo cáo phân tích đã được lưu.", "success")}
         onOpenAuthModal={() => setAuthModalOpen(true)}
         onOpenAdminDashboard={() => setAdminDashboardOpen(true)}
       />
 
-      {/* Main 3-Zone Financial Workstation */}
+      {/* Main 4-Zone Workstation (Sidebar | Chat | Sources Drawer | PDF Split-View) */}
       <SplitLayout
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         sidebar={
           <ChatHistoryList
             sessions={chat.sessions}
@@ -70,25 +88,7 @@ export const App: React.FC = () => {
         }
         main={
           <div className="main-workspace-flow">
-            {/* Thanh tài liệu BCTC đang phân tích (Document Context Bar) */}
-            <DocumentContextBar
-              document={docs.activeDoc}
-              documents={docs.documents}
-              onSelectDoc={docs.setActiveDocId}
-              selectedIds={docs.selectedDocIds}
-              onToggleDoc={docs.toggleSelected}
-              onUpload={docs.upload}
-              onDeleteDocument={docs.remove}
-              isUploading={docs.isUploading}
-              isDeleting={docs.isDeleting}
-              isAnalyzing={chat.isLoading}
-              isEvidenceOpen={isEvidenceOpen}
-              onToggleEvidence={() => setIsEvidenceOpen(!isEvidenceOpen)}
-              hasActiveCitation={!!activeCitation}
-              onEditCatalog={(docId) => setCatalogDocId(docId)}
-            />
-
-            {/* Tài liệu chưa xác minh được công ty / kỳ: phải xác nhận trước khi hỏi (backend cũng chặn) */}
+            {/* Banner yêu cầu xác nhận công ty/kỳ báo cáo nếu có */}
             {unconfirmedDocs.length > 0 && (
               <div className="catalog-confirm-banner" role="status">
                 <span>
@@ -110,6 +110,9 @@ export const App: React.FC = () => {
               onClearChat={() => chat.setMessages([])}
               sessionTitle={activeSessionTitle}
               onNewChat={chat.newChat}
+              onOpenSources={() => setIsSourcesOpen((prev) => !prev)}
+              onToggleSources={() => setIsSourcesOpen((prev) => !prev)}
+              isSourcesOpen={isSourcesOpen}
               hasSources={docs.selectedDocIds.length > 0}
               mentionOptions={docs.documents
                 .filter((d) => docs.selectedDocIds.includes(d.document_id))
@@ -117,17 +120,38 @@ export const App: React.FC = () => {
             />
           </div>
         }
-        evidencePane={
-          <SourceViewer
-            activeCitation={activeCitation}
-            onClearCitation={() => {
-              setActiveCitation(null);
-              setIsEvidenceOpen(false);
+        sourcesPane={
+          <DocumentManager
+            documents={docs.documents}
+            activeDocId={docs.activeDocId}
+            selectedDocIds={docs.selectedDocIds}
+            onSelectDoc={docs.setActiveDocId}
+            onToggleDoc={docs.toggleSelected}
+            onToggleAllDocs={docs.toggleAll}
+            onOpenDocPdf={(doc) => {
+              docs.setActiveDocId(doc.document_id);
+              setIsSplitViewOpen(true);
             }}
-            documentName={docs.activeDoc?.file_name}
+            onUploadFiles={docs.uploadFiles}
+            onDeleteDocument={docs.remove}
+            onEditCatalog={(docId) => setCatalogDocId(docId)}
+            onClose={() => setIsSourcesOpen(false)}
+            isUploading={docs.isUploading}
+            isDeleting={docs.isDeleting}
           />
         }
-        isEvidenceOpen={isEvidenceOpen}
+        isSourcesOpen={isSourcesOpen}
+        pdfViewerPane={
+          <SourceViewer
+            documents={docs.documents}
+            activeDocId={docs.activeDocId}
+            onSelectDoc={docs.setActiveDocId}
+            activeCitation={activeCitation}
+            onClearCitation={() => setActiveCitation(null)}
+            onClose={() => setIsSplitViewOpen(false)}
+          />
+        }
+        isSplitViewOpen={isSplitViewOpen}
       />
 
       {/* Auth Modal (Đăng nhập / Đăng ký / Quên mật khẩu) */}
