@@ -1,0 +1,8 @@
+# Local models + PDF parsing for the research core. Install AFTER requirements.txt.
+# GPU (recommended, 4 GB VRAM is enough): install the CUDA build of torch first:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+torch>=2.6
+transformers>=5.0     # tokenizer + Qwen3-Reranker; AutoModelForCausalLM(dtype=...) as used in the research
+FlagEmbedding>=1.3    # BGE-M3 embeddings
+docling==2.127.0      # the version the postprocess rules were measured on; do not upgrade blindly
+pymupdf>=1.24         # postprocess evidence + the fast "pymupdf" parser engine

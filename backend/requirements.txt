@@ -1,0 +1,29 @@
+# FastAPI & Web Server
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+email-validator>=2.1.0
+python-multipart>=0.0.9
+
+# Databases
+motor>=3.3.2          # Async MongoDB driver
+pymongo>=4.6.2        # Sync MongoDB driver (for migrations/tools)
+qdrant-client>=1.16.0 # >=1.16: AsyncQdrantClient.search() was removed, retrieval uses query_batch_points()
+
+# Authentication & Security
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0         # used directly in app/core/security.py (passlib is not used)
+
+# Financial Math & Utilities
+# Note: Financial calculations use Python's built-in decimal.Decimal for exact precision
+
+# Retrieval & NLP
+numpy>=1.26.0
+httpx>=0.27.0         # Async HTTP client for the LLM API
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+
+# Local models (BGE-M3 embeddings, Qwen3 reranker) and PDF parsing (Docling): see requirements-ml.txt

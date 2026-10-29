@@ -1,0 +1,96 @@
+/* Financial Analytics Components Styling */
+
+.calc-card {
+  background-color: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border-medium);
+  padding: 12px 14px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.calc-title-box {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.calc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.calc-currency {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.calc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px 10px;
+  background-color: var(--bg-app);
+  border-radius: 6px;
+}
+
+.calc-metric-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: block;
+}
+
+.calc-metric-val {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.calc-metric-val.current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.calc-metric-val.growth {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.calc-metric-val.growth.positive {
+  color: var(--positive);
+}
+
+.calc-metric-val.growth.negative {
+  color: var(--negative);
+}
+
+.calc-note {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 520px) {
+  .calc-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .calc-grid > div:last-child {
+    grid-column: span 2;
+  }
+}
+

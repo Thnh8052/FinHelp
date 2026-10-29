@@ -1,0 +1,31 @@
+# Các thư mục (Folders)
+.agents/
+graphify-out/
+tasks/
+docs/
+node_modules/
+.vscode/
+pdfs/
+artifacts/
+storage/
+dist/
+# Các file cụ thể (Specific files)
+run.md
+version_control.md
+
+# Các file Excel và PDF (Đuôi mở rộng)
+*.xlsx
+*.xls
+*.xlsm
+*.pdf
+*.zip
+
+# File liên quan đến bảo mật và cấu hình môi trường
+.env
+.env.*
+__pycache__/
+*.pyc
+.venv/
+venv/
+env
+*.yml

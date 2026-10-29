@@ -1,0 +1,9 @@
+# graphify: the code graph only (no docs, stored artifacts, build output or dependencies)
+backups/
+backend/storage/
+backend/.venv/
+frontend/node_modules/
+frontend/dist/
+docs/
+*.md
+graphify-out/
