@@ -38,8 +38,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           className="inline-citation-pill"
           title={
             targetCitation
-              ? `Xem nguồn tại Trang ${targetCitation.page}`
-              : `Trích dẫn nguồn [${citeNum}]`
+              ? `View source at Page ${targetCitation.page}`
+              : `Source citation [${citeNum}]`
           }
           onClick={(e) => {
             e.stopPropagation();
@@ -119,12 +119,16 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const isDeltaNegative =
               plainText.startsWith("-") ||
               plainText.startsWith("−") ||
+              plainText.toLowerCase().includes("decrease") ||
+              plainText.toLowerCase().includes("decline") ||
               plainText.toLowerCase().includes("giảm");
             const isDeltaPositive =
               plainText.startsWith("+") ||
               (plainText.includes("%") &&
                 !plainText.startsWith("-") &&
                 !plainText.startsWith("−") &&
+                !plainText.toLowerCase().includes("decrease") &&
+                !plainText.toLowerCase().includes("decline") &&
                 !plainText.toLowerCase().includes("giảm"));
 
             let cellClass = "financial-td";
@@ -151,8 +155,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 </div>
               );
             }
-            // Footnote / table note styling: starts with *Ghi chú:, Ghi chú:, *Lưu ý:
+            // Footnote / table note styling: starts with *Note:, Note:, *Ghi chú:, Ghi chú:
             if (
+              rawText.startsWith("*Note:") ||
+              rawText.startsWith("Note:") ||
               rawText.startsWith("*Ghi chú:") ||
               rawText.startsWith("Ghi chú:") ||
               rawText.startsWith("*Lưu ý:")

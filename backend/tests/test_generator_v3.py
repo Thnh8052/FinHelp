@@ -1,4 +1,4 @@
-from app.services.rag_workflow.generator import build_messages, final_answer, is_refusal, split_answer
+from app.modules.generation.generator import build_messages, final_answer, is_refusal, split_answer
 
 ANSWER = ("Air Canada had the higher revenue in 2024 [3].\n"
           '<answer_meta>{"status": "answered", "short_answer": "Air Canada, by CAD 1,651 million", "citations": [1, 3]}</answer_meta>')
@@ -59,7 +59,7 @@ def test_v4_messages_and_structured_generation(monkeypatch):
 
 
 def test_fallback_short_answer_with_table_and_abbreviations():
-    from app.services.rag_workflow.generator import _fallback_short_answer
+    from app.modules.generation.generator import _fallback_short_answer
 
     ans_single = "In FY2023, Apple Inc. reported revenue of **USD 383,285 million** [1]. This was lower than FY2022."
     assert _fallback_short_answer(ans_single) == "In FY2023, Apple Inc. reported revenue of USD 383,285 million [1]"

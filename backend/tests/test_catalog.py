@@ -3,7 +3,7 @@ import json
 
 import httpx
 
-from app.services.ingestion import catalog
+from app.modules.ingestion import catalog
 
 PAGES = {
     1: "## ROGERS COMMUNICATIONS INC.\nConsolidated Financial Statements\nDecember 31, 2023\nFormerly Rogers Cable Inc.",
@@ -69,7 +69,7 @@ def test_prompt_has_first_pages_outline_and_no_file_name():
 
 
 def test_interim_quarter_from_year_to_date_columns():
-    from app.services.ingestion.catalog import card_metadata, interim_quarter
+    from app.modules.ingestion.catalog import card_metadata, interim_quarter
     six = {1: "| | Three Months Ended June 30, 2023 | Six Months Ended June 30, 2023 |"}
     assert interim_quarter(six) == 2
     assert interim_quarter({1: "Thirteen weeks ended Oct 29, 2022 | Thirty-nine weeks ended Oct 29, 2022"}) == 3
@@ -84,7 +84,7 @@ def test_interim_quarter_from_year_to_date_columns():
 def test_vlm_fallback_accepts_a_logo_name_and_is_used_only_when_needed(monkeypatch, tmp_path):
     import asyncio
     import json as _json
-    from app.services.ingestion import catalog
+    from app.modules.ingestion import catalog
 
     pages = [{"page_number": 1, "text": "Consolidated Statements of Operations\n| | 2024 | 2023 |\n|---|---|---|\n| Revenue | 1 | 2 |"}]
     card = {"entity": "Air Canada", "doc_type": "annual financial statements", "period_end": "2024-12-31", "fiscal_period": "2024"}
@@ -106,7 +106,7 @@ def test_vlm_fallback_accepts_a_logo_name_and_is_used_only_when_needed(monkeypat
 
 async def test_catalog_through_the_api_uses_the_measured_prompt_and_the_same_checks(monkeypatch):
     from app.core.config import settings
-    from app.services.llm.llm_client import LLMUnavailableError
+    from app.modules.generation.llm_client import LLMUnavailableError
 
     pages = [{"page_number": n, "text": t} for n, t in PAGES.items()]
     monkeypatch.setattr(settings, "CATALOG_ENABLED", True)

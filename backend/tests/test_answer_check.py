@@ -1,4 +1,4 @@
-from app.services.answer_check.numbers import check_numbers
+from app.modules.generation.answer_check.numbers import check_numbers
 
 TABLE = [{"content": "| | 2019 | 2015 |\n|---|---:|---:|\n| Income from operations | 2,321 | 2,197 |\n| Total revenue | 10,800 | 8,592 |\n"
                      "| Net income (loss) | (1,016) | 1,725 |"}]

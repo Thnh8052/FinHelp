@@ -1,0 +1,53 @@
+%% =========================================================================
+%% Quy trình Xử lý RAG Phân tích BCTC Đầu cuối (E2E Financial RAG Pipeline)
+%% Sinh viên: Vương Văn Thành (20225094) - ĐHBK Hà Nội (HUST)
+%% =========================================================================
+
+flowchart TD
+  Start(["🚀 Bắt đầu: Người dùng gửi câu hỏi\n(Ví dụ: So sánh biên lợi nhuận ròng FPT và CMG)"]) --> S1
+
+  subgraph Stage1 ["GIAI ĐOẠN 1: ĐỊNH TUYẾN & PHÂN RÃ CÂU HỎI (Query Router)"]
+    S1["1.1 Xác định phạm vi tài liệu (Target Resolver)\n- Kiểm tra danh sách BCTC đang chọn\n- Đối chiếu mã cổ phiếu, năm tài chính"]
+    S2{"1.2 Phân loại phạm vi\n(Scope Type?)"}
+    S1 --> S2
+    S2 -->|"Đơn tài liệu (Single Doc)"| S3A["Giữ nguyên phạm vi 1 BCTC"]
+    S2 -->|"Đa tài liệu (Multi-Doc Comparison)"| S3B["Tách câu hỏi theo từng công ty\n(Sub-query Decomposer: Sub1=FPT, Sub2=CMG)"]
+  end
+
+  S3A --> S4
+  S3B --> S4
+
+  subgraph Stage2 ["GIAI ĐOẠN 2: TRUY XUẤT LAI ĐA TẦNG (Hybrid Retrieval)"]
+    S4["2.1 Nhúng đa phương thức bằng BGE-M3\n- Dense Vector (1024 chiều)\n- Sparse Lexical Weight Vector"]
+    S5["2.2 Tìm kiếm song song trên Qdrant\n- Dense Semantic Match\n- Sparse Keyword Match (BM25 equivalent)\n(Lọc theo document_id đã định tuyến)"]
+    S6["2.3 Hợp nhất kết quả bằng RRF (Reciprocal Rank Fusion)\n- Câu hỏi gốc: Hệ số 2.0x\n- Các câu hỏi thành phần: Hệ số 1.0x\n(Thu được Pool 20 đoạn văn bản tiềm năng)"]
+    S4 --> S5 --> S6
+  end
+
+  subgraph Stage3 ["GIAI ĐOẠN 3: TÁI XẾP HẠNG CHÍNH XÁC CAO (Reranking)"]
+    S7["3.1 Mô hình Qwen Reranker tính điểm Cross-Encoder"]
+    S8["3.2 Lọc top 6 đoạn văn bản có độ liên quan cao nhất\n(Kèm theo bảng biểu và tiêu đề mục BCTC)"]
+    S6 --> S7 --> S8
+  end
+
+  subgraph Stage4 ["GIAI ĐOẠN 4: SINH CÂU TRẢ LỜI CÓ CẤU TRÚC (Generation)"]
+    S9["4.1 Xây dựng Prompt Ngữ cảnh (Financial Prompt v3)\n- Đưa top chunks, công thức yêu cầu, định dạng bảng"]
+    S10["4.2 LLM sinh câu trả lời (DeepSeek)\n- Phân tích xu hướng, so sánh chỉ số\n- Gắn thẻ trích dẫn [1], [2] tương ứng với trang"]
+    S8 --> S9 --> S10
+  end
+
+  subgraph Stage5 ["GIAI ĐOẠN 5: KIỂM CHỨNG SỐ LIỆU ĐỘC LẬP (Answer Verification)"]
+    S11["5.1 Trích xuất toàn bộ con số và phép tính trong câu trả lời"]
+    S12["5.2 Đối chiếu số liệu với đoạn văn bản nguồn gốc\n(Kiểm tra: Sai lệch số liệu, tính toán sai, trích dẫn rác)"]
+    S13{"5.3 Kết quả kiểm chứng?"}
+    S11 --> S12 --> S13
+    S13 -->|"Khớp số liệu 100%"| S14A["Gắn nhãn: ✓ Grounded & Verified"]
+    S13 -->|"Phát hiện chênh lệch"| S14B["Gắn nhãn cảnh báo: ⚠️ Số liệu cần xác minh lại"]
+  end
+
+  S10 --> S11
+  S14A --> End
+  S14B --> End
+
+  End(["🎯 Hoàn thành: Trả về câu trả lời cho Frontend\n(Hiển thị bảng phân tích + trích dẫn tương tác để nhảy trang PDF)"])
+

@@ -13,11 +13,11 @@ export const CitationBadge: React.FC<CitationBadgeProps> = ({ citation, onClick,
     <button
       type="button"
       onClick={onClick}
-      title={`Xem nguồn trích dẫn [${index || ""}] tại Trang ${citation.page}`}
+      title={`View source citation [${index || ""}] at Page ${citation.page}`}
       className="citation-badge"
     >
       {index && <span className="citation-badge-index">[{index}]</span>}
-      <span className="citation-badge-page">Trang {citation.page}</span>
+      <span className="citation-badge-page">Page {citation.page}</span>
     </button>
   );
 };

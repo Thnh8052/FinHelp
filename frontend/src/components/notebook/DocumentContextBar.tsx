@@ -91,17 +91,17 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
   const canOpenSourceList = documents.length > 0 && (!!onSelectDoc || multiSelect);
   const buttonLabel = multiSelect
     ? selectedIds.length === 0
-      ? "Chọn tài liệu nguồn"
+      ? "Select source filings"
       : selectedIds.length === 1
-      ? documents.find((d) => d.document_id === selectedIds[0])?.file_name ?? "1 nguồn đã chọn"
-      : `${selectedIds.length} nguồn đã chọn`
+      ? documents.find((d) => d.document_id === selectedIds[0])?.file_name ?? "1 filing selected"
+      : `${selectedIds.length} filings selected`
     : document
     ? document.file_name
-    : "Chưa chọn tài liệu";
+    : "No filing selected";
 
   return (
     <div className="doc-context-bar">
-      {/* Thông tin tài liệu BCTC */}
+      {/* Document info */}
       <div className="doc-context-info">
         <div className="doc-context-icon">
           <FileTextIcon size={16} color="var(--accent-primary)" />
@@ -115,7 +115,7 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
                   type="button"
                   onClick={() => setDropdownOpen(!dropdownOpen)}
                   className="doc-selector-btn"
-                  title="Mở danh sách nguồn tài liệu"
+                  title="Open sources list"
                   aria-expanded={dropdownOpen}
                   aria-haspopup="dialog"
                 >
@@ -124,7 +124,7 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
                 </button>
 
                 {dropdownOpen && (
-                  <div className="doc-selector-menu" role="dialog" aria-label="Danh sách nguồn tài liệu">
+                  <div className="doc-selector-menu" role="dialog" aria-label="Sources list">
                     {documents.map((d) => {
                       const checked = multiSelect
                         ? selectedIds.includes(d.document_id)
@@ -139,7 +139,7 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
                               type="checkbox"
                               checked={checked}
                               onChange={() => onToggleDoc!(d.document_id)}
-                              aria-label={`Dùng ${d.file_name} làm nguồn cho câu hỏi`}
+                              aria-label={`Use ${d.file_name} for queries`}
                             />
                           )}
                           <button
@@ -162,7 +162,7 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
                                 onEditCatalog(d.document_id);
                               }}
                             >
-                              Thông tin
+                              Details
                             </button>
                           )}
                           <button
@@ -172,12 +172,12 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
                               setDeleteTarget(d);
                               setDropdownOpen(false);
                             }}
-                            aria-label={`Xóa ${d.file_name}`}
-                            title={`Xóa ${d.file_name}`}
+                            aria-label={`Delete ${d.file_name}`}
+                            title={`Delete ${d.file_name}`}
                             disabled={isDeleting}
                           >
                             <TrashIcon size={14} />
-                            <span>Xóa</span>
+                            <span>Delete</span>
                           </button>
                         </div>
                       );
@@ -188,9 +188,9 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
             ) : (
               <span
                 className="doc-context-name"
-                title={document?.file_name || "Chưa chọn tài liệu"}
+                title={document?.file_name || "No filing selected"}
               >
-                {document ? document.file_name : "Chưa tải lên Báo cáo tài chính"}
+                {document ? document.file_name : "No financial report uploaded"}
               </span>
             )}
 
@@ -200,47 +200,47 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
             {isUploading ? (
               <>
                 <span className="doc-status-dot processing" />
-                <span>Đang xử lý & trích xuất dữ liệu BCTC...</span>
+                <span>Processing and extracting filing data...</span>
               </>
             ) : isAnalyzing ? (
               <>
                 <span className="doc-status-dot processing" />
-                <span>Đang đối chiếu dữ liệu & tính toán chỉ số...</span>
+                <span>Verifying metrics &amp; calculating ratios...</span>
               </>
             ) : isDocProcessing(document) ? (
               <>
                 <span className="doc-status-dot processing" />
-                <span>Đang xử lý tài liệu (bảng biểu, số liệu)... có thể mất vài phút</span>
+                <span>Processing document layout and tables...</span>
               </>
             ) : document?.parsing_status === "failed" ? (
               <>
                 <span className="doc-status-dot idle" />
-                <span>Không xử lý được tài liệu • Vui lòng tải lên lại</span>
+                <span>Failed to process document • Please try uploading again</span>
               </>
             ) : document ? (
               <>
                 <span className="doc-status-dot" />
                 <span>
-                  {document.page_count ? `${document.page_count} trang • ` : ""}
-                  Hệ thống hoạt động • Sẵn sàng phân tích
+                  {document.page_count ? `${document.page_count} pages • ` : ""}
+                  System active • Ready for analysis
                 </span>
               </>
             ) : (
               <>
                 <span className="doc-status-dot idle" />
-                <span>Chưa nạp tài liệu • Tải file PDF báo cáo tài chính để bắt đầu</span>
+                <span>No filings loaded • Upload a PDF report to begin</span>
               </>
             )}
           </div>
         </div>
       </div>
 
-      {/* Hành động: Upload BCTC & Bật/Tắt bảng đối chiếu */}
+      {/* Action buttons */}
       <div className="doc-context-actions">
-        {/* Nút Upload / Đổi file */}
+        {/* Upload Button */}
         <label className={`doc-upload-btn ${isUploading ? "disabled" : ""}`}>
           <UploadCloudIcon size={13} />
-          <span>{isUploading ? "Đang xử lý PDF..." : document ? "Thêm PDF" : "Tải lên PDF"}</span>
+          <span>{isUploading ? "Processing PDF..." : document ? "Add PDF" : "Upload PDF"}</span>
           <input
             type="file"
             accept=".pdf"
@@ -250,29 +250,29 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
           />
         </label>
 
-        {/* Nút Bật / Tắt Bảng đối chiếu nguồn */}
+        {/* Evidence Toggle */}
         <button
           onClick={onToggleEvidence}
-          title={isEvidenceOpen ? "Ẩn bảng đối chiếu nguồn" : "Mở bảng đối chiếu nguồn"}
+          title={isEvidenceOpen ? "Hide citations drawer" : "Open citations drawer"}
           className={`doc-evidence-toggle-btn ${isEvidenceOpen ? "active" : ""}`}
         >
           <CheckShieldIcon size={13} color={isEvidenceOpen ? "var(--accent-primary)" : "currentColor"} />
-          <span>Đối chiếu nguồn {hasActiveCitation ? "•" : ""}</span>
+          <span>Verified Citations {hasActiveCitation ? "•" : ""}</span>
         </button>
       </div>
 
       {deleteTarget && (
         <div className="doc-delete-confirm" role="alertdialog" aria-modal="true" aria-labelledby="doc-delete-title" aria-describedby="doc-delete-description">
-          <p id="doc-delete-title" className="doc-delete-confirm-title">Xóa tài liệu?</p>
+          <p id="doc-delete-title" className="doc-delete-confirm-title">Delete document?</p>
           <p id="doc-delete-description" className="doc-delete-confirm-description">
-            “{deleteTarget.file_name}” và dữ liệu phân tích liên quan sẽ bị xóa vĩnh viễn.
+            “{deleteTarget.file_name}” and its indexed data will be permanently removed.
           </p>
           <div className="doc-delete-confirm-actions">
             <button ref={cancelDeleteRef} type="button" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
-              Hủy
+              Cancel
             </button>
             <button type="button" className="doc-delete-confirm-button" onClick={confirmDelete} disabled={isDeleting}>
-              {isDeleting ? "Đang xóa..." : "Xóa tài liệu"}
+              {isDeleting ? "Deleting..." : "Delete document"}
             </button>
           </div>
         </div>

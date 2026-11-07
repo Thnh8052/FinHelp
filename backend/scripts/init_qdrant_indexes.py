@@ -1,5 +1,5 @@
 import asyncio
-from app.db.qdrant import QdrantManager
+from app.infrastructure.database.qdrant import QdrantManager
 from app.core.logging import logger
 
 

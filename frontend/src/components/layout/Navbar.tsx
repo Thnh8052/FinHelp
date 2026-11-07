@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { UserDropdown } from "../auth/UserDropdown";
 import { FileTextIcon, MenuIcon, TableIcon, UserIcon } from "../common/Icons";
+import { FinHelpLogo } from "../common/FinHelpLogo";
 import "./layout.css";
 
 interface NavbarProps {
@@ -16,6 +17,7 @@ interface NavbarProps {
   onExportReport?: () => void;
   onOpenAuthModal: () => void;
   onOpenAdminDashboard: () => void;
+  onNavigateHome?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -30,6 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onExportReport: _onExportReport,
   onOpenAuthModal,
   onOpenAdminDashboard,
+  onNavigateHome,
 }) => {
   const { user } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -48,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="navbar">
-      {/* Left: App Logo & Workspace Title (Mockup V3) */}
+      {/* Left: App Logo & Workspace Title */}
       <div className="navbar-brand">
         {onToggleSidebar && (
           <button
@@ -56,24 +59,30 @@ export const Navbar: React.FC<NavbarProps> = ({
             id="btn-toggle-sidebar"
             onClick={onToggleSidebar}
             className={`navbar-sidebar-btn ${isSidebarOpen ? "active" : ""}`}
-            title="Thu gọn / Mở sidebar (Ctrl+B)"
-            aria-label="Thu gọn hoặc mở sidebar"
+            title="Toggle sidebar (Ctrl+B)"
+            aria-label="Toggle sidebar"
           >
             <MenuIcon size={16} />
           </button>
         )}
-        <div className="navbar-brand-logo">
-          <span>F</span>
+        <div className="cursor-pointer" onClick={onNavigateHome} title="Return to FinHelp Home">
+          <FinHelpLogo size="sm" showText={false} />
         </div>
         <div className="navbar-brand-info">
           <div className="navbar-brand-row">
-            <span className="navbar-brand-title">FinHelp</span>
+            <span
+              className="navbar-brand-title cursor-pointer hover:text-blue-400 transition-colors"
+              onClick={onNavigateHome}
+              title="Return to FinHelp Home"
+            >
+              FinHelp
+            </span>
             <span className="navbar-version-badge">V3</span>
           </div>
           <div className="navbar-brand-subtitle">
             <span className="navbar-status-dot" />
             <span className="navbar-notebook-title" title={notebookTitle}>
-              {notebookTitle || "Phân Tích Báo Cáo Tài Chính"}
+              {notebookTitle || "Financial Statement Analysis"}
             </span>
           </div>
         </div>
@@ -81,32 +90,32 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Right: Workspace & Account Controls */}
       <div className="navbar-actions">
-        {/* Toggle Sources Drawer Button (Bật / Tắt danh sách nguồn phiên này) */}
+        {/* Toggle Sources Drawer Button */}
         {onToggleSources && (
           <button
             type="button"
             id="btn-toggle-sources"
             onClick={onToggleSources}
             className={`navbar-action-btn ${isSourcesOpen ? "active" : ""}`}
-            title="Mở hoặc thu gọn danh sách BCTC của phiên chat này"
+            title="Toggle filing sources for this session"
           >
             <FileTextIcon size={14} color="var(--accent-primary)" />
-            <span>Nguồn phiên này: <strong>{sourcesCount} BCTC</strong></span>
+            <span className="navbar-btn-text">Filings: <strong>{sourcesCount}</strong></span>
             <span className={`navbar-source-indicator ${sourcesCount > 0 ? "ready" : ""}`} />
           </button>
         )}
 
-        {/* Toggle PDF Split-View Button (Bật / Tắt trình đọc BCTC gốc) */}
+        {/* Toggle PDF Split-View Button */}
         {onToggleSplitView && (
           <button
             type="button"
             id="btn-toggle-splitview"
             onClick={onToggleSplitView}
             className={`navbar-action-btn split-toggle ${isSplitViewOpen ? "active" : ""}`}
-            title="Mở song song hoặc thu gọn trình đọc BCTC đối chiếu"
+            title="Toggle split-view document reader"
           >
             <TableIcon size={14} />
-            <span>Trình đọc BCTC [{isSplitViewOpen ? "On" : "Off"}]</span>
+            <span className="navbar-btn-text">Split-View [{isSplitViewOpen ? "On" : "Off"}]</span>
           </button>
         )}
 
@@ -136,11 +145,11 @@ export const Navbar: React.FC<NavbarProps> = ({
         ) : (
           <div className="navbar-guest-actions">
             <span className="navbar-guest-badge">
-              Chế độ dùng thử
+              Guest Mode
             </span>
             <button onClick={onOpenAuthModal} className="navbar-login-btn">
               <UserIcon size={12} />
-              <span>Đăng nhập</span>
+              <span>Sign In</span>
             </button>
           </div>
         )}

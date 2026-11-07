@@ -19,8 +19,8 @@ if str(BACKEND_DIR) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from app.db.collections import MESSAGES_COLLECTION  # noqa: E402
-from app.db.mongodb import MongoManager  # noqa: E402
+from app.infrastructure.database.collections import MESSAGES_COLLECTION  # noqa: E402
+from app.infrastructure.database.mongodb import MongoManager  # noqa: E402
 
 STAGES = ("plan", "search", "generate", "verify_repair", "total")
 

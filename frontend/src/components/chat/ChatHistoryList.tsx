@@ -13,9 +13,8 @@ interface ChatHistoryListProps {
 }
 
 /**
- * Danh sách đoạn chat (Theo chuẩn Layout Mockup V3)
- * Cung cấp nút nổi bật "Tạo đoạn chat mới" ở đầu danh sách (có hiệu ứng hover xoay icon + badge New),
- * danh sách phiên dạng Card với metadata BCTC riêng, và Footer trạng thái hệ thống.
+ * Analysis sessions history list
+ * Provides "New Analysis" button, session cards with metadata, and secure workspace footer.
  */
 export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
   sessions,
@@ -34,17 +33,17 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
 
   return (
     <div className="history-container">
-      {/* 1. NÚT DUY NHẤT TẠO CHAT MỚI (Mockup V3) */}
+      {/* 1. New Chat Action */}
       <div className="history-top-section">
         <button
           type="button"
           onClick={onNewChat}
           className="history-new-btn group"
-          title="Tạo phiên hội thoại mới"
+          title="Create new analysis session"
         >
           <div className="history-new-btn-left">
             <PlusIcon size={16} className="history-plus-icon" />
-            <span>Tạo đoạn chat mới</span>
+            <span>New Analysis</span>
           </div>
           <span className="history-new-tag">
             {isGuest ? "Login" : "New"}
@@ -52,40 +51,40 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
         </button>
       </div>
 
-      {/* 2. Tiêu đề danh mục Lịch sử hội thoại */}
+      {/* 2. Section Header */}
       <div className="history-section-header">
-        <span className="history-section-title">Lịch sử hội thoại</span>
-        <span className="history-section-count">{sessions.length} phiên</span>
+        <span className="history-section-title">Analysis History</span>
+        <span className="history-section-count">{sessions.length} sessions</span>
       </div>
 
-      {/* Tìm kiếm đoạn chat (nếu có từ 3 đoạn chat trở lên) */}
+      {/* Search Filter */}
       {sessions.length >= 3 && (
         <div className="history-search-box">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Tìm kiếm đoạn chat..."
+            placeholder="Search sessions..."
             className="history-search-input"
           />
         </div>
       )}
 
-      {/* Guest Mode Banner nếu chưa đăng nhập */}
+      {/* Guest Mode Banner */}
       {isGuest && (
         <div className="history-guest-banner">
-          <div className="history-guest-badge">Chế độ dùng thử</div>
-          <div>Giới hạn 1 đoạn chat & 1 tài liệu. Đăng nhập để lưu lịch sử vĩnh viễn.</div>
+          <div className="history-guest-badge">Guest Session</div>
+          <div>1 session &amp; 1 filing limit. Sign in to save permanent history.</div>
         </div>
       )}
 
-      {/* 3. Danh sách các phiên hội thoại (Cards chuẩn Mockup V3) */}
+      {/* 3. Session Cards List */}
       <div className="history-list scrollbar-slim">
         {filteredSessions.length === 0 ? (
           <div className="history-empty">
             {searchTerm
-              ? "Không tìm thấy đoạn chat phù hợp."
-              : 'Chưa có đoạn chat nào. Bấm "Tạo đoạn chat mới" ở trên để bắt đầu.'}
+              ? "No matching sessions found."
+              : 'No sessions yet. Click "New Analysis" above to start.'}
           </div>
         ) : (
           filteredSessions.map((session) => {
@@ -110,21 +109,21 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                     <div className="history-card-info">
                       <p
                         className="history-card-title"
-                        title={session.title || "Đoạn chat tài chính"}
+                        title={session.title || "Financial Session"}
                       >
-                        {session.title || "Đoạn chat tài chính"}
+                        {session.title || "Financial Session"}
                       </p>
                       <p className="history-card-sub">
-                        <span>📂 BCTC riêng</span>
+                        <span>📂 Isolated Filing</span>
                         <span>•</span>
                         <span className={isActive ? "status-active" : "status-saved"}>
-                          {isActive ? "Đang mở" : "Đã lưu"}
+                          {isActive ? "Active" : "Saved"}
                         </span>
                       </p>
                     </div>
                   </div>
 
-                  {/* Nút Xóa (xuất hiện khi di chuột hoặc active) */}
+                  {/* Delete Button */}
                   {(isHovered || isActive) && !isGuest && (
                     <button
                       type="button"
@@ -132,7 +131,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                         e.stopPropagation();
                         onDeleteSession(session.session_id);
                       }}
-                      title="Xóa đoạn chat này"
+                      title="Delete this session"
                       className="history-card-del-btn"
                     >
                       <TrashIcon size={12} />
@@ -145,13 +144,13 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
         )}
       </div>
 
-      {/* 4. FOOTER SIDEBAR: TRẠNG THÁI HỆ THỐNG AN TOÀN (Mockup V3) */}
+      {/* 4. Secure Workspace Footer */}
       <div className="history-footer">
         <div className="history-footer-status">
           <span className="history-footer-dot" />
-          <span>GPU/VRAM: Ổn định</span>
+          <span>Workspace Active</span>
         </div>
-        <span className="history-footer-tag">Docling CPU</span>
+        <span className="history-footer-tag">Encrypted</span>
       </div>
     </div>
   );

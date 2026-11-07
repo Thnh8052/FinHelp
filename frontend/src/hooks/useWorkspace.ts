@@ -21,7 +21,7 @@ const attempt = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
 export function useWorkspace(onLoginRequired: () => void) {
   const { isAuthenticated } = useAuth();
   const { toast, showToast, closeToast } = useToast();
-  const [notebookTitle, setNotebookTitle] = useState("Phân Tích Báo Cáo Tài Chính");
+  const [notebookTitle, setNotebookTitle] = useState("Financial Statement Analysis");
   const [notebookId, setNotebookId] = useState("");
   const maxSources = isAuthenticated ? MAX_SOURCES_USER : MAX_SOURCES_GUEST;
 
@@ -53,7 +53,7 @@ export function useWorkspace(onLoginRequired: () => void) {
     };
 
     const loadGuestData = async () => {
-      setNotebookTitle("Không Gian Dùng Thử (Khách Chưa Đăng Nhập)");
+      setNotebookTitle("Guest Workspace (Trial Mode)");
       docs.reset();
       chat.setMessages([]);
       try {
@@ -62,7 +62,7 @@ export function useWorkspace(onLoginRequired: () => void) {
         setNotebookId(guestNb);
         const guestSession = guestStore.session();
         chat.setCurrentSessionId(guestSession);
-        chat.setSessions(guestSession ? [{ session_id: guestSession, notebook_id: guestNb, title: "Phiên dùng thử (Khách)" }] : []);
+        chat.setSessions(guestSession ? [{ session_id: guestSession, notebook_id: guestNb, title: "Guest Trial Session" }] : []);
 
         const documents = await attempt(documentService.list(guestNb));
         if (documents) docs.load(documents);
@@ -71,7 +71,7 @@ export function useWorkspace(onLoginRequired: () => void) {
           const messages = await attempt(chatService.getMessages(guestSession));
           if (messages) {
             chat.setMessages(messages);
-          } else {  // phiên đã lưu không còn dùng được
+          } else {  // session expired or invalid
             guestStore.setSession(null);
             chat.setCurrentSessionId(null);
             chat.setSessions([]);
@@ -84,7 +84,7 @@ export function useWorkspace(onLoginRequired: () => void) {
     };
 
     const load = isAuthenticated && authService.getAuthToken() ? loadMemberData : loadGuestData;
-    load().catch((err) => console.warn("Không thể tải dữ liệu không gian làm việc:", err));
+    load().catch((err) => console.warn("Unable to load workspace data:", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 

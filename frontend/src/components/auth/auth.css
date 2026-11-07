@@ -206,6 +206,7 @@
   top: 44px;
   right: 0;
   width: 290px;
+  max-width: calc(100vw - 20px);
   background-color: var(--bg-card);
   border: 1px solid var(--border-medium);
   border-radius: 10px;

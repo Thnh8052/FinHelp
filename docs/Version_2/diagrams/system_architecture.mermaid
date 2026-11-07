@@ -1,0 +1,60 @@
+%% =========================================================================
+%% Sơ đồ Kiến trúc Phân tầng Hệ thống FinHelp (Modular Monolith)
+%% Sinh viên: Vương Văn Thành (20225094) - ĐHBK Hà Nội (HUST)
+%% =========================================================================
+
+graph TB
+  subgraph T1 ["TẦNG TRÌNH DIỄN (Client Presentation Layer)"]
+    direction TB
+    C1["Trang chủ & Giới thiệu (Landing Page)"]
+    C2["Trình định tuyến (React Router DOM)"]
+    C3["Không gian làm việc 4 vùng (4-Zone Analyst Workstation)"]
+    C4["Quản lý trạng thái bộ nhớ đệm (TanStack Query Cache)"]
+    C1 --> C2 --> C3
+    C3 <--> C4
+  end
+
+  subgraph T2 ["TẦNG ĐIỀU PHỐI & BẢO MẬT (API Gateway & Core Services)"]
+    direction TB
+    G1["Điểm tập trung Router (/api/v1/api_router.py)"]
+    G2["Xác thực JWT & Phân quyền RBAC (core/security.py)"]
+    G3["Quản lý cấu hình & Biến môi trường (core/config.py)"]
+    G4["Xử lý ngoại lệ tập trung (core/exceptions.py)"]
+    G1 --> G2 & G3 & G4
+  end
+
+  subgraph T3 ["TẦNG NGHIỆP VỤ (Feature-based Domain Modules)"]
+    direction TB
+    M_Auth["Phân hệ Xác thực (modules/auth)"]
+    M_Note["Phân hệ Không gian làm việc (modules/notebooks)"]
+    M_Doc["Phân hệ Quản lý Tài liệu (modules/documents)"]
+    M_Ingest["Phân hệ Bóc tách Ingestion (modules/ingestion)"]
+    M_Router["Phân hệ Định tuyến Câu hỏi (modules/query_router)"]
+    M_Ret["Phân hệ Truy xuất Tri thức (modules/retrieval)"]
+    M_Gen["Phân hệ Sinh & Kiểm chứng (modules/generation)"]
+    M_Chat["Phân hệ Điều phối Hội thoại (modules/chat)"]
+    M_Admin["Phân hệ Quản trị (modules/admin)"]
+
+    M_Chat --> M_Router --> M_Ret --> M_Gen
+    M_Doc --> M_Ingest
+  end
+
+  subgraph T4 ["TẦNG DỊCH VỤ HẠ TẦNG & LƯU TRỮ (Infrastructure & Storage)"]
+    direction TB
+    I_Mongo[("MongoDB 7.0\n(Users, Notebooks, Docs, Jobs, Chats)")]
+    I_Qdrant[("Qdrant Vector Database\n(Chunks, Dense 1024d, Sparse)")]
+    I_Storage[("File Storage\n(Local Disk / Cloudflare R2 S3)")]
+    I_Redis[("Hàng đợi Redis & arq worker\n(Asynchronous Docling Parsing)")]
+    I_LLM["Dịch vụ LLM Ngoài\n(DeepSeek API / OpenAI Compatible)"]
+  end
+
+  %% Kết nối liên tầng
+  C3 ==>|REST API / SSE Streaming| G1
+  G1 ==> M_Auth & M_Note & M_Doc & M_Chat & M_Admin
+  
+  M_Auth & M_Note & M_Doc & M_Chat & M_Admin --> I_Mongo
+  M_Ingest --> I_Storage & I_Mongo & I_Qdrant
+  M_Ingest -.-> I_Redis
+  M_Ret --> I_Qdrant
+  M_Gen --> I_LLM
+

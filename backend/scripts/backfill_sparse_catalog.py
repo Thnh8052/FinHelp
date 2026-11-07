@@ -15,10 +15,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
-from app.db import collections  # noqa: E402
-from app.services.ingestion.catalog import needs_vlm, read_catalog, read_catalog_vlm, years_covered  # noqa: E402
-from app.services.ingestion.doc_header import extract_document_header  # noqa: E402
-from app.services.retrieval.embeddings import DenseEmbeddingService  # noqa: E402
+from app.infrastructure.database import collections  # noqa: E402
+from app.modules.ingestion.catalog import needs_vlm, read_catalog, read_catalog_vlm, years_covered  # noqa: E402
+from app.modules.ingestion.doc_header import extract_document_header  # noqa: E402
+from app.modules.retrieval.embeddings import DenseEmbeddingService  # noqa: E402
 
 
 async def catalog_for(doc: dict, pages: list) -> dict:

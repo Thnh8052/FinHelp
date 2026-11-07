@@ -10,8 +10,8 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from app.db.collections import INGESTION_JOBS_COLLECTION, NOTEBOOKS_COLLECTION, USERS_COLLECTION
-from app.db.mongodb import MongoManager
+from app.infrastructure.database.collections import INGESTION_JOBS_COLLECTION, NOTEBOOKS_COLLECTION, USERS_COLLECTION
+from app.infrastructure.database.mongodb import MongoManager
 from app.core.logging import logger
 
 DEAD_FIELDS = {

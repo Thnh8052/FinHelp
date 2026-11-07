@@ -2,7 +2,7 @@
 import httpx
 
 from app.core.config import settings
-from app.services.llm import llm_client
+from app.modules.generation import llm_client
 
 
 class FakeClient:

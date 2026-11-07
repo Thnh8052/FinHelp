@@ -42,7 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
       await login(identifier, password);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Đăng nhập thất bại. Vui lòng kiểm tra lại tài khoản.");
+      setError(err instanceof Error ? err.message : "Sign in failed. Please verify your credentials.");
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
       await register(email, username, password, fullName);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Đăng ký thất bại. Email hoặc username có thể đã tồn tại.");
+      setError(err instanceof Error ? err.message : "Registration failed. Email or username may already exist.");
     } finally {
       setLoading(false);
     }
@@ -71,10 +71,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
       if (res.otp_debug) {
         setOtpDebug(res.otp_debug);
       }
-      setSuccessMsg("Mã OTP đã được tạo. Vui lòng nhập mã và mật khẩu mới bên dưới.");
+      setSuccessMsg("OTP code generated. Please enter code and your new password below.");
       setForgotStep(2);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Không thể gửi mã OTP.");
+      setError(err instanceof Error ? err.message : "Unable to send OTP code.");
     } finally {
       setLoading(false);
     }
@@ -94,7 +94,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
         setOtpDebug(null);
       }, 1500);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Xác thực OTP thất bại.");
+      setError(err instanceof Error ? err.message : "OTP verification failed.");
     } finally {
       setLoading(false);
     }
@@ -107,12 +107,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
         <div className="auth-header">
           <div>
             <h2 className="auth-title">
-              {tab === "signin" && "Đăng Nhập Hệ Thống"}
-              {tab === "signup" && "Tạo Tài Khoản Mới"}
-              {tab === "forgot" && "Khôi Phục Mật Khẩu"}
+              {tab === "signin" && "Sign In to FinHelp"}
+              {tab === "signup" && "Create New Account"}
+              {tab === "forgot" && "Reset Password"}
             </h2>
             <p className="auth-subtitle">
-              Nền tảng AI phân tích Báo cáo tài chính chuẩn doanh nghiệp
+              Enterprise-Grade Financial Statement Intelligence Platform
             </p>
           </div>
           <button onClick={onClose} className="auth-close-btn">
@@ -130,26 +130,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
             <div>
               <form onSubmit={handleSignIn} className="auth-form">
                 <div className="auth-field">
-                  <label className="auth-label">Email hoặc Tên đăng nhập</label>
+                  <label className="auth-label">Email or Username</label>
                   <input
                     type="text"
                     required
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="admin hoặc admin@finanalyst.ai"
+                    placeholder="user@finhelp.ai"
                     className="auth-input"
                   />
                 </div>
 
                 <div className="auth-field">
                   <div className="auth-label-row">
-                    <label className="auth-label">Mật khẩu</label>
+                    <label className="auth-label">Password</label>
                     <button
                       type="button"
                       onClick={() => setTab("forgot")}
                       className="auth-forgot-link"
                     >
-                      Quên mật khẩu?
+                      Forgot password?
                     </button>
                   </div>
                   <input
@@ -167,7 +167,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   disabled={loading}
                   className="auth-submit-btn"
                 >
-                  {loading ? "Đang xác thực..." : "Đăng Nhập"}
+                  {loading ? "Authenticating..." : "Sign In"}
                 </button>
               </form>
 
@@ -183,14 +183,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     className="auth-guest-link"
                   >
                     <SparklesIcon size={12} />
-                    <span>Tiếp tục trải nghiệm ở Chế độ dùng thử</span>
+                    <span>Continue in Guest Trial Mode</span>
                   </button>
                 </div>
               </div>
 
               {/* Bottom Switch */}
               <div className="auth-footer-switch">
-                Chưa có tài khoản?{" "}
+                Don't have an account?{" "}
                 <button
                   type="button"
                   onClick={() => {
@@ -199,7 +199,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   }}
                   className="auth-link-btn"
                 >
-                  Đăng ký ngay
+                  Register now
                 </button>
               </div>
             </div>
@@ -218,28 +218,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tenban@congty.com"
+                    placeholder="name@company.com"
                     className="auth-input"
                   />
                 </div>
 
                 <div className="auth-field">
                   <label className="auth-label">
-                    Tên đăng nhập <span className="auth-required">*</span>
+                    Username <span className="auth-required">*</span>
                   </label>
                   <input
                     type="text"
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="vd: analyst_hanoi"
+                    placeholder="e.g. financial_analyst"
                     className="auth-input"
                   />
                 </div>
 
                 <div className="auth-field">
                   <label className="auth-label">
-                    Mật khẩu <span className="auth-required">*</span> (Tối thiểu 6 ký tự)
+                    Password <span className="auth-required">*</span> (Minimum 6 characters)
                   </label>
                   <input
                     type="password"
@@ -254,13 +254,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
 
                 <div className="auth-field">
                   <label className="auth-label">
-                    Họ và tên (Tùy chọn)
+                    Full Name (Optional)
                   </label>
                   <input
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="vd: Vũ Thành"
+                    placeholder="e.g. John Doe"
                     className="auth-input"
                   />
                 </div>
@@ -270,12 +270,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   disabled={loading}
                   className="auth-submit-btn spaced"
                 >
-                  {loading ? "Đang tạo tài khoản..." : "Hoàn Tất Đăng Ký"}
+                  {loading ? "Creating account..." : "Complete Registration"}
                 </button>
               </form>
 
               <div className="auth-footer-switch">
-                Đã có tài khoản?{" "}
+                Already have an account?{" "}
                 <button
                   type="button"
                   onClick={() => {
@@ -284,7 +284,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   }}
                   className="auth-link-btn"
                 >
-                  Đăng nhập
+                  Sign in
                 </button>
               </div>
             </div>
@@ -296,7 +296,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
               {forgotStep === 1 ? (
                 <form onSubmit={handleForgotStep1} className="auth-form">
                   <p className="auth-hint-text">
-                    Nhập địa chỉ email đăng ký để nhận mã xác thực OTP 6 số (thời hạn 15 phút):
+                    Enter your registered email address to receive a 6-digit OTP verification code (valid for 15 minutes):
                   </p>
                   <div>
                     <input
@@ -313,20 +313,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     disabled={loading}
                     className="auth-submit-btn"
                   >
-                    {loading ? "Đang xử lý..." : "Gửi Mã OTP"}
+                    {loading ? "Sending..." : "Send OTP Code"}
                   </button>
                 </form>
               ) : (
                 <form onSubmit={handleForgotStep2} className="auth-form">
                   {otpDebug && (
                     <div className="auth-otp-debug">
-                      Mã OTP thử nghiệm (Đồ án): <strong>{otpDebug}</strong>
+                      Development Demo OTP: <strong>{otpDebug}</strong>
                     </div>
                   )}
 
                   <div className="auth-field">
                     <label className="auth-label">
-                      Mã OTP (6 chữ số)
+                      OTP Code (6 digits)
                     </label>
                     <input
                       type="text"
@@ -341,7 +341,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
 
                   <div className="auth-field">
                     <label className="auth-label">
-                      Mật khẩu mới (Tối thiểu 6 ký tự)
+                      New Password (Minimum 6 characters)
                     </label>
                     <input
                       type="password"
@@ -359,7 +359,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     disabled={loading}
                     className="auth-submit-btn"
                   >
-                    {loading ? "Đang xác thực..." : "Xác Nhận & Đặt Lại Mật Khẩu"}
+                    {loading ? "Verifying..." : "Confirm & Reset Password"}
                   </button>
                 </form>
               )}
@@ -374,7 +374,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   }}
                   className="auth-link-btn secondary"
                 >
-                  Quay lại Đăng nhập
+                  Back to Sign In
                 </button>
               </div>
             </div>

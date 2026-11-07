@@ -11,7 +11,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-from app.db.mongodb import MongoManager
+from app.infrastructure.database.mongodb import MongoManager
 
 async def main():
     await MongoManager.connect_to_database()
