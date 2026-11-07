@@ -138,9 +138,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           {/* Title */}
           <h1 className="fh-hero-title">
-            Understand Financial Reports.
+            Understand Financial Reports
             <br />
-            <span className="fh-hero-gradient-text">Make Better Decisions.</span>
+            <span className="fh-hero-gradient-text">Make Better Decisions</span>
           </h1>
 
           {/* Subtitle */}
