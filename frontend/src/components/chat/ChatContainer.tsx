@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { ChatMessage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import { CheckIcon, ChevronRightIcon, CopyIcon, FileTextIcon, SendIcon } from "../common/Icons";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, FileTextIcon, SendIcon } from "../common/Icons";
 import "./chat.css";
 
 interface ChatContainerProps {
@@ -58,27 +58,66 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
   const scrollLeftRef = useRef(0);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
-  const handlePromptsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (e.deltaY !== 0) {
-      e.currentTarget.scrollLeft += e.deltaY;
-    }
+  const checkScrollBounds = () => {
+    const el = promptsTrackRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 6);
   };
+
+  const scrollPrompts = (direction: "left" | "right") => {
+    const el = promptsTrackRef.current;
+    if (!el) return;
+    const amount = direction === "left" ? -240 : 240;
+    el.scrollBy({ left: amount, behavior: "smooth" });
+    setTimeout(checkScrollBounds, 320);
+  };
+
+  useEffect(() => {
+    checkScrollBounds();
+    window.addEventListener("resize", checkScrollBounds);
+    return () => window.removeEventListener("resize", checkScrollBounds);
+  }, []);
+
+  useEffect(() => {
+    const el = promptsTrackRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) >= Math.abs(e.deltaX) && e.deltaY !== 0) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY * 1.25;
+      } else if (e.deltaX !== 0) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaX * 1.25;
+      }
+      checkScrollBounds();
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, []);
 
   const handlePromptsMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const el = promptsTrackRef.current;
     if (!el) return;
     isDraggingRef.current = false;
-    dragStartXRef.current = e.pageX - el.offsetLeft;
+    dragStartXRef.current = e.pageX;
     scrollLeftRef.current = el.scrollLeft;
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      const x = moveEvent.pageX - el.offsetLeft;
-      const walk = (x - dragStartXRef.current) * 1.4;
+      const walk = (moveEvent.pageX - dragStartXRef.current) * 1.4;
       if (Math.abs(walk) > 4) {
         isDraggingRef.current = true;
       }
       el.scrollLeft = scrollLeftRef.current - walk;
+      checkScrollBounds();
     };
 
     const onMouseUp = () => {
@@ -86,7 +125,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       window.removeEventListener("mouseup", onMouseUp);
       setTimeout(() => {
         isDraggingRef.current = false;
-      }, 50);
+      }, 60);
     };
 
     window.addEventListener("mousemove", onMouseMove);
@@ -327,10 +366,23 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           {messages.length <= 3 && (
             <div className="chat-sample-prompts">
               <span className="chat-prompts-label">Suggestions:</span>
+
+              {canScrollLeft && (
+                <button
+                  type="button"
+                  className="chat-prompts-nav-btn prev"
+                  onClick={() => scrollPrompts("left")}
+                  aria-label="Previous suggestions"
+                  title="Scroll left"
+                >
+                  <ChevronLeftIcon size={12} />
+                </button>
+              )}
+
               <div
                 ref={promptsTrackRef}
                 className="chat-sample-track"
-                onWheel={handlePromptsWheel}
+                onScroll={checkScrollBounds}
                 onMouseDown={handlePromptsMouseDown}
               >
                 {samplePrompts.map((p, idx) => (
@@ -350,6 +402,18 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   </button>
                 ))}
               </div>
+
+              {canScrollRight && (
+                <button
+                  type="button"
+                  className="chat-prompts-nav-btn next"
+                  onClick={() => scrollPrompts("right")}
+                  aria-label="More suggestions"
+                  title="Scroll right"
+                >
+                  <ChevronRightIcon size={12} />
+                </button>
+              )}
             </div>
           )}
 

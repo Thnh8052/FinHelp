@@ -264,6 +264,34 @@
   padding: 0;
 }
 
+.chat-prompts-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: #111a2a;
+  border: 1px solid #1f2d47;
+  color: #94a3b8;
+  cursor: pointer;
+  flex-shrink: 0 !important;
+  transition: all 0.2s ease;
+  padding: 0;
+  user-select: none;
+}
+
+.chat-prompts-nav-btn:hover {
+  background-color: #1d4ed8;
+  border-color: #3b82f6;
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+.chat-prompts-nav-btn:active {
+  transform: scale(0.95);
+}
+
 .chat-sample-track {
   flex: 1;
   min-width: 0;
@@ -285,13 +313,53 @@
   cursor: grabbing;
 }
 
-.chat-sample-track::-webkit-scrollbar,
-.chat-sample-track::-webkit-scrollbar-thumb,
-.chat-sample-track::-webkit-scrollbar-track {
-  display: none !important;
-  width: 0px !important;
-  height: 0px !important;
-  background: transparent !important;
+/* On desktop: show sleek thin scrollbar on hover so users can see track and drag if they want */
+@media (min-width: 769px) {
+  .chat-sample-track {
+    scrollbar-width: thin !important;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.2s ease;
+  }
+
+  .chat-sample-prompts:hover .chat-sample-track {
+    scrollbar-color: #22304d transparent;
+  }
+
+  .chat-sample-track::-webkit-scrollbar {
+    display: block !important;
+    height: 3px !important;
+  }
+
+  .chat-sample-track::-webkit-scrollbar-track {
+    display: block !important;
+    background: transparent !important;
+  }
+
+  .chat-sample-track::-webkit-scrollbar-thumb {
+    display: block !important;
+    background: transparent !important;
+    border-radius: 9999px;
+    transition: background 0.2s ease;
+  }
+
+  .chat-sample-prompts:hover .chat-sample-track::-webkit-scrollbar-thumb {
+    background: #22304d !important;
+  }
+
+  .chat-sample-prompts:hover .chat-sample-track::-webkit-scrollbar-thumb:hover {
+    background: #3b82f6 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .chat-sample-track::-webkit-scrollbar,
+  .chat-sample-track::-webkit-scrollbar-thumb,
+  .chat-sample-track::-webkit-scrollbar-track {
+    display: none !important;
+    width: 0px !important;
+    height: 0px !important;
+    background: transparent !important;
+  }
 }
 
 .chat-sample-btn {
@@ -862,6 +930,10 @@
     height: 22px;
     font-size: 10px;
     margin-right: 1px;
+  }
+
+  .chat-prompts-nav-btn {
+    display: none !important;
   }
 
   .chat-sample-btn {
