@@ -35,12 +35,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [apiModalOpen, setApiModalOpen] = useState(false);
   const [activeApiEndpoint, setActiveApiEndpoint] = useState<ApiEndpointInfo | null>(null);
 
-  // Bar Style: "floating" (ChatGPT style) vs "dock" (NotebookLM style)
-  const [navStyle, setNavStyle] = useState<"floating" | "dock">("floating");
-
   // Demo Query Selector in Product Preview
   const [activeQueryIndex, setActiveQueryIndex] = useState<number>(1);
   const [activeCitationAlert, setActiveCitationAlert] = useState<string | null>(null);
+
+  // Interactive Persona Tab in Section 04
+  const [activePersona, setActivePersona] = useState<"accounting" | "auditor" | "analyst">("accounting");
 
   // Live Backend Status Check
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
@@ -89,161 +89,80 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <div className="fh-hero-glow" />
 
       {/* ========================================================================= */}
-      {/* 1. NAVBAR (Supports both ChatGPT Floating Pill and NotebookLM Dock)       */}
+      {/* 1. PERMANENT FLOATING PILL NAVBAR (ChatGPT Sites Style)                   */}
       {/* ========================================================================= */}
-      {navStyle === "floating" ? (
-        <div className="fh-navbar-floating-wrapper">
-          <header className="fh-navbar-floating">
-            {/* Logo */}
-            <FinHelpLogo
-              size="sm"
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="cursor-pointer"
-            />
+      <div className="fh-navbar-floating-wrapper">
+        <header className="fh-navbar-floating">
+          {/* Logo with clean emblem and generous spacing */}
+          <FinHelpLogo
+            size="sm"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="cursor-pointer"
+          />
 
-            {/* Segmented Nav Links */}
-            <nav className="fh-nav-pill-group">
-              <a href="#features" className="fh-nav-link">
-                Features
-              </a>
-              <a href="#how-it-works" className="fh-nav-link">
-                How it works
-              </a>
-              <a href="#use-cases" className="fh-nav-link">
-                Use Cases
-              </a>
-              <a href="#trust" className="fh-nav-link">
-                Trust
-              </a>
-            </nav>
+          {/* Segmented Capsule Nav Links */}
+          <nav className="fh-nav-pill-group">
+            <a href="#features" className="fh-nav-link">
+              Features
+            </a>
+            <a href="#how-it-works" className="fh-nav-link">
+              How it works
+            </a>
+            <a href="#use-cases" className="fh-nav-link">
+              Use Cases
+            </a>
+            <a href="#trust" className="fh-nav-link">
+              Trust
+            </a>
+          </nav>
 
-            {/* Right Actions */}
-            <div className="fh-navbar-actions">
-              {/* Style Switcher Toggle */}
-              <button
-                onClick={() => setNavStyle("dock")}
-                className="fh-style-toggle-btn"
-                title="Switch to NotebookLM style dock bar"
-              >
-                <span>Bar: Floating</span>
-              </button>
-
-              {/* Backend Status Pill */}
-              <div
-                onClick={() => openApiDetails("/health", "GET")}
-                className="fh-btn-api-map cursor-pointer"
-                title="FastAPI Backend Health Status (127.0.0.1:8000)"
-              >
-                <span
-                  style={{
-                    width: "7px",
-                    height: "7px",
-                    borderRadius: "50%",
-                    backgroundColor: backendStatus === "online" ? "#10b981" : "#f59e0b",
-                    display: "inline-block",
-                  }}
-                />
-                <span>
-                  {backendStatus === "online" ? `API Online (${backendLatency}ms)` : "29 API Specs"}
-                </span>
-              </div>
-
-              {isAuthenticated ? (
-                <button onClick={onEnterApp} className="fh-btn-primary">
-                  <span>Open Workspace</span>
-                  <IconArrowRight size={14} />
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => onOpenAuth("login")} className="fh-btn-text">
-                    Sign in
-                  </button>
-                  <button onClick={onEnterApp} className="fh-btn-primary">
-                    Get Started
-                  </button>
-                </>
-              )}
+          {/* Right Actions: Live API Status & Auth CTAs */}
+          <div className="fh-navbar-actions">
+            {/* Backend Connectivity Status Pill */}
+            <div
+              onClick={() => openApiDetails("/health", "GET")}
+              className="fh-btn-api-map cursor-pointer"
+              title="FastAPI Backend Health Status (127.0.0.1:8000)"
+            >
+              <span
+                style={{
+                  width: "7px",
+                  height: "7px",
+                  borderRadius: "50%",
+                  backgroundColor: backendStatus === "online" ? "#10b981" : "#f59e0b",
+                  display: "inline-block",
+                }}
+              />
+              <span>
+                {backendStatus === "online" ? `API Online (${backendLatency}ms)` : "29 API Specs"}
+              </span>
             </div>
-          </header>
-        </div>
-      ) : (
-        <header className="fh-navbar-dock">
-          <div className="fh-navbar-dock-inner">
-            <FinHelpLogo
-              size="sm"
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="cursor-pointer"
-            />
 
-            <nav className="fh-nav-pill-group">
-              <a href="#features" className="fh-nav-link">
-                Features
-              </a>
-              <a href="#how-it-works" className="fh-nav-link">
-                How it works
-              </a>
-              <a href="#use-cases" className="fh-nav-link">
-                Use Cases
-              </a>
-              <a href="#trust" className="fh-nav-link">
-                Trust
-              </a>
-            </nav>
-
-            <div className="fh-navbar-actions">
-              <button
-                onClick={() => setNavStyle("floating")}
-                className="fh-style-toggle-btn"
-                title="Switch to ChatGPT style floating pill bar"
-              >
-                <span>Bar: Dock</span>
+            {isAuthenticated ? (
+              <button onClick={onEnterApp} className="fh-btn-primary">
+                <span>Open Workspace</span>
+                <IconArrowRight size={14} />
               </button>
-
-              <div
-                onClick={() => openApiDetails("/health", "GET")}
-                className="fh-btn-api-map cursor-pointer"
-                title="FastAPI Backend Health Status (127.0.0.1:8000)"
-              >
-                <span
-                  style={{
-                    width: "7px",
-                    height: "7px",
-                    borderRadius: "50%",
-                    backgroundColor: backendStatus === "online" ? "#10b981" : "#f59e0b",
-                    display: "inline-block",
-                  }}
-                />
-                <span>
-                  {backendStatus === "online" ? `API Online (${backendLatency}ms)` : "29 API Specs"}
-                </span>
-              </div>
-
-              {isAuthenticated ? (
-                <button onClick={onEnterApp} className="fh-btn-primary">
-                  <span>Open Workspace</span>
-                  <IconArrowRight size={14} />
+            ) : (
+              <>
+                <button onClick={() => onOpenAuth("login")} className="fh-btn-text">
+                  Sign in
                 </button>
-              ) : (
-                <>
-                  <button onClick={() => onOpenAuth("login")} className="fh-btn-text">
-                    Sign in
-                  </button>
-                  <button onClick={onEnterApp} className="fh-btn-primary">
-                    Get Started
-                  </button>
-                </>
-              )}
-            </div>
+                <button onClick={onEnterApp} className="fh-btn-primary">
+                  Get Started
+                </button>
+              </>
+            )}
           </div>
         </header>
-      )}
+      </div>
 
       {/* ========================================================================= */}
       {/* 2. HERO SECTION & PRODUCT PREVIEW                                         */}
       {/* ========================================================================= */}
       <section className="fh-hero fh-grid-pattern">
         <div className="fh-container">
-          {/* Badge */}
+          {/* Tagline Badge */}
           <div className="fh-hero-badge">
             <span
               style={{
@@ -611,59 +530,146 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. 01 — THE PROBLEM                                                       */}
+      {/* 3. 01 — THE PROBLEM (With Visual Before vs After Split Illustration)       */}
       {/* ========================================================================= */}
       <section className="fh-section fh-section-alt">
         <div className="fh-container">
           <span className="fh-section-tag">01 — The Problem</span>
           <h2 className="fh-section-title">Financial reports are complex and time-consuming to analyze.</h2>
           <p className="fh-section-subtitle">
-            Traditional financial analysis suffers from tedious manual searching, scattered footnotes, and fragmented comparisons.
+            Traditional financial research is fragmented across scanned PDFs, footnotes, and disparate accounting filings.
           </p>
 
+          {/* VISUAL ILLUSTRATION: Before vs After Comparison Graphic */}
+          <div className="fh-comparison-wrapper">
+            {/* Before Card */}
+            <div className="fh-comparison-card fh-comparison-card-before">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: "#f87171", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Before: Manual Financial Audit
+                </span>
+                <span style={{ padding: "3px 8px", borderRadius: "9999px", background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5", fontSize: "11px", fontWeight: 600 }}>
+                  High Error Risk
+                </span>
+              </div>
+              <div className="fh-mockup-doc">
+                <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                  <span>Form 10-K Annual Report (142 pages)</span>
+                  <span>Scanned PDF</span>
+                </div>
+                <div style={{ padding: "8px", background: "#0c101c", borderRadius: "6px", border: "1px dashed #334155" }}>
+                  <div style={{ color: "#fca5a5", textDecoration: "line-through" }}>
+                    Depreciation expense: $1,240M (?) [Note 14 vs Cash Flow mismatch]
+                  </div>
+                  <div style={{ color: "#64748b", marginTop: "4px" }}>
+                    Manual search across footnotes 12, 14, and Consolidated Statement...
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px" }}>
+                  <span style={{ color: "#ef4444", fontSize: "11px" }}>⚠️ 4.5 hours spent verifying numbers</span>
+                  <span style={{ color: "#64748b" }}>No verified citations</span>
+                </div>
+              </div>
+            </div>
+
+            {/* After Card */}
+            <div className="fh-comparison-card fh-comparison-card-after">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: "#60a5fa", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  After: FinHelp Grounded Intelligence
+                </span>
+                <span style={{ padding: "3px 8px", borderRadius: "9999px", background: "rgba(16, 185, 129, 0.15)", color: "#6ee7b7", fontSize: "11px", fontWeight: 600 }}>
+                  100% Traceable
+                </span>
+              </div>
+              <div className="fh-mockup-doc" style={{ background: "#050b18", borderColor: "#1e3a8a" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", color: "#93c5fd" }}>
+                  <span>Docling Tabular Extraction Engine</span>
+                  <span style={{ color: "#34d399" }}>✓ Verified</span>
+                </div>
+                <div style={{ padding: "8px", background: "#091428", borderRadius: "6px", border: "1px solid rgba(59, 130, 246, 0.4)" }}>
+                  <div style={{ color: "#ffffff", fontWeight: 600 }}>
+                    Depreciation &amp; Amortization: <span style={{ color: "#34d399" }}>$1,240.5M</span>
+                  </div>
+                  <div style={{ color: "#93c5fd", fontSize: "11px", marginTop: "2px" }}>
+                    Grounded in Note 14 (Fixed Assets, p. 68) &amp; Operating Cash Flow (p. 48)
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px" }}>
+                  <span style={{ color: "#38bdf8", fontSize: "11px" }}>⚡ 12 seconds with exact page jump</span>
+                  <span className="fh-citation-btn">[1] #page=68</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Standardized Feature Cards with Identical 38x38px Icons */}
           <div className="fh-grid-4">
             <div className="fh-card">
-              <div className="fh-card-icon-mono">
-                <IconSearch size={19} />
+              <div>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconSearch size={18} />
+                  </div>
+                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>01. SEARCH</span>
+                </div>
+                <h3 className="fh-card-title">Manual searching</h3>
+                <p className="fh-card-text">
+                  Pinpointing specific figures across hundreds of pages and disclosure footnotes.
+                </p>
               </div>
-              <h3 className="fh-card-title">Manual searching</h3>
-              <p className="fh-card-text">
-                Pinpointing specific figures across hundreds of pages and disclosure footnotes.
-              </p>
             </div>
+
             <div className="fh-card">
-              <div className="fh-card-icon-mono">
-                <IconCalculator size={19} />
+              <div>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconCalculator size={18} />
+                  </div>
+                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>02. MATH</span>
+                </div>
+                <h3 className="fh-card-title">Manual calculations</h3>
+                <p className="fh-card-text">
+                  Cross-referencing metrics, margins, and cash flows across multiple fiscal quarters.
+                </p>
               </div>
-              <h3 className="fh-card-title">Manual calculations</h3>
-              <p className="fh-card-text">
-                Cross-referencing metrics, margins, and cash flows across multiple fiscal quarters.
-              </p>
             </div>
+
             <div className="fh-card">
-              <div className="fh-card-icon-mono">
-                <IconDocuments size={19} />
+              <div>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconDocuments size={18} />
+                  </div>
+                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>03. FILINGS</span>
+                </div>
+                <h3 className="fh-card-title">Multiple documents</h3>
+                <p className="fh-card-text">
+                  Switching back and forth between separate annual filings to find relevant disclosures.
+                </p>
               </div>
-              <h3 className="fh-card-title">Multiple documents</h3>
-              <p className="fh-card-text">
-                Switching back and forth between separate annual filings to find relevant disclosures.
-              </p>
             </div>
+
             <div className="fh-card">
-              <div className="fh-card-icon-mono">
-                <IconLightbulb size={19} />
+              <div>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconLightbulb size={18} />
+                  </div>
+                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>04. INSIGHTS</span>
+                </div>
+                <h3 className="fh-card-title">Difficult insights</h3>
+                <p className="fh-card-text">
+                  Transforming raw accounting statements into understandable, structured answers.
+                </p>
               </div>
-              <h3 className="fh-card-title">Difficult insights</h3>
-              <p className="fh-card-text">
-                Transforming raw accounting statements into understandable, structured answers.
-              </p>
             </div>
           </div>
         </div>
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. 02 — CORE FEATURES                                                     */}
+      {/* 4. 02 — CORE FEATURES (With Visual Bento Showcase Grid)                    */}
       {/* ========================================================================= */}
       <section id="features" className="fh-section">
         <div className="fh-container">
@@ -677,42 +683,104 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
 
-          <div className="fh-grid-3">
-            {/* Feature 1 */}
-            <div className="fh-card">
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div className="fh-card-icon-mono" style={{ margin: 0, width: "32px", height: "32px" }}>
-                      <IconUpload size={16} />
-                    </div>
-                    <h3 className="fh-card-title" style={{ margin: 0 }}>Document Upload</h3>
+          {/* VISUAL BENTO SHOWCASE GRID */}
+          <div className="fh-bento-hero-grid">
+            {/* Bento Visual 1: Document Ingestion with Table Bounding Boxes */}
+            <div className="fh-bento-visual-card">
+              <div className="fh-card-header">
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div className="fh-card-icon-mono">
+                    <IconUpload size={18} />
                   </div>
-                  <button
-                    onClick={() => openApiDetails("/api/v1/documents/upload/{notebook_id}", "POST")}
-                    className="fh-api-pill fh-api-pill-post"
-                  >
-                    POST /upload
-                  </button>
+                  <div>
+                    <h3 className="fh-card-title" style={{ margin: 0 }}>Document Upload &amp; Tabular Extraction</h3>
+                    <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>Powered by Docling Document Layout Parsing</p>
+                  </div>
                 </div>
-                <p className="fh-card-text">
-                  Upload financial reports in PDF format with automatic two-dimensional table recognition and contextual metadata tagging.
-                </p>
+                <button
+                  onClick={() => openApiDetails("/api/v1/documents/upload/{notebook_id}", "POST")}
+                  className="fh-api-pill fh-api-pill-post"
+                >
+                  POST /upload
+                </button>
               </div>
-              <div style={{ marginTop: "14px", paddingTop: "10px", borderTop: "1px solid #1e293b", fontSize: "11.5px", color: "#60a5fa" }}>
+
+              {/* Visual Table Bounding Mockup */}
+              <div className="fh-table-bounding-mockup">
+                <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b", padding: "0 6px", fontSize: "11px" }}>
+                  <span>FINANCIAL STATEMENT BOUNDING EXTRACTION</span>
+                  <span style={{ color: "#60a5fa" }}>BGE-M3 1024-tokens</span>
+                </div>
+                <div className="fh-bounding-box-row active">
+                  <span>[Table 1.1] Consolidated Net Revenue</span>
+                  <span style={{ color: "#34d399", fontWeight: 700 }}>$17,902,400,000</span>
+                </div>
+                <div className="fh-bounding-box-row">
+                  <span>[Table 1.2] Cost of Goods Sold (COGS)</span>
+                  <span style={{ color: "#94a3b8" }}>$10,210,100,000</span>
+                </div>
+                <div className="fh-bounding-box-row active">
+                  <span>[Table 1.3] Gross Operating Margin</span>
+                  <span style={{ color: "#60a5fa", fontWeight: 700 }}>42.96% (+180 bps)</span>
+                </div>
+              </div>
+
+              <div className="fh-card-footer" style={{ margin: 0, borderTop: "none", paddingTop: 0 }}>
                 Supports: PDF, Form 10-K, Audited Annual Reports
               </div>
             </div>
 
-            {/* Feature 2 */}
+            {/* Bento Visual 2: PDF Split-View Citation Grounding */}
+            <div className="fh-bento-visual-card">
+              <div className="fh-card-header">
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div className="fh-card-icon-mono">
+                    <IconCitation size={18} />
+                  </div>
+                  <div>
+                    <h3 className="fh-card-title" style={{ margin: 0 }}>Split-View Citation Jumping</h3>
+                    <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>100% Grounded in Underlying Documents</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => openApiDetails("/api/v1/documents/{document_id}/file", "GET")}
+                  className="fh-api-pill fh-api-pill-get"
+                >
+                  GET /documents/&#123;id&#125;/file
+                </button>
+              </div>
+
+              {/* Visual Split-View Graphic */}
+              <div className="fh-split-view-graphic">
+                <div style={{ padding: "8px", background: "#0c1222", borderRadius: "8px", border: "1px solid #1e3a8a" }}>
+                  <div style={{ color: "#93c5fd", fontWeight: 600, marginBottom: "4px" }}>AI Response:</div>
+                  <div style={{ color: "#cbd5e1", lineHeight: "1.4" }}>
+                    Net sales expanded 26.1% YoY to $17,902M...
+                  </div>
+                  <span className="fh-citation-btn" style={{ marginTop: "8px" }}>[1] Page 45</span>
+                </div>
+                <div style={{ padding: "8px", background: "#060912", borderRadius: "8px", border: "1px solid #334155" }}>
+                  <div style={{ color: "#64748b", marginBottom: "4px" }}>Filing: Item 8 (p. 45)</div>
+                  <div style={{ background: "rgba(59, 130, 246, 0.2)", border: "1px dashed #60a5fa", borderRadius: "4px", padding: "4px", color: "#ffffff" }}>
+                    "...net revenue reached $17,902M for fiscal 2023."
+                  </div>
+                </div>
+              </div>
+
+              <div className="fh-card-footer" style={{ margin: 0, borderTop: "none", paddingTop: 0 }}>
+                Direct Stream: GET /documents/{`{id}`}/file#page=45
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Standardized Feature Cards Below Bento with Unified 38x38px Icons */}
+          <div className="fh-grid-4" style={{ marginTop: "20px" }}>
+            {/* Feature 1 */}
             <div className="fh-card">
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div className="fh-card-icon-mono" style={{ margin: 0, width: "32px", height: "32px" }}>
-                      <IconChat size={16} />
-                    </div>
-                    <h3 className="fh-card-title" style={{ margin: 0 }}>AI-powered Q&amp;A</h3>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconChat size={18} />
                   </div>
                   <button
                     onClick={() => openApiDetails("/api/v1/chat/query", "POST")}
@@ -721,115 +789,84 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     POST /chat/query
                   </button>
                 </div>
+                <h3 className="fh-card-title">AI-powered Q&amp;A</h3>
                 <p className="fh-card-text">
                   Ask questions using natural language. Query across complex accounting disclosures without manual page searching.
                 </p>
               </div>
-              <div style={{ marginTop: "14px", paddingTop: "10px", borderTop: "1px solid #1e293b", fontSize: "11.5px", color: "#60a5fa" }}>
+              <div className="fh-card-footer">
                 Interactive Multi-turn Analysis
+              </div>
+            </div>
+
+            {/* Feature 2 */}
+            <div className="fh-card">
+              <div>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconCompare size={18} />
+                  </div>
+                  <button
+                    onClick={() => openApiDetails("/api/v1/chat/query", "POST")}
+                    className="fh-api-pill fh-api-pill-post"
+                  >
+                    Multi-document
+                  </button>
+                </div>
+                <h3 className="fh-card-title">Multi-report Comparison</h3>
+                <p className="fh-card-text">
+                  Compare companies, fiscal periods, and financial indicators across multiple filings simultaneously.
+                </p>
+              </div>
+              <div className="fh-card-footer">
+                Cross-compare 2+ companies
               </div>
             </div>
 
             {/* Feature 3 */}
             <div className="fh-card">
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div className="fh-card-icon-mono" style={{ margin: 0, width: "32px", height: "32px" }}>
-                      <IconCompare size={16} />
-                    </div>
-                    <h3 className="fh-card-title" style={{ margin: 0 }}>Multi-report Comparison</h3>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconCalculator size={18} />
                   </div>
                   <button
                     onClick={() => openApiDetails("/api/v1/chat/query", "POST")}
                     className="fh-api-pill fh-api-pill-post"
                   >
-                    Multi-document scope
+                    Math Engine
                   </button>
                 </div>
+                <h3 className="fh-card-title">Financial Analysis</h3>
                 <p className="fh-card-text">
-                  Compare companies, fiscal periods, and financial indicators across multiple filings simultaneously.
+                  Calculate and interpret margins, growth rates, ratios, and cash flows with automated mathematical verification.
                 </p>
               </div>
-              <div style={{ marginTop: "14px", paddingTop: "10px", borderTop: "1px solid #1e293b", fontSize: "11.5px", color: "#60a5fa" }}>
-                Cross-compare 2+ companies
+              <div className="fh-card-footer">
+                Transparent Arithmetic Steps
               </div>
             </div>
 
             {/* Feature 4 */}
             <div className="fh-card">
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div className="fh-card-icon-mono" style={{ margin: 0, width: "32px", height: "32px" }}>
-                      <IconCitation size={16} />
-                    </div>
-                    <h3 className="fh-card-title" style={{ margin: 0 }}>Evidence-based Answers</h3>
-                  </div>
-                  <button
-                    onClick={() => openApiDetails("/api/v1/documents/{document_id}/file", "GET")}
-                    className="fh-api-pill fh-api-pill-get"
-                  >
-                    GET /documents/&#123;id&#125;/file
-                  </button>
-                </div>
-                <p className="fh-card-text">
-                  See the supporting passages and exact document references behind every statement with PDF Split-View jumping.
-                </p>
-              </div>
-              <div style={{ marginTop: "14px", paddingTop: "10px", borderTop: "1px solid #1e293b", fontSize: "11.5px", color: "#60a5fa" }}>
-                100% Grounded in Source Filings
-              </div>
-            </div>
-
-            {/* Feature 5 */}
-            <div className="fh-card">
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div className="fh-card-icon-mono" style={{ margin: 0, width: "32px", height: "32px" }}>
-                      <IconCalculator size={16} />
-                    </div>
-                    <h3 className="fh-card-title" style={{ margin: 0 }}>Financial Analysis</h3>
-                  </div>
-                  <button
-                    onClick={() => openApiDetails("/api/v1/chat/query", "POST")}
-                    className="fh-api-pill fh-api-pill-post"
-                  >
-                    Calculator &amp; Re-check
-                  </button>
-                </div>
-                <p className="fh-card-text">
-                  Calculate and interpret margins, growth rates, ratios, and cash flows with automated mathematical verification.
-                </p>
-              </div>
-              <div style={{ marginTop: "14px", paddingTop: "10px", borderTop: "1px solid #1e293b", fontSize: "11.5px", color: "#60a5fa" }}>
-                Transparent Arithmetic Steps
-              </div>
-            </div>
-
-            {/* Feature 6 */}
-            <div className="fh-card">
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div className="fh-card-icon-mono" style={{ margin: 0, width: "32px", height: "32px" }}>
-                      <IconHistory size={16} />
-                    </div>
-                    <h3 className="fh-card-title" style={{ margin: 0 }}>Conversation History</h3>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconHistory size={18} />
                   </div>
                   <button
                     onClick={() => openApiDetails("/api/v1/chat/sessions/notebook/{notebook_id}", "GET")}
                     className="fh-api-pill fh-api-pill-get"
                   >
-                    GET /chat/sessions
+                    GET /sessions
                   </button>
                 </div>
+                <h3 className="fh-card-title">Conversation History</h3>
                 <p className="fh-card-text">
                   Save, search, and continue previous analysis sessions anytime with isolated session history per notebook.
                 </p>
               </div>
-              <div style={{ marginTop: "14px", paddingTop: "10px", borderTop: "1px solid #1e293b", fontSize: "11.5px", color: "#60a5fa" }}>
+              <div className="fh-card-footer">
                 Isolated Notebook Storage
               </div>
             </div>
@@ -838,56 +875,71 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ========================================================================= */}
-      {/* 5. 03 — HOW IT WORKS                                                      */}
+      {/* 5. 03 — HOW IT WORKS (With Pipeline Visual Progression)                   */}
       {/* ========================================================================= */}
       <section id="how-it-works" className="fh-section fh-section-alt">
         <div className="fh-container">
           <span className="fh-section-tag">03 — How It Works</span>
           <h2 className="fh-section-title">From documents to insights in three steps.</h2>
           <p className="fh-section-subtitle">
-            A seamless workflow designed to eliminate manual data entry and surface verified metrics rapidly.
+            A verified pipeline engineered to eliminate manual data entry and surface auditable metrics rapidly.
           </p>
 
           <div className="fh-grid-3">
             {/* Step 1 */}
             <div className="fh-card">
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconUpload size={18} />
+                  </div>
                   <span className="fh-step-num">Step 01</span>
-                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>POST /upload</span>
                 </div>
                 <h3 className="fh-card-title">Upload your reports</h3>
                 <p className="fh-card-text">
-                  Upload one or multiple financial reports in PDF format. The parsing engine automatically extracts structured financial tables and footnotes.
+                  Upload one or multiple financial reports in PDF format. Docling parses two-dimensional tables, text blocks, and footnotes into structured embeddings.
                 </p>
+              </div>
+              <div className="fh-card-footer" style={{ fontFamily: "monospace", color: "#94a3b8" }}>
+                POST /api/v1/documents/upload
               </div>
             </div>
 
             {/* Step 2 */}
             <div className="fh-card">
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconChat size={18} />
+                  </div>
                   <span className="fh-step-num">Step 02</span>
-                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>POST /chat/query</span>
                 </div>
                 <h3 className="fh-card-title">Ask your questions</h3>
                 <p className="fh-card-text">
-                  Ask about revenue trends, operating cash flows, liquidity ratios, or footnotes in plain English.
+                  Query in natural language. The RRF hybrid retriever scans dense vectors and lexical keywords, reranking the best passages with Qwen.
                 </p>
+              </div>
+              <div className="fh-card-footer" style={{ fontFamily: "monospace", color: "#94a3b8" }}>
+                POST /api/v1/chat/query
               </div>
             </div>
 
             {/* Step 3 */}
             <div className="fh-card">
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconCitation size={18} />
+                  </div>
                   <span className="fh-step-num">Step 03</span>
-                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>GET /file#page</span>
                 </div>
                 <h3 className="fh-card-title">Explore grounded answers</h3>
                 <p className="fh-card-text">
-                  Review syntheses, calculations, and supporting source citations side-by-side with split-view PDF navigation.
+                  Review synthesized metrics, arithmetic steps, and click citation badges to jump directly to corresponding PDF pages in split-view.
                 </p>
+              </div>
+              <div className="fh-card-footer" style={{ fontFamily: "monospace", color: "#94a3b8" }}>
+                GET /api/v1/documents/file#page
               </div>
             </div>
           </div>
@@ -895,43 +947,115 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ========================================================================= */}
-      {/* 6. 04 — USE CASES                                                         */}
+      {/* 6. 04 — USE CASES (With Interactive Persona Workflow Switcher)            */}
       {/* ========================================================================= */}
       <section id="use-cases" className="fh-section">
         <div className="fh-container">
           <span className="fh-section-tag">04 — Use Cases</span>
           <h2 className="fh-section-title">Designed for financial research and analysis.</h2>
           <p className="fh-section-subtitle">
-            Empowering professionals with verifiable data extraction and auditable intelligence.
+            Tailored workflows empowering accountants, auditors, and equity analysts with verifiable document intelligence.
           </p>
 
-          <div className="fh-grid-3">
-            <div className="fh-card">
-              <div className="fh-card-icon-mono">
-                <IconAccounting size={19} />
-              </div>
-              <h3 className="fh-card-title">Accounting professionals</h3>
-              <p className="fh-card-text">
-                Find financial figures and analyze financial statements with speed and exact source page validation.
-              </p>
+          {/* Interactive Persona Tabs */}
+          <div className="fh-persona-nav">
+            <button
+              onClick={() => setActivePersona("accounting")}
+              className={`fh-persona-tab ${activePersona === "accounting" ? "active" : ""}`}
+            >
+              <IconAccounting size={16} />
+              <span>Accounting Professionals</span>
+            </button>
+            <button
+              onClick={() => setActivePersona("auditor")}
+              className={`fh-persona-tab ${activePersona === "auditor" ? "active" : ""}`}
+            >
+              <IconAuditor size={16} />
+              <span>Auditors &amp; Regulators</span>
+            </button>
+            <button
+              onClick={() => setActivePersona("analyst")}
+              className={`fh-persona-tab ${activePersona === "analyst" ? "active" : ""}`}
+            >
+              <IconAnalyst size={16} />
+              <span>Financial Analysts</span>
+            </button>
+          </div>
+
+          {/* Interactive Persona Content Graphic */}
+          <div className="fh-persona-content-card">
+            <div>
+              {activePersona === "accounting" && (
+                <>
+                  <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", marginBottom: "6px" }}>
+                    Persona: Corporate Accounting
+                  </div>
+                  <h3 className="fh-card-title" style={{ fontSize: "20px" }}>
+                    Accelerate financial statement reconciliations
+                  </h3>
+                  <p className="fh-card-text" style={{ fontSize: "14px", marginTop: "8px" }}>
+                    Instantly extract line items across Balance Sheets and Cash Flows. Verify footnote adjustments, tax provisions, and lease liabilities with single-click page validation.
+                  </p>
+                  <div style={{ marginTop: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <span className="fh-chip">GAAP / IFRS Footnotes</span>
+                    <span className="fh-chip">Intercompany Eliminations</span>
+                  </div>
+                </>
+              )}
+              {activePersona === "auditor" && (
+                <>
+                  <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", marginBottom: "6px" }}>
+                    Persona: Statutory Audit &amp; Compliance
+                  </div>
+                  <h3 className="fh-card-title" style={{ fontSize: "20px" }}>
+                    Cross-examine reported figures with zero hallucination
+                  </h3>
+                  <p className="fh-card-text" style={{ fontSize: "14px", marginTop: "8px" }}>
+                    Trace every reported disclosure back to the original auditor notes. Automatically verify arithmetic consistency between consolidated tables and note breakdowns.
+                  </p>
+                  <div style={{ marginTop: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <span className="fh-chip">Substantive Testing</span>
+                    <span className="fh-chip">Footnote Audit Trail</span>
+                  </div>
+                </>
+              )}
+              {activePersona === "analyst" && (
+                <>
+                  <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", marginBottom: "6px" }}>
+                    Persona: Equity Research &amp; M&amp;A
+                  </div>
+                  <h3 className="fh-card-title" style={{ fontSize: "20px" }}>
+                    Benchmark competitors across multi-year cycles
+                  </h3>
+                  <p className="fh-card-text" style={{ fontSize: "14px", marginTop: "8px" }}>
+                    Select filings from multiple companies and evaluate margin expansion, Free Cash Flow yields, and leverage metrics side-by-side in seconds.
+                  </p>
+                  <div style={{ marginTop: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <span className="fh-chip">YoY Peer Benchmarking</span>
+                    <span className="fh-chip">FCF Yield Modeling</span>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="fh-card">
-              <div className="fh-card-icon-mono">
-                <IconAuditor size={19} />
+
+            {/* Persona Visual Mockup Preview */}
+            <div style={{ background: "#060912", border: "1px solid #1e293b", borderRadius: "12px", padding: "18px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", fontSize: "11px", color: "#64748b" }}>
+                <span>SAMPLE QUERY &amp; AUDIT TRAIL</span>
+                <span style={{ color: "#10b981" }}>● Grounded Answer</span>
               </div>
-              <h3 className="fh-card-title">Auditors</h3>
-              <p className="fh-card-text">
-                Locate supporting disclosures and compare reported figures against underlying notes across fiscal periods.
-              </p>
-            </div>
-            <div className="fh-card">
-              <div className="fh-card-icon-mono">
-                <IconAnalyst size={19} />
+              <div style={{ padding: "10px", background: "#0e1526", borderRadius: "8px", border: "1px solid #1e3a8a", fontSize: "12.5px", color: "#cbd5e1", marginBottom: "10px" }}>
+                {activePersona === "accounting" && "Q: Reconcile Operating Income to EBITDA including depreciation notes."}
+                {activePersona === "auditor" && "Q: Cross-check Note 8 contingent liabilities against balance sheet reserves."}
+                {activePersona === "analyst" && "Q: Compare FY23 Free Cash Flow margin between Company A and Company B."}
               </div>
-              <h3 className="fh-card-title">Financial analysts &amp; researchers</h3>
-              <p className="fh-card-text">
-                Explore company performance across multi-year reports, synthesize ratios, and compare competitors.
-              </p>
+              <div style={{ padding: "10px", background: "#080c14", borderRadius: "8px", fontSize: "12px", color: "#94a3b8" }}>
+                <span style={{ color: "#34d399", fontWeight: 700 }}>Calculation Output:</span> Matches reported Note details with 100% audit confidence.
+                <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+                  <span className="fh-citation-btn">[1] Page 45</span>
+                  <span className="fh-citation-btn">[2] Page 68</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -950,48 +1074,63 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           <div className="fh-grid-3">
             <div className="fh-card">
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                <div className="fh-card-icon-mono" style={{ margin: 0, width: "30px", height: "30px" }}>
-                  <IconCitation size={15} />
+              <div>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconCitation size={18} />
+                  </div>
+                  <span style={{ color: "#60a5fa", fontWeight: 700, fontSize: "11px", textTransform: "uppercase" }}>
+                    01. Citations
+                  </span>
                 </div>
-                <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: "11.5px", textTransform: "uppercase" }}>
-                  01. Citations
-                </div>
+                <h3 className="fh-card-title">Document citations &amp; source references</h3>
+                <p className="fh-card-text">
+                  Every response references supporting pages directly with clickable highlight jumps and excerpt validation.
+                </p>
               </div>
-              <h3 className="fh-card-title">Document citations &amp; source references</h3>
-              <p className="fh-card-text">
-                Every response references supporting pages directly with clickable highlight jumps and excerpt validation.
-              </p>
+              <div className="fh-card-footer">
+                Interactive PDF Highlighting
+              </div>
             </div>
 
             <div className="fh-card">
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                <div className="fh-card-icon-mono" style={{ margin: 0, width: "30px", height: "30px" }}>
-                  <IconCalculator size={15} />
+              <div>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconCalculator size={18} />
+                  </div>
+                  <span style={{ color: "#60a5fa", fontWeight: 700, fontSize: "11px", textTransform: "uppercase" }}>
+                    02. Arithmetic
+                  </span>
                 </div>
-                <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: "11.5px", textTransform: "uppercase" }}>
-                  02. Arithmetic
-                </div>
+                <h3 className="fh-card-title">Transparent calculation steps</h3>
+                <p className="fh-card-text">
+                  Constituent arithmetic formulas and values are stated clearly so you can re-check every formula and equation.
+                </p>
               </div>
-              <h3 className="fh-card-title">Transparent calculation steps</h3>
-              <p className="fh-card-text">
-                Constituent arithmetic formulas and values are stated clearly so you can re-check every formula and equation.
-              </p>
+              <div className="fh-card-footer">
+                Auditable Math Proofs
+              </div>
             </div>
 
             <div className="fh-card">
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                <div className="fh-card-icon-mono" style={{ margin: 0, width: "30px", height: "30px" }}>
-                  <IconLock size={15} />
+              <div>
+                <div className="fh-card-header">
+                  <div className="fh-card-icon-mono">
+                    <IconLock size={18} />
+                  </div>
+                  <span style={{ color: "#60a5fa", fontWeight: 700, fontSize: "11px", textTransform: "uppercase" }}>
+                    03. Security
+                  </span>
                 </div>
-                <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: "11.5px", textTransform: "uppercase" }}>
-                  03. Security
-                </div>
+                <h3 className="fh-card-title">Data protection &amp; access controls</h3>
+                <p className="fh-card-text">
+                  Workspace notebook isolation ensures your uploaded financial reports remain completely confidential and secure.
+                </p>
               </div>
-              <h3 className="fh-card-title">Data protection &amp; access controls</h3>
-              <p className="fh-card-text">
-                Workspace notebook isolation ensures your uploaded financial reports remain completely confidential and secure.
-              </p>
+              <div className="fh-card-footer">
+                Notebook Isolation
+              </div>
             </div>
           </div>
         </div>
@@ -1028,43 +1167,88 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ========================================================================= */}
-      {/* 9. COMPACT BALANCED FOOTER                                                */}
+      {/* 9. EXPANDED, BALANCED 4-COLUMN FOOTER                                     */}
       {/* ========================================================================= */}
       <footer className="fh-footer">
         <div className="fh-footer-inner">
-          <div className="fh-footer-top">
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div className="fh-footer-grid">
+            {/* Col 1: Brand & Mission */}
+            <div className="fh-footer-col">
               <FinHelpLogo size="sm" />
-              <span style={{ color: "#475569" }}>·</span>
-              <span style={{ color: "#94a3b8", fontSize: "12.5px" }}>AI-Powered Financial Intelligence Platform</span>
+              <p style={{ margin: "8px 0 0 0", color: "#94a3b8", fontSize: "13px", lineHeight: "1.6", maxWidth: "340px" }}>
+                AI-Powered Financial Intelligence Platform. Empowering accounting, audit, and equity research professionals with auditable document extraction.
+              </p>
+              <div style={{ marginTop: "12px" }}>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "4px 10px",
+                    borderRadius: "9999px",
+                    backgroundColor: "rgba(16, 185, 129, 0.12)",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    color: "#34d399",
+                    fontSize: "11px",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#10b981" }} />
+                  FastAPI Server: Operational
+                </span>
+              </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-              <a href="#features" className="fh-nav-link" style={{ padding: "4px 8px" }}>
-                Features
-              </a>
-              <a href="#how-it-works" className="fh-nav-link" style={{ padding: "4px 8px" }}>
-                How it works
-              </a>
-              <a href="#use-cases" className="fh-nav-link" style={{ padding: "4px 8px" }}>
-                Use Cases
-              </a>
+
+            {/* Col 2: Platform Capabilities */}
+            <div className="fh-footer-col">
+              <div className="fh-footer-heading">Platform</div>
+              <a href="#features" className="fh-footer-link">Document Ingestion</a>
+              <a href="#features" className="fh-footer-link">Interactive Workspace Chat</a>
+              <a href="#features" className="fh-footer-link">Multi-Report Comparison</a>
+              <a href="#features" className="fh-footer-link">PDF Split-View Jumping</a>
+              <a href="#features" className="fh-footer-link">Mathematical Engine</a>
+            </div>
+
+            {/* Col 3: Use Cases */}
+            <div className="fh-footer-col">
+              <div className="fh-footer-heading">Use Cases</div>
+              <a href="#use-cases" className="fh-footer-link">Accounting Professionals</a>
+              <a href="#use-cases" className="fh-footer-link">Statutory Auditors</a>
+              <a href="#use-cases" className="fh-footer-link">Financial Analysts &amp; M&amp;A</a>
+              <a href="#use-cases" className="fh-footer-link">SEC Form 10-K Analysis</a>
+              <a href="#trust" className="fh-footer-link">Audit Trail &amp; Provenance</a>
+            </div>
+
+            {/* Col 4: Developers & Trust */}
+            <div className="fh-footer-col">
+              <div className="fh-footer-heading">Developers &amp; Trust</div>
               <button
                 onClick={() => {
                   setActiveApiEndpoint(API_ENDPOINTS_CATALOG[0]);
                   setApiModalOpen(true);
                 }}
-                className="fh-nav-link"
-                style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 8px" }}
+                className="fh-footer-link"
               >
-                API Specs
+                OpenAPI 3.1 Documentation
               </button>
+              <button
+                onClick={() => openApiDetails("/health", "GET")}
+                className="fh-footer-link"
+              >
+                System Health Endpoint
+              </button>
+              <a href="#trust" className="fh-footer-link">Qdrant Vector Database</a>
+              <a href="#trust" className="fh-footer-link">Docling Parser Integration</a>
+              <a href="#trust" className="fh-footer-link">Data Protection &amp; Security</a>
             </div>
           </div>
+
+          {/* Bottom Sub-row */}
           <div className="fh-footer-bottom">
-            <div style={{ color: "#64748b" }}>
-              FastAPI RAG Engine · Python 3.12 · Qdrant Vector Engine · Docling Table Extraction
+            <div>
+              FastAPI RAG Engine · Python 3.12 · BGE-M3 Embeddings · Qdrant Vector Engine · Docling Parser
             </div>
-            <div>© 2026 FinHelp. All rights reserved.</div>
+            <div>© 2026 FinHelp Inc. All rights reserved.</div>
           </div>
         </div>
       </footer>

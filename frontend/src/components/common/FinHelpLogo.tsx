@@ -14,10 +14,10 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
   onClick,
 }) => {
   const sizeMap = {
-    sm: { icon: 24, font: "text-sm", gap: "gap-1.5" },
-    md: { icon: 32, font: "text-base", gap: "gap-2.5" },
-    lg: { icon: 40, font: "text-xl", gap: "gap-3" },
-    xl: { icon: 48, font: "text-2xl", gap: "gap-3.5" },
+    sm: { icon: 30, font: "text-[16.5px]", gap: "gap-2.5" },
+    md: { icon: 36, font: "text-[18.5px]", gap: "gap-3" },
+    lg: { icon: 44, font: "text-[22px]", gap: "gap-3.5" },
+    xl: { icon: 52, font: "text-[26px]", gap: "gap-4" },
   };
 
   const currentSize = sizeMap[size] || sizeMap.md;
@@ -25,7 +25,7 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
   return (
     <div
       className={`inline-flex items-center ${currentSize.gap} select-none ${
-        onClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""
+        onClick ? "cursor-pointer hover:opacity-95 transition-opacity" : ""
       } ${className}`}
       onClick={onClick}
     >
@@ -111,4 +111,3 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
 };
 
 export default FinHelpLogo;
-
