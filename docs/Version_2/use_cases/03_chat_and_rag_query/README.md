@@ -109,3 +109,4 @@ sequenceDiagram
   API-->>UI: 200 OK {answer, citations, verification, focus_state}
   UI-->>User: Render câu trả lời Markdown + Bảng đối chiếu + Chip trích dẫn [1]
 ```
+

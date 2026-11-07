@@ -201,3 +201,4 @@ erDiagram
   }
   ```
 - **Payload Indexing:** B-Tree Index cho `document_id`, `notebook_id`, `ticker`, `fiscal_year` để đảm bảo tốc độ lọc (Filtered Search) dưới 5ms trên hàng triệu vectors.
+

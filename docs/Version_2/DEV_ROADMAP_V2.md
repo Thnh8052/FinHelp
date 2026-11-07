@@ -111,3 +111,4 @@ Toàn bộ tài liệu phân tích thiết kế, use case và sơ đồ quy trì
 - [ ] Xây dựng Admin Dashboard quản lý User, Quota và Logs.
 - [ ] Chạy bộ benchmark đo lường toàn diện (Recall@k, Precision, Grounding Accuracy, Latency).
 - [ ] Viết báo cáo tốt nghiệp chuẩn theo format Đại học Bách Khoa Hà Nội.
+

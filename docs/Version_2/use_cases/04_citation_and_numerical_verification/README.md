@@ -90,3 +90,4 @@ sequenceDiagram
   UI_PDF->>UI_PDF: Khớp đoạn snippet & vẽ viền sáng (highlight pulse)
   UI_PDF-->>User: Hiển thị dòng BCTC gốc song song với câu trả lời AI
 ```
+

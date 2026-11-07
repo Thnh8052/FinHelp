@@ -54,9 +54,6 @@ html, body, #root {
 button {
   font-family: inherit;
   cursor: pointer;
-  border: none;
-  background: none;
-  transition: all var(--transition);
 }
 
 button:disabled {

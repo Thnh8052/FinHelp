@@ -104,3 +104,4 @@ sequenceDiagram
   API-->>UI: Trạng thái: "parsed" kèm thông tin catalog AI nhận diện
   UI-->>User: Hiển thị form xác nhận Catalog (Ticker, Kỳ báo cáo)
 ```
+

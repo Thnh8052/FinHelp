@@ -82,3 +82,4 @@ sequenceDiagram
   API-->>UI: 201 Created {notebook_id, title, created_at}
   UI-->>User: Hiển thị Workspace trống sẵn sàng để upload BCTC
 ```
+
