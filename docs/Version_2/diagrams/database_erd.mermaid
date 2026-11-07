@@ -1,0 +1,95 @@
+%% =========================================================================
+%% Lược đồ Cơ sở Dữ liệu Thực thể Liên kết (ERD) - FinHelp V2
+%% Sinh viên: Vương Văn Thành (20225094) - ĐHBK Hà Nội (HUST)
+%% =========================================================================
+
+erDiagram
+  USERS ||--o{ NOTEBOOKS : "sở hữu (1:N)"
+  NOTEBOOKS ||--o{ DOCUMENTS : "chứa (1:N)"
+  DOCUMENTS ||--o{ CHUNKS : "phân mảnh thành (1:N)"
+  DOCUMENTS ||--o{ INGESTION_JOBS : "theo dõi tiến trình (1:N)"
+  NOTEBOOKS ||--o{ CONVERSATIONS : "chứa các phiên (1:N)"
+  CONVERSATIONS ||--o{ MESSAGES : "gồm các tin nhắn (1:N)"
+  MESSAGES |o--o{ MESSAGES : "nhánh cha con (1:N)"
+
+  USERS {
+    string user_id PK "Khóa chính UUID"
+    string email UK "Email đăng nhập"
+    string username UK "Tên định danh"
+    string password_hash "Mật khẩu mã hóa Bcrypt"
+    string role "Vai trò: admin | analyst | user"
+    string tier "Gói dịch vụ: free | pro | enterprise"
+    obj quota "Hạn mức câu hỏi ngày, số docs tối đa"
+    datetime created_at "Ngày tạo tài khoản"
+    datetime last_login_at "Lần đăng nhập gần nhất"
+  }
+
+  NOTEBOOKS {
+    string notebook_id PK "Khóa chính UUID"
+    string user_id FK "Chủ sở hữu"
+    string title "Tên workspace nghiên cứu"
+    string description "Mô tả mục tiêu phân tích"
+    list document_ids "Danh sách tài liệu BCTC đính kèm"
+    datetime created_at "Thời điểm tạo"
+    datetime updated_at "Lần cập nhật cuối"
+  }
+
+  DOCUMENTS {
+    string document_id PK "Khóa chính UUID"
+    string notebook_id FK "Thuộc workspace nào"
+    string file_name "Tên file PDF gốc"
+    string storage_path "Đường dẫn lưu file (Local/R2)"
+    int page_count "Tổng số trang tài liệu"
+    string status "pending | parsing | parsed | failed"
+    obj catalog "ticker, company_name, fiscal_year, period"
+    bool is_catalog_confirmed "Đã xác nhận metadata"
+    datetime created_at "Ngày upload"
+  }
+
+  INGESTION_JOBS {
+    string job_id PK "Khóa chính UUID"
+    string document_id FK "Tài liệu đang xử lý"
+    string status "queued | processing | done | failed"
+    string stage "docling | chunking | embedding | indexing"
+    int progress "Tiến độ xử lý 0-100%"
+    string error_message "Thông báo lỗi nếu thất bại"
+    datetime started_at "Thời điểm bắt đầu"
+    datetime finished_at "Thời điểm hoàn thành"
+  }
+
+  CONVERSATIONS {
+    string session_id PK "Khóa chính UUID"
+    string notebook_id FK "Thuộc notebook nào"
+    string user_id FK "Người thực hiện"
+    string title "Tiêu đề cuộc trò chuyện"
+    obj focus_state "Ngữ cảnh gần nhất: ticker, fiscal_year, metric"
+    list active_document_ids "Tập BCTC đang được chọn"
+    datetime created_at "Ngày tạo phiên"
+    datetime updated_at "Lần tương tác gần nhất"
+  }
+
+  MESSAGES {
+    string message_id PK "Khóa chính UUID"
+    string session_id FK "Thuộc phiên hội thoại"
+    string parent_message_id FK "ID tin nhắn cha (hỗ trợ phân nhánh)"
+    string role "user | assistant | system"
+    string content "Nội dung Markdown"
+    list citations "Danh sách trích dẫn: doc_id, page, snippet"
+    obj verification "Kết quả kiểm chứng số liệu (math, amounts)"
+    string understood "Giải thích cách hiểu của AI"
+    list suggestions "Gợi ý câu hỏi tiếp theo"
+    int rating "Đánh giá: +1 (Hữu ích) | -1 (Chưa tốt)"
+    datetime created_at "Thời điểm gửi"
+  }
+
+  CHUNKS {
+    string chunk_id PK "Khóa chính UUID"
+    string document_id FK "Thuộc tài liệu BCTC nào"
+    string notebook_id FK "Thuộc notebook nào"
+    int page_number "Trang tài liệu gốc"
+    string section_title "Tiêu đề mục BCTC"
+    string text_content "Nội dung văn bản và bảng Markdown"
+    bool has_table "Có chứa bảng biểu hay không"
+    vector dense_embedding "Vector ngữ nghĩa 1024 chiều (Qdrant)"
+    obj sparse_embedding "Trọng số từ khóa lexical (Qdrant)"
+  }

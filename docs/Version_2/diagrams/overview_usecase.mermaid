@@ -1,0 +1,72 @@
+%% =========================================================================
+%% Biểu đồ Use Case Tổng quan Hệ thống FinHelp
+%% Sinh viên: Vương Văn Thành (20225094) - ĐHBK Hà Nội (HUST)
+%% =========================================================================
+
+flowchart LR
+  %% Tác nhân
+  User(["👤 Người dùng\n(User / Chuyên viên PTTC)"])
+  Admin(["🛡️ Quản trị viên\n(System Administrator)"])
+  System(["🤖 Hệ thống FinHelp AI\n(Backend RAG Engine)"])
+
+  %% Nhóm Chức năng Xác thực
+  subgraph AuthGroup ["Phân hệ Xác thực & Tài khoản"]
+    UC_Login(["UC-AUTH-01: Đăng nhập"])
+    UC_Register(["UC-AUTH-02: Đăng ký"])
+    UC_Profile(["UC-AUTH-03: Quản lý hồ sơ"])
+  end
+
+  %% Nhóm Chức năng Quản lý Workspace & Tài liệu
+  subgraph DocGroup ["Phân hệ Quản lý Workspace & BCTC"]
+    UC_Notebook(["UC-WS-01: Quản lý Notebook"])
+    UC_Upload(["UC-INGEST-01: Tải lên BCTC PDF"])
+    UC_Catalog(["UC-INGEST-02: Xác nhận Catalog BCTC"])
+    UC_DocList(["UC-INGEST-03: Xem & Xóa tài liệu"])
+  end
+
+  %% Nhóm Chức năng Hỏi đáp & Kiểm chứng RAG
+  subgraph ChatGroup ["Phân hệ Phân tích & Kiểm chứng Số liệu"]
+    UC_Query(["UC-CHAT-01: Đặt câu hỏi BCTC tự nhiên"])
+    UC_MultiDoc(["UC-CHAT-02: So sánh chéo đa BCTC"])
+    UC_Verify(["UC-VERIFY-01: Kiểm chứng số liệu BCTC"])
+    UC_SplitView(["UC-VERIFY-02: Đối chiếu trang PDF Split-View"])
+    UC_History(["UC-CHAT-03: Quản lý phiên hội thoại"])
+  end
+
+  %% Nhóm Chức năng Quản trị Hệ thống
+  subgraph AdminGroup ["Phân hệ Quản trị & Giám sát"]
+    UC_UserMgmt(["UC-ADM-01: Quản lý tài khoản"])
+    UC_Quota(["UC-ADM-02: Cấu hình hạn mức Quota"])
+    UC_Audit(["UC-ADM-03: Xem nhật ký kiểm toán"])
+  end
+
+  %% Liên kết Người dùng (User)
+  User --> UC_Login
+  User --> UC_Register
+  User --> UC_Profile
+  User --> UC_Notebook
+  User --> UC_Upload
+  User --> UC_Catalog
+  User --> UC_DocList
+  User --> UC_Query
+  User --> UC_MultiDoc
+  User --> UC_SplitView
+  User --> UC_History
+
+  %% Quan hệ Include / Extend giữa các Use Case
+  UC_Query -.->|<<include>>| UC_Verify
+  UC_MultiDoc -.->|<<extend>>| UC_Query
+  UC_SplitView -.->|<<extend>>| UC_Verify
+  UC_Upload -.->|<<include>>| UC_Catalog
+
+  %% Liên kết Quản trị viên (Admin)
+  Admin --> UC_Login
+  Admin --> UC_UserMgmt
+  Admin --> UC_Quota
+  Admin --> UC_Audit
+  Admin --> UC_DocList
+
+  %% Liên kết Hệ thống AI Engine
+  System -.->|Xử lý Bóc tách & Nhúng Vector| UC_Upload
+  System -.->|Định tuyến & Truy vấn RRF Rerank| UC_Query
+  System -.->|Kiểm tra độ chính xác số học| UC_Verify
