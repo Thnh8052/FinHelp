@@ -269,6 +269,20 @@
   flex-wrap: wrap;
 }
 
+.fh-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fh-chips-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
 .fh-chip {
   padding: 6px 14px;
   border-radius: 9999px;
@@ -282,6 +296,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .fh-chip:hover {
@@ -594,12 +609,20 @@
   gap: 6px;
 }
 
-/* API Badge Pills */
+/* Capability & Comparison Badges */
+.fh-badge-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
 .fh-capability-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 3px 10px;
+  padding: 4px 11px;
   border-radius: 9999px;
   font-size: 11px;
   font-weight: 600;
@@ -607,6 +630,51 @@
   background: rgba(37, 99, 235, 0.12);
   border: 1px solid rgba(59, 130, 246, 0.28);
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.fh-comparison-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.fh-comparison-title {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.fh-comparison-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.25;
+}
+
+.fh-badge-risk {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.fh-badge-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .fh-api-pill {
@@ -987,17 +1055,91 @@
   .fh-chips-container {
     width: 100%;
     max-width: 100%;
-    justify-content: flex-start;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 6px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
     box-sizing: border-box;
   }
-  .fh-chips-container::-webkit-scrollbar {
-    display: none;
+  .fh-chips-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
   }
+  .fh-chips-row-1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .fh-chips-row-1 .fh-chips-label {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .fh-chips-row-1 .fh-chip {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    padding: 7px 12px;
+    font-size: 11.5px;
+  }
+  .fh-chips-row-2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .fh-chips-row-2 .fh-chip {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+  .fh-chip {
+    white-space: nowrap;
+  }
+  .fh-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fh-badge-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  .fh-card-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .fh-bento-visual-card .fh-card-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .fh-comparison-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .fh-capability-badge {
+    white-space: nowrap;
+    font-size: 11px;
+    padding: 3.5px 10px;
+  }
+  .fh-comparison-badge {
+    white-space: nowrap;
+    font-size: 11px;
+    padding: 3.5px 10px;
+  }
+
   .fh-preview-card {
     border-radius: 12px;
     margin: 24px 0 0;

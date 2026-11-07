@@ -175,32 +175,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </a>
           </div>
 
-          {/* Sample Query Chips */}
+          {/* Sample Query Chips (2-Row Balanced SaaS Layout) */}
           <div className="fh-chips-container">
-            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, marginRight: "4px" }}>
-              Try sample queries:
-            </span>
-            <button
-              onClick={() => setActiveQueryIndex(1)}
-              className={`fh-chip ${activeQueryIndex === 1 ? "active" : ""}`}
-            >
-              <IconCompare size={14} />
-              <span>YoY Revenue Comparison</span>
-            </button>
-            <button
-              onClick={() => setActiveQueryIndex(2)}
-              className={`fh-chip ${activeQueryIndex === 2 ? "active" : ""}`}
-            >
-              <IconCalculator size={14} />
-              <span>Calculate Free Cash Flow</span>
-            </button>
-            <button
-              onClick={() => setActiveQueryIndex(3)}
-              className={`fh-chip ${activeQueryIndex === 3 ? "active" : ""}`}
-            >
-              <IconSearch size={14} />
-              <span>Doubtful Debt Footnotes</span>
-            </button>
+            <div className="fh-chips-row fh-chips-row-1">
+              <span className="fh-chips-label">
+                Try sample queries:
+              </span>
+              <button
+                onClick={() => setActiveQueryIndex(1)}
+                className={`fh-chip ${activeQueryIndex === 1 ? "active" : ""}`}
+              >
+                <IconCompare size={14} />
+                <span>YoY Revenue Comparison</span>
+              </button>
+            </div>
+            <div className="fh-chips-row fh-chips-row-2">
+              <button
+                onClick={() => setActiveQueryIndex(2)}
+                className={`fh-chip ${activeQueryIndex === 2 ? "active" : ""}`}
+              >
+                <IconCalculator size={14} />
+                <span>Calculate Free Cash Flow</span>
+              </button>
+              <button
+                onClick={() => setActiveQueryIndex(3)}
+                className={`fh-chip ${activeQueryIndex === 3 ? "active" : ""}`}
+              >
+                <IconSearch size={14} />
+                <span>Doubtful Debt Footnotes</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -220,10 +224,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 FinHelp Workspace · Session #104
               </span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span className="fh-capability-badge">
-                Natural Language Analysis
-              </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <div className="fh-badge-wrapper">
+                <span className="fh-capability-badge">
+                  Natural Language Analysis
+                </span>
+              </div>
               <span
                 style={{
                   padding: "3px 9px",
@@ -233,6 +239,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   color: "#93c5fd",
                   fontSize: "11px",
                   fontWeight: 600,
+                  whiteSpace: "nowrap",
                 }}
               >
                 2 filings selected
@@ -447,7 +454,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               {/* Source references footer */}
               <div className="fh-sources-box">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
                   <span
                     style={{
                       fontSize: "11px",
@@ -459,9 +466,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   >
                     Source references (Audit Trail)
                   </span>
-                  <span className="fh-capability-badge">
-                    Verified Citations
-                  </span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-capability-badge">
+                      Verified Citations
+                    </span>
+                  </div>
                 </div>
 
                 <div className="fh-sources-grid">
@@ -499,13 +508,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="fh-comparison-wrapper">
             {/* Before Card */}
             <div className="fh-comparison-card fh-comparison-card-before">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ color: "#f87171", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              <div className="fh-comparison-header">
+                <span className="fh-comparison-title" style={{ color: "#f87171" }}>
                   Before: Manual Financial Audit
                 </span>
-                <span style={{ padding: "3px 8px", borderRadius: "9999px", background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5", fontSize: "11px", fontWeight: 600 }}>
-                  High Error Risk
-                </span>
+                <div className="fh-badge-wrapper">
+                  <span className="fh-comparison-badge fh-badge-risk">
+                    High Error Risk
+                  </span>
+                </div>
               </div>
               <div className="fh-mockup-doc">
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
@@ -529,13 +540,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             {/* After Card */}
             <div className="fh-comparison-card fh-comparison-card-after">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ color: "#60a5fa", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              <div className="fh-comparison-header">
+                <span className="fh-comparison-title" style={{ color: "#60a5fa" }}>
                   After: FinHelp Grounded Intelligence
                 </span>
-                <span style={{ padding: "3px 8px", borderRadius: "9999px", background: "rgba(16, 185, 129, 0.15)", color: "#6ee7b7", fontSize: "11px", fontWeight: 600 }}>
-                  100% Traceable
-                </span>
+                <div className="fh-badge-wrapper">
+                  <span className="fh-comparison-badge fh-badge-success">
+                    100% Traceable
+                  </span>
+                </div>
               </div>
               <div className="fh-mockup-doc" style={{ background: "#050b18", borderColor: "#1e3a8a" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#93c5fd" }}>
@@ -652,9 +665,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>Intelligent Layout &amp; Table Structure Recognition</p>
                   </div>
                 </div>
-                <span className="fh-capability-badge">
-                  Automated Ingestion
-                </span>
+                <div className="fh-badge-wrapper">
+                  <span className="fh-capability-badge">
+                    Automated Ingestion
+                  </span>
+                </div>
               </div>
 
               {/* Visual Table Bounding Mockup */}
@@ -694,9 +709,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>100% Grounded in Underlying Documents</p>
                   </div>
                 </div>
-                <span className="fh-capability-badge">
-                  Split-View Inspection
-                </span>
+                <div className="fh-badge-wrapper">
+                  <span className="fh-capability-badge">
+                    Split-View Inspection
+                  </span>
+                </div>
               </div>
 
               {/* Visual Split-View Graphic */}
@@ -731,9 +748,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconChat size={18} />
                   </div>
-                  <span className="fh-capability-badge">
-                    Interactive Q&amp;A
-                  </span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-capability-badge">
+                      Interactive Q&amp;A
+                    </span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">AI-powered Q&amp;A</h3>
                 <p className="fh-card-text">
@@ -752,9 +771,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconCompare size={18} />
                   </div>
-                  <span className="fh-capability-badge">
-                    Cross-Entity
-                  </span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-capability-badge">
+                      Cross-Entity
+                    </span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Multi-report Comparison</h3>
                 <p className="fh-card-text">
@@ -773,9 +794,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconCalculator size={18} />
                   </div>
-                  <span className="fh-capability-badge">
-                    Deterministic Math
-                  </span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-capability-badge">
+                      Deterministic Math
+                    </span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Financial Analysis</h3>
                 <p className="fh-card-text">
@@ -794,9 +817,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconHistory size={18} />
                   </div>
-                  <span className="fh-capability-badge">
-                    Isolated Vault
-                  </span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-capability-badge">
+                      Isolated Vault
+                    </span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Conversation History</h3>
                 <p className="fh-card-text">
