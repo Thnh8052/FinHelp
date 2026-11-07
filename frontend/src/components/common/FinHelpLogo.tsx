@@ -111,3 +111,4 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
 };
 
 export default FinHelpLogo;
+
