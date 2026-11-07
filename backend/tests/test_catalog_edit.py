@@ -2,11 +2,11 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.document import DocumentMetadata, DocumentRecord
-from app.services.ingestion.catalog_edit import CatalogUpdate, catalog_changes, needs_confirmation
-from app.services.ingestion.doc_header import company_candidates
-from app.services.query_router.catalog_route import names, words
-from app.services.query_router.planner import CatalogEntry, clean_label
+from app.modules.documents.document import DocumentMetadata, DocumentRecord
+from app.modules.documents.catalog_edit import CatalogUpdate, catalog_changes, needs_confirmation
+from app.modules.ingestion.doc_header import company_candidates
+from app.modules.query_router.catalog_route import names, words
+from app.modules.query_router.planner import CatalogEntry, clean_label
 
 TEXT = "ADVANCED MICRO DEVICES, INC. (Exact name of registrant) Nasdaq: AMD. Annual Report on Form 10-K for fiscal 2024."
 GOOD = {"company_name": "Advanced Micro Devices, Inc.", "ticker": "amd", "report_type": "10-K", "fiscal_year": 2024, "period_end": "2024-12-28"}
@@ -88,11 +88,12 @@ def test_only_the_owner_edits_and_bad_input_is_422(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from app.api.v1 import deps, documents as doc_api
-    from app.api.v1.deps import get_optional_user_id
-    from app.db.mongodb import get_database
-    from app.db.qdrant import get_qdrant_client
-    from app.models.notebook import NotebookRecord
+    from app.shared import deps
+    from app.modules.documents import documents as doc_api
+    from app.shared.deps import get_optional_user_id
+    from app.infrastructure.database.mongodb import get_database
+    from app.infrastructure.database.qdrant import get_qdrant_client
+    from app.modules.notebooks.notebook import NotebookRecord
 
     notebooks = {"nb": NotebookRecord(notebook_id="nb", user_id="alice", title="A"),
                  "nb_sec_demo": NotebookRecord(notebook_id="nb_sec_demo", user_id="admin", title="S")}

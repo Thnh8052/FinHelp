@@ -1,5 +1,5 @@
 """target_resolver: company / year / quarter -> filing, with fiscal years named differently by companies."""
-from app.services.query_router.target_resolver import Filing, Target, alignment_note, resolve
+from app.modules.query_router.target_resolver import Filing, Target, alignment_note, resolve
 
 F = [
     Filing("ulta_2023_10k", "ULTA BEAUTY, INC", "10-K", 2022, None, 2022, "2023-01-28"),        # fiscal 2022 ends 2023-01-28

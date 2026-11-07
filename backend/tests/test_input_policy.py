@@ -3,10 +3,10 @@ import json
 
 import pytest
 
-from app.models.document import DocumentMetadata, DocumentRecord
-from app.services.query_router import input_policy as policy
-from app.services.query_router.input_policy import SourceInfo, decide
-from app.services.rag_workflow import retrieval_step
+from app.modules.documents.document import DocumentMetadata, DocumentRecord
+from app.modules.query_router import input_policy as policy
+from app.modules.query_router.input_policy import SourceInfo, decide
+from app.modules.chat import retrieval_step
 
 NIKE19 = SourceInfo("NIKE, Inc", "10-K", 2019, None, "NIKE, Inc | 10-K | FY2019")
 NIKE23 = SourceInfo("NIKE, Inc", "10-K", 2023, None, "NIKE, Inc | 10-K | FY2023")
@@ -130,8 +130,8 @@ def _doc(doc_id, name, **meta):
 
 
 def _orchestrator(docs, monkeypatch, listed=()):
-    from app.services.rag_workflow import orchestrator as orch_mod
-    from app.services.rag_workflow.orchestrator import RAGWorkflowOrchestrator
+    from app.modules.chat import orchestrator as orch_mod
+    from app.modules.chat.orchestrator import RAGWorkflowOrchestrator
 
     class Repo:
         async def get_by_notebook(self, notebook_id):
@@ -213,7 +213,7 @@ async def test_partial_answer_when_one_part_is_about_a_selected_company(monkeypa
 
 
 async def test_follow_up_is_rewritten_shown_and_answered(monkeypatch):
-    from app.services.rag_workflow import orchestrator as orch_mod
+    from app.modules.chat import orchestrator as orch_mod
 
     orch, seen = _orchestrator(NIKE_DOCS[1:], monkeypatch)
 
@@ -234,7 +234,7 @@ async def test_follow_up_is_rewritten_shown_and_answered(monkeypatch):
 
 
 async def test_several_questions_are_answered_one_by_one_with_distinct_citations(monkeypatch):
-    from app.services.rag_workflow import orchestrator as orch_mod
+    from app.modules.chat import orchestrator as orch_mod
 
     async def rewrite(q, history):  # the 2nd and 3rd question lean on the 1st
         return "What is Nike's " + ("total assets?" if "assets" in q else "net income?")

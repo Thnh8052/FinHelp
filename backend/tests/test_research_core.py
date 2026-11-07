@@ -4,11 +4,11 @@ import json
 import pytest
 
 from app.core.config import settings
-from app.services.ingestion.chunker import FinancialChunkerService, parse_blocks
-from app.services.llm.llm_client import LLMUnavailableError, chat_completion
-from app.services.query_router import decomposer
-from app.services.rag_workflow import generator
-from app.services.retrieval.fusion import descending_ranks, fuse_with_rerank, rrf_merge
+from app.modules.ingestion.chunker import FinancialChunkerService, parse_blocks
+from app.modules.generation.llm_client import LLMUnavailableError, chat_completion
+from app.modules.query_router import decomposer
+from app.modules.generation import generator
+from app.modules.retrieval.fusion import descending_ranks, fuse_with_rerank, rrf_merge
 
 
 def words(text: str) -> int:
@@ -165,7 +165,7 @@ async def test_decompose_ignores_malformed_json(monkeypatch):
 
 # ---------------------------------------------------------------- GPU turn-taking on out-of-memory
 def _fake_gpu(monkeypatch):
-    from app.services.retrieval import gpu
+    from app.modules.retrieval import gpu
 
     released = []
     monkeypatch.setattr(gpu, "_UNLOADERS", {"a": lambda: released.append("a"), "b": lambda: released.append("b")})
@@ -211,7 +211,7 @@ async def test_gpu_second_oom_and_other_errors_propagate(monkeypatch):
 # ---------------------------------------------------------------- fast parser
 def test_pymupdf_parser_reads_text(tmp_path):
     fitz = pytest.importorskip("fitz")
-    from app.services.ingestion.parser import _pymupdf_pages
+    from app.modules.ingestion.parser import _pymupdf_pages
 
     pdf = tmp_path / "t.pdf"
     doc = fitz.open()

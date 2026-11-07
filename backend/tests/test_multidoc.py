@@ -4,15 +4,16 @@ import json
 import pytest
 
 from app.core.config import settings
-from app.models.document import DocumentMetadata, DocumentRecord
-from app.services.ingestion.doc_header import extract_document_header
-from app.services.llm.llm_client import LLMUnavailableError
-from app.services.query_router import planner
-from app.services.query_router.planner import CatalogEntry
-from app.services.rag_workflow import generator, retrieval_step
-from app.services.rag_workflow.orchestrator import catalog_entry, document_label
-from app.services.retrieval.fusion import round_robin_merge
-from app.services.retrieval.qdrant_retriever import QdrantRetriever
+from app.modules.documents.document import DocumentMetadata, DocumentRecord
+from app.modules.ingestion.doc_header import extract_document_header
+from app.modules.generation.llm_client import LLMUnavailableError
+from app.modules.query_router import planner
+from app.modules.query_router.planner import CatalogEntry
+from app.modules.generation import generator
+from app.modules.chat import retrieval_step
+from app.modules.chat.orchestrator import catalog_entry, document_label
+from app.modules.retrieval.fusion import round_robin_merge
+from app.modules.retrieval.qdrant_retriever import QdrantRetriever
 
 
 # ---------------------------------------------------------------- equal slots
@@ -206,7 +207,7 @@ class _FakeReranker:
 
 def _service(monkeypatch, top_k, rerank_top_n):
     from app.core.config import settings
-    from app.services.retrieval.hybrid_search import HybridSearchService
+    from app.modules.retrieval.hybrid_search import HybridSearchService
 
     monkeypatch.setattr(settings, "RETRIEVAL_TOP_K", top_k)
     monkeypatch.setattr(settings, "MULTIDOC_RERANK_TOP_N", rerank_top_n)
@@ -218,7 +219,7 @@ def _service(monkeypatch, top_k, rerank_top_n):
 
 async def test_retrieve_multi_doc_equal_slots_without_rerank(monkeypatch):
     from app.core.config import settings
-    from app.services.query_router.planner import PlanItem
+    from app.modules.query_router.planner import PlanItem
 
     svc = _service(monkeypatch, top_k=4, rerank_top_n=0)
     plan = [PlanItem("revenue", ["d1"]), PlanItem("revenue", ["d2"])]
@@ -229,7 +230,7 @@ async def test_retrieve_multi_doc_equal_slots_without_rerank(monkeypatch):
 
 
 async def test_retrieve_multi_doc_qwen_orders_each_item_and_keeps_chunks_near_its_best(monkeypatch):
-    from app.services.query_router.planner import PlanItem
+    from app.modules.query_router.planner import PlanItem
 
     svc = _service(monkeypatch, top_k=2, rerank_top_n=4)
     chunks = await svc.retrieve_multi_doc([PlanItem("revenue", ["d1"]), PlanItem("assets", ["d2"])], "nb", ["d1", "d2"])
@@ -238,7 +239,7 @@ async def test_retrieve_multi_doc_qwen_orders_each_item_and_keeps_chunks_near_it
 
 
 async def test_retrieve_multi_doc_survives_reranker_failure(monkeypatch):
-    from app.services.query_router.planner import PlanItem
+    from app.modules.query_router.planner import PlanItem
 
     svc = _service(monkeypatch, top_k=2, rerank_top_n=4)
 
@@ -251,7 +252,7 @@ async def test_retrieve_multi_doc_survives_reranker_failure(monkeypatch):
 
 
 def test_hybrid_order_mixes_dense_and_sparse_and_keeps_dense_without_weights(monkeypatch):
-    from app.services.retrieval.hybrid_search import hybrid_order
+    from app.modules.retrieval.hybrid_search import hybrid_order
 
     hits = [{"chunk_id": "a", "score": 0.80}, {"chunk_id": "b", "score": 0.79}, {"chunk_id": "c", "score": 0.10}]
     stats = {"a": ({"1": 0.1}, 10), "b": ({"7": 0.9}, 10), "c": ({}, 10)}
@@ -261,7 +262,7 @@ def test_hybrid_order_mixes_dense_and_sparse_and_keeps_dense_without_weights(mon
 
 def test_allocate_relative_threshold_round_robin_and_token_cap(monkeypatch):
     from app.core.config import settings
-    from app.services.retrieval.hybrid_search import allocate
+    from app.modules.retrieval.hybrid_search import allocate
 
     monkeypatch.setattr(settings, "MULTIDOC_MAX_TOKENS", 250)
     lanes = [(["a", "b", "c"], {"a": 0.9, "b": 0.5, "c": 0.2}), (["x", "y"], {"x": 0.04, "y": 0.01})]
@@ -303,7 +304,7 @@ class _PlannedReranker:
 
 
 def _planned(monkeypatch, by_document, text, score):
-    from app.services.retrieval.hybrid_search import HybridSearchService
+    from app.modules.retrieval.hybrid_search import HybridSearchService
 
     monkeypatch.setattr(settings, "RERANK_ENABLED", True)
     svc = HybridSearchService.__new__(HybridSearchService)
@@ -314,7 +315,7 @@ def _planned(monkeypatch, by_document, text, score):
 def test_bm25_scores_prefer_rare_terms_and_short_chunks():
     from collections import Counter
 
-    from app.services.retrieval.hybrid_search import bm25_scores
+    from app.modules.retrieval.hybrid_search import bm25_scores
 
     chunks = [Counter(goodwill=1, total=1), Counter(total=1, assets=3), Counter(total=2, other=8)]
     s = bm25_scores("Goodwill total", chunks)
@@ -326,7 +327,7 @@ def test_bm25_scores_prefer_rare_terms_and_short_chunks():
 def test_dense_bm25_order_lets_a_shared_term_win_over_a_close_dense_score():
     from collections import Counter
 
-    from app.services.retrieval.hybrid_search import dense_bm25_order
+    from app.modules.retrieval.hybrid_search import dense_bm25_order
 
     hits = [{"chunk_id": "a", "score": 0.80}, {"chunk_id": "b", "score": 0.79}, {"chunk_id": "c", "score": 0.10}]
     counts = {"a": Counter(other=5), "b": Counter(goodwill=5), "c": Counter(other=5)}
@@ -336,7 +337,7 @@ def test_dense_bm25_order_lets_a_shared_term_win_over_a_close_dense_score():
 
 
 def test_planned_ceilings_grow_with_the_question_and_have_no_upper_limit():
-    from app.services.retrieval.hybrid_search import planned_ceilings
+    from app.modules.retrieval.hybrid_search import planned_ceilings
 
     assert planned_ceilings(3, 2) == (12, 8192 + 2 * 1024)
     assert planned_ceilings(9, 3) == (12, 18432)
@@ -345,7 +346,7 @@ def test_planned_ceilings_grow_with_the_question_and_have_no_upper_limit():
 
 
 def test_allocate_planned_limits_the_question_search_only_and_stops_at_both_ceilings():
-    from app.services.retrieval.hybrid_search import allocate_planned
+    from app.modules.retrieval.hybrid_search import allocate_planned
 
     sub = (["a", "b", "c", "d", "e"], {c: 0.9 for c in "abcde"})
     question = (["q1", "q2", "q3", "q4"], {"q1": 0.9, "q2": 0.9, "q3": 0.9, "q4": 0.9})
@@ -358,7 +359,7 @@ def test_allocate_planned_limits_the_question_search_only_and_stops_at_both_ceil
 
 
 async def test_retrieve_planned_searches_each_document_and_adds_the_question_last(monkeypatch):
-    from app.services.query_router.planner import PlanItem
+    from app.modules.query_router.planner import PlanItem
 
     by_document = {"d1": [("a1", 0.9), ("a2", 0.8), ("a3", 0.7)], "d2": [("b1", 0.9), ("b2", 0.8)], "d3": [("c1", 0.99)]}
     text = {"a1": "revenue a", "a2": "revenue aa", "a3": "other", "b1": "revenue b", "b2": "assets", "c1": "never"}
@@ -371,7 +372,7 @@ async def test_retrieve_planned_searches_each_document_and_adds_the_question_las
 
 
 async def test_retrieve_planned_has_no_cap_of_8_but_a_guard_and_survives_the_reranker(monkeypatch):
-    from app.services.query_router.planner import PlanItem
+    from app.modules.query_router.planner import PlanItem
 
     by_document = {"d1": [("a1", 0.9), ("a2", 0.8), ("a3", 0.7), ("a4", 0.6)]}
     text = {c: c for c, _ in by_document["d1"]}
@@ -407,7 +408,7 @@ def _doc(doc_id, name, **meta):
 
 
 def _orchestrator(docs):
-    from app.services.rag_workflow.orchestrator import RAGWorkflowOrchestrator
+    from app.modules.chat.orchestrator import RAGWorkflowOrchestrator
 
     class Repo:
         async def get_by_notebook(self, notebook_id):
@@ -419,7 +420,7 @@ def _orchestrator(docs):
 
 
 async def test_several_documents_without_a_selection_are_refused():
-    from app.services.rag_workflow.orchestrator import SourceSelectionError
+    from app.modules.chat.orchestrator import SourceSelectionError
 
     orch = _orchestrator([_doc("d1", "a.pdf"), _doc("d2", "b.pdf")])
     with pytest.raises(SourceSelectionError):
@@ -427,7 +428,7 @@ async def test_several_documents_without_a_selection_are_refused():
 
 
 async def test_no_selection_is_refused_even_with_one_document_and_selection_keeps_order():
-    from app.services.rag_workflow.orchestrator import SourceSelectionError
+    from app.modules.chat.orchestrator import SourceSelectionError
 
     orch = _orchestrator([_doc("d1", "a.pdf")])
     with pytest.raises(SourceSelectionError):  # the system never guesses the scope (chat is disabled until a source is selected)
@@ -438,7 +439,7 @@ async def test_no_selection_is_refused_even_with_one_document_and_selection_keep
 
 
 async def test_unknown_or_unready_selection_is_refused():
-    from app.services.rag_workflow.orchestrator import SourceSelectionError
+    from app.modules.chat.orchestrator import SourceSelectionError
 
     pending = _doc("d2", "b.pdf")
     pending.indexing_status = "indexing"
@@ -449,8 +450,8 @@ async def test_unknown_or_unready_selection_is_refused():
 
 
 async def test_retrieve_never_widens_the_selection(monkeypatch):
-    from app.services.query_router.planner import PlanItem
-    from app.services.rag_workflow import orchestrator as orch_mod
+    from app.modules.query_router.planner import PlanItem
+    from app.modules.chat import orchestrator as orch_mod
 
     docs = [_doc("d1", "a.pdf", company_name="Coca-Cola", fiscal_year=2022, report_type="10-K"),
             _doc("d2", "b.pdf", company_name="PepsiCo", fiscal_year=2022, report_type="10-K")]
@@ -519,8 +520,8 @@ async def test_retrieve_never_widens_the_selection(monkeypatch):
 
 
 async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_without_documents(monkeypatch):
-    from app.services.query_router.planner import PlanItem
-    from app.services.rag_workflow import orchestrator as orch_mod
+    from app.modules.query_router.planner import PlanItem
+    from app.modules.chat import orchestrator as orch_mod
 
     docs = [_doc("d1", "a.pdf", company_name="Coca-Cola", fiscal_year=2022, report_type="10-K", period_end="2022-12-31"),
             _doc("d2", "b.pdf", company_name="PepsiCo", fiscal_year=2022, report_type="10-K", period_end="2022-12-31"),
@@ -567,8 +568,8 @@ async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_with
 
 
 async def test_targeted_documents_skip_the_net_and_v1_retries_a_missing_one(monkeypatch):
-    from app.services.query_router.planner import PlanItem
-    from app.services.rag_workflow import orchestrator as orch_mod
+    from app.modules.query_router.planner import PlanItem
+    from app.modules.chat import orchestrator as orch_mod
 
     docs = [_doc("d1", "a.pdf", company_name="Coca-Cola", fiscal_year=2022), _doc("d2", "b.pdf", company_name="PepsiCo", fiscal_year=2022),
             _doc("d3", "c.pdf", company_name="Apple", fiscal_year=2022)]
@@ -605,7 +606,7 @@ async def test_targeted_documents_skip_the_net_and_v1_retries_a_missing_one(monk
 
 # ---------------------------------------------------------------- one search per (query, document)
 def test_expand_plan_gives_every_document_its_own_search():
-    from app.services.query_router.planner import PlanItem, expand_plan
+    from app.modules.query_router.planner import PlanItem, expand_plan
 
     plan = [PlanItem("net revenue", ["d1", "d2", "d3", "d4"])]
     out = expand_plan(plan, ["d1", "d2", "d3", "d4", "d5"], 8)
@@ -615,7 +616,7 @@ def test_expand_plan_gives_every_document_its_own_search():
 
 
 def test_expand_plan_keeps_the_plan_when_it_would_exceed_the_limit():
-    from app.services.query_router.planner import PlanItem, expand_plan
+    from app.modules.query_router.planner import PlanItem, expand_plan
 
     plan = [PlanItem("a", ["d1", "d2", "d3"]), PlanItem("b", ["d1", "d2", "d3"])]
     assert expand_plan(plan, ["d1", "d2", "d3"], 5) == plan
@@ -689,7 +690,7 @@ async def test_unlisted_companies_retries_empty_replies_and_fails_open(monkeypat
 
 
 async def test_question_about_a_company_outside_the_selection_is_refused_without_retrieval(monkeypatch):
-    from app.services.rag_workflow import orchestrator as orch_mod
+    from app.modules.chat import orchestrator as orch_mod
 
     docs = [_doc("d1", "a.pdf", company_name="Coca-Cola", fiscal_year=2022, report_type="10-K")]
 
@@ -733,7 +734,7 @@ def test_extract_document_header_leaves_period_end_empty_when_the_date_is_not_pr
 
 
 async def test_targeted_question_with_an_unknown_name_nets_the_other_documents(monkeypatch):
-    from app.services.rag_workflow import orchestrator as orch_mod
+    from app.modules.chat import orchestrator as orch_mod
 
     docs = [_doc("d1", "a.pdf", company_name="Royal Bank of Canada", fiscal_year=2025), _doc("d2", "b.pdf", company_name="The Toronto-Dominion Bank", fiscal_year=2025)]
     seen = {}

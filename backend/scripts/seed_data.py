@@ -14,11 +14,11 @@ if hasattr(sys.stderr, "reconfigure"):
 
 from app.core.logging import logger
 from app.core.security import get_password_hash
-from app.db.mongodb import MongoManager
-from app.db.repositories.notebook_repo import NotebookRepository
-from app.db.repositories.user_repo import UserRepository
-from app.models.notebook import NotebookRecord
-from app.models.user import UserRecord
+from app.infrastructure.database.mongodb import MongoManager
+from app.modules.notebooks.notebook_repo import NotebookRepository
+from app.modules.auth.user_repo import UserRepository
+from app.modules.notebooks.notebook import NotebookRecord
+from app.modules.auth.user import UserRecord
 
 
 async def seed():
@@ -95,8 +95,8 @@ async def seed():
         logger.info("Demo notebook 'nb_demo_001' (SEC 10-K) seeded.")
 
     # 3. Không gian phân tích Notebook & Phiên Chat cho Quản Trị Viên (Vũ Thành) - SEC 10-K Filings
-    from app.db.repositories.chat_repo import ChatRepository
-    from app.models.chat import ChatSessionRecord, MessageRecord
+    from app.modules.chat.chat_repo import ChatRepository
+    from app.modules.chat.chat_models import ChatSessionRecord, MessageRecord
 
     chat_repo = ChatRepository(db)
     vuthanh_nb = await notebook_repo.get_by_id("nb_vuthanh_01")

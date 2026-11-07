@@ -2,9 +2,10 @@
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1 import deps, documents as documents_api
-from app.models.document import DocumentRecord
-from app.models.notebook import NotebookRecord
+from app.shared import deps
+from app.modules.documents import documents as documents_api
+from app.modules.documents.document import DocumentRecord
+from app.modules.notebooks.notebook import NotebookRecord
 
 
 GUEST_NOTEBOOK = "nb_guest_" + "d" * 32

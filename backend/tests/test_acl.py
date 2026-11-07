@@ -3,13 +3,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.v1 import chat as chat_api
-from app.api.v1 import deps
-from app.api.v1.deps import can_access_notebook, can_chat, get_optional_user_id, is_guest_notebook, owns_session
-from app.db.mongodb import get_database
-from app.db.qdrant import get_qdrant_client
-from app.models.chat import ChatSessionRecord, MessageRecord
-from app.models.notebook import NotebookRecord
+from app.modules.chat import chat as chat_api
+from app.shared import deps
+from app.shared.deps import can_access_notebook, can_chat, get_optional_user_id, is_guest_notebook, owns_session
+from app.infrastructure.database.mongodb import get_database
+from app.infrastructure.database.qdrant import get_qdrant_client
+from app.modules.chat.chat_models import ChatSessionRecord, MessageRecord
+from app.modules.notebooks.notebook import NotebookRecord
 
 GUEST_ID = "nb_guest_" + "a" * 32
 NOTEBOOKS = {
@@ -51,7 +51,7 @@ def test_session_belongs_to_one_caller():
 
 
 def test_qdrant_filter_refuses_a_search_without_notebook():
-    from app.services.retrieval.qdrant_retriever import QdrantRetriever
+    from app.modules.retrieval.qdrant_retriever import QdrantRetriever
 
     retriever = QdrantRetriever.__new__(QdrantRetriever)
     with pytest.raises(ValueError):
@@ -168,7 +168,7 @@ def test_messages_and_session_lists_are_the_callers_own(client):
 
 
 def test_document_list_and_upload_check_the_notebook(monkeypatch):
-    from app.api.v1 import documents as doc_api
+    from app.modules.documents import documents as doc_api
 
     monkeypatch.setattr(deps, "NotebookRepository", FakeNotebooks)
     caller = {"id": "bob"}

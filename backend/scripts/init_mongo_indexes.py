@@ -1,5 +1,5 @@
 import asyncio
-from app.db.mongodb import MongoManager
+from app.infrastructure.database.mongodb import MongoManager
 from app.core.logging import logger
 
 

@@ -14,8 +14,8 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 import httpx
-from app.db.mongodb import MongoManager
-from app.db.repositories.user_repo import UserRepository
+from app.infrastructure.database.mongodb import MongoManager
+from app.modules.auth.user_repo import UserRepository
 from app.main import app
 
 async def check_auth():

@@ -4,19 +4,19 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.api.v1 import auth as auth_api
-from app.api.v1 import deps
-from app.api.v1 import documents as documents_api
-from app.api.v1.deps import get_optional_user_id
-from app.api.v1.router import api_v1_router
+from app.modules.auth import auth as auth_api
+from app.shared import deps
+from app.modules.documents import documents as documents_api
+from app.shared.deps import get_optional_user_id
+from app.api_router import api_v1_router
 from app.core.config import Settings, settings
 from app.core.security import get_password_hash, verify_password
-from app.db import init_admin
-from app.db.mongodb import get_database
-from app.db.qdrant import get_qdrant_client
-from app.models.document import DocumentRecord
-from app.models.notebook import NotebookRecord
-from app.models.user import UserRecord
+from app.modules.admin import init_admin
+from app.infrastructure.database.mongodb import get_database
+from app.infrastructure.database.qdrant import get_qdrant_client
+from app.modules.documents.document import DocumentRecord
+from app.modules.notebooks.notebook import NotebookRecord
+from app.modules.auth.user import UserRecord
 
 REAL_PASSWORD = "a-long-real-password"
 ADMIN = UserRecord(user_id="usr_admin", email="admin@example.com", username="admin", hashed_password=get_password_hash(REAL_PASSWORD), role="admin")

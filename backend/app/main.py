@@ -7,15 +7,15 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1.router import api_v1_router
+from app.api_router import api_v1_router
 from app.core.config import settings
 from app.core.exceptions import DomainException
 from app.core.logging import logger
-from app.db.init_admin import setup_admin_and_clean_mocks
-from app.db.mongodb import MongoManager
-from app.db.qdrant import QdrantManager
-from app.services.ingestion.pipeline import IngestionPipeline
-from app.services.retrieval.warmup import warm_models
+from app.modules.admin.init_admin import setup_admin_and_clean_mocks
+from app.infrastructure.database.mongodb import MongoManager
+from app.infrastructure.database.qdrant import QdrantManager
+from app.modules.ingestion.pipeline import IngestionPipeline
+from app.modules.retrieval.warmup import warm_models
 
 
 @asynccontextmanager

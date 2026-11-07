@@ -1,6 +1,6 @@
 """G3: the documents a question targets, by @file or by code (no model), with defaults instead of blocking questions."""
-from app.services.query_router.target_resolver import Filing
-from app.services.query_router.target_scope import ScopeDoc, decide_targets
+from app.modules.query_router.target_resolver import Filing
+from app.modules.query_router.target_scope import ScopeDoc, decide_targets
 
 
 def doc(i, company, fy, ticker=None, form="10-K", end=None, covered=None):

@@ -1,11 +1,11 @@
 """A2 after generation: citations point at real excerpts of the right company / period; one repair, then a visible flag."""
-from app.models.document import DocumentMetadata, DocumentRecord
-from app.services.answer_check.citations import check_citations, problems
-from app.services.query_router.input_policy import Decision
-from app.services.query_router.target_resolver import Filing
-from app.services.query_router.target_scope import ScopeDoc
-from app.services.rag_workflow.orchestrator import RAGWorkflowOrchestrator, RetrievalResult
-from app.services.rag_workflow.replies import unlisted_message
+from app.modules.documents.document import DocumentMetadata, DocumentRecord
+from app.modules.generation.answer_check.citations import check_citations, problems
+from app.modules.query_router.input_policy import Decision
+from app.modules.query_router.target_resolver import Filing
+from app.modules.query_router.target_scope import ScopeDoc
+from app.modules.chat.orchestrator import RAGWorkflowOrchestrator, RetrievalResult
+from app.modules.generation.replies import unlisted_message
 
 AMD = ScopeDoc("amd", "AMD | 10-K | FY2024", {"entity": "Advanced Micro Devices, Inc.", "ticker": "AMD"},
                Filing("amd", "Advanced Micro Devices, Inc.", "10-K", 2024), [2024, 2023, 2022])
