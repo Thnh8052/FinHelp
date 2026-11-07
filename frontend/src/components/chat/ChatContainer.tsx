@@ -54,6 +54,44 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const labelOf = (id: string) => mentionOptions.find((o) => o.document_id === id)?.label || id;
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const promptsTrackRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+
+  const handlePromptsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+    }
+  };
+
+  const handlePromptsMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = promptsTrackRef.current;
+    if (!el) return;
+    isDraggingRef.current = false;
+    dragStartXRef.current = e.pageX - el.offsetLeft;
+    scrollLeftRef.current = el.scrollLeft;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const x = moveEvent.pageX - el.offsetLeft;
+      const walk = (x - dragStartXRef.current) * 1.4;
+      if (Math.abs(walk) > 4) {
+        isDraggingRef.current = true;
+      }
+      el.scrollLeft = scrollLeftRef.current - walk;
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      setTimeout(() => {
+        isDraggingRef.current = false;
+      }, 50);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -69,10 +107,12 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     if (!el) return;
     el.style.height = "auto";
     const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
-    const minHeight = isMobile ? 24 : 26;
-    const maxHeight = isMobile ? 150 : 220;
+    const isSmallMobile = typeof window !== "undefined" && window.innerWidth <= 480;
+    const minHeight = isSmallMobile ? 18 : isMobile ? 20 : 22;
+    const maxHeight = isMobile ? 120 : 180;
     const newHeight = Math.min(Math.max(el.scrollHeight, minHeight), maxHeight);
     el.style.height = `${newHeight}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
   };
 
   useEffect(() => {
@@ -88,7 +128,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     setMentions([]);
     if (textareaRef.current) {
       const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
-      textareaRef.current.style.height = isMobile ? "24px" : "26px";
+      const isSmallMobile = typeof window !== "undefined" && window.innerWidth <= 480;
+      textareaRef.current.style.height = isSmallMobile ? "18px" : isMobile ? "20px" : "22px";
+      textareaRef.current.style.overflowY = "hidden";
     }
     onSendMessage(toSend, usedMentions);
   };
@@ -285,21 +327,29 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           {messages.length <= 3 && (
             <div className="chat-sample-prompts">
               <span className="chat-prompts-label">Suggestions:</span>
-              {samplePrompts.map((p, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setInput(p);
-                    textareaRef.current?.focus();
-                  }}
-                  disabled={isLoading || !hasSources}
-                  className="chat-sample-btn"
-                  title="Insert sample query into prompt input"
-                >
-                  {p}
-                </button>
-              ))}
+              <div
+                ref={promptsTrackRef}
+                className="chat-sample-track"
+                onWheel={handlePromptsWheel}
+                onMouseDown={handlePromptsMouseDown}
+              >
+                {samplePrompts.map((p, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      if (isDraggingRef.current) return;
+                      setInput(p);
+                      textareaRef.current?.focus();
+                    }}
+                    disabled={isLoading || !hasSources}
+                    className="chat-sample-btn"
+                    title="Insert sample query into prompt input"
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -332,8 +382,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={
                 hasSources
-                  ? "Ask about your financial reports (e.g. Compare revenue growth and calculate CAGR)..."
-                  : "Select source filings to begin asking questions..."
+                  ? "Ask about selected reports (e.g. revenue, CAGR, margins)..."
+                  : "Select source filings to ask questions..."
               }
               disabled={isLoading || !hasSources}
               rows={1}
