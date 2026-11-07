@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { ChatMessage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import { CheckIcon, ChevronRightIcon, CopyIcon, SendIcon } from "../common/Icons";
+import { CheckIcon, ChevronRightIcon, CopyIcon, FileTextIcon, SendIcon } from "../common/Icons";
 import "./chat.css";
 
 interface ChatContainerProps {
@@ -164,6 +164,16 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               <p className="chat-empty-desc">
                 Select or upload financial reports (PDF Form 10-K / Annual Filings), then ask natural language questions about margins, cash flows, or audit disclosures.
               </p>
+              {!hasSources && (onToggleSources || onOpenSources) && (
+                <button
+                  type="button"
+                  onClick={onToggleSources || onOpenSources}
+                  className="chat-empty-select-docs-btn"
+                >
+                  <FileTextIcon size={14} />
+                  <span>Choose Filings to Analyze</span>
+                </button>
+              )}
             </div>
           )}
           {messages.map((msg) => {
@@ -323,7 +333,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               placeholder={
                 hasSources
                   ? "Ask about your financial reports (e.g. Compare revenue growth and calculate CAGR)..."
-                  : "Please select source filings in the right panel before asking questions"
+                  : "Select source filings to begin asking questions..."
               }
               disabled={isLoading || !hasSources}
               rows={1}
