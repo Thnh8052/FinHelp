@@ -1,0 +1,143 @@
+/* =========================================================================
+   FinHelp Landing Page Styles (Modern Centered SaaS)
+   ========================================================================= */
+
+.fh-landing-root {
+  width: 100%;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: #0b0f19;
+  color: #f3f4f6;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  scroll-behavior: smooth;
+  position: relative;
+}
+
+/* Subtle Tech Grid Pattern */
+.fh-grid-pattern {
+  background-size: 36px 36px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+}
+
+/* Radial Glows */
+.fh-hero-glow {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.15) 0%, rgba(14, 165, 233, 0.05) 50%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fh-glow-blue {
+  box-shadow: 0 20px 80px -20px rgba(37, 99, 235, 0.25);
+}
+
+/* Typography Helpers */
+.fh-heading {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.fh-finance-text {
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.fh-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Animations */
+@keyframes fhPulseHighlight {
+  0%, 100% {
+    background-color: rgba(59, 130, 246, 0.15);
+  }
+  50% {
+    background-color: rgba(59, 130, 246, 0.38);
+  }
+}
+
+.fh-citation-pulse {
+  animation: fhPulseHighlight 2s infinite ease-in-out;
+}
+
+/* API Badge Styles */
+.fh-api-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.fh-api-pill-get {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.fh-api-pill-get:hover {
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.fh-api-pill-post {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.fh-api-pill-post:hover {
+  background: rgba(59, 130, 246, 0.22);
+}
+
+.fh-api-pill-patch {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.fh-api-pill-patch:hover {
+  background: rgba(245, 158, 11, 0.22);
+}
+
+/* Glass Cards */
+.fh-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(30, 41, 59, 0.8);
+  border-radius: 16px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fh-card:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Scrollbar */
+.fh-landing-root::-webkit-scrollbar {
+  width: 8px;
+}
+
+.fh-landing-root::-webkit-scrollbar-track {
+  background: #0b0f19;
+}
+
+.fh-landing-root::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+.fh-landing-root::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}

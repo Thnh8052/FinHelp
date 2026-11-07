@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { UserDropdown } from "../auth/UserDropdown";
 import { FileTextIcon, MenuIcon, TableIcon, UserIcon } from "../common/Icons";
+import { FinHelpLogo } from "../common/FinHelpLogo";
 import "./layout.css";
 
 interface NavbarProps {
@@ -16,6 +17,7 @@ interface NavbarProps {
   onExportReport?: () => void;
   onOpenAuthModal: () => void;
   onOpenAdminDashboard: () => void;
+  onNavigateHome?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -30,6 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onExportReport: _onExportReport,
   onOpenAuthModal,
   onOpenAdminDashboard,
+  onNavigateHome,
 }) => {
   const { user } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -62,12 +65,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             <MenuIcon size={16} />
           </button>
         )}
-        <div className="navbar-brand-logo">
-          <span>F</span>
+        <div className="cursor-pointer" onClick={onNavigateHome} title="Về trang chủ FinHelp">
+          <FinHelpLogo size="sm" showText={false} />
         </div>
         <div className="navbar-brand-info">
           <div className="navbar-brand-row">
-            <span className="navbar-brand-title">FinHelp</span>
+            <span
+              className="navbar-brand-title cursor-pointer hover:text-blue-400 transition-colors"
+              onClick={onNavigateHome}
+              title="Về trang chủ FinHelp"
+            >
+              FinHelp
+            </span>
             <span className="navbar-version-badge">V3</span>
           </div>
           <div className="navbar-brand-subtitle">
