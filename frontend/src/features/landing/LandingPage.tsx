@@ -77,8 +77,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             className="cursor-pointer"
           />
 
-          {/* Segmented Capsule Nav Links */}
-          <nav className="fh-nav-pill-group">
+          {/* Direct Nav Links with Balanced Spacing (SaaS Minimalist Layout) */}
+          <nav className="fh-nav-links">
             <a href="#features" className="fh-nav-link">
               Features
             </a>
@@ -100,15 +100,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               className="fh-btn-api-map"
               title="FinHelp Platform Status"
             >
-              <span
-                style={{
-                  width: "7px",
-                  height: "7px",
-                  borderRadius: "50%",
-                  backgroundColor: systemStatus === "online" ? "#10b981" : "#f59e0b",
-                  display: "inline-block",
-                }}
-              />
+              <span className={`fh-status-dot ${systemStatus === "online" ? "online" : "connecting"}`} />
               <span>
                 {systemStatus === "online" ? "System Active" : "Connecting..."}
               </span>
@@ -140,15 +132,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="fh-container">
           {/* Tagline Badge */}
           <div className="fh-hero-badge">
-            <span
-              style={{
-                width: "7px",
-                height: "7px",
-                borderRadius: "50%",
-                backgroundColor: "#3b82f6",
-                display: "inline-block",
-              }}
-            />
+            <span className="fh-hero-badge-dot" />
             <span>AI-Powered Financial Intelligence</span>
           </div>
 
@@ -166,11 +150,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           {/* Hero CTAs */}
           <div className="fh-hero-actions">
-            <button onClick={onEnterApp} className="fh-btn-primary" style={{ padding: "10px 24px", fontSize: "14.5px" }}>
+            <button onClick={onEnterApp} className="fh-btn-primary fh-btn-hero-primary">
               <span>Get Started</span>
               <IconArrowRight size={15} />
             </button>
-            <a href="#features" className="fh-btn-secondary" style={{ padding: "10px 22px", fontSize: "14px" }}>
+            <a href="#features" className="fh-btn-secondary fh-btn-hero-secondary">
               Explore Features
             </a>
           </div>
@@ -215,34 +199,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="fh-preview-card">
           {/* Topbar */}
           <div className="fh-preview-topbar">
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div className="fh-preview-title-group">
               <div className="fh-window-dots">
-                <span className="fh-dot" style={{ backgroundColor: "#ef4444" }} />
-                <span className="fh-dot" style={{ backgroundColor: "#f59e0b" }} />
-                <span className="fh-dot" style={{ backgroundColor: "#10b981" }} />
+                <span className="fh-dot fh-dot-red" />
+                <span className="fh-dot fh-dot-yellow" />
+                <span className="fh-dot fh-dot-green" />
               </div>
-              <span style={{ color: "#94a3b8", fontWeight: 600, fontSize: "11.5px" }}>
+              <span className="fh-preview-session-label">
                 FinHelp Workspace · Session #104
               </span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <div className="fh-preview-meta-group">
               <div className="fh-badge-wrapper">
                 <span className="fh-capability-badge">
                   Natural Language Analysis
                 </span>
               </div>
-              <span
-                style={{
-                  padding: "3px 9px",
-                  borderRadius: "6px",
-                  backgroundColor: "#172554",
-                  border: "1px solid #1e40af",
-                  color: "#93c5fd",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <span className="fh-preview-filings-badge">
                 2 filings selected
               </span>
             </div>
@@ -265,23 +238,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* AI Grounded Answer Card */}
             <div className="fh-ai-response-card">
               <div className="fh-ai-header">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "#cbd5e1", fontWeight: 600 }}>AI-generated answer</span>
+                <div className="fh-ai-title-group">
+                  <span className="fh-ai-title-text">AI-generated answer</span>
                 </div>
-                <span
-                  style={{
-                    color: "#34d399",
-                    backgroundColor: "rgba(16, 185, 129, 0.12)",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                    padding: "3px 10px",
-                    borderRadius: "9999px",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
+                <span className="fh-ai-grounded-pill">
                   <IconCheck size={12} />
                   <span>Grounded in uploaded reports</span>
                 </span>
@@ -290,8 +250,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {/* Dynamic Answer content */}
               {activeQueryIndex === 1 && (
                 <>
-                  <p style={{ margin: 0, fontSize: "13.5px", lineHeight: "1.6", color: "#cbd5e1" }}>
-                    <strong style={{ color: "#ffffff" }}>Company A reported higher revenue growth</strong> over the
+                  <p className="fh-ai-answer-lead">
+                    <strong className="fh-color-white">Company A reported higher revenue growth</strong> over the
                     fiscal period. The comparison is substantiated by the following disclosure lines:
                   </p>
                   <div className="fh-table-wrapper">
@@ -299,19 +259,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <thead>
                         <tr>
                           <th>Company</th>
-                          <th style={{ textAlign: "right" }}>FY22 Revenue</th>
-                          <th style={{ textAlign: "right" }}>FY23 Revenue</th>
-                          <th style={{ textAlign: "right" }}>YoY Growth</th>
-                          <th style={{ textAlign: "center" }}>Reference</th>
+                          <th className="fh-table-num">FY22 Revenue</th>
+                          <th className="fh-table-num">FY23 Revenue</th>
+                          <th className="fh-table-num">YoY Growth</th>
+                          <th className="fh-table-center">Reference</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr>
-                          <td style={{ fontWeight: 600, color: "#f8fafc", fontFamily: "sans-serif" }}>Company A</td>
-                          <td style={{ textAlign: "right", color: "#94a3b8" }}>$14,200M</td>
-                          <td style={{ textAlign: "right", color: "#34d399", fontWeight: 700 }}>$17,902M</td>
-                          <td style={{ textAlign: "right", color: "#34d399", fontWeight: 700 }}>+26.1%</td>
-                          <td style={{ textAlign: "center" }}>
+                          <td className="fh-table-company-name">Company A</td>
+                          <td className="fh-table-val-muted">$14,200M</td>
+                          <td className="fh-table-val-highlight">$17,902M</td>
+                          <td className="fh-table-val-highlight">+26.1%</td>
+                          <td className="fh-table-center">
                             <button
                               onClick={() =>
                                 setActiveCitationAlert(
@@ -325,11 +285,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           </td>
                         </tr>
                         <tr>
-                          <td style={{ fontWeight: 600, color: "#f8fafc", fontFamily: "sans-serif" }}>Company B</td>
-                          <td style={{ textAlign: "right", color: "#94a3b8" }}>$28,500M</td>
-                          <td style={{ textAlign: "right", color: "#f1f5f9" }}>$30,120M</td>
-                          <td style={{ textAlign: "right", color: "#f1f5f9" }}>+5.7%</td>
-                          <td style={{ textAlign: "center" }}>
+                          <td className="fh-table-company-name">Company B</td>
+                          <td className="fh-table-val-muted">$28,500M</td>
+                          <td className="fh-table-val-neutral">$30,120M</td>
+                          <td className="fh-table-val-neutral">+5.7%</td>
+                          <td className="fh-table-center">
                             <button
                               onClick={() =>
                                 setActiveCitationAlert(
@@ -350,44 +310,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               {activeQueryIndex === 2 && (
                 <>
-                  <p style={{ margin: 0, fontSize: "13.5px", lineHeight: "1.6", color: "#cbd5e1" }}>
-                    <strong style={{ color: "#ffffff" }}>Free Cash Flow (FCF)</strong> is calculated directly from the
+                  <p className="fh-ai-answer-lead">
+                    <strong className="fh-color-white">Free Cash Flow (FCF)</strong> is calculated directly from the
                     Consolidated Statement of Cash Flows:
                   </p>
-                  <div
-                    style={{
-                      background: "#080c14",
-                      border: "1px solid #1e293b",
-                      borderRadius: "10px",
-                      padding: "14px 16px",
-                      fontSize: "12.5px",
-                      fontFamily: "monospace",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "7px",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", color: "#cbd5e1" }}>
+                  <div className="fh-preview-code-box">
+                    <div className="fh-calc-row">
                       <span>(+) Cash Flow from Operating Activities (CFO):</span>
-                      <span style={{ color: "#34d399", fontWeight: 700 }}>$12,195M</span>
+                      <span className="fh-val-positive">$12,195M</span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", color: "#cbd5e1" }}>
+                    <div className="fh-calc-row">
                       <span>(-) Capital Expenditures (CapEx):</span>
-                      <span style={{ color: "#f87171", fontWeight: 700 }}>-$9,102M</span>
+                      <span className="fh-val-negative">-$9,102M</span>
                     </div>
-                    <div
-                      style={{
-                        paddingTop: "7px",
-                        borderTop: "1px solid #334155",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        fontSize: "13.5px",
-                      }}
-                    >
+                    <div className="fh-calc-total-row">
                       <span>(=) Free Cash Flow (FCF):</span>
-                      <span style={{ color: "#34d399" }}>+$3,093M</span>
+                      <span className="fh-val-positive">+$3,093M</span>
                     </div>
                   </div>
                 </>
@@ -395,30 +333,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               {activeQueryIndex === 3 && (
                 <>
-                  <p style={{ margin: 0, fontSize: "13.5px", lineHeight: "1.6", color: "#cbd5e1" }}>
-                    <strong style={{ color: "#ffffff" }}>Footnote Disclosure on Doubtful Accounts:</strong> Overdue trade
+                  <p className="fh-ai-answer-lead">
+                    <strong className="fh-color-white">Footnote Disclosure on Doubtful Accounts:</strong> Overdue trade
                     receivables and provision allowances have been parsed from Note 7:
                   </p>
-                  <div
-                    style={{
-                      background: "#080c14",
-                      border: "1px solid #1e293b",
-                      borderRadius: "10px",
-                      padding: "14px 16px",
-                      fontSize: "12.5px",
-                      fontFamily: "monospace",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "7px",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", color: "#cbd5e1" }}>
+                  <div className="fh-preview-code-box">
+                    <div className="fh-calc-row">
                       <span>• Receivables past due 1–6 months:</span>
-                      <span style={{ color: "#f8fafc" }}>$45.2M (Provision allowance: $12.0M)</span>
+                      <span className="fh-val-bright">$45.2M (Provision allowance: $12.0M)</span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", color: "#cbd5e1" }}>
+                    <div className="fh-calc-row">
                       <span>• Receivables past due &gt; 1 year:</span>
-                      <span style={{ color: "#fbbf24", fontWeight: 700 }}>$18.5M (100% reserved)</span>
+                      <span className="fh-val-warning">$18.5M (100% reserved)</span>
                     </div>
                   </div>
                 </>
@@ -426,27 +352,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               {/* Citation Alert notification */}
               {activeCitationAlert && (
-                <div
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: "8px",
-                    backgroundColor: "rgba(30, 58, 138, 0.45)",
-                    border: "1px solid rgba(59, 130, 246, 0.6)",
-                    fontSize: "12px",
-                    color: "#bfdbfe",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "8px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div className="fh-citation-alert">
+                  <div className="fh-citation-alert-content">
                     <IconCitation size={15} />
                     <span>{activeCitationAlert}</span>
                   </div>
                   <button
                     onClick={() => setActiveCitationAlert(null)}
-                    style={{ color: "#94a3b8", cursor: "pointer", background: "none", border: "none", fontWeight: 700 }}
+                    className="fh-citation-alert-close"
                   >
                     ✕
                   </button>
@@ -455,16 +368,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               {/* Source references footer */}
               <div className="fh-sources-box">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      color: "#64748b",
-                    }}
-                  >
+                <div className="fh-sources-header">
+                  <span className="fh-sources-title">
                     Source references (Audit Trail)
                   </span>
                   <div className="fh-badge-wrapper">
@@ -479,13 +384,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <span>
                       <strong>[1]</strong> Company_A_Report.pdf — Page 45 (Income Statement)
                     </span>
-                    <span style={{ color: "#60a5fa", fontFamily: "monospace", fontSize: "11px" }}>#page=45</span>
+                    <span className="fh-source-page">#page=45</span>
                   </div>
                   <div className="fh-source-item">
                     <span>
                       <strong>[2]</strong> Company_B_Report.pdf — Page 32 (Item 8 Financials)
                     </span>
-                    <span style={{ color: "#60a5fa", fontFamily: "monospace", fontSize: "11px" }}>#page=32</span>
+                    <span className="fh-source-page">#page=32</span>
                   </div>
                 </div>
               </div>
@@ -510,7 +415,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Before Card */}
             <div className="fh-comparison-card fh-comparison-card-before">
               <div className="fh-comparison-header">
-                <span className="fh-comparison-title" style={{ color: "#f87171" }}>
+                <span className="fh-comparison-title fh-comparison-title-danger">
                   Before: Manual Financial Audit
                 </span>
                 <div className="fh-badge-wrapper">
@@ -520,21 +425,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
               </div>
               <div className="fh-mockup-doc">
-                <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                <div className="fh-mockup-meta">
                   <span>Form 10-K Annual Report (142 pages)</span>
                   <span>Scanned PDF</span>
                 </div>
-                <div style={{ padding: "8px", background: "#0c101c", borderRadius: "6px", border: "1px dashed #334155" }}>
-                  <div style={{ color: "#fca5a5", textDecoration: "line-through" }}>
+                <div className="fh-mockup-inner-box">
+                  <div className="fh-mockup-strikethrough">
                     Depreciation expense: $1,240M (?) [Note 14 vs Cash Flow mismatch]
                   </div>
-                  <div style={{ color: "#64748b", marginTop: "4px" }}>
+                  <div className="fh-mockup-muted">
                     Manual search across footnotes 12, 14, and Consolidated Statement...
                   </div>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px" }}>
-                  <span style={{ color: "#ef4444", fontSize: "11px" }}>⚠️ 4.5 hours spent verifying numbers</span>
-                  <span style={{ color: "#64748b" }}>No verified citations</span>
+                <div className="fh-mockup-footer">
+                  <span className="fh-mockup-alert">⚠️ 4.5 hours spent verifying numbers</span>
+                  <span className="fh-color-muted">No verified citations</span>
                 </div>
               </div>
             </div>
@@ -542,7 +447,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* After Card */}
             <div className="fh-comparison-card fh-comparison-card-after">
               <div className="fh-comparison-header">
-                <span className="fh-comparison-title" style={{ color: "#60a5fa" }}>
+                <span className="fh-comparison-title fh-comparison-title-success">
                   After: FinHelp Grounded Intelligence
                 </span>
                 <div className="fh-badge-wrapper">
@@ -551,21 +456,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </span>
                 </div>
               </div>
-              <div className="fh-mockup-doc" style={{ background: "#050b18", borderColor: "#1e3a8a" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", color: "#93c5fd" }}>
+              <div className="fh-mockup-doc fh-mockup-doc-after">
+                <div className="fh-mockup-meta-after">
                   <span>Automated Tabular Extraction Engine</span>
-                  <span style={{ color: "#34d399" }}>✓ Verified</span>
+                  <span className="fh-color-success">✓ Verified</span>
                 </div>
-                <div style={{ padding: "8px", background: "#091428", borderRadius: "6px", border: "1px solid rgba(59, 130, 246, 0.4)" }}>
-                  <div style={{ color: "#ffffff", fontWeight: 600 }}>
-                    Depreciation &amp; Amortization: <span style={{ color: "#34d399" }}>$1,240.5M</span>
+                <div className="fh-mockup-inner-box-after">
+                  <div className="fh-mockup-after-headline">
+                    Depreciation &amp; Amortization: <span className="fh-val-positive">$1,240.5M</span>
                   </div>
-                  <div style={{ color: "#93c5fd", fontSize: "11px", marginTop: "2px" }}>
+                  <div className="fh-mockup-after-sub">
                     Grounded in Note 14 (Fixed Assets, p. 68) &amp; Operating Cash Flow (p. 48)
                   </div>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px" }}>
-                  <span style={{ color: "#38bdf8", fontSize: "11px" }}>⚡ 12 seconds with exact page jump</span>
+                <div className="fh-mockup-footer">
+                  <span className="fh-mockup-speed">⚡ 12 seconds with exact page jump</span>
                   <span className="fh-citation-btn">[1] #page=68</span>
                 </div>
               </div>
@@ -650,12 +555,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* ========================================================================= */}
       <section id="features" className="fh-section">
         <div className="fh-container">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "12px" }}>
+          <div className="fh-section-header-split">
             <div>
               <span className="fh-section-tag">02 — Core Features</span>
               <h2 className="fh-section-title">Everything you need to explore financial reports.</h2>
             </div>
-            <div style={{ fontSize: "12.5px", color: "#94a3b8" }}>
+            <div className="fh-section-header-side">
               Comprehensive tools built for high-stakes financial research, multi-filing comparisons, and precision.
             </div>
           </div>
@@ -675,30 +580,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
               </div>
 
-              <h3 className="fh-card-title" style={{ marginTop: "2px" }}>Document Upload &amp; Tabular Extraction</h3>
-              <p style={{ margin: "0 0 14px 0", fontSize: "12px", color: "#64748b" }}>Intelligent Layout &amp; Table Structure Recognition</p>
+              <h3 className="fh-card-title fh-bento-card-title">Document Upload &amp; Tabular Extraction</h3>
+              <p className="fh-bento-card-desc">Intelligent Layout &amp; Table Structure Recognition</p>
 
               {/* Visual Table Bounding Mockup */}
               <div className="fh-table-bounding-mockup">
-                <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b", padding: "0 6px", fontSize: "11px" }}>
+                <div className="fh-table-bounding-header">
                   <span>FINANCIAL STATEMENT BOUNDING EXTRACTION</span>
-                  <span style={{ color: "#60a5fa" }}>High-Density Context</span>
+                  <span className="fh-color-accent">High-Density Context</span>
                 </div>
                 <div className="fh-bounding-box-row active">
                   <span>[Table 1.1] Consolidated Net Revenue</span>
-                  <span style={{ color: "#34d399", fontWeight: 700 }}>$17,902,400,000</span>
+                  <span className="fh-val-positive">$17,902,400,000</span>
                 </div>
                 <div className="fh-bounding-box-row">
                   <span>[Table 1.2] Cost of Goods Sold (COGS)</span>
-                  <span style={{ color: "#94a3b8" }}>$10,210,100,000</span>
+                  <span className="fh-color-muted">$10,210,100,000</span>
                 </div>
                 <div className="fh-bounding-box-row active">
                   <span>[Table 1.3] Gross Operating Margin</span>
-                  <span style={{ color: "#60a5fa", fontWeight: 700 }}>42.96% (+180 bps)</span>
+                  <span className="fh-val-positive">42.96% (+180 bps)</span>
                 </div>
               </div>
 
-              <div className="fh-card-footer" style={{ margin: 0, borderTop: "none", paddingTop: 0 }}>
+              <div className="fh-card-footer fh-card-footer-flush">
                 Supports: PDF, Form 10-K, Audited Annual Reports
               </div>
             </div>
@@ -716,34 +621,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
               </div>
 
-              <h3 className="fh-card-title" style={{ marginTop: "2px" }}>Split-View Citation Jumping</h3>
-              <p style={{ margin: "0 0 14px 0", fontSize: "12px", color: "#64748b" }}>100% Grounded in Underlying Documents</p>
+              <h3 className="fh-card-title fh-bento-card-title">Split-View Citation Jumping</h3>
+              <p className="fh-bento-card-desc">100% Grounded in Underlying Documents</p>
 
               {/* Visual Split-View Graphic */}
               <div className="fh-split-view-graphic">
-                <div style={{ padding: "8px", background: "#0c1222", borderRadius: "8px", border: "1px solid #1e3a8a" }}>
-                  <div style={{ color: "#93c5fd", fontWeight: 600, marginBottom: "4px" }}>AI Response:</div>
-                  <div style={{ color: "#cbd5e1", lineHeight: "1.4" }}>
+                <div className="fh-split-card-ai">
+                  <div className="fh-split-card-label">AI Response:</div>
+                  <div className="fh-split-card-body">
                     Net sales expanded 26.1% YoY to $17,902M...
                   </div>
-                  <span className="fh-citation-btn" style={{ marginTop: "8px" }}>[1] Page 45</span>
+                  <span className="fh-citation-btn fh-mt-8">[1] Page 45</span>
                 </div>
-                <div style={{ padding: "8px", background: "#060912", borderRadius: "8px", border: "1px solid #334155" }}>
-                  <div style={{ color: "#64748b", marginBottom: "4px" }}>Filing: Item 8 (p. 45)</div>
-                  <div style={{ background: "rgba(59, 130, 246, 0.2)", border: "1px dashed #60a5fa", borderRadius: "4px", padding: "4px", color: "#ffffff" }}>
+                <div className="fh-split-card-filing">
+                  <div className="fh-split-card-filing-label">Filing: Item 8 (p. 45)</div>
+                  <div className="fh-split-card-highlight">
                     "...net revenue reached $17,902M for fiscal 2023."
                   </div>
                 </div>
               </div>
 
-              <div className="fh-card-footer" style={{ margin: 0, borderTop: "none", paddingTop: 0 }}>
+              <div className="fh-card-footer fh-card-footer-flush">
                 Direct Stream: Original Document Page 45
               </div>
             </div>
           </div>
 
           {/* 4 Standardized Feature Cards Below Bento with Unified 38x38px Icons */}
-          <div className="fh-grid-4" style={{ marginTop: "20px" }}>
+          <div className="fh-grid-4 fh-mt-20">
             {/* Feature 1 */}
             <div className="fh-card">
               <div>
@@ -867,7 +772,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Upload one or multiple financial reports in PDF format. Our ingestion pipeline parses complex two-dimensional tables, text blocks, and footnotes into structured data.
                 </p>
               </div>
-              <div className="fh-card-footer" style={{ color: "#94a3b8" }}>
+              <div className="fh-card-footer fh-card-footer-muted">
                 Instant Document Ingestion
               </div>
             </div>
@@ -888,7 +793,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Query in natural language. FinHelp cross-references financial statements, disclosures, and auditor notes to isolate verified context.
                 </p>
               </div>
-              <div className="fh-card-footer" style={{ color: "#94a3b8" }}>
+              <div className="fh-card-footer fh-card-footer-muted">
                 Contextual Semantic Synthesis
               </div>
             </div>
@@ -909,7 +814,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Review synthesized metrics, arithmetic steps, and click citation badges to jump directly to corresponding PDF pages in split-view.
                 </p>
               </div>
-              <div className="fh-card-footer" style={{ color: "#94a3b8" }}>
+              <div className="fh-card-footer fh-card-footer-muted">
                 Interactive Audit Trail
               </div>
             </div>
@@ -958,16 +863,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div>
               {activePersona === "accounting" && (
                 <>
-                  <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", marginBottom: "6px" }}>
+                  <div className="fh-persona-tag">
                     Persona: Corporate Accounting
                   </div>
-                  <h3 className="fh-card-title" style={{ fontSize: "20px" }}>
+                  <h3 className="fh-card-title fh-persona-heading">
                     Accelerate financial statement reconciliations
                   </h3>
-                  <p className="fh-card-text" style={{ fontSize: "14px", marginTop: "8px" }}>
+                  <p className="fh-card-text fh-persona-desc">
                     Instantly extract line items across Balance Sheets and Cash Flows. Verify footnote adjustments, tax provisions, and lease liabilities with single-click page validation.
                   </p>
-                  <div style={{ marginTop: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <div className="fh-persona-chips">
                     <span className="fh-chip">GAAP / IFRS Footnotes</span>
                     <span className="fh-chip">Intercompany Eliminations</span>
                   </div>
@@ -975,16 +880,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               )}
               {activePersona === "auditor" && (
                 <>
-                  <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", marginBottom: "6px" }}>
+                  <div className="fh-persona-tag">
                     Persona: Statutory Audit &amp; Compliance
                   </div>
-                  <h3 className="fh-card-title" style={{ fontSize: "20px" }}>
+                  <h3 className="fh-card-title fh-persona-heading">
                     Cross-examine reported figures with zero hallucination
                   </h3>
-                  <p className="fh-card-text" style={{ fontSize: "14px", marginTop: "8px" }}>
+                  <p className="fh-card-text fh-persona-desc">
                     Trace every reported disclosure back to the original auditor notes. Automatically verify arithmetic consistency between consolidated tables and note breakdowns.
                   </p>
-                  <div style={{ marginTop: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <div className="fh-persona-chips">
                     <span className="fh-chip">Substantive Testing</span>
                     <span className="fh-chip">Footnote Audit Trail</span>
                   </div>
@@ -992,16 +897,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               )}
               {activePersona === "analyst" && (
                 <>
-                  <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: "12px", textTransform: "uppercase", marginBottom: "6px" }}>
+                  <div className="fh-persona-tag">
                     Persona: Equity Research &amp; M&amp;A
                   </div>
-                  <h3 className="fh-card-title" style={{ fontSize: "20px" }}>
+                  <h3 className="fh-card-title fh-persona-heading">
                     Benchmark competitors across multi-year cycles
                   </h3>
-                  <p className="fh-card-text" style={{ fontSize: "14px", marginTop: "8px" }}>
+                  <p className="fh-card-text fh-persona-desc">
                     Select filings from multiple companies and evaluate margin expansion, Free Cash Flow yields, and leverage metrics side-by-side in seconds.
                   </p>
-                  <div style={{ marginTop: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <div className="fh-persona-chips">
                     <span className="fh-chip">YoY Peer Benchmarking</span>
                     <span className="fh-chip">FCF Yield Modeling</span>
                   </div>
@@ -1010,19 +915,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
 
             {/* Persona Visual Mockup Preview */}
-            <div style={{ background: "#060912", border: "1px solid #1e293b", borderRadius: "12px", padding: "18px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", fontSize: "11px", color: "#64748b" }}>
+            <div className="fh-persona-preview-box">
+              <div className="fh-persona-preview-header">
                 <span>SAMPLE QUERY &amp; AUDIT TRAIL</span>
-                <span style={{ color: "#10b981" }}>● Grounded Answer</span>
+                <span className="fh-color-success">● Grounded Answer</span>
               </div>
-              <div style={{ padding: "10px", background: "#0e1526", borderRadius: "8px", border: "1px solid #1e3a8a", fontSize: "12.5px", color: "#cbd5e1", marginBottom: "10px" }}>
+              <div className="fh-persona-query-card">
                 {activePersona === "accounting" && "Q: Reconcile Operating Income to EBITDA including depreciation notes."}
                 {activePersona === "auditor" && "Q: Cross-check Note 8 contingent liabilities against balance sheet reserves."}
                 {activePersona === "analyst" && "Q: Compare FY23 Free Cash Flow margin between Company A and Company B."}
               </div>
-              <div style={{ padding: "10px", background: "#080c14", borderRadius: "8px", fontSize: "12px", color: "#94a3b8" }}>
-                <span style={{ color: "#34d399", fontWeight: 700 }}>Calculation Output:</span> Matches reported Note details with 100% audit confidence.
-                <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+              <div className="fh-persona-result-card">
+                <span className="fh-val-positive">Calculation Output:</span> Matches reported Note details with 100% audit confidence.
+                <div className="fh-persona-citations">
                   <span className="fh-citation-btn">[1] Page 45</span>
                   <span className="fh-citation-btn">[2] Page 68</span>
                 </div>
@@ -1118,20 +1023,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* ========================================================================= */}
       <section className="fh-final-cta">
         <div className="fh-container">
-          <h2 className="fh-section-title" style={{ fontSize: "36px" }}>
+          <h2 className="fh-section-title fh-cta-title">
             Ready to explore your financial reports?
           </h2>
-          <p className="fh-section-subtitle" style={{ margin: "10px auto 28px" }}>
+          <p className="fh-section-subtitle fh-cta-subtitle">
             Start asking questions and discover verifiable insights from your documents.
           </p>
-          <div style={{ display: "flex", justifyContent: "center", gap: "12px", flexWrap: "wrap" }}>
-            <button onClick={onEnterApp} className="fh-btn-primary" style={{ padding: "12px 28px", fontSize: "14.5px" }}>
+          <div className="fh-cta-actions">
+            <button onClick={onEnterApp} className="fh-btn-primary fh-btn-cta-primary">
               Get Started
             </button>
             <button
               onClick={onEnterApp}
-              className="fh-btn-secondary"
-              style={{ padding: "12px 24px", fontSize: "14px" }}
+              className="fh-btn-secondary fh-btn-cta-secondary"
             >
               <span>Explore Sample Workspace</span>
             </button>
@@ -1148,24 +1052,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Col 1: Brand & Mission */}
             <div className="fh-footer-col">
               <FinHelpLogo size="sm" />
-              <p style={{ margin: "8px 0 0 0", color: "#94a3b8", fontSize: "13px", lineHeight: "1.6", maxWidth: "340px" }}>
+              <p className="fh-footer-desc">
                 AI-Powered Financial Intelligence Platform. Empowering accounting, audit, and equity research professionals with auditable document extraction.
               </p>
-              <div style={{ marginTop: "12px" }}>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "4px 10px",
-                    borderRadius: "9999px",
-                    backgroundColor: "rgba(16, 185, 129, 0.12)",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                    color: "#34d399",
-                    fontSize: "11px",
-                  }}
-                >
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#10b981" }} />
+              <div className="fh-footer-status-wrap">
+                <span className="fh-footer-status-pill">
+                  <span className="fh-footer-status-dot" />
                   All Systems Operational
                 </span>
               </div>

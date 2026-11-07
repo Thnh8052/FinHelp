@@ -144,7 +144,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             accept=".pdf"
             disabled={isUploading}
             onChange={handleFileInputChange}
-            style={{ display: "none" }}
+            className="hidden-file-input"
           />
 
           <div className="doc-dropzone-icon">

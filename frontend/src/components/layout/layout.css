@@ -436,6 +436,14 @@
     display: none;
   }
 
+  .navbar-action-btn.split-toggle {
+    padding: 0 8px;
+    height: 30px;
+  }
+  .navbar-action-btn.split-toggle .navbar-btn-text {
+    display: none;
+  }
+
   .split-sources-pane {
     position: fixed;
     top: 54px;
@@ -519,6 +527,13 @@
     gap: 4px;
   }
   .navbar-action-btn.split-toggle {
-    display: none; /* Hide separate PDF toggle on very small screens; users open PDF directly from filing or citation badge */
+    display: inline-flex;
+    padding: 0 7px;
+    height: 30px;
+    min-width: 30px;
+    justify-content: center;
+  }
+  .navbar-action-btn.split-toggle .navbar-btn-text {
+    display: none; /* Compact icon-only button on mobile; opens full-width PDF drawer */
   }
 }
