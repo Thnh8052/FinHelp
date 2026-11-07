@@ -436,6 +436,28 @@
     display: none;
   }
 
+  .split-sources-pane {
+    position: fixed;
+    top: 54px;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    max-width: 100vw;
+    z-index: 45;
+    box-shadow: -8px 0 25px rgba(0, 0, 0, 0.7);
+  }
+
+  .split-pdf-pane {
+    position: fixed;
+    top: 54px;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    max-width: 100vw;
+    z-index: 40;
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.8);
+  }
+
   .split-sidebar {
     position: fixed;
     top: 54px;
@@ -478,5 +500,25 @@
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
     z-index: 48;
+  }
+}
+
+@media (max-width: 600px) {
+  .navbar {
+    padding: 0 8px;
+  }
+  .navbar-brand-title {
+    font-size: 13px;
+  }
+  .navbar-version-badge {
+    display: none;
+  }
+  .navbar-action-btn {
+    padding: 0 7px;
+    font-size: 11px;
+    gap: 4px;
+  }
+  .navbar-action-btn.split-toggle {
+    display: none; /* Hide separate PDF toggle on very small screens; users open PDF directly from filing or citation badge */
   }
 }

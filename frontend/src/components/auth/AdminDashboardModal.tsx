@@ -21,7 +21,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
       const data = await authService.getAdminDashboard();
       setStats(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Không thể tải số liệu Admin Dashboard");
+      setError(err instanceof Error ? err.message : "Unable to load Admin Dashboard metrics");
     } finally {
       setLoading(false);
     }
@@ -44,10 +44,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
             <ShieldIcon size={18} color="#3b82f6" />
             <div>
               <h2 className="auth-title">
-                Hệ Thống Quản Trị & Giám Sát Chi Phí API (Admin)
+                System Administration &amp; Cost Monitoring (Admin)
               </h2>
               <p className="auth-subtitle">
-                Dành riêng cho Quản trị viên hệ thống (Vũ Thành)
+                System Administrator Console
               </p>
             </div>
           </div>
@@ -57,7 +57,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
         </div>
 
         <div className="auth-body">
-          {loading && <p className="admin-loading-text">Đang tải số liệu hệ thống...</p>}
+          {loading && <p className="admin-loading-text">Loading system metrics...</p>}
           {error && <div className="auth-alert-error no-top-margin">{error}</div>}
 
           {stats && (
@@ -66,29 +66,29 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
               <div className="admin-grid">
                 {/* Card 1: Users */}
                 <div className="admin-metric-card">
-                  <span className="admin-metric-label">Tài khoản người dùng</span>
+                  <span className="admin-metric-label">User Accounts</span>
                   <div className="admin-metric-val">
                     {stats.total_users}
                   </div>
                   <div className="admin-metric-sub">
-                    {stats.active_users} tài khoản đang kích hoạt
+                    {stats.active_users} active accounts
                   </div>
                 </div>
 
                 {/* Card 2: Tokens */}
                 <div className="admin-metric-card">
-                  <span className="admin-metric-label">Tổng Tokens Tiêu Thụ</span>
+                  <span className="admin-metric-label">Total Consumed Tokens</span>
                   <div className="admin-metric-val tokens">
                     {stats.api_metrics.total_tokens_consumed.toLocaleString()}
                   </div>
                   <div className="admin-metric-sub">
-                    Cụm AI Phân Tích Tài Chính
+                    Financial Intelligence Cluster
                   </div>
                 </div>
 
                 {/* Card 3: Estimated Cost */}
                 <div className="admin-metric-card">
-                  <span className="admin-metric-label">Ước tính Chi Phí API</span>
+                  <span className="admin-metric-label">Estimated API Cost</span>
                   <div className="admin-metric-val cost">
                     ${stats.api_metrics.total_estimated_cost_usd.toFixed(4)}
                   </div>
@@ -102,10 +102,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
               <div className="admin-perf-bar">
                 <div>
                   <div className="admin-perf-status">
-                    Trạng Thái Cơ Sở Dữ Liệu: {stats.system_performance.database}
+                    Database Cluster: {stats.system_performance.database}
                   </div>
                   <div className="admin-perf-latency">
-                    Độ trễ trung bình: {stats.system_performance.latency_ms} ms
+                    Average Latency: {stats.system_performance.latency_ms} ms
                   </div>
                 </div>
                 <span className="admin-badge-active">
@@ -116,11 +116,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
               {/* Policy Section */}
               <div className="admin-policy-box">
                 <h4 className="admin-policy-title">
-                  Chính Sách Giới Hạn Tài Nguyên (Access Control Policy)
+                  Access Control &amp; Resource Policy
                 </h4>
                 <div className="admin-policy-text">
-                  <div>• <strong>Chưa đăng nhập (Khách dùng thử):</strong> Giới hạn tối đa <strong>1 tài liệu</strong>, không giới hạn số câu hỏi.</div>
-                  <div>• <strong>Đã đăng nhập (Thành viên):</strong> Mở khóa tối đa <strong>5 tài liệu / 1 Notebook</strong> phân tích tài chính chuyên sâu.</div>
+                  <div>• <strong>Guest Trial:</strong> Maximum <strong>1 filing</strong> per session, interactive questions enabled.</div>
+                  <div>• <strong>Member Account:</strong> Unlocks up to <strong>5 filings</strong> per notebook for cross-filing analysis.</div>
                 </div>
               </div>
             </div>

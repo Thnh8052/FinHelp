@@ -71,7 +71,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onClose }) => {
 
       <button
         onClick={onClose}
-        aria-label="Đóng thông báo"
+        aria-label="Close notification"
         className="toast-close-btn"
       >
         <CloseIcon size={14} />

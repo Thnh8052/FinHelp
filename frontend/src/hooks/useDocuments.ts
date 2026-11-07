@@ -54,14 +54,14 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
         for (const id of watching) {
           const d = docs.find((x) => x.document_id === id);
           if (d?.indexing_status === "completed") {
-            showToast("Tài liệu đã sẵn sàng. Bạn có thể bắt đầu đặt câu hỏi.", "success");
+            showToast("Document is ready. You can now ask questions.", "success");
           } else if (isDocFailed(d)) {
-            setSelectedDocIds((prev) => prev.filter((x) => x !== id));  // tài liệu lỗi không trả lời được: bỏ khỏi danh sách nguồn đã chọn
-            showToast("Không xử lý được tài liệu này. Vui lòng thử tải lên lại.", "error");
+            setSelectedDocIds((prev) => prev.filter((x) => x !== id));  // Remove failed docs from active selection
+            showToast("Failed to process document. Please try uploading again.", "error");
           }
         }
       } catch {
-        /* mạng chập chờn: thử lại ở lần sau */
+        /* Network retry */
       }
     }, 3000);
     return () => clearInterval(timer);
@@ -84,27 +84,25 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
       };
       setDocuments((prev) => [newDoc, ...prev]);
       setActiveDocId(newDoc.document_id);
-      // Tệp mới luôn được chọn; đã đủ hạn mức thì thay nguồn chọn sớm nhất (khách chỉ có 1 nguồn: chính tệp mới)
       setSelectedDocIds((prev) => [...prev.filter((x) => x !== newDoc.document_id), newDoc.document_id].slice(-maxSources));
-      showToast("Tải tệp thành công! Đang tiến hành trích xuất dữ liệu BCTC.", "success");
+      showToast("Upload successful! Processing financial filing.", "success");
     } catch (err) {
       if (err instanceof ApiError) {
-        const detail = err.detail || "Tải lên tài liệu thất bại.";
-        // Chạm trần hạn mức của khách: thông báo kèm nút đăng nhập
-        if (err.status === 403 || detail.toLowerCase().includes("đăng nhập")) {
-          showToast(detail, "warning", "Đăng nhập ngay", onLoginRequired);
+        const detail = err.detail || "Document upload failed.";
+        if (err.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
+          showToast(detail, "warning", "Sign in now", onLoginRequired);
         } else {
           showToast(detail, "error");
         }
       } else {
-        showToast("Không thể kết nối đến máy chủ khi tải lên tài liệu.", "error");
+        showToast("Unable to connect to server during upload.", "error");
       }
     } finally {
       setIsUploading(false);
     }
   };
 
-  /** Tải lên nhiều tệp cùng lúc (Batch Upload từ Dropzone) */
+  /** Batch upload */
   const uploadFiles = async (files: File[]) => {
     if (files.length === 0) return;
     setIsUploading(true);
@@ -130,9 +128,9 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
           successCount++;
         } catch (fileErr) {
           if (fileErr instanceof ApiError) {
-            const detail = fileErr.detail || `Tải lên ${file.name} thất bại.`;
-            if (fileErr.status === 403 || detail.toLowerCase().includes("đăng nhập")) {
-              showToast(detail, "warning", "Đăng nhập ngay", onLoginRequired);
+            const detail = fileErr.detail || `Upload of ${file.name} failed.`;
+            if (fileErr.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
+              showToast(detail, "warning", "Sign in now", onLoginRequired);
               break;
             } else {
               showToast(detail, "error");
@@ -141,7 +139,7 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
         }
       }
       if (successCount > 0) {
-        showToast(`Đã tải lên ${successCount} tệp BCTC! Đang tiến hành trích xuất dữ liệu.`, "success");
+        showToast(`Uploaded ${successCount} report(s)! Extracting document layout.`, "success");
       }
     } finally {
       setIsUploading(false);
@@ -158,10 +156,10 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
         return remaining;
       });
       setSelectedDocIds((previous) => previous.filter((id) => id !== documentId));
-      showToast("Đã xóa tài liệu. Bạn có thể tải lên nguồn khác.", "success");
+      showToast("Document deleted successfully.", "success");
       return true;
     } catch (err) {
-      const message = err instanceof ApiError ? err.detail || "Không thể xóa tài liệu." : "Không thể kết nối đến máy chủ khi xóa tài liệu.";
+      const message = err instanceof ApiError ? err.detail || "Unable to delete document." : "Unable to connect to server to delete document.";
       showToast(message, "error");
       return false;
     } finally {
@@ -173,9 +171,9 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
     if (selectedDocIds.includes(docId)) {
       setSelectedDocIds(selectedDocIds.filter((x) => x !== docId));
     } else if (isDocFailed(documents.find((d) => d.document_id === docId))) {
-      showToast("Tài liệu này xử lý lỗi nên không dùng làm nguồn được. Vui lòng tải lên lại.", "warning");
+      showToast("This document encountered processing errors and cannot be queried. Please re-upload.", "warning");
     } else if (selectedDocIds.length >= maxSources) {
-      showToast(`Chỉ chọn được tối đa ${maxSources} tài liệu nguồn cho một câu hỏi.`, "warning");
+      showToast(`Maximum ${maxSources} filings can be active simultaneously.`, "warning");
     } else {
       setSelectedDocIds([...selectedDocIds, docId]);
     }

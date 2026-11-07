@@ -108,8 +108,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       <div className="doc-drawer-header">
         <div className="doc-drawer-title-box">
           <FileTextIcon size={15} color="var(--accent-primary, #2563eb)" />
-          <span className="doc-drawer-title">Nguồn phiên này</span>
-          <span className="doc-drawer-badge">{documents.length} File</span>
+          <span className="doc-drawer-title">Session Filings</span>
+          <span className="doc-drawer-badge">{documents.length} Files</span>
         </div>
 
         {onClose && (
@@ -117,14 +117,14 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             type="button"
             onClick={onClose}
             className="doc-drawer-close-btn"
-            title="Đóng danh sách nguồn"
+            title="Close filings drawer"
           >
             <CloseIcon size={13} />
           </button>
         )}
       </div>
 
-      {/* 2. Vùng Kéo Thả / Batch Upload (Dropzone) */}
+      {/* 2. Drag & Dropzone */}
       <div className="doc-drawer-dropzone-wrap">
         <div
           className={`doc-drawer-dropzone ${isDragging ? "dragging" : ""} ${
@@ -151,15 +151,15 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             <UploadCloudIcon size={18} color="var(--accent-primary, #2563eb)" />
           </div>
           <p className="doc-dropzone-text">
-            {isUploading ? "Đang tải và trích xuất BCTC..." : "Kéo thả hoặc tải thêm BCTC"}
+            {isUploading ? "Processing and indexing report..." : "Drop PDF filings or click to upload"}
           </p>
           <p className="doc-dropzone-subtext">
-            Chọn nhiều file PDF cùng lúc (Tối đa 5 file)
+            Supports multiple PDF reports (up to 5 per session)
           </p>
         </div>
       </div>
 
-      {/* 3. Bộ Đếm & Checkbox Bật Tất Cả Cho RAG */}
+      {/* 3. Controls & Select All */}
       <div className="doc-drawer-controls">
         <label className="doc-master-checkbox-label">
           <input
@@ -169,19 +169,19 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             disabled={documents.length === 0}
             className="doc-checkbox"
           />
-          <span>Bật tất cả cho RAG</span>
+          <span>Select all for analysis</span>
         </label>
         <span className="doc-active-counter">
-          {selectedDocIds.length}/{documents.length} kích hoạt
+          {selectedDocIds.length}/{documents.length} active
         </span>
       </div>
 
-      {/* 4. Danh Sách Chi Tiết Từng Tài Liệu BCTC */}
+      {/* 4. Document Cards List */}
       <div className="doc-drawer-list scrollbar-slim">
         {documents.length === 0 ? (
           <div className="doc-drawer-empty">
-            <p>Chưa có BCTC nào trong phiên này.</p>
-            <p className="sub">Kéo thả file PDF vào ô phía trên để bắt đầu đối chiếu.</p>
+            <p>No reports added to this session yet.</p>
+            <p className="sub">Drag and drop PDF reports above to begin analysis.</p>
           </div>
         ) : (
           documents.map((doc) => {
@@ -204,7 +204,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                     disabled={isProcessing || isFailed}
                     onChange={() => onToggleDoc(doc.document_id)}
                     className="doc-checkbox"
-                    title={isSelected ? "Bỏ chọn khỏi ngữ cảnh RAG" : "Bật làm ngữ cảnh trả lời RAG"}
+                    title={isSelected ? "Exclude from analysis" : "Include in analysis"}
                   />
 
                   <div className="doc-card-details">
@@ -214,36 +214,36 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                       </span>
                       <span className="doc-card-tag">
                         {isProcessing
-                          ? "Đang xử lý..."
+                          ? "Processing..."
                           : isFailed
-                          ? "Lỗi"
-                          : "10-K Kiểm toán"}
+                          ? "Failed"
+                          : "Audited Filing"}
                       </span>
                     </div>
 
                     <div className="doc-card-meta">
-                      {doc.page_count ? <span>{doc.page_count} trang</span> : null}
+                      {doc.page_count ? <span>{doc.page_count} pages</span> : null}
                       {doc.page_count ? <span>•</span> : null}
                       <span>{formatFileSize(doc.file_size_bytes)}</span>
                       {doc.indexing_status === "completed" && (
                         <>
                           <span>•</span>
-                          <span className="doc-status-ok">Đã sẵn sàng</span>
+                          <span className="doc-status-ok">Ready</span>
                         </>
                       )}
                     </div>
 
-                    {/* Action Bar dưới mỗi tệp */}
+                    {/* Action Bar */}
                     <div className="doc-card-actions">
                       {onOpenDocPdf && (
                         <button
                           type="button"
                           onClick={() => onOpenDocPdf(doc)}
                           className="doc-btn-open-pdf"
-                          title="Mở tài liệu này trên trình đọc PDF Split-View"
+                          title="Open filing in split-view reader"
                         >
                           <FileTextIcon size={12} color="#60a5fa" />
-                          <span>Mở xem PDF</span>
+                          <span>View PDF</span>
                         </button>
                       )}
 
@@ -253,10 +253,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                             type="button"
                             onClick={() => onEditCatalog(doc.document_id)}
                             className="doc-subaction-btn"
-                            title="Xem thông tin kiểm toán & kỳ báo cáo"
+                            title="View metadata & reporting period"
                           >
                             <InfoCircleIcon size={12} />
-                            <span>Chi tiết</span>
+                            <span>Details</span>
                           </button>
                         )}
 
@@ -264,7 +264,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
                         {deleteTargetId === doc.document_id ? (
                           <div className="doc-delete-confirm-box">
-                            <span className="doc-delete-text">Xóa?</span>
+                            <span className="doc-delete-text">Delete?</span>
                             <button
                               type="button"
                               onClick={() => {
@@ -273,7 +273,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                               }}
                               disabled={isDeleting}
                               className="doc-confirm-yes"
-                              title="Xác nhận xóa"
+                              title="Confirm delete"
                             >
                               <CheckIcon size={12} />
                             </button>
@@ -281,7 +281,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                               type="button"
                               onClick={() => setDeleteTargetId(null)}
                               className="doc-confirm-no"
-                              title="Hủy"
+                              title="Cancel"
                             >
                               <CloseIcon size={12} />
                             </button>
@@ -291,10 +291,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                             type="button"
                             onClick={() => setDeleteTargetId(doc.document_id)}
                             className="doc-subaction-btn delete"
-                            title="Xóa tài liệu khỏi phiên này"
+                            title="Delete document from session"
                           >
                             <TrashIcon size={12} />
-                            <span>Xóa</span>
+                            <span>Delete</span>
                           </button>
                         )}
                       </div>
@@ -309,7 +309,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
       {/* 5. Footer Panel */}
       <div className="doc-drawer-footer">
-        <span>🔒 Nguồn chỉ lưu trong phiên chat này, không bị ghi đè.</span>
+        <span>🔒 Filings are sandboxed to this session and strictly isolated.</span>
       </div>
     </div>
   );

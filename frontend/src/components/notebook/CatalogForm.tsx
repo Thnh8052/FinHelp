@@ -79,7 +79,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
         setQuarter(m.fiscal_quarter ? String(m.fiscal_quarter) : "");
         setPeriodEnd(m.period_end || "");
       })
-      .catch((e: Error) => setError(`Không tải được thông tin tài liệu: ${e.message}`));
+      .catch((e: Error) => setError(`Failed to load document metadata: ${e.message}`));
   }, [documentId]);
 
   if (!documentId) return null;
@@ -118,7 +118,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
       onSaved(documentId);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Không lưu được thông tin tài liệu.");
+      setError(err instanceof Error ? err.message : "Failed to save document metadata.");
     } finally {
       setSaving(false);
     }
@@ -131,10 +131,10 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
       <div className="auth-card" onClick={(e) => e.stopPropagation()}>
         <div className="auth-header">
           <div>
-            <h2 className="auth-title">Thông tin tài liệu</h2>
-            <p className="auth-subtitle">{data ? data.file_name : "Đang tải..."}</p>
+            <h2 className="auth-title">Document Metadata</h2>
+            <p className="auth-subtitle">{data ? data.file_name : "Loading..."}</p>
           </div>
-          <button onClick={onClose} className="auth-close-btn" aria-label="Đóng">
+          <button onClick={onClose} className="auth-close-btn" aria-label="Close">
             <CloseIcon size={16} />
           </button>
         </div>
@@ -142,7 +142,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
         {error && <div className="auth-alert-error">{error}</div>}
         {data?.needs_confirmation && (
           <div className="auth-alert-error" style={{ color: "#b45309", borderColor: "rgba(245, 158, 11, 0.4)", backgroundColor: "rgba(245, 158, 11, 0.08)" }}>
-            Hệ thống chưa xác minh được công ty hoặc kỳ báo cáo trong tài liệu. Hãy kiểm tra và xác nhận trước khi hỏi.
+            Company entity or reporting period could not be automatically confirmed. Please verify before analyzing.
           </div>
         )}
 
@@ -150,15 +150,15 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
           <div className="auth-body">
             <form onSubmit={handleSubmit} className="auth-form">
               <div className="auth-field">
-                <label className="auth-label">Tên công ty (pháp nhân)</label>
+                <label className="auth-label">Company Entity Name</label>
                 <select className="auth-input" value={choice} onChange={(e) => setChoice(e.target.value)} style={flag("entity")}>
                   {candidates.map((c) => (
                     <option key={c.name} value={c.name}>
                       {c.name}
-                      {c.pages.length ? ` (trang ${c.pages.join(", ")})` : ""}
+                      {c.pages.length ? ` (page ${c.pages.join(", ")})` : ""}
                     </option>
                   ))}
-                  <option value={OTHER}>Khác (nhập tay)</option>
+                  <option value={OTHER}>Other (custom name)</option>
                 </select>
                 {choice === OTHER && (
                   <input
@@ -166,37 +166,37 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
                     value={typedName}
                     onChange={(e) => setTypedName(e.target.value)}
                     maxLength={120}
-                    placeholder="Ví dụ: Advanced Micro Devices, Inc."
+                    placeholder="e.g. Advanced Micro Devices, Inc."
                     required
                   />
                 )}
               </div>
 
               <div className="auth-field">
-                <label className="auth-label">Mã chứng khoán / tên viết tắt</label>
+                <label className="auth-label">Ticker Symbol</label>
                 <input
                   className="auth-input"
                   value={ticker}
                   onChange={(e) => setTicker(e.target.value.toUpperCase())}
                   maxLength={10}
                   pattern="[A-Z0-9.\-]{1,10}"
-                  placeholder="Ví dụ: AMD"
+                  placeholder="e.g. AMD"
                 />
               </div>
 
               <div className="auth-field">
-                <label className="auth-label">Tên khác / tên cũ (tối đa 5, cách nhau bằng dấu phẩy)</label>
+                <label className="auth-label">Aliases / Prior Names (comma-separated, max 5)</label>
                 <input
                   className="auth-input"
                   value={aliases}
                   onChange={(e) => setAliases(e.target.value)}
                   maxLength={320}
-                  placeholder="Ví dụ: Facebook"
+                  placeholder="e.g. Facebook"
                 />
               </div>
 
               <div className="auth-field">
-                <label className="auth-label">Loại báo cáo</label>
+                <label className="auth-label">Report Type</label>
                 <select className="auth-input" value={reportType} onChange={(e) => setReportType(e.target.value)}>
                   {data.report_types.map((t) => (
                     <option key={t} value={t}>
@@ -208,7 +208,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
 
               <div className="auth-field" style={{ display: "flex", gap: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <label className="auth-label">Năm tài chính</label>
+                  <label className="auth-label">Fiscal Year</label>
                   <input
                     className="auth-input"
                     type="number"
@@ -221,9 +221,9 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
                   />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label className="auth-label">Quý</label>
+                  <label className="auth-label">Quarter</label>
                   <select className="auth-input" value={quarter} onChange={(e) => setQuarter(e.target.value)}>
-                    <option value="">Cả năm</option>
+                    <option value="">Full Year</option>
                     {[1, 2, 3, 4].map((q) => (
                       <option key={q} value={q}>
                         Q{q}
@@ -234,7 +234,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
               </div>
 
               <div className="auth-field">
-                <label className="auth-label">Ngày kết thúc kỳ</label>
+                <label className="auth-label">Period End Date</label>
                 <input
                   className="auth-input"
                   type="date"
@@ -245,7 +245,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
               </div>
 
               <button type="submit" className="auth-submit-btn" disabled={saving}>
-                {saving ? "Đang lưu..." : "Xác nhận thông tin"}
+                {saving ? "Saving..." : "Confirm Metadata"}
               </button>
             </form>
           </div>

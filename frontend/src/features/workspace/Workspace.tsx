@@ -25,8 +25,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const [authModalOpen, setAuthModalOpen] = useState(initialAuthModalOpen);
   const [adminDashboardOpen, setAdminDashboardOpen] = useState(false);
 
-  // Panel control states
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Panel control states (Desktop: open by default, Mobile: closed drawer)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== "undefined" && window.innerWidth > 768);
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
   const [isSplitViewOpen, setIsSplitViewOpen] = useState(false);
   const [activeCitation, setActiveCitation] = useState<CitationItem | null>(null);
@@ -41,7 +41,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const unconfirmedDocs = docs.documents.filter(needsCatalogConfirmation);
   const activeSession = chat.sessions.find((s) => s.session_id === chat.currentSessionId);
   const activeSessionTitle =
-    activeSession?.title || (isAuthenticated ? "Hội thoại tài chính" : "Phiên dùng thử (Khách)");
+    activeSession?.title || (isAuthenticated ? "Financial Analysis Session" : "Guest Trial Session");
 
   // Khi click vào trích dẫn [1] Trang 12: Tự động mở Split-View, chuyển đúng tài liệu và nhảy tới trang đó
   const handleSelectCitation = (citation: CitationItem) => {
@@ -59,7 +59,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         documentId={catalogDocId}
         onClose={() => setCatalogDocId(null)}
         onSaved={() => {
-          showToast("Đã lưu thông tin tài liệu.", "success");
+          showToast("Document metadata saved.", "success");
           docs.reload();
         }}
       />
@@ -77,7 +77,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         onToggleSplitView={() => setIsSplitViewOpen((prev) => !prev)}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-        onExportReport={() => showToast("Báo cáo phân tích đã được lưu.", "success")}
+        onExportReport={() => showToast("Analysis report saved.", "success")}
         onOpenAuthModal={() => setAuthModalOpen(true)}
         onOpenAdminDashboard={() => setAdminDashboardOpen(true)}
         onNavigateHome={onNavigateHome}
@@ -103,11 +103,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             {unconfirmedDocs.length > 0 && (
               <div className="catalog-confirm-banner" role="status">
                 <span>
-                  Cần xác nhận thông tin tài liệu trước khi hỏi:{" "}
+                  Please confirm document metadata before querying:{" "}
                   {unconfirmedDocs.map((d) => d.file_name).join(", ")}
                 </span>
                 <button type="button" onClick={() => setCatalogDocId(unconfirmedDocs[0].document_id)}>
-                  Xác nhận
+                  Confirm
                 </button>
               </div>
             )}

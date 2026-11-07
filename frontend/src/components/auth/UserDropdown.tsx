@@ -46,7 +46,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
                 {user.full_name || user.username}
               </span>
               <span className={`dropdown-role-tag ${user.role === "admin" ? "admin" : "user"}`}>
-                {user.role === "admin" ? "ADMIN" : "THÀNH VIÊN"}
+                {user.role === "admin" ? "ADMIN" : "MEMBER"}
               </span>
             </div>
             <div className="dropdown-email">
@@ -60,14 +60,14 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
           <div>
             <div className="dropdown-title-row">
               <span className="dropdown-name">
-                Khách Vãng Lai
+                Guest User
               </span>
               <span className="dropdown-role-tag guest">
-                CHƯA ĐĂNG NHẬP
+                NOT SIGNED IN
               </span>
             </div>
             <div className="dropdown-email">
-              Chế độ trải nghiệm
+              Trial Session
             </div>
           </div>
         )}
@@ -76,19 +76,19 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
       {/* Quota Status */}
       <div className="dropdown-section">
         <div className="dropdown-section-title">
-          Hạn Mức Sử Dụng
+          Usage Quota
         </div>
 
         {user ? (
           <div className="dropdown-quota-list">
             <div className="dropdown-metric-row">
-              <span className="dropdown-metric-label">Tài liệu tải lên:</span>
+              <span className="dropdown-metric-label">Uploaded filings:</span>
               <span className="dropdown-metric-val">
-                Tối đa {user.quota.max_upload_documents} tài liệu / notebook
+                Max {user.quota.max_upload_documents} documents / workspace
               </span>
             </div>
             <div className="dropdown-metric-row">
-              <span className="dropdown-metric-label">Lượt hỏi hôm nay:</span>
+              <span className="dropdown-metric-label">Queries today:</span>
               <span className="dropdown-metric-val">
                 {user.quota.messages_used_today} / {user.quota.daily_messages_limit}
               </span>
@@ -97,9 +97,9 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
         ) : (
           <div className="dropdown-quota-list">
             <div className="dropdown-metric-row">
-              <span className="dropdown-metric-label">Tài liệu tải lên:</span>
+              <span className="dropdown-metric-label">Uploaded filings:</span>
               <span className="dropdown-metric-val">
-                Tối đa {guestQuota?.max_upload_documents || 1} tài liệu
+                Max {guestQuota?.max_upload_documents || 1} filing
               </span>
             </div>
           </div>
@@ -117,7 +117,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
             className="dropdown-action-item"
           >
             <ShieldIcon size={14} color="#3b82f6" />
-            <span>Admin Dashboard (Hiệu năng & Chi phí)</span>
+            <span>Admin Dashboard (Metrics &amp; Usage)</span>
           </button>
         )}
 
@@ -130,7 +130,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
             className="dropdown-action-login"
           >
             <UserIcon size={14} />
-            <span>Đăng Nhập / Đăng Ký Tài Khoản</span>
+            <span>Sign In / Register</span>
           </button>
         ) : (
           <button
@@ -141,7 +141,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
             className="dropdown-action-logout"
           >
             <LogOutIcon size={14} />
-            <span>Đăng Xuất</span>
+            <span>Sign Out</span>
           </button>
         )}
       </div>

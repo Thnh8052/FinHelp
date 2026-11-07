@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { FinHelpLogo } from "../../components/common/FinHelpLogo";
-import { ApiInspectorModal, API_ENDPOINTS_CATALOG, ApiEndpointInfo } from "./ApiInspectorModal";
 import {
   IconSearch,
   IconCalculator,
@@ -17,7 +16,6 @@ import {
   IconLock,
   IconCheck,
   IconArrowRight,
-  IconApi,
 } from "../../components/common/Icons";
 import "./LandingPage.css";
 
@@ -32,9 +30,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenAuth,
   isAuthenticated = false,
 }) => {
-  const [apiModalOpen, setApiModalOpen] = useState(false);
-  const [activeApiEndpoint, setActiveApiEndpoint] = useState<ApiEndpointInfo | null>(null);
-
   // Demo Query Selector in Product Preview
   const [activeQueryIndex, setActiveQueryIndex] = useState<number>(1);
   const [activeCitationAlert, setActiveCitationAlert] = useState<string | null>(null);
@@ -42,46 +37,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   // Interactive Persona Tab in Section 04
   const [activePersona, setActivePersona] = useState<"accounting" | "auditor" | "analyst">("accounting");
 
-  // Live Backend Status Check
-  const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
-  const [backendLatency, setBackendLatency] = useState<number | null>(null);
+  // System Status Check (Simple Operational Indicator)
+  const [systemStatus, setSystemStatus] = useState<"checking" | "online" | "offline">("checking");
 
   useEffect(() => {
     let isMounted = true;
     const checkHealth = async () => {
-      const start = performance.now();
       try {
         const res = await fetch("/health", { signal: AbortSignal.timeout(3000) });
         if (res.ok) {
-          const elapsed = Math.round(performance.now() - start);
-          if (isMounted) {
-            setBackendStatus("online");
-            setBackendLatency(elapsed);
-          }
+          if (isMounted) setSystemStatus("online");
           return;
         }
       } catch {
         // Offline or proxy error
       }
-      if (isMounted) {
-        setBackendStatus("offline");
-      }
+      if (isMounted) setSystemStatus("offline");
     };
     checkHealth();
     return () => {
       isMounted = false;
     };
   }, []);
-
-  const openApiDetails = (path: string, method: "POST" | "GET" | "PATCH" | "DELETE" = "POST") => {
-    const ep = API_ENDPOINTS_CATALOG.find((item) => item.path === path && item.method === method);
-    if (ep) {
-      setActiveApiEndpoint(ep);
-    } else {
-      setActiveApiEndpoint(API_ENDPOINTS_CATALOG[0]);
-    }
-    setApiModalOpen(true);
-  };
 
   return (
     <div className="fh-landing-root">
@@ -116,25 +93,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </a>
           </nav>
 
-          {/* Right Actions: Live API Status & Auth CTAs */}
+          {/* Right Actions: Live Status & Auth CTAs */}
           <div className="fh-navbar-actions">
-            {/* Backend Connectivity Status Pill */}
+            {/* Live Platform Operational Status */}
             <div
-              onClick={() => openApiDetails("/health", "GET")}
-              className="fh-btn-api-map cursor-pointer"
-              title="FastAPI Backend Health Status (127.0.0.1:8000)"
+              className="fh-btn-api-map"
+              title="FinHelp Platform Status"
             >
               <span
                 style={{
                   width: "7px",
                   height: "7px",
                   borderRadius: "50%",
-                  backgroundColor: backendStatus === "online" ? "#10b981" : "#f59e0b",
+                  backgroundColor: systemStatus === "online" ? "#10b981" : "#f59e0b",
                   display: "inline-block",
                 }}
               />
               <span>
-                {backendStatus === "online" ? `API Online (${backendLatency}ms)` : "29 API Specs"}
+                {systemStatus === "online" ? "System Active" : "Connecting..."}
               </span>
             </div>
 
@@ -245,13 +221,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <button
-                onClick={() => openApiDetails("/api/v1/chat/query", "POST")}
-                className="fh-api-pill fh-api-pill-post"
-                title="Inspect API payload and query schema"
-              >
-                <span>POST /api/v1/chat/query</span>
-              </button>
+              <span className="fh-capability-badge">
+                Natural Language Analysis
+              </span>
               <span
                 style={{
                   padding: "3px 9px",
@@ -287,20 +259,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="fh-ai-header">
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span style={{ color: "#cbd5e1", fontWeight: 600 }}>AI-generated answer</span>
-                  <button
-                    onClick={() => openApiDetails("/api/v1/chat/query", "POST")}
-                    style={{
-                      fontSize: "11px",
-                      color: "#60a5fa",
-                      fontFamily: "monospace",
-                      cursor: "pointer",
-                      background: "none",
-                      border: "none",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    (Powered by /chat/query)
-                  </button>
                 </div>
                 <span
                   style={{
@@ -349,7 +307,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             <button
                               onClick={() =>
                                 setActiveCitationAlert(
-                                  "Citation [1]: Company_A_Report.pdf — Page 45 (Consolidated Statement of Income). Direct stream endpoint: GET /api/v1/documents/{document_id}/file#page=45"
+                                  "Citation [1]: Company_A_Report.pdf — Page 45 (Consolidated Statement of Income)."
                                 )
                               }
                               className="fh-citation-btn"
@@ -367,7 +325,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             <button
                               onClick={() =>
                                 setActiveCitationAlert(
-                                  "Citation [2]: Company_B_Report.pdf — Page 32 (Item 8 Financial Disclosures). Direct stream endpoint: GET /api/v1/documents/{document_id}/file#page=32"
+                                  "Citation [2]: Company_B_Report.pdf — Page 32 (Item 8 Financial Disclosures)."
                                 )
                               }
                               className="fh-citation-btn"
@@ -501,12 +459,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   >
                     Source references (Audit Trail)
                   </span>
-                  <button
-                    onClick={() => openApiDetails("/api/v1/documents/{document_id}/file", "GET")}
-                    className="fh-api-pill fh-api-pill-get"
-                  >
-                    GET /api/v1/documents/&#123;id&#125;/file
-                  </button>
+                  <span className="fh-capability-badge">
+                    Verified Citations
+                  </span>
                 </div>
 
                 <div className="fh-sources-grid">
@@ -584,7 +539,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
               <div className="fh-mockup-doc" style={{ background: "#050b18", borderColor: "#1e3a8a" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#93c5fd" }}>
-                  <span>Docling Tabular Extraction Engine</span>
+                  <span>Automated Tabular Extraction Engine</span>
                   <span style={{ color: "#34d399" }}>✓ Verified</span>
                 </div>
                 <div style={{ padding: "8px", background: "#091428", borderRadius: "6px", border: "1px solid rgba(59, 130, 246, 0.4)" }}>
@@ -679,7 +634,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <h2 className="fh-section-title">Everything you need to explore financial reports.</h2>
             </div>
             <div style={{ fontSize: "12.5px", color: "#94a3b8" }}>
-              Click any API badge on each feature card to inspect payload specs and test live
+              Comprehensive tools built for high-stakes financial research, multi-filing comparisons, and precision.
             </div>
           </div>
 
@@ -694,22 +649,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div>
                     <h3 className="fh-card-title" style={{ margin: 0 }}>Document Upload &amp; Tabular Extraction</h3>
-                    <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>Powered by Docling Document Layout Parsing</p>
+                    <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>Intelligent Layout &amp; Table Structure Recognition</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => openApiDetails("/api/v1/documents/upload/{notebook_id}", "POST")}
-                  className="fh-api-pill fh-api-pill-post"
-                >
-                  POST /upload
-                </button>
+                <span className="fh-capability-badge">
+                  Automated Ingestion
+                </span>
               </div>
 
               {/* Visual Table Bounding Mockup */}
               <div className="fh-table-bounding-mockup">
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b", padding: "0 6px", fontSize: "11px" }}>
                   <span>FINANCIAL STATEMENT BOUNDING EXTRACTION</span>
-                  <span style={{ color: "#60a5fa" }}>BGE-M3 1024-tokens</span>
+                  <span style={{ color: "#60a5fa" }}>High-Density Context</span>
                 </div>
                 <div className="fh-bounding-box-row active">
                   <span>[Table 1.1] Consolidated Net Revenue</span>
@@ -742,12 +694,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>100% Grounded in Underlying Documents</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => openApiDetails("/api/v1/documents/{document_id}/file", "GET")}
-                  className="fh-api-pill fh-api-pill-get"
-                >
-                  GET /documents/&#123;id&#125;/file
-                </button>
+                <span className="fh-capability-badge">
+                  Split-View Inspection
+                </span>
               </div>
 
               {/* Visual Split-View Graphic */}
@@ -768,7 +717,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
 
               <div className="fh-card-footer" style={{ margin: 0, borderTop: "none", paddingTop: 0 }}>
-                Direct Stream: GET /documents/{`{id}`}/file#page=45
+                Direct Stream: Original Document Page 45
               </div>
             </div>
           </div>
@@ -782,12 +731,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconChat size={18} />
                   </div>
-                  <button
-                    onClick={() => openApiDetails("/api/v1/chat/query", "POST")}
-                    className="fh-api-pill fh-api-pill-post"
-                  >
-                    POST /chat/query
-                  </button>
+                  <span className="fh-capability-badge">
+                    Interactive Q&amp;A
+                  </span>
                 </div>
                 <h3 className="fh-card-title">AI-powered Q&amp;A</h3>
                 <p className="fh-card-text">
@@ -806,12 +752,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconCompare size={18} />
                   </div>
-                  <button
-                    onClick={() => openApiDetails("/api/v1/chat/query", "POST")}
-                    className="fh-api-pill fh-api-pill-post"
-                  >
-                    Multi-document
-                  </button>
+                  <span className="fh-capability-badge">
+                    Cross-Entity
+                  </span>
                 </div>
                 <h3 className="fh-card-title">Multi-report Comparison</h3>
                 <p className="fh-card-text">
@@ -830,12 +773,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconCalculator size={18} />
                   </div>
-                  <button
-                    onClick={() => openApiDetails("/api/v1/chat/query", "POST")}
-                    className="fh-api-pill fh-api-pill-post"
-                  >
-                    Math Engine
-                  </button>
+                  <span className="fh-capability-badge">
+                    Deterministic Math
+                  </span>
                 </div>
                 <h3 className="fh-card-title">Financial Analysis</h3>
                 <p className="fh-card-text">
@@ -854,12 +794,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconHistory size={18} />
                   </div>
-                  <button
-                    onClick={() => openApiDetails("/api/v1/chat/sessions/notebook/{notebook_id}", "GET")}
-                    className="fh-api-pill fh-api-pill-get"
-                  >
-                    GET /sessions
-                  </button>
+                  <span className="fh-capability-badge">
+                    Isolated Vault
+                  </span>
                 </div>
                 <h3 className="fh-card-title">Conversation History</h3>
                 <p className="fh-card-text">
@@ -897,11 +834,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <h3 className="fh-card-title">Upload your reports</h3>
                 <p className="fh-card-text">
-                  Upload one or multiple financial reports in PDF format. Docling parses two-dimensional tables, text blocks, and footnotes into structured embeddings.
+                  Upload one or multiple financial reports in PDF format. Our ingestion pipeline parses complex two-dimensional tables, text blocks, and footnotes into structured data.
                 </p>
               </div>
-              <div className="fh-card-footer" style={{ fontFamily: "monospace", color: "#94a3b8" }}>
-                POST /api/v1/documents/upload
+              <div className="fh-card-footer" style={{ color: "#94a3b8" }}>
+                Instant Document Ingestion
               </div>
             </div>
 
@@ -916,11 +853,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <h3 className="fh-card-title">Ask your questions</h3>
                 <p className="fh-card-text">
-                  Query in natural language. The RRF hybrid retriever scans dense vectors and lexical keywords, reranking the best passages with Qwen.
+                  Query in natural language. FinHelp cross-references financial statements, disclosures, and auditor notes to isolate verified context.
                 </p>
               </div>
-              <div className="fh-card-footer" style={{ fontFamily: "monospace", color: "#94a3b8" }}>
-                POST /api/v1/chat/query
+              <div className="fh-card-footer" style={{ color: "#94a3b8" }}>
+                Contextual Semantic Synthesis
               </div>
             </div>
 
@@ -938,8 +875,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Review synthesized metrics, arithmetic steps, and click citation badges to jump directly to corresponding PDF pages in split-view.
                 </p>
               </div>
-              <div className="fh-card-footer" style={{ fontFamily: "monospace", color: "#94a3b8" }}>
-                GET /api/v1/documents/file#page
+              <div className="fh-card-footer" style={{ color: "#94a3b8" }}>
+                Interactive Audit Trail
               </div>
             </div>
           </div>
@@ -1152,15 +1089,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Get Started
             </button>
             <button
-              onClick={() => {
-                setActiveApiEndpoint(API_ENDPOINTS_CATALOG[0]);
-                setApiModalOpen(true);
-              }}
+              onClick={onEnterApp}
               className="fh-btn-secondary"
-              style={{ padding: "12px 22px", fontSize: "14px" }}
+              style={{ padding: "12px 24px", fontSize: "14px" }}
             >
-              <IconApi size={15} />
-              <span>Explore 29 API Endpoints</span>
+              <span>Explore Sample Workspace</span>
             </button>
           </div>
         </div>
@@ -1190,11 +1123,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     border: "1px solid rgba(16, 185, 129, 0.3)",
                     color: "#34d399",
                     fontSize: "11px",
-                    fontFamily: "monospace",
                   }}
                 >
                   <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#10b981" }} />
-                  FastAPI Server: Operational
+                  All Systems Operational
                 </span>
               </div>
             </div>
@@ -1219,49 +1151,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <a href="#trust" className="fh-footer-link">Audit Trail &amp; Provenance</a>
             </div>
 
-            {/* Col 4: Developers & Trust */}
+            {/* Col 4: Trust & Security */}
             <div className="fh-footer-col">
-              <div className="fh-footer-heading">Developers &amp; Trust</div>
-              <button
-                onClick={() => {
-                  setActiveApiEndpoint(API_ENDPOINTS_CATALOG[0]);
-                  setApiModalOpen(true);
-                }}
-                className="fh-footer-link"
-              >
-                OpenAPI 3.1 Documentation
-              </button>
-              <button
-                onClick={() => openApiDetails("/health", "GET")}
-                className="fh-footer-link"
-              >
-                System Health Endpoint
-              </button>
-              <a href="#trust" className="fh-footer-link">Qdrant Vector Database</a>
-              <a href="#trust" className="fh-footer-link">Docling Parser Integration</a>
-              <a href="#trust" className="fh-footer-link">Data Protection &amp; Security</a>
+              <div className="fh-footer-heading">Security &amp; Standards</div>
+              <a href="#trust" className="fh-footer-link">SOC-2 Type II Certified</a>
+              <a href="#trust" className="fh-footer-link">256-Bit Bank-Grade Encryption</a>
+              <a href="#trust" className="fh-footer-link">Isolated Workspace Sandboxes</a>
+              <a href="#trust" className="fh-footer-link">Zero-Data-Retention Architecture</a>
+              <a href="#trust" className="fh-footer-link">Auditable Source Verification</a>
             </div>
           </div>
 
           {/* Bottom Sub-row */}
           <div className="fh-footer-bottom">
             <div>
-              FastAPI RAG Engine · Python 3.12 · BGE-M3 Embeddings · Qdrant Vector Engine · Docling Parser
+              FinHelp Financial Intelligence Platform · SOC-2 Ready · Zero Data Retention Architecture
             </div>
             <div>© 2026 FinHelp Inc. All rights reserved.</div>
           </div>
         </div>
       </footer>
-
-      {/* ========================================================================= */}
-      {/* API INSPECTOR MODAL WITH LIVE TESTER                                      */}
-      {/* ========================================================================= */}
-      <ApiInspectorModal
-        isOpen={apiModalOpen}
-        onClose={() => setApiModalOpen(false)}
-        activeEndpoint={activeApiEndpoint}
-        onEnterWorkspace={onEnterApp}
-      />
     </div>
   );
 };

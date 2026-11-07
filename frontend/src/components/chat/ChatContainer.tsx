@@ -101,27 +101,27 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   };
 
   const samplePrompts = [
-    "So sánh Doanh thu (Total Revenue) giữa các kỳ gần nhất",
-    "Biên lợi nhuận hoạt động (Operating Margin) đạt bao nhiêu?",
-    "Phân tích Đòn bẩy tài chính và Nợ dài hạn (Long-term Debt)",
-    "Tóm tắt các rủi ro trọng yếu (Risk Factors) trong BCTC",
+    "Compare Total Revenue across the latest fiscal periods",
+    "What is the Operating Margin and YoY expansion?",
+    "Analyze Capital Expenditures and Free Cash Flow",
+    "Summarize key risk factors and contingent liabilities",
   ];
 
   const canSubmit = !isLoading && hasSources && !!input.trim();
 
   return (
     <div className="chat-container">
-      {/* Top Header Bar inside Chat Container: Context Bar Tinh Gọn (Mockup V3) */}
+      {/* Top Header Bar inside Chat Container: Context Bar */}
       <div className="chat-header">
         <div className="chat-header-title-box">
           <span className="chat-header-title">
-            {sessionTitle || "Đoạn chat hiện tại"}
+            {sessionTitle || "Current Session"}
           </span>
         </div>
 
-        {/* Thanh Context hiển thị các nguồn đang được chọn để hỏi */}
+        {/* Context bar showing selected documents */}
         <div className="chat-header-sources">
-          <span className="chat-sources-label">Đang hỏi trên:</span>
+          <span className="chat-sources-label">Active Scope:</span>
           <div className="chat-sources-tags">
             {mentionOptions && mentionOptions.length > 0 ? (
               mentionOptions.map((opt) => (
@@ -130,7 +130,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 </span>
               ))
             ) : (
-              <span className="chat-source-tag muted">Chưa chọn nguồn</span>
+              <span className="chat-source-tag muted">No filings selected</span>
             )}
           </div>
           {(onToggleSources || onOpenSources) && (
@@ -138,25 +138,25 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               type="button"
               onClick={onToggleSources || onOpenSources}
               className={`chat-manage-sources-btn ${isSourcesOpen ? "active" : ""}`}
-              title={isSourcesOpen ? "Đóng danh sách quản lý BCTC" : "Mở danh sách quản lý BCTC"}
+              title={isSourcesOpen ? "Close filings drawer" : "Open filings drawer"}
             >
-              <span>{isSourcesOpen ? "Đóng quản lý nguồn" : "Quản lý nguồn"}</span>
+              <span>{isSourcesOpen ? "Close Sources" : "Manage Sources"}</span>
               <ChevronRightIcon size={12} />
             </button>
           )}
         </div>
       </div>
 
-      {/* Messages Stream (Centered ChatGPT / Claude reading column) */}
+      {/* Messages Stream */}
       <div className="chat-messages-stream">
         <div className="chat-messages-column">
           {messages.length === 0 && !isLoading && (
             <div className="chat-empty-state">
               <div className="chat-empty-title">
-                Sẵn sàng phân tích Báo cáo tài chính
+                Ready to Analyze Financial Reports
               </div>
               <p className="chat-empty-desc">
-                Hãy chọn hoặc tải lên báo cáo tài chính (PDF SEC Form 10-K / 10-Q), sau đó đặt câu hỏi về chỉ số tài chính, doanh thu, lợi nhuận hoặc đối chiếu kiểm toán.
+                Select or upload financial reports (PDF Form 10-K / Annual Filings), then ask natural language questions about margins, cash flows, or audit disclosures.
               </p>
             </div>
           )}
@@ -170,7 +170,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               >
                 {/* Sender label */}
                 <span className="chat-sender-label">
-                  {isUser ? "Bạn" : "FinAnalyst"}
+                  {isUser ? "You" : "FinHelp"}
                 </span>
 
                 {/* Message Box */}
@@ -195,7 +195,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                           disabled={isLoading}
                           onClick={() => onSendMessage(msg.query!, [a.document_id])}
                         >
-                          Hỏi lại với {a.label}
+                          Query with {a.label}
                         </button>
                       ))}
                     </div>
@@ -205,7 +205,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   {msg.citations && msg.citations.length > 0 && (
                     <div className="chat-citations-container">
                       <div className="chat-citations-title">
-                        Nguồn đối chiếu ({msg.citations.length}):
+                        Source Citations ({msg.citations.length}):
                       </div>
                       <div className="chat-citations-list">
                         {msg.citations.map((cite, idx) => (
@@ -226,17 +226,17 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                       <button
                         onClick={() => handleCopy(msg.content, msg.message_id)}
                         className="chat-copy-btn"
-                        title="Sao chép câu trả lời"
+                        title="Copy response"
                       >
                         {copiedMsgId === msg.message_id ? (
                           <>
                             <CheckIcon size={12} color="#10b981" />
-                            <span className="chat-copied-text">Đã sao chép</span>
+                            <span className="chat-copied-text">Copied</span>
                           </>
                         ) : (
                           <>
                             <CopyIcon size={12} />
-                            <span>Sao chép</span>
+                            <span>Copy</span>
                           </>
                         )}
                       </button>
@@ -250,10 +250,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           {/* Assistant Typing / Streaming Skeleton */}
           {isLoading && (
             <div className="chat-loading-row">
-              <span className="chat-sender-label">FinAnalyst</span>
+              <span className="chat-sender-label">FinHelp</span>
               <div className="chat-loading-bubble">
                 <div className="chat-loading-spinner" />
-                <span>Đang tra cứu dữ liệu BCTC và lập luận đối chiếu...</span>
+                <span>Retrieving document context and verifying financial metrics...</span>
               </div>
             </div>
           )}
@@ -262,13 +262,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         </div>
       </div>
 
-      {/* Floating Prompt Input Box (ChatGPT / Claude Style) */}
+      {/* Floating Prompt Input Box */}
       <div className="chat-input-wrapper">
         <div className="chat-input-column">
-          {/* Quick suggestions when input is empty (Điền vào textarea thay vì gửi ngay) */}
+          {/* Quick suggestions when input is empty */}
           {messages.length <= 3 && (
             <div className="chat-sample-prompts">
-              <span className="chat-prompts-label">Gợi ý:</span>
+              <span className="chat-prompts-label">Suggestions:</span>
               {samplePrompts.map((p, idx) => (
                 <button
                   key={idx}
@@ -279,7 +279,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   }}
                   disabled={isLoading || !hasSources}
                   className="chat-sample-btn"
-                  title="Điền câu hỏi mẫu vào ô nhập"
+                  title="Insert sample query into prompt input"
                 >
                   {p}
                 </button>
@@ -287,13 +287,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             </div>
           )}
 
-          {/* Tài liệu đã tag bằng @ (câu hỏi chỉ về các tài liệu này) */}
+          {/* Tagged documents with @ */}
           {(mentions.length > 0 || mentionMatches.length > 0) && (
             <div className="chat-mentions">
               {mentions.map((id) => (
                 <span key={id} className="chat-mention-chip">
                   @{labelOf(id)}
-                  <button type="button" aria-label="Bỏ tag" onClick={() => setMentions(mentions.filter((m) => m !== id))}>
+                  <button type="button" aria-label="Remove tag" onClick={() => setMentions(mentions.filter((m) => m !== id))}>
                     ×
                   </button>
                 </span>
@@ -315,8 +315,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={
                 hasSources
-                  ? "Đặt câu hỏi về BCTC (ví dụ: So sánh doanh thu và tính tốc độ tăng trưởng)..."
-                  : "Hãy chọn tài liệu nguồn ở thanh bên phải trước khi đặt câu hỏi"
+                  ? "Ask about your financial reports (e.g. Compare revenue growth and calculate CAGR)..."
+                  : "Please select source filings in the right panel before asking questions"
               }
               disabled={isLoading || !hasSources}
               rows={1}
@@ -326,7 +326,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             <button
               type="submit"
               disabled={!canSubmit}
-              aria-label="Gửi"
+              aria-label="Send"
               className={`chat-send-btn ${canSubmit ? "active" : "inactive"}`}
             >
               <SendIcon size={14} />
@@ -334,7 +334,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           </form>
 
           <div className="chat-input-hint">
-            Nhấn Enter để gửi • Shift + Enter để xuống dòng • Gõ @ để chỉ định tài liệu
+            Press Enter to send • Shift + Enter for new line • Type @ to reference a document
           </div>
         </div>
       </div>

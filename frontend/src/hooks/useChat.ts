@@ -21,21 +21,21 @@ export function useChat({ notebookId, isAuthenticated, selectedDocIds, maxSource
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const loginWarning = (detail: string) => showToast(detail, "warning", "Đăng nhập ngay", onLoginRequired);
+  const loginWarning = (detail: string) => showToast(detail, "warning", "Sign in now", onLoginRequired);
 
   const newChat = async () => {
     if (!isAuthenticated) {
-      showToast("Bạn cần đăng nhập để tạo thêm đoạn chat mới và lưu trữ lịch sử!", "warning", "Đăng nhập ngay", onLoginRequired);
+      showToast("Please sign in to create new analysis sessions and save history!", "warning", "Sign in now", onLoginRequired);
       return;
     }
     try {
-      const session = await chatService.createSession(notebookId, "Hội thoại tài chính mới");
+      const session = await chatService.createSession(notebookId, "New Financial Session");
       setSessions((prev) => [session, ...prev]);
       setCurrentSessionId(session.session_id);
       setMessages([]);
-      showToast("Đã tạo đoạn chat mới thành công.", "success");
+      showToast("New analysis session created.", "success");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.detail || "Không thể tạo đoạn chat mới." : "Lỗi kết nối khi tạo đoạn chat mới.", "error");
+      showToast(err instanceof ApiError ? err.detail || "Unable to create new session." : "Connection error when creating session.", "error");
     }
   };
 
@@ -45,7 +45,7 @@ export function useChat({ notebookId, isAuthenticated, selectedDocIds, maxSource
     try {
       setMessages(await chatService.getMessages(sessionId));
     } catch {
-      showToast("Không thể tải tin nhắn của đoạn chat này.", "error");
+      showToast("Unable to load messages for this session.", "error");
     } finally {
       setIsLoading(false);
     }
@@ -64,15 +64,15 @@ export function useChat({ notebookId, isAuthenticated, selectedDocIds, maxSource
           setMessages([]);
         }
       }
-      showToast("Đã xóa đoạn chat thành công.", "info");
+      showToast("Session deleted successfully.", "info");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.detail || "Không thể xóa đoạn chat." : "Lỗi kết nối khi xóa đoạn chat.", "error");
+      showToast(err instanceof ApiError ? err.detail || "Unable to delete session." : "Connection error when deleting session.", "error");
     }
   };
 
   const sendMessage = async (queryText: string, mentions?: string[]) => {
     if (selectedDocIds.length === 0) {
-      showToast("Hãy chọn ít nhất một tài liệu nguồn (thanh tài liệu phía trên) rồi đặt câu hỏi.", "warning");
+      showToast("Please select at least one filing from the sources drawer before querying.", "warning");
       return;
     }
     const assistantNote = (id: string, content: string): ChatMessage => ({
@@ -129,16 +129,19 @@ export function useChat({ notebookId, isAuthenticated, selectedDocIds, maxSource
       }
     } catch (err) {
       if (err instanceof ApiError) {
-        const detail = err.detail || `Lỗi máy chủ (HTTP ${err.status})`;
-        // Cần đăng nhập (ví dụ hỏi trong notebook của người dùng): thông báo kèm nút đăng nhập
-        if (err.status === 403 || detail.toLowerCase().includes("đăng nhập")) loginWarning(detail);
-        else showToast(detail, "error");
+        const detail = err.detail || `Server error (HTTP ${err.status})`;
+        // Auth required
+        if (err.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
+          loginWarning(detail);
+        } else {
+          showToast(detail, "error");
+        }
         setMessages((prev) => [...prev, assistantNote("msg_err", `⚠️ ${detail}`)]);
       } else {
-        showToast("Không thể kết nối đến máy chủ hệ thống.", "error");
+        showToast("Unable to connect to backend server.", "error");
         setMessages((prev) => [
           ...prev,
-          assistantNote("msg_err", "⚠️ Không thể kết nối đến máy chủ hệ thống. Vui lòng kiểm tra lại đường truyền."),
+          assistantNote("msg_err", "⚠️ Unable to connect to server. Please check your network connection."),
         ]);
       }
     } finally {

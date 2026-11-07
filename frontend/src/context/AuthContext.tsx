@@ -50,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tier: "guest",
         max_upload_documents: 1,
         max_file_size_mb: 5,
-        cost_description: "Chế độ dùng thử (Tối đa 1 tài liệu)",
+        cost_description: "Guest Trial Mode (Max 1 document)",
       });
     }
   };

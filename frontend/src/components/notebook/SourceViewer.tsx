@@ -107,8 +107,8 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
         <div className="pdf-empty-icon-box">
           <FileTextIcon size={24} color="var(--text-dim, #94a3b8)" />
         </div>
-        <p className="pdf-empty-title">Chưa có tài liệu BCTC</p>
-        <p className="pdf-empty-sub">Hãy tải lên hoặc chọn tài liệu nguồn ở thanh bên cạnh để xem BCTC gốc.</p>
+        <p className="pdf-empty-title">No Filing Selected</p>
+        <p className="pdf-empty-sub">Upload or select a filing from the sources drawer to inspect original document pages.</p>
       </div>
     );
   }
@@ -122,11 +122,11 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
 
   return (
     <div className="pdf-split-viewer-container">
-      {/* 1. Toolbar Trình Đọc PDF */}
+      {/* 1. PDF Toolbar */}
       <div className="pdf-viewer-toolbar">
-        {/* Tab Chuyển Đổi Các File BCTC Trong Phiên */}
+        {/* Document Tab Bar */}
         <div className="pdf-docs-tab-bar scrollbar-slim">
-          <span className="pdf-tab-label">Tài liệu:</span>
+          <span className="pdf-tab-label">Filings:</span>
           {documents.map((doc) => {
             const isTabActive = doc.document_id === currentDoc.document_id;
             return (
@@ -147,20 +147,20 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
           })}
         </div>
 
-        {/* Thanh Điều Hướng Trang PDF & Zoom */}
+        {/* Navigation & Zoom Controls */}
         <div className="pdf-nav-controls">
           <button
             type="button"
             onClick={handlePrevPage}
             disabled={currentPage <= 1}
             className="pdf-page-btn"
-            title="Trang trước"
+            title="Previous page"
           >
             <ChevronLeftIcon size={13} />
           </button>
 
           <span className="pdf-page-indicator">
-            Trang {currentPage} / {totalPages}
+            Page {currentPage} of {totalPages}
           </span>
 
           <button
@@ -168,19 +168,19 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
             onClick={handleNextPage}
             disabled={currentPage >= totalPages}
             className="pdf-page-btn"
-            title="Trang sau"
+            title="Next page"
           >
             <ChevronRightIcon size={13} />
           </button>
 
           <div className="pdf-toolbar-sep" />
 
-          {/* Điều khiển phóng to / thu nhỏ / vừa chiều rộng */}
+          {/* Zoom In / Out / Fit Width */}
           <button
             type="button"
             onClick={handleZoomOut}
             className="pdf-page-btn"
-            title="Thu nhỏ (-15%)"
+            title="Zoom out (-15%)"
           >
             <ZoomOutIcon size={13} />
           </button>
@@ -189,30 +189,30 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
             type="button"
             onClick={handleToggleFitWidth}
             className={`pdf-zoom-indicator ${isFitWidth ? "active" : ""}`}
-            title={isFitWidth ? "Đang vừa chiều rộng (Click để về 100%)" : `${zoomLevel}% (Click để vừa chiều rộng)`}
+            title={isFitWidth ? "Fit width (Click for 100%)" : `${zoomLevel}% (Click to fit width)`}
           >
             <FitWidthIcon size={12} />
-            <span>{isFitWidth ? "Vừa rộng" : `${zoomLevel}%`}</span>
+            <span>{isFitWidth ? "Fit" : `${zoomLevel}%`}</span>
           </button>
 
           <button
             type="button"
             onClick={handleZoomIn}
             className="pdf-page-btn"
-            title="Phóng to (+15%)"
+            title="Zoom in (+15%)"
           >
             <ZoomInIcon size={13} />
           </button>
 
           <div className="pdf-toolbar-sep" />
 
-          {/* Mở trang PDF ở tab mới */}
+          {/* Open in new tab */}
           <a
             href={pdfUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="pdf-page-btn"
-            title={`Mở riêng Trang ${currentPage} ở tab mới`}
+            title={`Open Page ${currentPage} in new tab`}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -226,7 +226,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
               type="button"
               onClick={onClose}
               className="pdf-close-btn"
-              title="Đóng trình đọc BCTC"
+              title="Close split-view viewer"
             >
               <CloseIcon size={13} />
             </button>
@@ -234,13 +234,13 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
         </div>
       </div>
 
-      {/* 2. Banner Đối Chiếu Trích Dẫn (Chuẩn hóa Markdown Table thành bảng đẹp mắt) */}
+      {/* 2. Grounded Evidence Banner */}
       {activeCitation && (
         <div className={`pdf-evidence-banner ${highlightPulse ? "highlight-flash" : ""}`}>
           <div className="pdf-evidence-header">
             <div className="pdf-evidence-title">
               <CheckShieldIcon size={13} color="#2563eb" />
-              <span>Đối chiếu tài liệu gốc: <strong>Trang {activeCitation.page}</strong></span>
+              <span>Verified Document Grounding: <strong>Page {activeCitation.page}</strong></span>
               {activeCitation.row_label && (
                 <span className="pdf-evidence-row">({activeCitation.row_label})</span>
               )}
@@ -250,37 +250,37 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
                 {copied ? (
                   <>
                     <CheckIcon size={11} color="#10b981" />
-                    <span>Đã chép</span>
+                    <span>Copied</span>
                   </>
                 ) : (
                   <>
                     <CopyIcon size={11} />
-                    <span>Sao chép</span>
+                    <span>Copy</span>
                   </>
                 )}
               </button>
               <button
                 onClick={onClearCitation}
                 className="pdf-clear-cite-btn"
-                title="Bỏ chọn trích dẫn này"
+                title="Clear citation highlight"
               >
                 <CloseIcon size={11} />
               </button>
             </div>
           </div>
-          {/* Render đoạn trích bằng MarkdownRenderer để các bảng tài chính Markdown được hiển thị thành bảng thực thụ */}
+          {/* Render Markdown table */}
           <div className="pdf-evidence-rendered-wrapper scrollbar-slim">
             <MarkdownRenderer content={activeCitation.snippet} />
           </div>
         </div>
       )}
 
-      {/* 3. Không Gian Hiển Thị Trang PDF BCTC Thực Tế */}
+      {/* 3. Original PDF Page Viewport */}
       <div className="pdf-display-viewport">
         <iframe
           key={`${currentDoc.document_id}-p${currentPage}`}
           src={pdfUrl}
-          title={`Báo cáo tài chính: ${currentDoc.file_name}`}
+          title={`Financial Report: ${currentDoc.file_name}`}
           className="pdf-render-frame"
         />
       </div>
