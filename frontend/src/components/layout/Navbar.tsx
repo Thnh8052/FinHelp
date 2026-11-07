@@ -112,7 +112,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             id="btn-toggle-splitview"
             onClick={onToggleSplitView}
             className={`navbar-action-btn split-toggle ${isSplitViewOpen ? "active" : ""}`}
-            title="Toggle split-view document reader"
+            title={isSplitViewOpen ? "Close document reader" : "Open document reader"}
+            aria-label="Toggle document reader"
           >
             <TableIcon size={14} />
             <span className="navbar-btn-text">Split-View [{isSplitViewOpen ? "On" : "Off"}]</span>

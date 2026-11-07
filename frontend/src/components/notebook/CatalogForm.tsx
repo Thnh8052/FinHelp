@@ -141,7 +141,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
 
         {error && <div className="auth-alert-error">{error}</div>}
         {data?.needs_confirmation && (
-          <div className="auth-alert-error" style={{ color: "#b45309", borderColor: "rgba(245, 158, 11, 0.4)", backgroundColor: "rgba(245, 158, 11, 0.08)" }}>
+          <div className="auth-alert-warning">
             Company entity or reporting period could not be automatically confirmed. Please verify before analyzing.
           </div>
         )}
@@ -206,8 +206,8 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
                 </select>
               </div>
 
-              <div className="auth-field" style={{ display: "flex", gap: 8 }}>
-                <div style={{ flex: 1 }}>
+              <div className="auth-field auth-field-row">
+                <div className="auth-field-col">
                   <label className="auth-label">Fiscal Year</label>
                   <input
                     className="auth-input"
@@ -220,7 +220,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
                     required
                   />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div className="auth-field-col">
                   <label className="auth-label">Quarter</label>
                   <select className="auth-input" value={quarter} onChange={(e) => setQuarter(e.target.value)}>
                     <option value="">Full Year</option>

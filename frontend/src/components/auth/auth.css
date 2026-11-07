@@ -75,6 +75,27 @@
   font-size: 12px;
 }
 
+.auth-alert-warning {
+  margin: 14px 20px 0 20px;
+  padding: 10px 14px;
+  background-color: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.auth-field-row {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 8px;
+}
+
+.auth-field-col {
+  flex: 1;
+}
+
 .auth-alert-success {
   margin: 14px 20px 0 20px;
   padding: 10px 14px;

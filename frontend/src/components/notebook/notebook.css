@@ -1386,3 +1386,9 @@
   padding: 5px 10px;
   font-size: 11px;
 }
+
+
+/* Utility: Hidden file input */
+.hidden-file-input {
+  display: none !important;
+}
