@@ -63,15 +63,20 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     scrollToBottom();
   }, [messages]);
 
-  // Tự động mở rộng độ cao thanh chat theo nội dung (Gemini & NotebookLM style)
+  // Auto-expand textarea to match content height (NotebookLM & ChatGPT style)
+  const autoResizeTextarea = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
+    const minHeight = isMobile ? 24 : 26;
+    const maxHeight = isMobile ? 150 : 220;
+    const newHeight = Math.min(Math.max(el.scrollHeight, minHeight), maxHeight);
+    el.style.height = `${newHeight}px`;
+  };
+
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      const scrollHeight = textareaRef.current.scrollHeight;
-      // Min 26px (1 dòng), mở rộng tối đa 220px (~8-9 dòng), cuộn êm khi vượt quá
-      const newHeight = Math.min(Math.max(scrollHeight, 26), 220);
-      textareaRef.current.style.height = `${newHeight}px`;
-    }
+    autoResizeTextarea();
   }, [input]);
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -82,7 +87,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     setInput("");
     setMentions([]);
     if (textareaRef.current) {
-      textareaRef.current.style.height = "26px";
+      const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
+      textareaRef.current.style.height = isMobile ? "24px" : "26px";
     }
     onSendMessage(toSend, usedMentions);
   };
@@ -312,6 +318,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onInput={autoResizeTextarea}
               onKeyDown={handleKeyDown}
               placeholder={
                 hasSources

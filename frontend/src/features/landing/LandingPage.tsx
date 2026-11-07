@@ -175,22 +175,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </a>
           </div>
 
-          {/* Sample Query Chips (2-Row Balanced SaaS Layout) */}
+          {/* Sample Query Chips (SaaS 2-Line Layout with Horizontal Touch Slider on Mobile) */}
           <div className="fh-chips-container">
-            <div className="fh-chips-row fh-chips-row-1">
-              <span className="fh-chips-label">
-                Try sample queries:
-              </span>
+            <span className="fh-chips-label">
+              Try sample queries:
+            </span>
+            <div className="fh-chips-track">
               <button
+                type="button"
                 onClick={() => setActiveQueryIndex(1)}
                 className={`fh-chip ${activeQueryIndex === 1 ? "active" : ""}`}
               >
                 <IconCompare size={14} />
                 <span>YoY Revenue Comparison</span>
               </button>
-            </div>
-            <div className="fh-chips-row fh-chips-row-2">
               <button
+                type="button"
                 onClick={() => setActiveQueryIndex(2)}
                 className={`fh-chip ${activeQueryIndex === 2 ? "active" : ""}`}
               >
@@ -198,6 +198,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <span>Calculate Free Cash Flow</span>
               </button>
               <button
+                type="button"
                 onClick={() => setActiveQueryIndex(3)}
                 className={`fh-chip ${activeQueryIndex === 3 ? "active" : ""}`}
               >
@@ -579,7 +580,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconSearch size={18} />
                   </div>
-                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>01. SEARCH</span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-problem-step">01. SEARCH</span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Manual searching</h3>
                 <p className="fh-card-text">
@@ -594,7 +597,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconCalculator size={18} />
                   </div>
-                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>02. MATH</span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-problem-step">02. MATH</span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Manual calculations</h3>
                 <p className="fh-card-text">
@@ -609,7 +614,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconDocuments size={18} />
                   </div>
-                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>03. FILINGS</span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-problem-step">03. FILINGS</span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Multiple documents</h3>
                 <p className="fh-card-text">
@@ -624,7 +631,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconLightbulb size={18} />
                   </div>
-                  <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>04. INSIGHTS</span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-problem-step">04. INSIGHTS</span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Difficult insights</h3>
                 <p className="fh-card-text">
@@ -656,14 +665,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Bento Visual 1: Document Ingestion with Table Bounding Boxes */}
             <div className="fh-bento-visual-card">
               <div className="fh-card-header">
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div className="fh-card-icon-mono">
-                    <IconUpload size={18} />
-                  </div>
-                  <div>
-                    <h3 className="fh-card-title" style={{ margin: 0 }}>Document Upload &amp; Tabular Extraction</h3>
-                    <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>Intelligent Layout &amp; Table Structure Recognition</p>
-                  </div>
+                <div className="fh-card-icon-mono">
+                  <IconUpload size={18} />
                 </div>
                 <div className="fh-badge-wrapper">
                   <span className="fh-capability-badge">
@@ -671,6 +674,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </span>
                 </div>
               </div>
+
+              <h3 className="fh-card-title" style={{ marginTop: "2px" }}>Document Upload &amp; Tabular Extraction</h3>
+              <p style={{ margin: "0 0 14px 0", fontSize: "12px", color: "#64748b" }}>Intelligent Layout &amp; Table Structure Recognition</p>
 
               {/* Visual Table Bounding Mockup */}
               <div className="fh-table-bounding-mockup">
@@ -700,14 +706,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Bento Visual 2: PDF Split-View Citation Grounding */}
             <div className="fh-bento-visual-card">
               <div className="fh-card-header">
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div className="fh-card-icon-mono">
-                    <IconCitation size={18} />
-                  </div>
-                  <div>
-                    <h3 className="fh-card-title" style={{ margin: 0 }}>Split-View Citation Jumping</h3>
-                    <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>100% Grounded in Underlying Documents</p>
-                  </div>
+                <div className="fh-card-icon-mono">
+                  <IconCitation size={18} />
                 </div>
                 <div className="fh-badge-wrapper">
                   <span className="fh-capability-badge">
@@ -715,6 +715,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </span>
                 </div>
               </div>
+
+              <h3 className="fh-card-title" style={{ marginTop: "2px" }}>Split-View Citation Jumping</h3>
+              <p style={{ margin: "0 0 14px 0", fontSize: "12px", color: "#64748b" }}>100% Grounded in Underlying Documents</p>
 
               {/* Visual Split-View Graphic */}
               <div className="fh-split-view-graphic">
@@ -855,7 +858,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconUpload size={18} />
                   </div>
-                  <span className="fh-step-num">Step 01</span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-step-num">Step 01</span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Upload your reports</h3>
                 <p className="fh-card-text">
@@ -874,7 +879,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconChat size={18} />
                   </div>
-                  <span className="fh-step-num">Step 02</span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-step-num">Step 02</span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Ask your questions</h3>
                 <p className="fh-card-text">
@@ -893,7 +900,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconCitation size={18} />
                   </div>
-                  <span className="fh-step-num">Step 03</span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-step-num">Step 03</span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Explore grounded answers</h3>
                 <p className="fh-card-text">
@@ -1041,9 +1050,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconCitation size={18} />
                   </div>
-                  <span style={{ color: "#60a5fa", fontWeight: 700, fontSize: "11px", textTransform: "uppercase" }}>
-                    01. Citations
-                  </span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-trust-badge">
+                      01. Citations
+                    </span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Document citations &amp; source references</h3>
                 <p className="fh-card-text">
@@ -1061,9 +1072,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconCalculator size={18} />
                   </div>
-                  <span style={{ color: "#60a5fa", fontWeight: 700, fontSize: "11px", textTransform: "uppercase" }}>
-                    02. Arithmetic
-                  </span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-trust-badge">
+                      02. Arithmetic
+                    </span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Transparent calculation steps</h3>
                 <p className="fh-card-text">
@@ -1081,9 +1094,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-card-icon-mono">
                     <IconLock size={18} />
                   </div>
-                  <span style={{ color: "#60a5fa", fontWeight: 700, fontSize: "11px", textTransform: "uppercase" }}>
-                    03. Security
-                  </span>
+                  <div className="fh-badge-wrapper">
+                    <span className="fh-trust-badge">
+                      03. Security
+                    </span>
+                  </div>
                 </div>
                 <h3 className="fh-card-title">Data protection &amp; access controls</h3>
                 <p className="fh-card-text">
