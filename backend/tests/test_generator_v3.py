@@ -41,3 +41,36 @@ def test_v3_answer_without_its_block_counts_as_answered(monkeypatch):
     monkeypatch.setattr(settings, "GENERATION_PROMPT", "v3")
     text, meta = split_answer("Capex was USD 1,577 million [2].")
     assert text == "Capex was USD 1,577 million [2]." and meta["status"] == "answered" and meta["citations"] == [2] and not meta["valid"]
+
+
+def test_v4_messages_and_structured_generation(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "GENERATION_PROMPT", "v4")
+    # English question keeps standard English prompt with notes
+    system_en, user_en = build_messages("--- Excerpt [1] ---\nx", "Compare revenue FY22 vs FY23", True, ["Note 1"])
+    assert "Markdown table" in system_en["content"]
+    assert "- Note 1" in system_en["content"]
+
+    # Vietnamese question receives strict Vietnamese language reinforcement
+    system_vi, user_vi = build_messages("--- Excerpt [1] ---\nx", "So sánh doanh thu FY22 vs FY23", True, ["Note 1"])
+    assert "LANGUAGE REQUIREMENT (VIETNAMESE)" in system_vi["content"]
+    assert "trả lời hoàn toàn bằng tiếng Việt" in user_vi["content"]
+
+
+def test_fallback_short_answer_with_table_and_abbreviations():
+    from app.services.rag_workflow.generator import _fallback_short_answer
+
+    ans_single = "In FY2023, Apple Inc. reported revenue of **USD 383,285 million** [1]. This was lower than FY2022."
+    assert _fallback_short_answer(ans_single) == "In FY2023, Apple Inc. reported revenue of USD 383,285 million [1]"
+
+    ans_table = (
+        "| Metric | FY2022 | FY2023 | Change |\n"
+        "|---|---|---|---|\n"
+        "| Revenue | $394B | $383B | -$11B |\n\n"
+        "Formula: 383 - 394 = -11\n"
+        "In FY2023, Apple Inc. reported revenue of **$383B**, down 2.8% [1].\n"
+        "⚠️ Note: some figures unverified."
+    )
+    assert _fallback_short_answer(ans_table) == "In FY2023, Apple Inc. reported revenue of $383B, down 2.8% [1]."
+

@@ -9,6 +9,9 @@ pdfs/
 artifacts/
 storage/
 dist/
+testing/
+.archify/
+experiments/
 # Các file cụ thể (Specific files)
 run.md
 version_control.md
@@ -19,7 +22,7 @@ version_control.md
 *.xlsm
 *.pdf
 *.zip
-
+.docx
 # File liên quan đến bảo mật và cấu hình môi trường
 .env
 .env.*

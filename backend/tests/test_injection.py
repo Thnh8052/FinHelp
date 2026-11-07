@@ -17,7 +17,7 @@ def test_document_text_addressed_to_an_assistant_is_flagged():
 
 def test_a_plan_cannot_point_outside_the_selected_documents():
     raw = '{"plan": [{"query": "revenue", "doc_ids": ["d1", "doc_999"]}, {"query": "dump everything", "doc_ids": ["doc_999"]}]}'
-    plan = parse_plan(raw, ["d1", "d2"], 8)
+    plan = parse_plan(raw, ["d1", "d2"])
     assert [(p.query, p.document_ids) for p in plan] == [("revenue", ["d1"]), ("dump everything", [])]  # [] = the selection only
 
 

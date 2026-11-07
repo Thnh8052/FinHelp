@@ -104,6 +104,50 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
     }
   };
 
+  /** Tải lên nhiều tệp cùng lúc (Batch Upload từ Dropzone) */
+  const uploadFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    setIsUploading(true);
+    let successCount = 0;
+    try {
+      for (const file of files) {
+        try {
+          const data = await documentService.upload(notebookId, file);
+          const newDoc: DocumentRecord = {
+            document_id: data.document_id,
+            notebook_id: notebookId,
+            file_name: file.name,
+            file_size_bytes: file.size,
+            file_path: `storage/pdfs/${notebookId}/${data.document_id}.pdf`,
+            page_count: 0,
+            parsing_status: "processing",
+            indexing_status: "pending",
+            created_at: new Date().toISOString(),
+          };
+          setDocuments((prev) => [newDoc, ...prev]);
+          setActiveDocId(newDoc.document_id);
+          setSelectedDocIds((prev) => [...prev.filter((x) => x !== newDoc.document_id), newDoc.document_id].slice(-maxSources));
+          successCount++;
+        } catch (fileErr) {
+          if (fileErr instanceof ApiError) {
+            const detail = fileErr.detail || `Tải lên ${file.name} thất bại.`;
+            if (fileErr.status === 403 || detail.toLowerCase().includes("đăng nhập")) {
+              showToast(detail, "warning", "Đăng nhập ngay", onLoginRequired);
+              break;
+            } else {
+              showToast(detail, "error");
+            }
+          }
+        }
+      }
+      if (successCount > 0) {
+        showToast(`Đã tải lên ${successCount} tệp BCTC! Đang tiến hành trích xuất dữ liệu.`, "success");
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const remove = async (documentId: string): Promise<boolean> => {
     setIsDeleting(true);
     try {
@@ -137,10 +181,19 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
     }
   };
 
+  const toggleAll = (selectAll: boolean) => {
+    if (selectAll) {
+      const usableIds = documents.filter((d) => !isDocFailed(d)).map((d) => d.document_id);
+      setSelectedDocIds(usableIds.slice(-maxSources));
+    } else {
+      setSelectedDocIds([]);
+    }
+  };
+
   const activeDoc = documents.find((d) => d.document_id === activeDocId) || documents[0] || null;
 
   return {
     documents, activeDocId, setActiveDocId, activeDoc, selectedDocIds, isUploading, isDeleting,
-    load, reset, reload, upload, remove, toggleSelected,
+    load, reset, reload, upload, uploadFiles, remove, toggleSelected, toggleAll,
   };
 }

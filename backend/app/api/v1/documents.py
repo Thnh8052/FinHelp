@@ -258,3 +258,39 @@ async def update_catalog(
     changes = catalog_changes(doc, req, text, user_id or "guest")
     await DocumentRepository(db).update_one({"document_id": document_id}, changes)
     return {"document_id": document_id, "needs_confirmation": False, "user_override_unverified": changes["metadata.user_override_unverified"]}
+
+
+# ==============================================================================
+# HÀM: get_document_file
+# Ý NGHĨA: Phục vụ tệp PDF gốc để trình đọc BCTC Split-View tải trực tiếp.
+# ==============================================================================
+@router.get("/{document_id}/file/{token}")
+@router.get("/{document_id}/file")
+async def get_document_file(
+    document_id: str,
+    token: Optional[str] = None,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    user_id: Optional[str] = Depends(get_optional_user_id),
+):
+    from fastapi.responses import FileResponse
+    from jose import JWTError, jwt
+
+    # Thẻ <iframe> trong trình duyệt không gửi header Authorization: Bearer, do đó nhận token qua Query Param
+    if not user_id and token:
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            user_id = payload.get("sub")
+        except JWTError:
+            pass
+
+    doc = await _document(db, document_id, user_id, write=False)
+    storage = StorageService()
+    pdf_path = storage.get_pdf_path(doc.notebook_id, doc.document_id, doc.file_name)
+    if not pdf_path.is_file():
+        raise HTTPException(status_code=404, detail="Tệp PDF không tồn tại trên hệ thống lưu trữ.")
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=doc.file_name,
+        headers={"Content-Disposition": f'inline; filename="{doc.file_name}"'},
+    )

@@ -16,4 +16,6 @@ export const documentService = {
       body: formData,
     });
   },
+
+  getFileUrl: (documentId: string) => `/api/v1/documents/${documentId}/file`,
 };

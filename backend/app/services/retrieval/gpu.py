@@ -1,3 +1,6 @@
+import os
+# PyTorch CUDA Allocator: chong phan manh VRAM va tu dong nha cache tren Windows
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:128,garbage_collection_threshold:0.8")
 """Shared GPU helpers for the local models (BGE-M3 embedder, Qwen3 reranker).
 
 A 4 GB laptop card shared with the desktop cannot always hold both models at once (Windows gives each process a

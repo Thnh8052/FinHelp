@@ -180,4 +180,35 @@ export const RefreshCwIcon: React.FC<IconProps> = ({ size = 14, color = "current
     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
   </svg>
 );
+export const MenuIcon: React.FC<IconProps> = ({ size = 18, color = "currentColor", className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="4" y1="6" x2="20" y2="6" />
+    <line x1="4" y1="12" x2="20" y2="12" />
+    <line x1="4" y1="18" x2="11" y2="18" />
+  </svg>
+);
+export const ZoomInIcon: React.FC<IconProps> = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox='0 0 24 24' fill='none' stroke={color} strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+    <circle cx='11' cy='11' r='8' />
+    <line x1='21' y1='21' x2='16.65' y2='16.65' />
+    <line x1='11' y1='8' x2='11' y2='14' />
+    <line x1='8' y1='11' x2='14' y2='11' />
+  </svg>
+);
 
+export const ZoomOutIcon: React.FC<IconProps> = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox='0 0 24 24' fill='none' stroke={color} strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+    <circle cx='11' cy='11' r='8' />
+    <line x1='21' y1='21' x2='16.65' y2='16.65' />
+    <line x1='8' y1='11' x2='14' y2='11' />
+  </svg>
+);
+
+export const FitWidthIcon: React.FC<IconProps> = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox='0 0 24 24' fill='none' stroke={color} strokeWidth='1.75' strokeLinecap='round' strokeLinejoin='round'>
+    <polyline points='15 3 21 3 21 9' />
+    <polyline points='9 21 3 21 3 15' />
+    <line x1='21' y1='3' x2='14' y2='10' />
+    <line x1='3' y1='21' x2='10' y2='14' />
+  </svg>
+);

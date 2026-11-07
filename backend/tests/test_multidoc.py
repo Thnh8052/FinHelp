@@ -45,16 +45,16 @@ def test_parse_plan_drops_unknown_ids_and_blank_queries():
         {"query": "balance sheet total assets", "doc_ids": []},
         {"query": "x", "doc_ids": "d1"},
     ]})
-    plan = planner.parse_plan(raw, ["d1", "d2"], 8)
+    plan = planner.parse_plan(raw, ["d1", "d2"])
     assert [(p.query, p.document_ids) for p in plan] == [
         ("income statement net revenues", ["d1"]), ("balance sheet total assets", []), ("x", [])]
 
 
-def test_parse_plan_caps_items_and_tolerates_prose_or_garbage():
+def test_parse_plan_keeps_every_item_and_tolerates_prose_or_garbage():
     raw = "Here you go: " + json.dumps({"plan": [{"query": f"q{i}", "doc_ids": ["d1"]} for i in range(12)]})
-    assert len(planner.parse_plan(raw, ["d1"], 8)) == 8
-    assert planner.parse_plan("not json", ["d1"], 8) == []
-    assert planner.parse_plan(json.dumps({"plan": "oops"}), ["d1"], 8) == []
+    assert len(planner.parse_plan(raw, ["d1"])) == 12  # no cap on the queries: a harder question may need more
+    assert planner.parse_plan("not json", ["d1"]) == []
+    assert planner.parse_plan(json.dumps({"plan": "oops"}), ["d1"]) == []
 
 
 async def test_plan_multi_doc_validates_and_caches(monkeypatch):
@@ -62,15 +62,34 @@ async def test_plan_multi_doc_validates_and_caches(monkeypatch):
 
     async def fake_chat(messages, **kwargs):
         calls.append(messages[1]["content"])
-        return json.dumps({"plan": [{"query": "net revenues", "doc_ids": ["d1"]}, {"query": "net revenues", "doc_ids": ["d2"]}]})
+        return json.dumps({"plan": [{"query": "net revenues", "doc_ids": ["doc01", "ghost"]}, {"query": "net revenues", "doc_ids": ["doc02"]}]})
 
     planner._cache.clear()
     monkeypatch.setattr(planner, "chat_completion", fake_chat)
     plan = await planner.plan_multi_doc("Which had higher revenue in 2022?", CATALOG)
-    assert [p.document_ids for p in plan] == [["d1"], ["d2"]]
-    assert "d1 | The Coca-Cola Company | 10-K | FY2022" in calls[0] and "PepsiCo, Inc" in calls[0]
+    assert [p.document_ids for p in plan] == [["d1"], ["d2"]]  # the model's short ids become the real ones, an invented one is dropped
+    assert "doc01 | The Coca-Cola Company | 10-K | FY2022" in calls[0] and "doc02 | PepsiCo, Inc" in calls[0]
+    assert "At most" not in calls[0] and calls[0].endswith("Question: Which had higher revenue in 2022?")
     await planner.plan_multi_doc("Which had higher revenue in 2022?", CATALOG)
     assert len(calls) == 1
+
+
+async def test_plan_multi_doc_asks_again_after_an_invalid_reply_but_not_after_an_empty_plan(monkeypatch):
+    replies, calls = ["not json", json.dumps({"plan": [{"query": "net revenues", "doc_ids": ["doc01"]}]})], []
+
+    async def fake_chat(messages, **kwargs):
+        calls.append(1)
+        return replies[len(calls) - 1]
+
+    planner._cache.clear()
+    monkeypatch.setattr(planner, "chat_completion", fake_chat)
+    assert [p.document_ids for p in await planner.plan_multi_doc("q", CATALOG)] == [["d1"]] and len(calls) == 2
+
+    replies, calls = [json.dumps({"plan": []})] * 2, []
+    assert await planner.plan_multi_doc("q2", CATALOG) == [] and len(calls) == 1  # the model chose no report: not an error
+
+    replies, calls = ["not json"] * 2, []
+    assert await planner.plan_multi_doc("q3", CATALOG) == [] and len(calls) == 2
 
 
 async def test_plan_multi_doc_degrades_to_empty_when_llm_down_or_catalog_empty(monkeypatch):
@@ -120,6 +139,8 @@ def test_document_label_and_catalog_entry_fall_back_to_file_name():
                            metadata=DocumentMetadata(company_name="Ulta Beauty", report_type="10-K", fiscal_year=2022,
                                                      period_start="2022-01-30", period_end="2023-01-28", comparable_year=2022))
     assert document_label(dated) == "Ulta Beauty | 10-K | FY2022 (2022-01-30 to 2023-01-28)"
+    assert catalog_entry(dated).line() == "d3 | Ulta Beauty | 10-K | FY2022 | period ended 2023-01-28"
+    assert catalog_entry(dated).line("doc03") == "doc03 | Ulta Beauty | 10-K | FY2022 | period ended 2023-01-28"
 
 
 # ---------------------------------------------------------------- header extraction at upload
@@ -249,6 +270,136 @@ def test_allocate_relative_threshold_round_robin_and_token_cap(monkeypatch):
     assert allocate(lanes, tokens, limit=3) == ["a", "x", "b"]  # a fixed chunk count, no token cap
 
 
+# ---------------------------------------------------------------- retrieve_planned, the path of a question with a plan (Q13af)
+class _PlannedRetriever:
+    def __init__(self, by_document):
+        self.by_document, self.per_vector = by_document, None
+
+    async def search_vectors(self, vectors, notebook_id, document_id=None, limit=5, per_vector_documents=None):
+        self.per_vector = per_vector_documents
+        assert len(vectors) == len(per_vector_documents)
+        return [sorted(({"chunk_id": c, "score": s} for d in docs for c, s in self.by_document[d]), key=lambda h: -h["score"]) for docs in per_vector_documents]
+
+
+class _PlannedChunks:
+    def __init__(self, text):
+        self.text = text
+
+    async def get_text_and_tokens(self, document_ids):
+        return {c: (t, 100) for c, t in self.text.items()}
+
+    async def get_chunks_by_ids(self, ids):
+        import types
+        return [types.SimpleNamespace(chunk_id=i, document_id="d", page=1, section=None, chunk_type="text", content=self.text[i], concept_ids=[]) for i in ids]
+
+
+class _PlannedReranker:
+    def __init__(self, score):
+        self.scored, self.score = [], score
+
+    async def score_pairs(self, pairs):
+        self.scored += pairs
+        return [self.score(q, t) for q, t in pairs]
+
+
+def _planned(monkeypatch, by_document, text, score):
+    from app.services.retrieval.hybrid_search import HybridSearchService
+
+    monkeypatch.setattr(settings, "RERANK_ENABLED", True)
+    svc = HybridSearchService.__new__(HybridSearchService)
+    svc.embedder, svc.retriever, svc.chunk_repo, svc.reranker = _FakeEmbedder(), _PlannedRetriever(by_document), _PlannedChunks(text), _PlannedReranker(score)
+    return svc
+
+
+def test_bm25_scores_prefer_rare_terms_and_short_chunks():
+    from collections import Counter
+
+    from app.services.retrieval.hybrid_search import bm25_scores
+
+    chunks = [Counter(goodwill=1, total=1), Counter(total=1, assets=3), Counter(total=2, other=8)]
+    s = bm25_scores("Goodwill total", chunks)
+    assert s[0] > s[1] and s[0] > s[2]  # the only chunk with the rare term
+    assert list(bm25_scores("ebitda", chunks)) == [0, 0, 0] and list(bm25_scores("!!", chunks)) == [0, 0, 0]
+    assert len(bm25_scores("x", [])) == 0
+
+
+def test_dense_bm25_order_lets_a_shared_term_win_over_a_close_dense_score():
+    from collections import Counter
+
+    from app.services.retrieval.hybrid_search import dense_bm25_order
+
+    hits = [{"chunk_id": "a", "score": 0.80}, {"chunk_id": "b", "score": 0.79}, {"chunk_id": "c", "score": 0.10}]
+    counts = {"a": Counter(other=5), "b": Counter(goodwill=5), "c": Counter(other=5)}
+    assert dense_bm25_order(hits, "goodwill", counts) == ["b", "a", "c"]
+    assert dense_bm25_order(hits, "nothing matches", counts) == ["a", "b", "c"]  # no term: the dense order
+    assert dense_bm25_order([{"chunk_id": None, "score": 1.0}], "q", {}) == []
+
+
+def test_planned_ceilings_grow_with_the_question_and_have_no_upper_limit():
+    from app.services.retrieval.hybrid_search import planned_ceilings
+
+    assert planned_ceilings(3, 2) == (12, 8192 + 2 * 1024)
+    assert planned_ceilings(9, 3) == (12, 18432)
+    assert planned_ceilings(9, 4)[0] == 16 and planned_ceilings(11, 5) == (20, 8192 + 14 * 1024)  # past the old 18,432 tokens
+    assert planned_ceilings(41, 10) == (40, 8192 + 74 * 1024)
+
+
+def test_allocate_planned_limits_the_question_search_only_and_stops_at_both_ceilings():
+    from app.services.retrieval.hybrid_search import allocate_planned
+
+    sub = (["a", "b", "c", "d", "e"], {c: 0.9 for c in "abcde"})
+    question = (["q1", "q2", "q3", "q4"], {"q1": 0.9, "q2": 0.9, "q3": 0.9, "q4": 0.9})
+    tokens = {c: 100 for c in "abcde"} | {f"q{i}": 100 for i in range(1, 5)}
+    assert allocate_planned([sub, question], tokens, 100, 10 ** 6) == ["a", "q1", "b", "q2", "c", "q3", "d", "e"]  # q4 is the fourth of the question search
+    assert allocate_planned([sub, question], tokens, 3, 10 ** 6) == ["a", "q1", "b"]
+    assert allocate_planned([sub, question], tokens, 100, 250) == ["a", "q1"]
+    assert allocate_planned([sub, question], {"a": 900}, 100, 250) == ["a"]  # the first chunk always fits, and nothing fits after it
+    assert allocate_planned([sub, ([], {})], tokens, 100, 10 ** 6) == list("abcde")  # the question search found nothing
+
+
+async def test_retrieve_planned_searches_each_document_and_adds_the_question_last(monkeypatch):
+    from app.services.query_router.planner import PlanItem
+
+    by_document = {"d1": [("a1", 0.9), ("a2", 0.8), ("a3", 0.7)], "d2": [("b1", 0.9), ("b2", 0.8)], "d3": [("c1", 0.99)]}
+    text = {"a1": "revenue a", "a2": "revenue aa", "a3": "other", "b1": "revenue b", "b2": "assets", "c1": "never"}
+    best_for_question = {"a3": 0.9, "b2": 0.9}
+    svc = _planned(monkeypatch, by_document, text, lambda q, t: {"revenue a": 0.9, "revenue aa": 0.1, "revenue b": 0.9}.get(t, 0.05) if q == "revenue" else best_for_question.get({v: k for k, v in text.items()}[t], 0.1))
+    chunks = await svc.retrieve_planned("the question", [PlanItem("revenue", ["d1", "d2"])], "nb", ["d1", "d2", "d3"])
+    assert svc.retriever.per_vector == [["d1"], ["d2"], ["d1", "d2"]]  # never d3: the question search stays on the planned documents
+    assert [c["chunk_id"] for c in chunks] == ["a1", "b1", "b2", "a3"]  # sub-query lanes keep their best; the question lane, last in each round, offers b2 then a3
+    assert {q for q, _ in svc.reranker.scored} == {"revenue", "the question"}
+
+
+async def test_retrieve_planned_has_no_cap_of_8_but_a_guard_and_survives_the_reranker(monkeypatch):
+    from app.services.query_router.planner import PlanItem
+
+    by_document = {"d1": [("a1", 0.9), ("a2", 0.8), ("a3", 0.7), ("a4", 0.6)]}
+    text = {c: c for c, _ in by_document["d1"]}
+    svc = _planned(monkeypatch, by_document, text, lambda q, t: 0.9)
+    await svc.retrieve_planned("q", [PlanItem(f"item {i}", ["d1"]) for i in range(12)], "nb", ["d1"])
+    assert len(svc.retriever.per_vector) == 13  # 12 searches + the question
+
+    monkeypatch.setattr(settings, "MULTIDOC_SEARCH_GUARD", 3)
+    await svc.retrieve_planned("q", [PlanItem(f"item {i}", ["d1"]) for i in range(12)], "nb", ["d1"])
+    assert len(svc.retriever.per_vector) == 4
+
+    async def boom(pairs):
+        raise RuntimeError("CUDA out of memory")
+
+    svc.reranker.score_pairs = boom
+    chunks = await svc.retrieve_planned("q", [PlanItem("item", ["d1"])], "nb", ["d1"])
+    assert [c["chunk_id"] for c in chunks] == ["a1", "a2", "a3", "a4"]  # the first-stage order still answers
+
+
+def test_safety_net_keeps_its_room_above_a_large_first_stream():
+    big = [{"content": "x" * 40000}]  # 10,000 tokens: more than the 8,192 of the older stream 1
+    chunk = {"chunk_id": "n"}
+    assert retrieval_step.extra_slots(big, [(chunk, 9000)]) == [chunk]
+    assert retrieval_step.extra_slots(big, [(chunk, 11000)]) == []
+    assert retrieval_step.extra_slots([{"content": "x"}], [(chunk, 18000)]) == [chunk]  # the older room is unchanged
+    assert retrieval_step.extra_slots([{"content": "x"}], [(chunk, 19000)]) == []
+
+
 # ---------------------------------------------------------------- source selection (user chooses the files, the system never guesses)
 def _doc(doc_id, name, **meta):
     return DocumentRecord(document_id=doc_id, notebook_id="nb", file_name=name, file_size_bytes=1, file_path="p",
@@ -326,6 +477,10 @@ async def test_retrieve_never_widens_the_selection(monkeypatch):
             seen["plan"] = [(p.query, p.document_ids) for p in plan]
             return [{"document_id": "d1", "page": 3, "content": "x", "chunk_type": "table", "score": 1.0}]
 
+        async def retrieve_planned(self, question, plan, notebook_id, scope_ids):
+            seen["question"] = question
+            return await self.retrieve_multi_doc(plan, notebook_id, scope_ids)
+
         async def retrieve_research(self, query, sub_queries, notebook_id, document_id):
             seen["fallback_filter"] = document_id
             return []
@@ -342,7 +497,7 @@ async def test_retrieve_never_widens_the_selection(monkeypatch):
     orch = _orchestrator(docs)
     orch.hybrid_search = FakeSearch()
     found = await orch.retrieve("which is larger?", "nb", docs)
-    assert seen["catalog"] == ["d1", "d2"] and seen["scope"] == ["d1", "d2"]
+    assert seen["catalog"] == ["d1", "d2"] and seen["scope"] == ["d1", "d2"] and seen["question"] == "which is larger?"
     assert found.retrieved[0]["document_label"] == "Coca-Cola | 10-K | FY2022"
 
     # one selected document: the measured single-filing path, filtered to that document, no planner
@@ -378,7 +533,7 @@ async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_with
 
             return None
 
-        async def retrieve_multi_doc(self, plan, notebook_id, scope_ids, limit=None):
+        async def retrieve_planned(self, question, plan, notebook_id, scope_ids):
             seen["plan"] = [(p.query, p.document_ids) for p in plan]
             return [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x" * 400, "chunk_type": "table", "score": 1.0}]
 
@@ -425,9 +580,13 @@ async def test_targeted_documents_skip_the_net_and_v1_retries_a_missing_one(monk
 
             return None
 
+        async def retrieve_planned(self, question, plan, notebook_id, scope_ids):
+            calls.append(([p.document_ids for p in plan], list(scope_ids), None))
+            return [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x", "chunk_type": "table", "score": 1.0}]
+
         async def retrieve_multi_doc(self, plan, notebook_id, scope_ids, limit=None):
             calls.append(([p.document_ids for p in plan], list(scope_ids), limit))
-            return [] if limit else [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x", "chunk_type": "table", "score": 1.0}]
+            return []
 
         async def safety_net(self, *a):
             raise AssertionError("no safety net when the documents are targeted")

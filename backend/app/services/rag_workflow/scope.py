@@ -23,7 +23,7 @@ def document_label(doc: DocumentRecord) -> str:
 def catalog_entry(doc: DocumentRecord) -> CatalogEntry:
     m = doc.metadata
     period = f"FY{m.fiscal_year}" + (f" Q{m.fiscal_quarter}" if m.fiscal_quarter else "") if m.fiscal_year else ""
-    return CatalogEntry(doc.document_id, m.company_name or "", m.report_type or "", period, doc.file_name)
+    return CatalogEntry(doc.document_id, m.company_name or "", m.report_type or "", period, doc.file_name, m.period_end or "")
 
 
 def source_info(doc: DocumentRecord) -> SourceInfo:

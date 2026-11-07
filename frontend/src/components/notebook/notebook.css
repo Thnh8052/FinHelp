@@ -695,3 +695,694 @@
     right: 12px;
   }
 }
+
+/* ==========================================================================
+   SOURCES DRAWER & TRUE SPLIT-VIEW PDF READER (MOCKUP V3)
+   ========================================================================== */
+
+/* 1. Sources Drawer Container (Bên phải ~320px) */
+.doc-drawer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--bg-sidebar, #101726);
+  color: var(--text-primary, #f8fafc);
+  overflow: hidden;
+  user-select: none;
+}
+
+.doc-drawer-header {
+  height: 42px;
+  padding: 0 14px;
+  background-color: var(--bg-card, #162034);
+  border-bottom: 1px solid var(--border-medium, #22304d);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.doc-drawer-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-drawer-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.doc-drawer-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background-color: rgba(37, 99, 235, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  font-family: var(--font-mono, monospace);
+}
+
+.doc-drawer-close-btn {
+  padding: 4px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.doc-drawer-close-btn:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 2. Dropzone Kéo Thả / Chọn Nhiều File */
+.doc-drawer-dropzone-wrap {
+  padding: 12px;
+  background-color: #0c121e;
+  border-bottom: 1px solid var(--border-medium, #22304d);
+  flex-shrink: 0;
+}
+
+.doc-drawer-dropzone {
+  border: 2px dashed #33466d;
+  border-radius: 10px;
+  padding: 12px 8px;
+  text-align: center;
+  background-color: #101726;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.doc-drawer-dropzone:hover,
+.doc-drawer-dropzone.dragging {
+  border-color: #3b82f6;
+  background-color: rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.doc-dropzone-icon {
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 6px;
+  border-radius: 8px;
+  background-color: rgba(37, 99, 235, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-dropzone-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-bottom: 2px;
+}
+
+.doc-dropzone-subtext {
+  font-size: 10px;
+  color: var(--text-dim, #94a3b8);
+}
+
+/* 3. Bộ đếm & Checkbox Bật Tất Cả */
+.doc-drawer-controls {
+  padding: 8px 12px;
+  background-color: #121a2b;
+  border-bottom: 1px solid var(--border-medium, #22304d);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.doc-master-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #cbd5e1;
+}
+
+.doc-master-checkbox-label:hover {
+  color: #ffffff;
+}
+
+.doc-checkbox {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.doc-active-counter {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: #10b981;
+  font-weight: 600;
+}
+
+/* 4. Danh sách tài liệu BCTC */
+.doc-drawer-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.doc-drawer-empty {
+  padding: 30px 10px;
+  text-align: center;
+  color: var(--text-dim, #94a3b8);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.doc-drawer-empty .sub {
+  font-size: 10px;
+  margin-top: 4px;
+  color: #64748b;
+}
+
+.doc-card-item {
+  border-radius: 10px;
+  background-color: #141d30;
+  border: 1px solid #22304d;
+  padding: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.doc-card-item:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  background-color: #162034;
+}
+
+.doc-card-item.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.4);
+}
+
+.doc-card-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.doc-card-details {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.doc-card-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.doc-card-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-card-tag {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+}
+
+.doc-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-dim, #94a3b8);
+}
+
+.doc-status-ok {
+  color: #34d399;
+}
+
+.doc-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(34, 48, 77, 0.7);
+  font-size: 10.5px;
+}
+
+.doc-btn-open-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #60a5fa;
+  background: transparent;
+  border: none;
+  font-weight: 600;
+  font-size: 10.5px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.doc-btn-open-pdf:hover {
+  color: #93c5fd;
+  background-color: rgba(59, 130, 246, 0.15);
+}
+
+.doc-card-subactions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.doc-subaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-dim, #94a3b8);
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.doc-subaction-btn:hover {
+  color: #f59e0b;
+}
+
+.doc-subaction-btn.delete:hover {
+  color: #ef4444;
+}
+
+.doc-subaction-sep {
+  color: #334155;
+  font-size: 10px;
+}
+
+.doc-delete-confirm-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.doc-delete-text {
+  font-size: 9.5px;
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+.doc-confirm-yes {
+  color: #ef4444;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 1px;
+}
+
+.doc-confirm-no {
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 1px;
+}
+
+/* 5. Footer Panel Nguồn */
+.doc-drawer-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-medium, #22304d);
+  background-color: #0c121e;
+  font-size: 9.5px;
+  color: #64748b;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   TRUE SPLIT-VIEW PDF READER
+   ========================================================================== */
+
+.pdf-split-viewer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #090d16;
+  overflow: hidden;
+}
+
+.pdf-viewer-toolbar {
+  height: 42px;
+  padding: 0 12px;
+  background-color: var(--bg-card, #162034);
+  border-bottom: 1px solid var(--border-medium, #22304d);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.pdf-docs-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  max-width: 60%;
+}
+
+.pdf-tab-label {
+  font-size: 11px;
+  color: var(--text-dim, #94a3b8);
+  white-space: nowrap;
+}
+
+.pdf-doc-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background-color: #101726;
+  border: 1px solid #22304d;
+  color: var(--text-secondary, #cbd5e1);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pdf-doc-tab-btn:hover {
+  background-color: #1e293b;
+  color: #ffffff;
+}
+
+.pdf-doc-tab-btn.active {
+  background-color: #2563eb;
+  border-color: #3b82f6;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4);
+}
+
+.pdf-tab-text {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pdf-page-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background-color: #101726;
+  border: 1px solid #22304d;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdf-page-btn:hover:not(:disabled) {
+  background-color: #1e293b;
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+.pdf-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pdf-page-indicator {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: #090d16;
+  color: #60a5fa;
+  border: 1px solid #22304d;
+}
+
+.pdf-toolbar-sep {
+  width: 1px;
+  height: 16px;
+  background-color: #334155;
+  margin: 0 4px;
+}
+
+
+.pdf-zoom-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background-color: #101726;
+  border: 1px solid #22304d;
+  color: #94a3b8;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.pdf-zoom-indicator:hover {
+  background-color: #1e293b;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.pdf-zoom-indicator.active {
+  background-color: rgba(37, 99, 235, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #60a5fa;
+}
+
+.pdf-close-btn {
+  padding: 4px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.pdf-close-btn:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Banner Đối Chiếu Số Liệu Nổi Bật (Evidence Callout) */
+.pdf-evidence-banner {
+  margin: 10px 14px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background-color: #141d30;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.pdf-evidence-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.pdf-evidence-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #93c5fd;
+}
+
+.pdf-evidence-row {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+.pdf-evidence-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pdf-copy-excerpt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: rgba(37, 99, 235, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.pdf-clear-cite-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.pdf-evidence-snippet {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #e2e8f0;
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 6px 8px;
+  border-radius: 4px;
+  border-left: 2px solid #2563eb;
+}
+
+/* Hiệu ứng nhấp nháy vàng khi nhảy trang */
+.highlight-flash {
+  animation: pulse-amber 2s ease-in-out infinite;
+}
+
+@keyframes pulse-amber {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.8), 0 0 16px rgba(251, 191, 36, 0.3);
+    border-color: #fbbf24;
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, 1), 0 0 24px rgba(251, 191, 36, 0.6);
+    border-color: #fde047;
+  }
+}
+
+/* Viewport Render PDF Canvas / Iframe */
+.pdf-display-viewport {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background-color: #0b0f19;
+  padding: 4px;
+  display: flex;
+}
+
+.pdf-render-frame {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #22304d;
+  border-radius: 8px;
+  background-color: #ffffff;
+}
+
+.pdf-viewer-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  color: var(--text-dim, #94a3b8);
+}
+
+.pdf-empty-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background-color: #162034;
+  border: 1px solid #22304d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.pdf-empty-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 4px;
+}
+
+.pdf-empty-sub {
+  font-size: 12px;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.pdf-evidence-rendered-wrapper {
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: auto;
+  background-color: rgba(10, 15, 26, 0.9);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-left: 3px solid #3b82f6;
+  font-size: 12px;
+}
+
+.pdf-evidence-rendered-wrapper .table-responsive-container {
+  margin: 6px 0;
+  border-radius: 6px;
+}
+
+.pdf-evidence-rendered-wrapper .financial-markdown-table {
+  font-size: 11.5px;
+  min-width: 460px;
+}
+
+.pdf-evidence-rendered-wrapper .financial-th {
+  padding: 6px 10px;
+  font-size: 10.5px;
+}
+
+.pdf-evidence-rendered-wrapper .financial-td {
+  padding: 5px 10px;
+  font-size: 11px;
+}
