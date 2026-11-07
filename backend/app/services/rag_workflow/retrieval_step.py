@@ -29,8 +29,8 @@ class RetrievalResult:
 
 async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, notebook_id: str, scope: List[DocumentRecord], forced: Optional[List[str]] = None, net_others: bool = False) -> RetrievalResult:
     """Retrieval only. One selected document: the measured single-filing path. Several: the planner writes one query per
-    (selected document, item) and the results take equal slots; the planner choosing among the selected documents only
-    maps queries to them, it never widens the scope. Any planner failure falls back to the measured path over the selection.
+    (selected document, item), and the results and a search with the question take equal slots (retrieve_planned); the planner
+    choosing among the selected documents only maps queries to them, it never widens the scope. Any planner failure falls back to the measured path over the selection.
     `forced` (G3: the documents the question targets, by @file or by code): the search runs over those documents only, so the
     planner only writes queries (one document: the single-filing path). `net_others`: the question also writes a name no
     catalog carries, so the selected documents outside `forced` get the safety net."""
@@ -58,7 +58,7 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
         if not net_on:
             plan += [PlanItem(query, [d]) for d in named if d not in searched]
         sub_queries = [p.query for p in plan]
-        retrieved = await hybrid_search.retrieve_multi_doc(plan, notebook_id, ids)
+        retrieved = await hybrid_search.retrieve_planned(query, plan, notebook_id, ids)
         skipped = [d for d in ids if d not in searched]
         if net_on and skipped:
             retrieved += extra_slots(retrieved, await hybrid_search.safety_net(
@@ -106,9 +106,9 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
 
 
 def extra_slots(retrieved: List[Dict[str, Any]], net: List[Any]) -> List[Dict[str, Any]]:
-    """Safety-net chunks into at most NET_EXTRA_SLOTS extra slots, the token cap raised by 1,024 a slot."""
-    cap = settings.MULTIDOC_MAX_TOKENS + 1024 * settings.NET_EXTRA_SLOTS
-    used = sum(len(c["content"]) // 4 for c in retrieved)  # stream 1 is already capped at 8,192 tokens; chars / 4 is enough here
+    """Safety-net chunks into at most NET_EXTRA_SLOTS extra slots, the token cap raised by 1,024 a slot. Stream 1 can now pass 8,192 tokens: the net keeps its room above what stream 1 used."""
+    used = sum(len(c["content"]) // 4 for c in retrieved)  # chars / 4 is enough here
+    cap = max(settings.MULTIDOC_MAX_TOKENS, used) + 1024 * settings.NET_EXTRA_SLOTS
     out = []
     for chunk, tokens in net[: settings.NET_EXTRA_SLOTS]:
         if used + tokens > cap:

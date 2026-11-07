@@ -1,4 +1,7 @@
+import re
+import sys
 import time
+from collections import Counter
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -36,12 +39,67 @@ def hybrid_order(hits: Sequence[Dict[str, Any]], query_sparse: Dict[str, float],
     return [ids[i] for i in np.argsort(-score, kind="stable")]
 
 
+_TERM = re.compile(r"[a-z0-9]+")
+
+
+def bm25_scores(query: str, counts: Sequence[Counter]) -> np.ndarray:
+    """BM25 (k1 1.5, b 0.75) of a query over the chunks of one search; df and the average length come from those chunks, as in the study (pool_coverage.py)."""
+    terms = list(dict.fromkeys(_TERM.findall(query.lower())))
+    if not terms or not counts:
+        return np.zeros(len(counts))
+    tf = np.array([[c.get(t, 0) for t in terms] for c in counts], dtype=np.float64)
+    lengths = np.array([sum(c.values()) for c in counts], dtype=np.float64)
+    df = (tf > 0).sum(0)
+    idf = np.log(1 + (len(counts) - df + 0.5) / (df + 0.5))
+    return (idf * tf * 2.5 / (tf + 1.5 * (0.25 + 0.75 * lengths[:, None] / (lengths.mean() or 1.0)))).sum(1)
+
+
+def dense_bm25_order(hits: Sequence[Dict[str, Any]], query: str, counts: Dict[str, Counter]) -> List[str]:
+    """Chunk ids by 0.7 z(dense) + 0.3 z(BM25) over the search's hits (every chunk of its document)."""
+    hits = [h for h in hits if h.get("chunk_id")]
+    if not hits:
+        return []
+    ids = [h["chunk_id"] for h in hits]
+    dense = np.array([h["score"] for h in hits], dtype=np.float64)
+    w = settings.MULTIDOC_DENSE_WEIGHT
+    score = w * _z(dense) + (1 - w) * _z(bm25_scores(query, [counts.get(cid, Counter()) for cid in ids]))
+    return [ids[i] for i in np.argsort(-score, kind="stable")]
+
+
+def planned_ceilings(searches: int, documents: int) -> Tuple[int, int]:
+    """(chunks, tokens) of a question with a plan. `searches` counts the search with the question. Both grow with the question: there is no upper limit."""
+    base = settings.MULTIDOC_MAX_CHUNKS
+    slots = max(base, 2 * searches) + 2
+    return max(settings.MULTIDOC_MIN_CHUNKS, settings.MULTIDOC_CHUNKS_PER_FILE * documents), settings.MULTIDOC_MAX_TOKENS + (slots - base) * 1024
+
+
+def _near_best(ranking: List[str], scores: Dict[str, float]) -> List[str]:
+    """The chunks scoring >= MULTIDOC_REL_THRESHOLD x the search's best Qwen score (at least its first chunk); a search without Qwen scores offers its whole ranking."""
+    if not scores:
+        return list(ranking)
+    return [c for c in ranking if c in scores and scores[c] >= settings.MULTIDOC_REL_THRESHOLD * max(scores.values())] or ranking[:1]
+
+
+def allocate_planned(lanes: Sequence[Tuple[List[str], Dict[str, float]]], tokens: Dict[str, int], max_chunks: int, max_tokens: int) -> List[str]:
+    """The chunks of a question with a plan: each search keeps the chunks near its best, the last one (the search with the question) at most
+    MULTIDOC_QUESTION_KEEP of them, then round robin up to the two ceilings (the first chunk always fits)."""
+    kept = [_near_best(r, sc) for r, sc in lanes]
+    kept[-1] = kept[-1][: settings.MULTIDOC_QUESTION_KEEP]
+    out: List[str] = []
+    used = 0
+    for cid in round_robin_merge(kept, max_chunks):
+        if out and used + tokens.get(cid, 0) > max_tokens:
+            break
+        out.append(cid)
+        used += tokens.get(cid, 0)
+    return out
+
+
 def allocate(lanes: Sequence[Tuple[List[str], Dict[str, float]]], tokens: Dict[str, int], limit: Optional[int] = None) -> List[str]:
     """rel50t8k: from each search, the chunks scoring >= MULTIDOC_REL_THRESHOLD x its best Qwen score (at least its first chunk;
     a search without Qwen scores offers its whole ranking), merged round robin up to MULTIDOC_MAX_CHUNKS chunks and
     MULTIDOC_MAX_TOKENS tokens (the first chunk always fits). `limit`: that many chunks, no token cap."""
-    frac = settings.MULTIDOC_REL_THRESHOLD
-    kept = [([c for c in r if c in sc and sc[c] >= frac * max(sc.values())] or r[:1]) if sc else list(r) for r, sc in lanes if r]
+    kept = [_near_best(r, sc) for r, sc in lanes if r]
     out: List[str] = []
     used = 0
     for cid in round_robin_merge(kept, limit or settings.MULTIDOC_MAX_CHUNKS):
@@ -128,6 +186,34 @@ class HybridSearchService:
         lanes, scores, tokens = await self._lanes(plan, notebook_id, scope_document_ids)
         return await self._hydrate(allocate(lanes, tokens, limit), scores)
 
+    async def retrieve_planned(self, question: str, plan: List[PlanItem], notebook_id: str, scope_document_ids: List[str]) -> List[Dict[str, Any]]:
+        """Q13af, the path of a question with a plan (settings, MULTIDOC_*): one search per (query, document) by dense + BM25, one more with the
+        question by dense over the planned documents, Qwen3 orders each by its own query, then allocate_planned."""
+        t0 = time.perf_counter()
+        searches = expand_plan(plan, scope_document_ids, sys.maxsize)
+        if len(searches) > settings.MULTIDOC_SEARCH_GUARD:
+            logger.warning(f"Plan with {len(searches)} searches: only the first {settings.MULTIDOC_SEARCH_GUARD} run")
+            searches = searches[: settings.MULTIDOC_SEARCH_GUARD]
+        documents = list(dict.fromkeys(d for s in searches for d in s.document_ids))
+        items = searches + [PlanItem(question, documents)]
+        vectors = await self.embedder.embed_queries([item.query for item in items])
+        ranked = await self.retriever.search_vectors(
+            vectors, notebook_id, scope_document_ids, settings.MULTIDOC_CANDIDATE_LIMIT, per_vector_documents=[item.document_ids for item in items]
+        )
+        source = await self.chunk_repo.get_text_and_tokens(documents)
+        counts = {cid: Counter(_TERM.findall(text.lower())) for cid, (text, _) in source.items()}
+        scores: Dict[str, float] = {}
+        for hits in ranked:
+            for h in hits:
+                scores[h["chunk_id"]] = max(h["score"], scores.get(h["chunk_id"], float("-inf")))
+        rankings = [dense_bm25_order(hits, s.query, counts)[: settings.MULTIDOC_PER_ITEM_LIMIT] for hits, s in zip(ranked, searches)]
+        rankings.append([h["chunk_id"] for h in ranked[-1] if h.get("chunk_id")][: settings.MULTIDOC_QUESTION_POOL])
+        lanes = await self._qwen_lanes(items, rankings, scores)
+        max_chunks, max_tokens = planned_ceilings(len(items), len(documents))
+        chosen = allocate_planned(lanes, {cid: tok for cid, (_, tok) in source.items()}, max_chunks, max_tokens)
+        logger.info(f"Planned search, {len(items)} searches, {len(documents)} documents: {len(chosen)} chunks (ceiling {max_chunks} / {max_tokens} tokens) in {time.perf_counter() - t0:.2f}s")
+        return await self._hydrate(chosen, scores)
+
     async def retrieve_by_content(
         self, question: str, notebook_id: str, document_ids: List[str], year_document_ids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
@@ -162,16 +248,20 @@ class HybridSearchService:
         for hits in ranked:
             for h in hits:
                 scores[h["chunk_id"]] = max(h["score"], scores.get(h["chunk_id"], float("-inf")))
-        lanes = [(hybrid_order(hits, q, stats)[: settings.MULTIDOC_PER_ITEM_LIMIT], {}) for hits, q in zip(ranked, sparse)]
-        top_n = settings.MULTIDOC_RERANK_TOP_N
-        if settings.RERANK_ENABLED and top_n > 1:
-            try:
-                lanes = await self._rerank_items(plan, [r for r, _ in lanes], scores, top_n)
-            except RuntimeError as exc:  # e.g. GPU out of memory: the first-stage order still answers
-                logger.warning(f"Multi-document reranking skipped: {type(exc).__name__}: {str(exc)[:120]}")
+        lanes = await self._qwen_lanes(plan, [hybrid_order(hits, q, stats)[: settings.MULTIDOC_PER_ITEM_LIMIT] for hits, q in zip(ranked, sparse)], scores)
         logger.info(f"Multi-document search, {len(plan)} searches: embed {t1 - t0:.2f}s, vector {t2 - t1:.2f}s, sparse {t3 - t2:.2f}s, "
                     f"rerank {time.perf_counter() - t3:.2f}s")
         return lanes, scores, {cid: tok for cid, (_, tok) in stats.items()}
+
+    async def _qwen_lanes(self, plan: List[PlanItem], rankings: List[List[str]], scores: Dict[str, float]) -> List[Tuple[List[str], Dict[str, float]]]:
+        """(ranking, Qwen scores of its head) per search; without the reranker (off, or it fails) the first-stage order still answers."""
+        top_n = settings.MULTIDOC_RERANK_TOP_N
+        if settings.RERANK_ENABLED and top_n > 1:
+            try:
+                return await self._rerank_items(plan, rankings, scores, top_n)
+            except RuntimeError as exc:  # e.g. GPU out of memory
+                logger.warning(f"Multi-document reranking skipped: {type(exc).__name__}: {str(exc)[:120]}")
+        return [(r, {}) for r in rankings]
 
     async def _rerank_items(
         self, plan: List[PlanItem], rankings: List[List[str]], scores: Dict[str, float], top_n: int

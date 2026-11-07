@@ -45,8 +45,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     mentionQuery === undefined
       ? []
       : mentionOptions.filter(
-          (o) => !mentions.includes(o.document_id) && o.label.toLowerCase().includes(mentionQuery.toLowerCase())
-        );
+        (o) => !mentions.includes(o.document_id) && o.label.toLowerCase().includes(mentionQuery.toLowerCase())
+      );
   const pickMention = (o: MentionOption) => {
     setMentions([...mentions, o.document_id]);
     setInput(input.replace(/@[^\s@]*$/, ""));

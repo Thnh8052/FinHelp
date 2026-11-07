@@ -88,17 +88,25 @@ class Settings(BaseSettings):
     # Several filings in one notebook (no document selected): an LLM plans one query per (filing, item) from the catalog of
     # filings, each query is searched inside its own filings and the results take equal slots (round robin).
     MULTIDOC_ENABLED: bool = True
-    MULTIDOC_MAX_SUBQUERIES: int = 8
-    # `hybrid|item-rr15|rel50t8k` (multi-doc dev compl 83.9 / test 71.9; 80.5 dev with the neutral reranker instruction): per search,
-    # 0.7 z(dense) + 0.3 z(sparse) over every chunk of its documents -> top 20 -> Qwen3 order of the first 15 -> chunks >= 50% of the
-    # search's best Qwen score -> round robin, at most 10 chunks / 8,192 tokens
+    # With a plan, Q13af (experiments/scripts/multi_doc_planner, dev compl 90.2, test 89.3 on the gold workspaces, no safety net): one search per
+    # (query, document), 0.7 z(dense) + 0.3 z(BM25) over every chunk of its document -> top 20 -> Qwen3 order of the first 15 -> chunks >= 50% of
+    # the search's best Qwen score; one more search with the question (dense over the planned documents, first MULTIDOC_QUESTION_POOL, Qwen3 by the
+    # question, >= 50%, first MULTIDOC_QUESTION_KEEP) -> round robin. Chunks: max(MULTIDOC_MIN_CHUNKS, MULTIDOC_CHUNKS_PER_FILE x documents).
+    # Tokens: MULTIDOC_MAX_TOKENS + 1,024 x (max(MULTIDOC_MAX_CHUNKS, 2 x searches) + 2 - MULTIDOC_MAX_CHUNKS), no upper limit: a harder question may use more.
+    # Without a plan (R5, R4, V1 retry), `hybrid|item-rr15|rel50t8k`: the same with z(sparse) in place of z(BM25), no question search, 10 chunks / 8,192 tokens.
     MULTIDOC_PER_ITEM_LIMIT: int = 20
     MULTIDOC_CANDIDATE_LIMIT: int = 4096  # dense hits per search: every chunk of <= 5 documents, so the z-scores see the whole documents
     MULTIDOC_DENSE_WEIGHT: float = 0.7
-    MULTIDOC_MAX_SEARCHES: int = 8  # most (query, document) searches per question; beyond it the plan is searched per query
+    MULTIDOC_MAX_SEARCHES: int = 8  # without a plan: most (query, document) searches per question; beyond it the items are searched as written
+    # With a plan: not a limit of the method (the most measured is 9), a bound on what one question can make the GPU do, because the plan comes from a model reading user text.
+    MULTIDOC_SEARCH_GUARD: int = 40
     MULTIDOC_RERANK_TOP_N: int = 15  # Qwen3 reorders each search's first N; 0 or 1 turns it off
     MULTIDOC_REL_THRESHOLD: float = 0.5
     MULTIDOC_MAX_CHUNKS: int = 10
+    MULTIDOC_MIN_CHUNKS: int = 12
+    MULTIDOC_CHUNKS_PER_FILE: int = 4
+    MULTIDOC_QUESTION_POOL: int = 15
+    MULTIDOC_QUESTION_KEEP: int = 3
     MULTIDOC_MAX_TOKENS: int = 8192
     # Catalog line read at upload (services/ingestion/catalog.py): the measured prompt through the DeepSeek API ("deepseek", no GPU,
     # runs while Docling parses the next file) or the local model through Ollama ("ollama"); off or unreachable -> rule header

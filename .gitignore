@@ -9,8 +9,9 @@ pdfs/
 artifacts/
 storage/
 dist/
-test_new_embedding/
+testing/
 .archify/
+experiments/
 # Các file cụ thể (Specific files)
 run.md
 version_control.md

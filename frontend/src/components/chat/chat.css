@@ -751,7 +751,8 @@
   }
 
   .chat-input-textarea {
-    font-size: 16px; /* Prevents auto-zoom on iOS */
+    font-size: 16px;
+    /* Prevents auto-zoom on iOS */
   }
 
   .chat-sample-prompts {
@@ -976,7 +977,7 @@
 
 .financial-markdown-table {
   width: 100%;
-  min-width: 580px; /* Đảm bảo không bị ép chữ khi khung chat hẹp hoặc xem dạng split view */
+  min-width: 580px;
   border-collapse: collapse;
   font-size: 13px;
   text-align: left;
@@ -1043,7 +1044,8 @@
 
 .financial-td:not(:first-child) {
   min-width: 115px;
-  white-space: nowrap; /* Giữ số liệu và citation pill luôn gọn gàng cùng hàng */
+  white-space: nowrap;
+  /* Giữ số liệu và citation pill luôn gọn gàng cùng hàng */
 }
 
 .financial-td:last-child {

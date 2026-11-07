@@ -36,6 +36,13 @@ class ChunkRepository(BaseRepository):
         cursor = self.collection.find({"chunk_id": {"$in": chunk_ids}}, {"chunk_id": 1, "sparse_weights": 1, "token_count": 1, "_id": 0})
         return {d["chunk_id"]: (d.get("sparse_weights") or {}, d.get("token_count") or 0) async for d in cursor}
 
+    async def get_text_and_tokens(self, document_ids: List[str]) -> Dict[str, Tuple[str, int]]:
+        """{chunk_id: (text, token count)} of every chunk of the documents: BM25 reads the whole documents of a search."""
+        if not document_ids:
+            return {}
+        cursor = self.collection.find({"document_id": {"$in": document_ids}}, {"chunk_id": 1, "content": 1, "token_count": 1, "_id": 0})
+        return {d["chunk_id"]: (d.get("content") or "", d.get("token_count") or 0) async for d in cursor}
+
     async def get_chunks_by_document(
         self, document_id: str, page: Optional[int] = None
     ) -> List[ChunkDocument]:
