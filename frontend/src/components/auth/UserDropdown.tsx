@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
 import { LogOutIcon, ShieldIcon, UserIcon } from "../common/Icons";
 import "./auth.css";
 
@@ -17,6 +18,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
   onOpenAdminDashboard,
 }) => {
   const { user, isGuest, guestQuota, logout } = useAuth();
+  const { t } = useLanguage();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,14 +62,14 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
           <div>
             <div className="dropdown-title-row">
               <span className="dropdown-name">
-                Guest User
+                {t.userDropdown.guestUser}
               </span>
               <span className="dropdown-role-tag guest">
-                NOT SIGNED IN
+                {t.userDropdown.notSignedIn}
               </span>
             </div>
             <div className="dropdown-email">
-              Trial Session
+              {t.userDropdown.trialSession}
             </div>
           </div>
         )}
@@ -76,19 +78,19 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
       {/* Quota Status */}
       <div className="dropdown-section">
         <div className="dropdown-section-title">
-          Usage Quota
+          {t.userDropdown.usageQuota}
         </div>
 
         {user ? (
           <div className="dropdown-quota-list">
             <div className="dropdown-metric-row">
-              <span className="dropdown-metric-label">Uploaded filings:</span>
+              <span className="dropdown-metric-label">{t.userDropdown.uploadedFilings}</span>
               <span className="dropdown-metric-val">
-                Max {user.quota.max_upload_documents} documents / workspace
+                Max {user.quota.max_upload_documents} docs
               </span>
             </div>
             <div className="dropdown-metric-row">
-              <span className="dropdown-metric-label">Queries today:</span>
+              <span className="dropdown-metric-label">{t.userDropdown.queriesToday}</span>
               <span className="dropdown-metric-val">
                 {user.quota.messages_used_today} / {user.quota.daily_messages_limit}
               </span>
@@ -97,9 +99,9 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
         ) : (
           <div className="dropdown-quota-list">
             <div className="dropdown-metric-row">
-              <span className="dropdown-metric-label">Uploaded filings:</span>
+              <span className="dropdown-metric-label">{t.userDropdown.uploadedFilings}</span>
               <span className="dropdown-metric-val">
-                Max {guestQuota?.max_upload_documents || 1} filing
+                Max {guestQuota?.max_upload_documents || 1} doc
               </span>
             </div>
           </div>
@@ -117,7 +119,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
             className="dropdown-action-item"
           >
             <ShieldIcon size={14} color="#3b82f6" />
-            <span>Admin Dashboard (Metrics &amp; Usage)</span>
+            <span>{t.userDropdown.adminDashboard}</span>
           </button>
         )}
 
@@ -130,7 +132,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
             className="dropdown-action-login"
           >
             <UserIcon size={14} />
-            <span>Sign In / Register</span>
+            <span>{t.userDropdown.signInToSave}</span>
           </button>
         ) : (
           <button
@@ -141,7 +143,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
             className="dropdown-action-logout"
           >
             <LogOutIcon size={14} />
-            <span>Sign Out</span>
+            <span>{t.userDropdown.signOut}</span>
           </button>
         )}
       </div>

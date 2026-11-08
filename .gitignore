@@ -11,7 +11,11 @@ storage/
 dist/
 testing/
 .archify/
+mockup/
 experiments/
+templates/
+scratch/
+example/
 # Các file cụ thể (Specific files)
 run.md
 version_control.md

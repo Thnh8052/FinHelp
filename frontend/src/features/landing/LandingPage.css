@@ -64,7 +64,7 @@
 .fh-navbar-floating {
   pointer-events: auto;
   width: 100%;
-  max-width: 1040px;
+  max-width: 1120px;
   height: 58px;
   border-radius: 9999px;
   background: rgba(11, 16, 30, 0.88);
@@ -83,7 +83,7 @@
 .fh-nav-links {
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 16px;
 }
 
 .fh-nav-link {
@@ -91,7 +91,7 @@
   font-size: 13.5px;
   font-weight: 500;
   text-decoration: none;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: 8px;
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -105,7 +105,7 @@
 .fh-navbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* -------------------------------------------------------------------------
@@ -1678,8 +1678,7 @@
   }
 
   .fh-btn-text {
-    padding: 6px 8px !important;
-    font-size: 11.5px !important;
+    display: none !important;
   }
 
   .fh-hero {

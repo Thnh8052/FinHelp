@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { useLanguage } from "../../context/LanguageContext";
 import { DocumentRecord, isDocProcessing, isDocFailed } from "../../types/notebook";
 import {
   FileTextIcon,
@@ -41,6 +42,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   isUploading,
   isDeleting,
 }) => {
+  const { t, lang } = useLanguage();
   const [isDragging, setIsDragging] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,8 +110,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       <div className="doc-drawer-header">
         <div className="doc-drawer-title-box">
           <FileTextIcon size={15} color="var(--accent-primary, #2563eb)" />
-          <span className="doc-drawer-title">Session Filings</span>
-          <span className="doc-drawer-badge">{documents.length} Files</span>
+          <span className="doc-drawer-title">{t.sourcesDrawer.title}</span>
+          <span className="doc-drawer-badge">{documents.length} {t.sourcesDrawer.filesCount}</span>
         </div>
 
         {onClose && (
@@ -151,10 +153,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             <UploadCloudIcon size={18} color="var(--accent-primary, #2563eb)" />
           </div>
           <p className="doc-dropzone-text">
-            {isUploading ? "Processing and indexing report..." : "Drop PDF filings or click to upload"}
+            {isUploading ? t.sidebar.searchPlaceholder : t.sourcesDrawer.dropzoneIdle}
           </p>
           <p className="doc-dropzone-subtext">
-            Supports multiple PDF reports (up to 5 per session)
+            {t.sourcesDrawer.dropzoneSubtext}
           </p>
         </div>
       </div>
@@ -169,10 +171,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             disabled={documents.length === 0}
             className="doc-checkbox"
           />
-          <span>Select all for analysis</span>
+          <span>{t.sourcesDrawer.selectAll}</span>
         </label>
         <span className="doc-active-counter">
-          {selectedDocIds.length}/{documents.length} active
+          {selectedDocIds.length}/{documents.length} {t.sourcesDrawer.activeCounter}
         </span>
       </div>
 
@@ -180,8 +182,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       <div className="doc-drawer-list scrollbar-slim">
         {documents.length === 0 ? (
           <div className="doc-drawer-empty">
-            <p>No reports added to this session yet.</p>
-            <p className="sub">Drag and drop PDF reports above to begin analysis.</p>
+            <p>{t.sourcesDrawer.noReportsYet}</p>
+            <p className="sub">{t.sourcesDrawer.dragAndDropPrompt}</p>
           </div>
         ) : (
           documents.map((doc) => {
@@ -214,21 +216,21 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                       </span>
                       <span className="doc-card-tag">
                         {isProcessing
-                          ? "Processing..."
+                          ? (lang === "vi" ? "Đang xử lý..." : "Processing...")
                           : isFailed
-                          ? "Failed"
-                          : "Audited Filing"}
+                          ? t.sourcesDrawer.failedBadge
+                          : (lang === "vi" ? "Báo cáo Đã kiểm toán" : "Audited Filing")}
                       </span>
                     </div>
 
                     <div className="doc-card-meta">
-                      {doc.page_count ? <span>{doc.page_count} pages</span> : null}
+                      {doc.page_count ? <span>{doc.page_count} {lang === "vi" ? "trang" : "pages"}</span> : null}
                       {doc.page_count ? <span>•</span> : null}
                       <span>{formatFileSize(doc.file_size_bytes)}</span>
                       {doc.indexing_status === "completed" && (
                         <>
                           <span>•</span>
-                          <span className="doc-status-ok">Ready</span>
+                          <span className="doc-status-ok">{t.sourcesDrawer.statusReady}</span>
                         </>
                       )}
                     </div>
@@ -243,7 +245,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                           title="Open filing in split-view reader"
                         >
                           <FileTextIcon size={12} color="#60a5fa" />
-                          <span>View PDF</span>
+                          <span>{t.sourcesDrawer.viewPdf}</span>
                         </button>
                       )}
 
@@ -256,7 +258,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                             title="View metadata & reporting period"
                           >
                             <InfoCircleIcon size={12} />
-                            <span>Details</span>
+                            <span>{lang === "vi" ? "Chi tiết" : "Details"}</span>
                           </button>
                         )}
 
@@ -264,7 +266,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
                         {deleteTargetId === doc.document_id ? (
                           <div className="doc-delete-confirm-box">
-                            <span className="doc-delete-text">Delete?</span>
+                            <span className="doc-delete-text">{t.sourcesDrawer.deletePrompt}</span>
                             <button
                               type="button"
                               onClick={() => {
@@ -294,7 +296,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                             title="Delete document from session"
                           >
                             <TrashIcon size={12} />
-                            <span>Delete</span>
+                            <span>{t.common.delete}</span>
                           </button>
                         )}
                       </div>
@@ -309,7 +311,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
       {/* 5. Footer Panel */}
       <div className="doc-drawer-footer">
-        <span>🔒 Filings are sandboxed to this session and strictly isolated.</span>
+        <span>{t.sourcesDrawer.securityNote}</span>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useLanguage } from "../../context/LanguageContext";
 import { ChatMessage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
 import { MarkdownRenderer } from "./MarkdownRenderer";
@@ -35,6 +36,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   hasSources = true,
   mentionOptions = [],
 }) => {
+  const { t } = useLanguage();
   const [input, setInput] = useState("");
   const [mentions, setMentions] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -188,10 +190,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   };
 
   const samplePrompts = [
-    "Compare Total Revenue across the latest fiscal periods",
-    "What is the Operating Margin and YoY expansion?",
-    "Analyze Capital Expenditures and Free Cash Flow",
-    "Summarize key risk factors and contingent liabilities",
+    t.workspace.suggestion1,
+    t.workspace.suggestion2,
+    t.workspace.suggestion3,
   ];
 
   const canSubmit = !isLoading && hasSources && !!input.trim();
@@ -208,7 +209,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
         {/* Context bar showing selected documents */}
         <div className="chat-header-sources">
-          <span className="chat-sources-label">Active Scope:</span>
+          <span className="chat-sources-label">{t.workspace.activeScope}</span>
           <div className="chat-sources-tags">
             {mentionOptions && mentionOptions.length > 0 ? (
               mentionOptions.map((opt) => (
@@ -217,7 +218,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 </span>
               ))
             ) : (
-              <span className="chat-source-tag muted">No filings selected</span>
+              <span className="chat-source-tag muted">{t.workspace.noFilingsSelected}</span>
             )}
           </div>
           {(onToggleSources || onOpenSources) && (
@@ -225,9 +226,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               type="button"
               onClick={onToggleSources || onOpenSources}
               className={`chat-manage-sources-btn ${isSourcesOpen ? "active" : ""}`}
-              title={isSourcesOpen ? "Close filings drawer" : "Open filings drawer"}
+              title={isSourcesOpen ? t.nav.closeSources : t.nav.manageSources}
             >
-              <span>{isSourcesOpen ? "Close Sources" : "Manage Sources"}</span>
+              <span>{isSourcesOpen ? t.nav.closeSources : t.nav.manageSources}</span>
               <ChevronRightIcon size={12} />
             </button>
           )}
@@ -240,10 +241,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           {messages.length === 0 && !isLoading && (
             <div className="chat-empty-state">
               <div className="chat-empty-title">
-                Ready to Analyze Financial Reports
+                {t.workspace.emptyTitle}
               </div>
               <p className="chat-empty-desc">
-                Select or upload financial reports (PDF Form 10-K / Annual Filings), then ask natural language questions about margins, cash flows, or audit disclosures.
+                {t.workspace.emptyDesc}
               </p>
               {!hasSources && (onToggleSources || onOpenSources) && (
                 <button
@@ -252,7 +253,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   className="chat-empty-select-docs-btn"
                 >
                   <FileTextIcon size={14} />
-                  <span>Choose Filings to Analyze</span>
+                  <span>{t.workspace.chooseFilingsBtn}</span>
                 </button>
               )}
             </div>
@@ -267,7 +268,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               >
                 {/* Sender label */}
                 <span className="chat-sender-label">
-                  {isUser ? "You" : "FinHelp"}
+                  {isUser ? t.workspace.youLabel : t.workspace.aiLabel}
                 </span>
 
                 {/* Message Box */}
@@ -302,7 +303,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   {msg.citations && msg.citations.length > 0 && (
                     <div className="chat-citations-container">
                       <div className="chat-citations-title">
-                        Source Citations ({msg.citations.length}):
+                        {t.workspace.sourceCitationsTitle} ({msg.citations.length}):
                       </div>
                       <div className="chat-citations-list">
                         {msg.citations.map((cite, idx) => (
@@ -323,17 +324,17 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                       <button
                         onClick={() => handleCopy(msg.content, msg.message_id)}
                         className="chat-copy-btn"
-                        title="Copy response"
+                        title={t.common.copy}
                       >
                         {copiedMsgId === msg.message_id ? (
                           <>
                             <CheckIcon size={12} color="#10b981" />
-                            <span className="chat-copied-text">Copied</span>
+                            <span className="chat-copied-text">{t.common.copied}</span>
                           </>
                         ) : (
                           <>
                             <CopyIcon size={12} />
-                            <span>Copy</span>
+                            <span>{t.common.copy}</span>
                           </>
                         )}
                       </button>
@@ -347,10 +348,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           {/* Assistant Typing / Streaming Skeleton */}
           {isLoading && (
             <div className="chat-loading-row">
-              <span className="chat-sender-label">FinHelp</span>
+              <span className="chat-sender-label">{t.workspace.aiLabel}</span>
               <div className="chat-loading-bubble">
                 <div className="chat-loading-spinner" />
-                <span>Retrieving document context and verifying financial metrics...</span>
+                <span>{t.workspace.retrievingContext}</span>
               </div>
             </div>
           )}
@@ -365,7 +366,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           {/* Quick suggestions when input is empty */}
           {messages.length <= 3 && (
             <div className="chat-sample-prompts">
-              <span className="chat-prompts-label">Suggestions:</span>
+              <span className="chat-prompts-label">{t.workspace.suggestionsLabel}</span>
 
               {canScrollLeft && (
                 <button
@@ -446,8 +447,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={
                 hasSources
-                  ? "Ask about selected reports (e.g. revenue, CAGR, margins)..."
-                  : "Select source filings to ask questions..."
+                  ? t.workspace.placeholderWithDocs
+                  : t.workspace.placeholderNoDocs
               }
               disabled={isLoading || !hasSources}
               rows={1}
@@ -465,7 +466,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           </form>
 
           <div className="chat-input-hint">
-            Press Enter to send • Shift + Enter for new line • Type @ to reference a document
+            {t.workspace.inputShortcuts}
           </div>
         </div>
       </div>

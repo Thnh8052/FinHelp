@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
 import { authService } from "../../services/auth";
+import { LanguageToggle } from "../common/LanguageToggle";
 import { CloseIcon, SparklesIcon } from "../common/Icons";
 import "./auth.css";
 
@@ -12,6 +14,7 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTab = "signin" }) => {
   const { login, register, continueAsGuest } = useAuth();
+  const { t, lang } = useLanguage();
   const [tab, setTab] = useState<"signin" | "signup" | "forgot">(initialTab);
 
   // Form states
@@ -107,17 +110,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
         <div className="auth-header">
           <div>
             <h2 className="auth-title">
-              {tab === "signin" && "Sign In to FinHelp"}
-              {tab === "signup" && "Create New Account"}
-              {tab === "forgot" && "Reset Password"}
+              {tab === "signin" && t.auth.signInTitle}
+              {tab === "signup" && t.auth.createAccountTitle}
+              {tab === "forgot" && t.auth.resetPasswordTitle}
             </h2>
             <p className="auth-subtitle">
-              Enterprise-Grade Financial Statement Intelligence Platform
+              {tab === "signin" && t.auth.signInDesc}
+              {tab === "signup" && t.auth.createAccountDesc}
+              {tab === "forgot" && t.auth.forgotStep1Desc}
             </p>
           </div>
-          <button onClick={onClose} className="auth-close-btn">
-            <CloseIcon size={16} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <LanguageToggle size="sm" />
+            <button onClick={onClose} className="auth-close-btn" aria-label="Close">
+              <CloseIcon size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Alerts */}
@@ -130,7 +138,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
             <div>
               <form onSubmit={handleSignIn} className="auth-form">
                 <div className="auth-field">
-                  <label className="auth-label">Email or Username</label>
+                  <label className="auth-label">{t.auth.emailOrUsername}</label>
                   <input
                     type="text"
                     required
@@ -143,13 +151,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
 
                 <div className="auth-field">
                   <div className="auth-label-row">
-                    <label className="auth-label">Password</label>
+                    <label className="auth-label">{t.auth.password}</label>
                     <button
                       type="button"
                       onClick={() => setTab("forgot")}
                       className="auth-forgot-link"
                     >
-                      Forgot password?
+                      {t.auth.forgotPassword}
                     </button>
                   </div>
                   <input
@@ -167,7 +175,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   disabled={loading}
                   className="auth-submit-btn"
                 >
-                  {loading ? "Authenticating..." : "Sign In"}
+                  {loading ? t.auth.signingIn : t.auth.signInBtn}
                 </button>
               </form>
 
@@ -183,14 +191,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     className="auth-guest-link"
                   >
                     <SparklesIcon size={12} />
-                    <span>Continue in Guest Trial Mode</span>
+                    <span>{t.auth.continueAsGuest}</span>
                   </button>
                 </div>
               </div>
 
               {/* Bottom Switch */}
               <div className="auth-footer-switch">
-                Don't have an account?{" "}
+                {t.auth.noAccount}{" "}
                 <button
                   type="button"
                   onClick={() => {
@@ -199,7 +207,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   }}
                   className="auth-link-btn"
                 >
-                  Register now
+                  {t.auth.signUpNow}
                 </button>
               </div>
             </div>
@@ -239,7 +247,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
 
                 <div className="auth-field">
                   <label className="auth-label">
-                    Password <span className="auth-required">*</span> (Minimum 6 characters)
+                    {t.auth.passwordMin} <span className="auth-required">*</span>
                   </label>
                   <input
                     type="password"
@@ -254,7 +262,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
 
                 <div className="auth-field">
                   <label className="auth-label">
-                    Full Name (Optional)
+                    {t.auth.fullNameOptional}
                   </label>
                   <input
                     type="text"
@@ -270,12 +278,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   disabled={loading}
                   className="auth-submit-btn spaced"
                 >
-                  {loading ? "Creating account..." : "Complete Registration"}
+                  {loading ? t.auth.creatingAccount : t.auth.completeRegistration}
                 </button>
               </form>
 
               <div className="auth-footer-switch">
-                Already have an account?{" "}
+                {t.auth.haveAccount}{" "}
                 <button
                   type="button"
                   onClick={() => {
@@ -284,7 +292,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   }}
                   className="auth-link-btn"
                 >
-                  Sign in
+                  {t.auth.signInNow}
                 </button>
               </div>
             </div>
@@ -341,7 +349,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
 
                   <div className="auth-field">
                     <label className="auth-label">
-                      New Password (Minimum 6 characters)
+                      {t.auth.newPasswordMin}
                     </label>
                     <input
                       type="password"
@@ -359,7 +367,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     disabled={loading}
                     className="auth-submit-btn"
                   >
-                    {loading ? "Verifying..." : "Confirm & Reset Password"}
+                    {loading ? t.auth.verifying : t.auth.resetSubmit}
                   </button>
                 </form>
               )}
@@ -374,7 +382,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   }}
                   className="auth-link-btn secondary"
                 >
-                  Back to Sign In
+                  {lang === "vi" ? "← Quay lại Đăng nhập" : "← Back to Sign In"}
                 </button>
               </div>
             </div>
