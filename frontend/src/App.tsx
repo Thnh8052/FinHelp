@@ -2,6 +2,9 @@ import React, { useState } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import { LandingPage } from "./features/landing/LandingPage";
 import { Workspace } from "./features/workspace/Workspace";
+import { LoginPage } from "./features/auth/LoginPage";
+import { RegisterPage } from "./features/auth/RegisterPage";
+import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
 import { AuthModal } from "./components/auth/AuthModal";
 import { useAuth } from "./context/AuthContext";
 import "./App.css";
@@ -27,7 +30,7 @@ const AppRoutes: React.FC = () => {
   return (
     <>
       <Routes>
-        {/* Landing Page (Trang giới thiệu chính thức của FinHelp) */}
+        {/* Landing Page (Official FinHelp Overview) */}
         <Route
           path="/"
           element={
@@ -39,39 +42,23 @@ const AppRoutes: React.FC = () => {
           }
         />
 
-        {/* Workspace 4-Zone Workstation (Không gian phân tích báo cáo tài chính) */}
+        {/* Workspace 4-Zone Workstation (Financial Report Intelligence) */}
         <Route
           path="/app"
           element={<Workspace onNavigateHome={handleNavigateHome} />}
         />
 
-        {/* Tiện ích mở thẳng popup auth từ URL */}
-        <Route
-          path="/login"
-          element={
-            <LandingPage
-              onEnterApp={handleEnterApp}
-              onOpenAuth={handleOpenAuth}
-              isAuthenticated={isAuthenticated}
-            />
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <LandingPage
-              onEnterApp={handleEnterApp}
-              onOpenAuth={handleOpenAuth}
-              isAuthenticated={isAuthenticated}
-            />
-          }
-        />
+        {/* Dedicated Standalone Auth Pages (Email verification / Direct URL) */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/forgot-password" element={<ResetPasswordPage />} />
 
-        {/* Redirect mọi route không khớp về trang chủ */}
+        {/* Redirect non-matching routes to root */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* Global Auth Modal cho Landing Page */}
+      {/* Global Auth Modal for Landing Page */}
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </>
   );

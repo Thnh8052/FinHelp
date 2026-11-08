@@ -27,6 +27,7 @@ from app.core.security import create_access_token, get_password_hash, verify_pas
 from app.infrastructure.database.mongodb import get_database
 from app.modules.auth.user_repo import UserRepository
 from app.modules.auth.user import TIER_SPECS, UserQuota, UserRecord
+from app.services.email_service import email_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -158,9 +159,9 @@ async def register(req: RegisterRequest, db: AsyncIOMotorDatabase = Depends(get_
     """Đăng ký tài khoản người dùng mới vào MongoDB (role='user', tối đa 5 tài liệu/notebook)."""
     repo = UserRepository(db)
     if await repo.get_by_email(req.email):
-        raise HTTPException(status_code=400, detail="Email này đã được sử dụng")
+        raise HTTPException(status_code=400, detail="This email is already registered")
     if await repo.get_by_username(req.username):
-        raise HTTPException(status_code=400, detail="Tên đăng nhập đã tồn tại")
+        raise HTTPException(status_code=400, detail="Username already exists")
 
     user_id = f"usr_{uuid.uuid4().hex[:8]}"
     user = UserRecord(
@@ -172,6 +173,11 @@ async def register(req: RegisterRequest, db: AsyncIOMotorDatabase = Depends(get_
         role="user",
     )
     await repo.save_user(user)
+    email_service.send_account_confirmation(
+        to_email=user.email,
+        username=user.username,
+        full_name=user.full_name,
+    )
     return _token_response(user)
 
 
@@ -255,15 +261,17 @@ async def forgot_password(
     if not user:
         return {
             "success": True,
-            "message": "Nếu email tồn tại trong hệ thống, mã xác thực OTP đã được gửi đến hòm thư.",
+            "message": "If the email is registered in the system, a verification code has been sent.",
         }
 
     otp_code = f"{secrets.randbelow(900000) + 100000}"
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
     await repo.set_reset_token(req.email, otp_code, expires_at)
-    response = {"success": True, "message": "Mã xác thực OTP đã được gửi đến email của bạn."}
-    if settings.ENVIRONMENT == "development":  # no mail is sent yet: the code is shown only while developing, never to a real caller
+    email_service.send_password_reset_otp(req.email, otp_code)
+
+    response = {"success": True, "message": "A verification code has been sent to your email."}
+    if settings.ENVIRONMENT == "development":
         response["otp_debug"] = otp_code
     return response
 
@@ -286,10 +294,10 @@ async def reset_password(
     repo = UserRepository(db)
     user = await repo.get_by_email(req.email)
     if not user:
-        raise HTTPException(status_code=400, detail="Yêu cầu không hợp lệ")
+        raise HTTPException(status_code=400, detail="Invalid request")
 
     if not user.reset_token or user.reset_token != req.otp_code:
-        raise HTTPException(status_code=400, detail="Mã xác thực OTP không chính xác")
+        raise HTTPException(status_code=400, detail="Invalid verification code")
 
     if user.reset_token_expires_at:
         now_utc = datetime.now(timezone.utc)
@@ -297,26 +305,23 @@ async def reset_password(
         if hasattr(expires_at, "tzinfo") and expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
         if now_utc > expires_at:
-            raise HTTPException(status_code=400, detail="Mã xác thực OTP đã hết hạn")
+            raise HTTPException(status_code=400, detail="Verification code has expired")
 
     new_hash = get_password_hash(req.new_password)
     await repo.update_password(user.user_id, new_hash)
+    email_service.send_password_changed_notification(
+        to_email=user.email,
+        full_name=user.full_name or user.username,
+    )
 
     return {
         "success": True,
-        "message": "Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay với mật khẩu mới.",
+        "message": "Password reset successfully! You can now sign in with your new password.",
     }
 
 
 # ==============================================================================
-# HÀM: change_password
-# Ý NGHĨA: Cho phép người dùng đang đăng nhập đổi mật khẩu tài khoản của mình.
-#          Yêu cầu nhập đúng mật khẩu cũ trước khi đổi mật khẩu mới.
-# ĐẦU VÀO:
-#   - req (ChangePasswordRequest): old_password, new_password.
-#   - current_user: Bản ghi người dùng xác thực từ JWT.
-# ĐẦU RA:
-#   - JSON thông báo đổi mật khẩu thành công.
+# FUNCTION: change_password
 # ==============================================================================
 @router.post("/change-password")
 async def change_password(
@@ -324,12 +329,16 @@ async def change_password(
     current_user: UserRecord = Depends(get_current_user),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
-    """Đổi mật khẩu cho tài khoản đang đăng nhập."""
+    """Change password for the authenticated user."""
     if not verify_password(req.old_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Mật khẩu hiện tại không đúng")
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
 
     repo = UserRepository(db)
     new_hash = get_password_hash(req.new_password)
     await repo.update_password(current_user.user_id, new_hash)
+    email_service.send_password_changed_notification(
+        to_email=current_user.email,
+        full_name=current_user.full_name or current_user.username,
+    )
 
-    return {"success": True, "message": "Đổi mật khẩu thành công"}
+    return {"success": True, "message": "Password changed successfully"}

@@ -515,21 +515,31 @@
 
 @media (max-width: 600px) {
   .navbar {
-    padding: 0 8px;
+    padding: 0 6px;
+  }
+  .navbar-brand {
+    gap: 5px;
   }
   .navbar-brand-title {
-    font-size: 13px;
+    font-size: 12.5px;
   }
   .navbar-version-badge {
     display: none;
   }
-  .navbar-right {
-    gap: 4px;
+  .navbar-actions {
+    gap: 3.5px;
+    flex-shrink: 0;
   }
   .navbar-action-btn {
-    padding: 0 6px;
-    font-size: 11px;
+    padding: 0 5px;
+    font-size: 10.5px;
     gap: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    height: 28px;
+  }
+  .navbar-action-btn .navbar-btn-text {
+    white-space: nowrap;
   }
   .navbar-action-btn.split-toggle {
     display: inline-flex;
@@ -542,15 +552,18 @@
     display: none; /* Compact icon-only button on mobile; opens full-width PDF drawer */
   }
   .navbar-divider {
-    margin: 0 2px;
+    display: none;
   }
   .navbar-guest-actions {
-    gap: 4px;
+    gap: 3.5px;
     flex-shrink: 0;
   }
+  .navbar-guest-badge {
+    display: none;
+  }
   .navbar-login-btn {
-    padding: 4px 8px !important;
-    font-size: 11px !important;
+    padding: 4px 6px !important;
+    font-size: 10.5px !important;
     white-space: nowrap !important;
     flex-shrink: 0 !important;
   }

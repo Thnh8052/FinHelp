@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
+import { LanguageToggle } from "../common/LanguageToggle";
 import { UserDropdown } from "../auth/UserDropdown";
 import { FileTextIcon, MenuIcon, TableIcon, UserIcon } from "../common/Icons";
 import { FinHelpLogo } from "../common/FinHelpLogo";
@@ -35,6 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateHome,
 }) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Get initials for avatar (e.g. "VT" for Vũ Thành)
@@ -100,7 +103,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Toggle filing sources for this session"
           >
             <FileTextIcon size={14} color="var(--accent-primary)" />
-            <span className="navbar-btn-text">Filings: <strong>{sourcesCount}</strong></span>
+            <span className="navbar-btn-text">{t.nav.filings}: <strong>{sourcesCount}</strong></span>
             <span className={`navbar-source-indicator ${sourcesCount > 0 ? "ready" : ""}`} />
           </button>
         )}
@@ -116,9 +119,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             aria-label="Toggle document reader"
           >
             <TableIcon size={14} />
-            <span className="navbar-btn-text">Split-View [{isSplitViewOpen ? "On" : "Off"}]</span>
+            <span className="navbar-btn-text">{t.nav.splitView} [{isSplitViewOpen ? t.nav.splitViewOn : t.nav.splitViewOff}]</span>
           </button>
         )}
+
+        {/* Language Switcher */}
+        <LanguageToggle size="sm" />
 
         <div className="navbar-divider" />
 
@@ -146,11 +152,11 @@ export const Navbar: React.FC<NavbarProps> = ({
         ) : (
           <div className="navbar-guest-actions">
             <span className="navbar-guest-badge">
-              Guest Mode
+              {t.nav.guestMode}
             </span>
             <button onClick={onOpenAuthModal} className="navbar-login-btn">
               <UserIcon size={12} />
-              <span>Sign In</span>
+              <span>{t.common.signIn}</span>
             </button>
           </div>
         )}

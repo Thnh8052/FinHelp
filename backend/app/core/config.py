@@ -45,11 +45,19 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_NAME: str = "financial_chunks_m3"  # new name: the old 768-dim collection is left untouched
     QDRANT_API_KEY: Optional[str] = None
 
-    # Storage paths
+    # Storage paths & Cloudflare R2
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
     STORAGE_LOCAL_DIR: Path = BASE_DIR / "storage"
     PDF_STORAGE_DIR: Path = BASE_DIR / "storage" / "pdfs"
     ARTIFACTS_STORAGE_DIR: Path = BASE_DIR / "storage" / "artifacts"
+
+    # Cloudflare R2 / S3 Object Storage
+    STORAGE_BACKEND: str = "local"  # "local" | "r2"
+    R2_ENDPOINT_URL: Optional[str] = None
+    R2_ACCESS_KEY_ID: Optional[str] = None
+    R2_SECRET_ACCESS_KEY: Optional[str] = None
+    R2_BUCKET_NAME: Optional[str] = "finhelp-storage"
+    R2_PUBLIC_DOMAIN: Optional[str] = None
 
     # LLM Settings (DeepSeek chat-completions API)
     OPENROUTER_API_KEY: Optional[str] = None
@@ -63,6 +71,11 @@ class Settings(BaseSettings):
     # and a reply cut by the budget is retried with a larger one (up to LLM_MAX_TOKENS_CEILING) instead of being read as empty.
     LLM_MIN_MAX_TOKENS: int = 8000
     LLM_MAX_TOKENS_CEILING: int = 32000
+
+    # Email Service (SendGrid)
+    SENDGRID_API_KEY: Optional[str] = None
+    SENDGRID_FROM_EMAIL: Optional[str] = "noreply@finhelp.ai"
+    FRONTEND_URL: str = "http://localhost:3000"
 
     # --- Research core (FinanceBench 118-121/150 configuration) -----------------------------------------
     # Ingestion: Docling (TableFormer ACCURATE) + postprocess in a subprocess, or "pymupdf" for a fast, lower-quality parse.

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useLanguage } from "../../context/LanguageContext";
 import { ChatSession } from "../../types/chat";
 import { MessageSquareIcon, PlusIcon, TrashIcon } from "../common/Icons";
 import "./chat.css";
@@ -24,6 +25,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
   onDeleteSession,
   isGuest = false,
 }) => {
+  const { t, lang } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -43,7 +45,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
         >
           <div className="history-new-btn-left">
             <PlusIcon size={16} className="history-plus-icon" />
-            <span>New Analysis</span>
+            <span>{t.sidebar.newAnalysis}</span>
           </div>
           <span className="history-new-tag">
             {isGuest ? "Login" : "New"}
@@ -53,8 +55,8 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
 
       {/* 2. Section Header */}
       <div className="history-section-header">
-        <span className="history-section-title">Analysis History</span>
-        <span className="history-section-count">{sessions.length} sessions</span>
+        <span className="history-section-title">{t.sidebar.historyTitle}</span>
+        <span className="history-section-count">{sessions.length} {t.sidebar.sessionsCount}</span>
       </div>
 
       {/* Search Filter */}
@@ -64,7 +66,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search sessions..."
+            placeholder={t.sidebar.searchPlaceholder}
             className="history-search-input"
           />
         </div>
@@ -73,8 +75,8 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
       {/* Guest Mode Banner */}
       {isGuest && (
         <div className="history-guest-banner">
-          <div className="history-guest-badge">Guest Session</div>
-          <div>1 session &amp; 1 filing limit. Sign in to save permanent history.</div>
+          <div className="history-guest-badge">{t.sidebar.guestBannerTitle}</div>
+          <div>{t.sidebar.guestBannerDesc}</div>
         </div>
       )}
 
@@ -83,8 +85,8 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
         {filteredSessions.length === 0 ? (
           <div className="history-empty">
             {searchTerm
-              ? "No matching sessions found."
-              : 'No sessions yet. Click "New Analysis" above to start.'}
+              ? t.sidebar.noSessionsMatch
+              : t.sidebar.noSessionsYet}
           </div>
         ) : (
           filteredSessions.map((session) => {
@@ -114,10 +116,10 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                         {session.title || "Financial Session"}
                       </p>
                       <p className="history-card-sub">
-                        <span>📂 Isolated Filing</span>
+                        <span>{t.sidebar.isolatedFiling}</span>
                         <span>•</span>
                         <span className={isActive ? "status-active" : "status-saved"}>
-                          {isActive ? "Active" : "Saved"}
+                          {isActive ? (lang === "vi" ? "Đang mở" : "Active") : (lang === "vi" ? "Đã lưu" : "Saved")}
                         </span>
                       </p>
                     </div>
@@ -148,9 +150,9 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
       <div className="history-footer">
         <div className="history-footer-status">
           <span className="history-footer-dot" />
-          <span>Workspace Active</span>
+          <span>{t.sidebar.workspaceActive}</span>
         </div>
-        <span className="history-footer-tag">Encrypted</span>
+        <span className="history-footer-tag">{t.sidebar.encrypted}</span>
       </div>
     </div>
   );

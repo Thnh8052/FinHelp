@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { FinHelpLogo } from "../../components/common/FinHelpLogo";
+import { useLanguage } from "../../context/LanguageContext";
+import { LanguageToggle } from "../../components/common/LanguageToggle";
 import {
   IconSearch,
   IconCalculator,
@@ -30,6 +32,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenAuth,
   isAuthenticated = false,
 }) => {
+  const { t } = useLanguage();
   // Demo Query Selector in Product Preview
   const [activeQueryIndex, setActiveQueryIndex] = useState<number>(1);
   const [activeCitationAlert, setActiveCitationAlert] = useState<string | null>(null);
@@ -80,20 +83,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Direct Nav Links with Balanced Spacing (SaaS Minimalist Layout) */}
           <nav className="fh-nav-links">
             <a href="#features" className="fh-nav-link">
-              Features
+              {t.nav.features}
             </a>
             <a href="#how-it-works" className="fh-nav-link">
-              How it works
+              {t.nav.howItWorks}
             </a>
             <a href="#use-cases" className="fh-nav-link">
-              Use Cases
+              {t.nav.useCases}
             </a>
             <a href="#trust" className="fh-nav-link">
-              Trust
+              {t.nav.trust}
             </a>
           </nav>
 
-          {/* Right Actions: Live Status & Auth CTAs */}
+          {/* Right Actions: Live Status, Language Switcher & Auth CTAs */}
           <div className="fh-navbar-actions">
             {/* Live Platform Operational Status */}
             <div
@@ -102,22 +105,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             >
               <span className={`fh-status-dot ${systemStatus === "online" ? "online" : "connecting"}`} />
               <span>
-                {systemStatus === "online" ? "System Active" : "Connecting..."}
+                {systemStatus === "online" ? t.common.systemActive : t.common.systemConnecting}
               </span>
             </div>
 
+            {/* Language Switcher Button */}
+            <LanguageToggle size="sm" />
+
             {isAuthenticated ? (
               <button onClick={onEnterApp} className="fh-btn-primary">
-                <span>Open Workspace</span>
+                <span>{t.common.openWorkspace}</span>
                 <IconArrowRight size={14} />
               </button>
             ) : (
               <>
                 <button onClick={() => onOpenAuth("login")} className="fh-btn-text">
-                  Sign in
+                  {t.common.signIn}
                 </button>
                 <button onClick={onEnterApp} className="fh-btn-primary">
-                  Get Started
+                  {t.common.getStarted}
                 </button>
               </>
             )}
@@ -133,36 +139,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Tagline Badge */}
           <div className="fh-hero-badge">
             <span className="fh-hero-badge-dot" />
-            <span>AI-Powered Financial Intelligence</span>
+            <span>{t.landing.badge}</span>
           </div>
 
           {/* Title */}
           <h1 className="fh-hero-title">
-            Understand Financial Reports
+            {t.landing.heroTitle1}
             <br />
-            <span className="fh-hero-gradient-text">Make Better Decisions</span>
+            <span className="fh-hero-gradient-text">{t.landing.heroTitle2}</span>
           </h1>
 
           {/* Subtitle */}
           <p className="fh-hero-subtitle">
-            Upload financial statements, ask questions in natural language, and get auditable answers grounded directly in your filings.
+            {t.landing.heroSubtitle}
           </p>
 
           {/* Hero CTAs */}
           <div className="fh-hero-actions">
             <button onClick={onEnterApp} className="fh-btn-primary fh-btn-hero-primary">
-              <span>Get Started</span>
+              <span>{t.common.getStarted}</span>
               <IconArrowRight size={15} />
             </button>
             <a href="#features" className="fh-btn-secondary fh-btn-hero-secondary">
-              Explore Features
+              {t.landing.exploreFeaturesCta}
             </a>
           </div>
 
           {/* Sample Query Chips (SaaS 2-Line Layout with Horizontal Touch Slider on Mobile) */}
           <div className="fh-chips-container">
             <span className="fh-chips-label">
-              Try sample queries:
+              {t.landing.trySampleQueries}
             </span>
             <div className="fh-chips-track">
               <button
@@ -171,7 +177,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 className={`fh-chip ${activeQueryIndex === 1 ? "active" : ""}`}
               >
                 <IconCompare size={14} />
-                <span>YoY Revenue Comparison</span>
+                <span>{t.landing.chip1}</span>
               </button>
               <button
                 type="button"
@@ -179,7 +185,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 className={`fh-chip ${activeQueryIndex === 2 ? "active" : ""}`}
               >
                 <IconCalculator size={14} />
-                <span>Calculate Free Cash Flow</span>
+                <span>{t.landing.chip2}</span>
               </button>
               <button
                 type="button"
@@ -187,7 +193,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 className={`fh-chip ${activeQueryIndex === 3 ? "active" : ""}`}
               >
                 <IconSearch size={14} />
-                <span>Doubtful Debt Footnotes</span>
+                <span>{t.landing.chip3}</span>
               </button>
             </div>
           </div>
@@ -206,17 +212,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <span className="fh-dot fh-dot-green" />
               </div>
               <span className="fh-preview-session-label">
-                FinHelp Workspace · Session #104
+                {t.landing.previewSessionLabel}
               </span>
             </div>
             <div className="fh-preview-meta-group">
               <div className="fh-badge-wrapper">
                 <span className="fh-capability-badge">
-                  Natural Language Analysis
+                  {t.landing.previewCapability}
                 </span>
               </div>
               <span className="fh-preview-filings-badge">
-                2 filings selected
+                {t.landing.previewFilingsSelected}
               </span>
             </div>
           </div>
@@ -227,11 +233,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="fh-user-bubble-wrapper">
               <div className="fh-user-bubble">
                 {activeQueryIndex === 1 &&
-                  "Compare the revenue growth of these two companies and show the main financial drivers."}
+                  t.landing.query1}
                 {activeQueryIndex === 2 &&
-                  "Calculate Free Cash Flow (FCF = Cash from Operations - CapEx) for the latest fiscal year."}
+                  t.landing.query2}
                 {activeQueryIndex === 3 &&
-                  "Check the footnote disclosure on allowances for doubtful accounts and trade receivables."}
+                  t.landing.query3}
               </div>
             </div>
 
@@ -239,11 +245,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="fh-ai-response-card">
               <div className="fh-ai-header">
                 <div className="fh-ai-title-group">
-                  <span className="fh-ai-title-text">AI-generated answer</span>
+                  <span className="fh-ai-title-text">{t.landing.aiAnswerTitle}</span>
                 </div>
                 <span className="fh-ai-grounded-pill">
                   <IconCheck size={12} />
-                  <span>Grounded in uploaded reports</span>
+                  <span>{t.landing.groundedPill}</span>
                 </span>
               </div>
 
@@ -251,18 +257,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {activeQueryIndex === 1 && (
                 <>
                   <p className="fh-ai-answer-lead">
-                    <strong className="fh-color-white">Company A reported higher revenue growth</strong> over the
-                    fiscal period. The comparison is substantiated by the following disclosure lines:
+                    {t.landing.answer1Lead}
                   </p>
                   <div className="fh-table-wrapper">
                     <table className="fh-table">
                       <thead>
                         <tr>
-                          <th>Company</th>
-                          <th className="fh-table-num">FY22 Revenue</th>
-                          <th className="fh-table-num">FY23 Revenue</th>
-                          <th className="fh-table-num">YoY Growth</th>
-                          <th className="fh-table-center">Reference</th>
+                          <th>{t.landing.tableCompany}</th>
+                          <th className="fh-table-num">{t.landing.tableFy22}</th>
+                          <th className="fh-table-num">{t.landing.tableFy23}</th>
+                          <th className="fh-table-num">{t.landing.tableYoy}</th>
+                          <th className="fh-table-center">{t.landing.tableRef}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -280,7 +285,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                               }
                               className="fh-citation-btn"
                             >
-                              [1] Page 45
+                              {t.landing.page45Ref}
                             </button>
                           </td>
                         </tr>
@@ -298,7 +303,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                               }
                               className="fh-citation-btn"
                             >
-                              [2] Page 32
+                              {t.landing.page32Ref}
                             </button>
                           </td>
                         </tr>
@@ -311,20 +316,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {activeQueryIndex === 2 && (
                 <>
                   <p className="fh-ai-answer-lead">
-                    <strong className="fh-color-white">Free Cash Flow (FCF)</strong> is calculated directly from the
-                    Consolidated Statement of Cash Flows:
+                    {t.landing.answer2Lead}
                   </p>
                   <div className="fh-preview-code-box">
                     <div className="fh-calc-row">
-                      <span>(+) Cash Flow from Operating Activities (CFO):</span>
+                      <span>{t.landing.cfoLabel}</span>
                       <span className="fh-val-positive">$12,195M</span>
                     </div>
                     <div className="fh-calc-row">
-                      <span>(-) Capital Expenditures (CapEx):</span>
+                      <span>{t.landing.capexLabel}</span>
                       <span className="fh-val-negative">-$9,102M</span>
                     </div>
                     <div className="fh-calc-total-row">
-                      <span>(=) Free Cash Flow (FCF):</span>
+                      <span>{t.landing.fcfLabel}</span>
                       <span className="fh-val-positive">+$3,093M</span>
                     </div>
                   </div>
@@ -334,16 +338,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {activeQueryIndex === 3 && (
                 <>
                   <p className="fh-ai-answer-lead">
-                    <strong className="fh-color-white">Footnote Disclosure on Doubtful Accounts:</strong> Overdue trade
-                    receivables and provision allowances have been parsed from Note 7:
+                    {t.landing.answer3Lead}
                   </p>
                   <div className="fh-preview-code-box">
                     <div className="fh-calc-row">
-                      <span>• Receivables past due 1–6 months:</span>
+                      <span>{t.landing.receivables1to6}</span>
                       <span className="fh-val-bright">$45.2M (Provision allowance: $12.0M)</span>
                     </div>
                     <div className="fh-calc-row">
-                      <span>• Receivables past due &gt; 1 year:</span>
+                      <span>{t.landing.receivablesOver1yr}</span>
                       <span className="fh-val-warning">$18.5M (100% reserved)</span>
                     </div>
                   </div>
@@ -370,11 +373,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="fh-sources-box">
                 <div className="fh-sources-header">
                   <span className="fh-sources-title">
-                    Source references (Audit Trail)
+                    {t.landing.sourcesTitle}
                   </span>
                   <div className="fh-badge-wrapper">
                     <span className="fh-capability-badge">
-                      Verified Citations
+                      {t.landing.verifiedCitations}
                     </span>
                   </div>
                 </div>
@@ -404,10 +407,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* ========================================================================= */}
       <section className="fh-section fh-section-alt">
         <div className="fh-container">
-          <span className="fh-section-tag">01 — The Problem</span>
-          <h2 className="fh-section-title">Financial reports are complex and time-consuming to analyze.</h2>
+          <span className="fh-section-tag">{t.landing.problemTag}</span>
+          <h2 className="fh-section-title">{t.landing.problemTitle}</h2>
           <p className="fh-section-subtitle">
-            Traditional financial research is fragmented across scanned PDFs, footnotes, and disparate accounting filings.
+            {t.landing.problemSubtitle}
           </p>
 
           {/* VISUAL ILLUSTRATION: Before vs After Comparison Graphic */}
@@ -416,30 +419,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="fh-comparison-card fh-comparison-card-before">
               <div className="fh-comparison-header">
                 <span className="fh-comparison-title fh-comparison-title-danger">
-                  Before: Manual Financial Audit
+                  {t.landing.beforeTitle}
                 </span>
                 <div className="fh-badge-wrapper">
                   <span className="fh-comparison-badge fh-badge-risk">
-                    High Error Risk
+                    {t.landing.highErrorRisk}
                   </span>
                 </div>
               </div>
               <div className="fh-mockup-doc">
                 <div className="fh-mockup-meta">
-                  <span>Form 10-K Annual Report (142 pages)</span>
-                  <span>Scanned PDF</span>
+                  <span>{t.landing.beforeDoc}</span>
+                  <span>{t.landing.beforeScanned}</span>
                 </div>
                 <div className="fh-mockup-inner-box">
                   <div className="fh-mockup-strikethrough">
-                    Depreciation expense: $1,240M (?) [Note 14 vs Cash Flow mismatch]
+                    {t.landing.beforeStrike}
                   </div>
                   <div className="fh-mockup-muted">
-                    Manual search across footnotes 12, 14, and Consolidated Statement...
+                    {t.landing.beforeMuted}
                   </div>
                 </div>
                 <div className="fh-mockup-footer">
-                  <span className="fh-mockup-alert">⚠️ 4.5 hours spent verifying numbers</span>
-                  <span className="fh-color-muted">No verified citations</span>
+                  <span className="fh-mockup-alert">{t.landing.beforeSpent}</span>
+                  <span className="fh-color-muted">{t.landing.noCitations}</span>
                 </div>
               </div>
             </div>
@@ -448,29 +451,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="fh-comparison-card fh-comparison-card-after">
               <div className="fh-comparison-header">
                 <span className="fh-comparison-title fh-comparison-title-success">
-                  After: FinHelp Grounded Intelligence
+                  {t.landing.afterTitle}
                 </span>
                 <div className="fh-badge-wrapper">
                   <span className="fh-comparison-badge fh-badge-success">
-                    100% Traceable
+                    {t.landing.traceableBadge}
                   </span>
                 </div>
               </div>
               <div className="fh-mockup-doc fh-mockup-doc-after">
                 <div className="fh-mockup-meta-after">
-                  <span>Automated Tabular Extraction Engine</span>
-                  <span className="fh-color-success">✓ Verified</span>
+                  <span>{t.landing.afterExtraction}</span>
+                  <span className="fh-color-success">{t.landing.verifiedBadge}</span>
                 </div>
                 <div className="fh-mockup-inner-box-after">
                   <div className="fh-mockup-after-headline">
-                    Depreciation &amp; Amortization: <span className="fh-val-positive">$1,240.5M</span>
+                    {t.landing.afterDeprec} <span className="fh-val-positive">$1,240.5M</span>
                   </div>
                   <div className="fh-mockup-after-sub">
-                    Grounded in Note 14 (Fixed Assets, p. 68) &amp; Operating Cash Flow (p. 48)
+                    {t.landing.afterGrounded}
                   </div>
                 </div>
                 <div className="fh-mockup-footer">
-                  <span className="fh-mockup-speed">⚡ 12 seconds with exact page jump</span>
+                  <span className="fh-mockup-speed">{t.landing.afterSpeed}</span>
                   <span className="fh-citation-btn">[1] #page=68</span>
                 </div>
               </div>
@@ -486,12 +489,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <IconSearch size={18} />
                   </div>
                   <div className="fh-badge-wrapper">
-                    <span className="fh-problem-step">01. SEARCH</span>
+                    <span className="fh-problem-step">{t.landing.problem1Badge}</span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Manual searching</h3>
+                <h3 className="fh-card-title">{t.landing.problem1Title}</h3>
                 <p className="fh-card-text">
-                  Pinpointing specific figures across hundreds of pages and disclosure footnotes.
+                  {t.landing.problem1Text}
                 </p>
               </div>
             </div>
@@ -503,12 +506,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <IconCalculator size={18} />
                   </div>
                   <div className="fh-badge-wrapper">
-                    <span className="fh-problem-step">02. MATH</span>
+                    <span className="fh-problem-step">{t.landing.problem2Badge}</span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Manual calculations</h3>
+                <h3 className="fh-card-title">{t.landing.problem2Title}</h3>
                 <p className="fh-card-text">
-                  Cross-referencing metrics, margins, and cash flows across multiple fiscal quarters.
+                  {t.landing.problem2Text}
                 </p>
               </div>
             </div>
@@ -520,12 +523,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <IconDocuments size={18} />
                   </div>
                   <div className="fh-badge-wrapper">
-                    <span className="fh-problem-step">03. FILINGS</span>
+                    <span className="fh-problem-step">{t.landing.problem3Badge}</span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Multiple documents</h3>
+                <h3 className="fh-card-title">{t.landing.problem3Title}</h3>
                 <p className="fh-card-text">
-                  Switching back and forth between separate annual filings to find relevant disclosures.
+                  {t.landing.problem3Text}
                 </p>
               </div>
             </div>
@@ -537,12 +540,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <IconLightbulb size={18} />
                   </div>
                   <div className="fh-badge-wrapper">
-                    <span className="fh-problem-step">04. INSIGHTS</span>
+                    <span className="fh-problem-step">{t.landing.problem4Badge}</span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Difficult insights</h3>
+                <h3 className="fh-card-title">{t.landing.problem4Title}</h3>
                 <p className="fh-card-text">
-                  Transforming raw accounting statements into understandable, structured answers.
+                  {t.landing.problem4Text}
                 </p>
               </div>
             </div>
@@ -557,11 +560,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="fh-container">
           <div className="fh-section-header-split">
             <div>
-              <span className="fh-section-tag">02 — Core Features</span>
-              <h2 className="fh-section-title">Everything you need to explore financial reports.</h2>
+              <span className="fh-section-tag">{t.landing.featuresTag}</span>
+              <h2 className="fh-section-title">{t.landing.featuresTitle}</h2>
             </div>
             <div className="fh-section-header-side">
-              Comprehensive tools built for high-stakes financial research, multi-filing comparisons, and precision.
+              {t.landing.featuresSubtitle}
             </div>
           </div>
 
@@ -575,36 +578,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <div className="fh-badge-wrapper">
                   <span className="fh-capability-badge">
-                    Automated Ingestion
+                    {t.landing.bento1Badge}
                   </span>
                 </div>
               </div>
 
-              <h3 className="fh-card-title fh-bento-card-title">Document Upload &amp; Tabular Extraction</h3>
-              <p className="fh-bento-card-desc">Intelligent Layout &amp; Table Structure Recognition</p>
+              <h3 className="fh-card-title fh-bento-card-title">{t.landing.bento1Title}</h3>
+              <p className="fh-bento-card-desc">{t.landing.bento1Desc}</p>
 
               {/* Visual Table Bounding Mockup */}
               <div className="fh-table-bounding-mockup">
                 <div className="fh-table-bounding-header">
-                  <span>FINANCIAL STATEMENT BOUNDING EXTRACTION</span>
-                  <span className="fh-color-accent">High-Density Context</span>
+                  <span>{t.landing.bento1Header}</span>
+                  <span className="fh-color-accent">{t.landing.bento1Tag}</span>
                 </div>
                 <div className="fh-bounding-box-row active">
-                  <span>[Table 1.1] Consolidated Net Revenue</span>
+                  <span>{t.landing.bento1Row1}</span>
                   <span className="fh-val-positive">$17,902,400,000</span>
                 </div>
                 <div className="fh-bounding-box-row">
-                  <span>[Table 1.2] Cost of Goods Sold (COGS)</span>
+                  <span>{t.landing.bento1Row2}</span>
                   <span className="fh-color-muted">$10,210,100,000</span>
                 </div>
                 <div className="fh-bounding-box-row active">
-                  <span>[Table 1.3] Gross Operating Margin</span>
+                  <span>{t.landing.bento1Row3}</span>
                   <span className="fh-val-positive">42.96% (+180 bps)</span>
                 </div>
               </div>
 
               <div className="fh-card-footer fh-card-footer-flush">
-                Supports: PDF, Form 10-K, Audited Annual Reports
+                {t.landing.bento1Footer}
               </div>
             </div>
 
@@ -616,33 +619,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <div className="fh-badge-wrapper">
                   <span className="fh-capability-badge">
-                    Split-View Inspection
+                    {t.landing.bento2Badge}
                   </span>
                 </div>
               </div>
 
-              <h3 className="fh-card-title fh-bento-card-title">Split-View Citation Jumping</h3>
-              <p className="fh-bento-card-desc">100% Grounded in Underlying Documents</p>
+              <h3 className="fh-card-title fh-bento-card-title">{t.landing.bento2Title}</h3>
+              <p className="fh-bento-card-desc">{t.landing.bento2Desc}</p>
 
               {/* Visual Split-View Graphic */}
               <div className="fh-split-view-graphic">
                 <div className="fh-split-card-ai">
-                  <div className="fh-split-card-label">AI Response:</div>
+                  <div className="fh-split-card-label">{t.landing.bento2AiLabel}</div>
                   <div className="fh-split-card-body">
-                    Net sales expanded 26.1% YoY to $17,902M...
+                    {t.landing.bento2AiBody}
                   </div>
-                  <span className="fh-citation-btn fh-mt-8">[1] Page 45</span>
+                  <span className="fh-citation-btn fh-mt-8">{t.landing.bento2PageRef}</span>
                 </div>
                 <div className="fh-split-card-filing">
-                  <div className="fh-split-card-filing-label">Filing: Item 8 (p. 45)</div>
+                  <div className="fh-split-card-filing-label">{t.landing.bento2FilingLabel}</div>
                   <div className="fh-split-card-highlight">
-                    "...net revenue reached $17,902M for fiscal 2023."
+                    {t.landing.bento2FilingBody}
                   </div>
                 </div>
               </div>
 
               <div className="fh-card-footer fh-card-footer-flush">
-                Direct Stream: Original Document Page 45
+                {t.landing.bento2Footer}
               </div>
             </div>
           </div>
@@ -658,17 +661,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="fh-badge-wrapper">
                     <span className="fh-capability-badge">
-                      Interactive Q&amp;A
+                      {t.landing.feature1Badge}
                     </span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">AI-powered Q&amp;A</h3>
+                <h3 className="fh-card-title">{t.landing.feature1Title}</h3>
                 <p className="fh-card-text">
-                  Ask questions using natural language. Query across complex accounting disclosures without manual page searching.
+                  {t.landing.feature1Text}
                 </p>
               </div>
               <div className="fh-card-footer">
-                Interactive Multi-turn Analysis
+                {t.landing.feature1Footer}
               </div>
             </div>
 
@@ -681,17 +684,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="fh-badge-wrapper">
                     <span className="fh-capability-badge">
-                      Cross-Entity
+                      {t.landing.feature2Badge}
                     </span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Multi-report Comparison</h3>
+                <h3 className="fh-card-title">{t.landing.feature2Title}</h3>
                 <p className="fh-card-text">
-                  Compare companies, fiscal periods, and financial indicators across multiple filings simultaneously.
+                  {t.landing.feature2Text}
                 </p>
               </div>
               <div className="fh-card-footer">
-                Cross-compare 2+ companies
+                {t.landing.feature2Footer}
               </div>
             </div>
 
@@ -704,17 +707,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="fh-badge-wrapper">
                     <span className="fh-capability-badge">
-                      Deterministic Math
+                      {t.landing.feature3Badge}
                     </span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Financial Analysis</h3>
+                <h3 className="fh-card-title">{t.landing.feature3Title}</h3>
                 <p className="fh-card-text">
-                  Calculate and interpret margins, growth rates, ratios, and cash flows with automated mathematical verification.
+                  {t.landing.feature3Text}
                 </p>
               </div>
               <div className="fh-card-footer">
-                Transparent Arithmetic Steps
+                {t.landing.feature3Footer}
               </div>
             </div>
 
@@ -727,17 +730,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="fh-badge-wrapper">
                     <span className="fh-capability-badge">
-                      Isolated Vault
+                      {t.landing.feature4Badge}
                     </span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Conversation History</h3>
+                <h3 className="fh-card-title">{t.landing.feature4Title}</h3>
                 <p className="fh-card-text">
-                  Save, search, and continue previous analysis sessions anytime with isolated session history per notebook.
+                  {t.landing.feature4Text}
                 </p>
               </div>
               <div className="fh-card-footer">
-                Isolated Notebook Storage
+                {t.landing.feature4Footer}
               </div>
             </div>
           </div>
@@ -749,10 +752,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* ========================================================================= */}
       <section id="how-it-works" className="fh-section fh-section-alt">
         <div className="fh-container">
-          <span className="fh-section-tag">03 — How It Works</span>
-          <h2 className="fh-section-title">From documents to insights in three steps.</h2>
+          <span className="fh-section-tag">{t.landing.howTag}</span>
+          <h2 className="fh-section-title">{t.landing.howTitle}</h2>
           <p className="fh-section-subtitle">
-            A verified pipeline engineered to eliminate manual data entry and surface auditable metrics rapidly.
+            {t.landing.howSubtitle}
           </p>
 
           <div className="fh-grid-3">
@@ -764,16 +767,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <IconUpload size={18} />
                   </div>
                   <div className="fh-badge-wrapper">
-                    <span className="fh-step-num">Step 01</span>
+                    <span className="fh-step-num">{t.landing.step1Badge}</span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Upload your reports</h3>
+                <h3 className="fh-card-title">{t.landing.step1Title}</h3>
                 <p className="fh-card-text">
-                  Upload one or multiple financial reports in PDF format. Our ingestion pipeline parses complex two-dimensional tables, text blocks, and footnotes into structured data.
+                  {t.landing.step1Text}
                 </p>
               </div>
               <div className="fh-card-footer fh-card-footer-muted">
-                Instant Document Ingestion
+                {t.landing.step1Footer}
               </div>
             </div>
 
@@ -785,16 +788,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <IconChat size={18} />
                   </div>
                   <div className="fh-badge-wrapper">
-                    <span className="fh-step-num">Step 02</span>
+                    <span className="fh-step-num">{t.landing.step2Badge}</span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Ask your questions</h3>
+                <h3 className="fh-card-title">{t.landing.step2Title}</h3>
                 <p className="fh-card-text">
-                  Query in natural language. FinHelp cross-references financial statements, disclosures, and auditor notes to isolate verified context.
+                  {t.landing.step2Text}
                 </p>
               </div>
               <div className="fh-card-footer fh-card-footer-muted">
-                Contextual Semantic Synthesis
+                {t.landing.step2Footer}
               </div>
             </div>
 
@@ -806,16 +809,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <IconCitation size={18} />
                   </div>
                   <div className="fh-badge-wrapper">
-                    <span className="fh-step-num">Step 03</span>
+                    <span className="fh-step-num">{t.landing.step3Badge}</span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Explore grounded answers</h3>
+                <h3 className="fh-card-title">{t.landing.step3Title}</h3>
                 <p className="fh-card-text">
-                  Review synthesized metrics, arithmetic steps, and click citation badges to jump directly to corresponding PDF pages in split-view.
+                  {t.landing.step3Text}
                 </p>
               </div>
               <div className="fh-card-footer fh-card-footer-muted">
-                Interactive Audit Trail
+                {t.landing.step3Footer}
               </div>
             </div>
           </div>
@@ -827,10 +830,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* ========================================================================= */}
       <section id="use-cases" className="fh-section">
         <div className="fh-container">
-          <span className="fh-section-tag">04 — Use Cases</span>
-          <h2 className="fh-section-title">Designed for financial research and analysis.</h2>
+          <span className="fh-section-tag">{t.landing.useCasesTag}</span>
+          <h2 className="fh-section-title">{t.landing.useCasesTitle}</h2>
           <p className="fh-section-subtitle">
-            Tailored workflows empowering accountants, auditors, and equity analysts with verifiable document intelligence.
+            {t.landing.useCasesSubtitle}
           </p>
 
           {/* Interactive Persona Tabs */}
@@ -840,21 +843,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               className={`fh-persona-tab ${activePersona === "accounting" ? "active" : ""}`}
             >
               <IconAccounting size={16} />
-              <span>Accounting Professionals</span>
+              <span>{t.landing.personaTabAccounting}</span>
             </button>
             <button
               onClick={() => setActivePersona("auditor")}
               className={`fh-persona-tab ${activePersona === "auditor" ? "active" : ""}`}
             >
               <IconAuditor size={16} />
-              <span>Auditors &amp; Regulators</span>
+              <span>{t.landing.personaTabAuditor}</span>
             </button>
             <button
               onClick={() => setActivePersona("analyst")}
               className={`fh-persona-tab ${activePersona === "analyst" ? "active" : ""}`}
             >
               <IconAnalyst size={16} />
-              <span>Financial Analysts</span>
+              <span>{t.landing.personaTabAnalyst}</span>
             </button>
           </div>
 
@@ -864,51 +867,51 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {activePersona === "accounting" && (
                 <>
                   <div className="fh-persona-tag">
-                    Persona: Corporate Accounting
+                    {t.landing.persona1Tag}
                   </div>
                   <h3 className="fh-card-title fh-persona-heading">
-                    Accelerate financial statement reconciliations
+                    {t.landing.persona1Title}
                   </h3>
                   <p className="fh-card-text fh-persona-desc">
-                    Instantly extract line items across Balance Sheets and Cash Flows. Verify footnote adjustments, tax provisions, and lease liabilities with single-click page validation.
+                    {t.landing.persona1Desc}
                   </p>
                   <div className="fh-persona-chips">
-                    <span className="fh-chip">GAAP / IFRS Footnotes</span>
-                    <span className="fh-chip">Intercompany Eliminations</span>
+                    <span className="fh-chip">{t.landing.persona1Chip1}</span>
+                    <span className="fh-chip">{t.landing.persona1Chip2}</span>
                   </div>
                 </>
               )}
               {activePersona === "auditor" && (
                 <>
                   <div className="fh-persona-tag">
-                    Persona: Statutory Audit &amp; Compliance
+                    {t.landing.persona2Tag}
                   </div>
                   <h3 className="fh-card-title fh-persona-heading">
-                    Cross-examine reported figures with zero hallucination
+                    {t.landing.persona2Title}
                   </h3>
                   <p className="fh-card-text fh-persona-desc">
-                    Trace every reported disclosure back to the original auditor notes. Automatically verify arithmetic consistency between consolidated tables and note breakdowns.
+                    {t.landing.persona2Desc}
                   </p>
                   <div className="fh-persona-chips">
-                    <span className="fh-chip">Substantive Testing</span>
-                    <span className="fh-chip">Footnote Audit Trail</span>
+                    <span className="fh-chip">{t.landing.persona2Chip1}</span>
+                    <span className="fh-chip">{t.landing.persona2Chip2}</span>
                   </div>
                 </>
               )}
               {activePersona === "analyst" && (
                 <>
                   <div className="fh-persona-tag">
-                    Persona: Equity Research &amp; M&amp;A
+                    {t.landing.persona3Tag}
                   </div>
                   <h3 className="fh-card-title fh-persona-heading">
-                    Benchmark competitors across multi-year cycles
+                    {t.landing.persona3Title}
                   </h3>
                   <p className="fh-card-text fh-persona-desc">
-                    Select filings from multiple companies and evaluate margin expansion, Free Cash Flow yields, and leverage metrics side-by-side in seconds.
+                    {t.landing.persona3Desc}
                   </p>
                   <div className="fh-persona-chips">
-                    <span className="fh-chip">YoY Peer Benchmarking</span>
-                    <span className="fh-chip">FCF Yield Modeling</span>
+                    <span className="fh-chip">{t.landing.persona3Chip1}</span>
+                    <span className="fh-chip">{t.landing.persona3Chip2}</span>
                   </div>
                 </>
               )}
@@ -917,19 +920,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Persona Visual Mockup Preview */}
             <div className="fh-persona-preview-box">
               <div className="fh-persona-preview-header">
-                <span>SAMPLE QUERY &amp; AUDIT TRAIL</span>
-                <span className="fh-color-success">● Grounded Answer</span>
+                <span>{t.landing.personaBoxHeader}</span>
+                <span className="fh-color-success">{t.landing.personaGroundedTag}</span>
               </div>
               <div className="fh-persona-query-card">
-                {activePersona === "accounting" && "Q: Reconcile Operating Income to EBITDA including depreciation notes."}
-                {activePersona === "auditor" && "Q: Cross-check Note 8 contingent liabilities against balance sheet reserves."}
-                {activePersona === "analyst" && "Q: Compare FY23 Free Cash Flow margin between Company A and Company B."}
+                {activePersona === "accounting" && t.landing.persona1Query}
+                {activePersona === "auditor" && t.landing.persona2Query}
+                {activePersona === "analyst" && t.landing.persona3Query}
               </div>
               <div className="fh-persona-result-card">
-                <span className="fh-val-positive">Calculation Output:</span> Matches reported Note details with 100% audit confidence.
+                <span className="fh-val-positive">{t.landing.personaResultPrefix}</span> {t.landing.personaResultBody}
                 <div className="fh-persona-citations">
-                  <span className="fh-citation-btn">[1] Page 45</span>
-                  <span className="fh-citation-btn">[2] Page 68</span>
+                  <span className="fh-citation-btn">{t.landing.personaPage45}</span>
+                  <span className="fh-citation-btn">{t.landing.personaPage68}</span>
                 </div>
               </div>
             </div>
@@ -942,10 +945,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* ========================================================================= */}
       <section id="trust" className="fh-section fh-section-alt">
         <div className="fh-container">
-          <span className="fh-section-tag">05 — Trust &amp; Transparency</span>
-          <h2 className="fh-section-title">Understand where every answer comes from.</h2>
+          <span className="fh-section-tag">{t.landing.trustTag}</span>
+          <h2 className="fh-section-title">{t.landing.trustTitle}</h2>
           <p className="fh-section-subtitle">
-            Financial analysis requires traceability. We make it easy for users to verify the information behind AI-generated answers.
+            {t.landing.trustSubtitle}
           </p>
 
           <div className="fh-grid-3">
@@ -957,17 +960,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="fh-badge-wrapper">
                     <span className="fh-trust-badge">
-                      01. Citations
+                      {t.landing.trust1Badge}
                     </span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Document citations &amp; source references</h3>
+                <h3 className="fh-card-title">{t.landing.trust1Title}</h3>
                 <p className="fh-card-text">
-                  Every response references supporting pages directly with clickable highlight jumps and excerpt validation.
+                  {t.landing.trust1Text}
                 </p>
               </div>
               <div className="fh-card-footer">
-                Interactive PDF Highlighting
+                {t.landing.trust1Footer}
               </div>
             </div>
 
@@ -979,17 +982,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="fh-badge-wrapper">
                     <span className="fh-trust-badge">
-                      02. Arithmetic
+                      {t.landing.trust2Badge}
                     </span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Transparent calculation steps</h3>
+                <h3 className="fh-card-title">{t.landing.trust2Title}</h3>
                 <p className="fh-card-text">
-                  Constituent arithmetic formulas and values are stated clearly so you can re-check every formula and equation.
+                  {t.landing.trust2Text}
                 </p>
               </div>
               <div className="fh-card-footer">
-                Auditable Math Proofs
+                {t.landing.trust2Footer}
               </div>
             </div>
 
@@ -1001,17 +1004,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="fh-badge-wrapper">
                     <span className="fh-trust-badge">
-                      03. Security
+                      {t.landing.trust3Badge}
                     </span>
                   </div>
                 </div>
-                <h3 className="fh-card-title">Data protection &amp; access controls</h3>
+                <h3 className="fh-card-title">{t.landing.trust3Title}</h3>
                 <p className="fh-card-text">
-                  Workspace notebook isolation ensures your uploaded financial reports remain completely confidential and secure.
+                  {t.landing.trust3Text}
                 </p>
               </div>
               <div className="fh-card-footer">
-                Notebook Isolation
+                {t.landing.trust3Footer}
               </div>
             </div>
           </div>
@@ -1024,20 +1027,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="fh-final-cta">
         <div className="fh-container">
           <h2 className="fh-section-title fh-cta-title">
-            Ready to explore your financial reports?
+            {t.landing.finalCtaTitle}
           </h2>
           <p className="fh-section-subtitle fh-cta-subtitle">
-            Start asking questions and discover verifiable insights from your documents.
+            {t.landing.finalCtaSubtitle}
           </p>
           <div className="fh-cta-actions">
             <button onClick={onEnterApp} className="fh-btn-primary fh-btn-cta-primary">
-              Get Started
+              {t.common.getStarted}
             </button>
             <button
               onClick={onEnterApp}
               className="fh-btn-secondary fh-btn-cta-secondary"
             >
-              <span>Explore Sample Workspace</span>
+              <span>{t.landing.finalCtaButton2}</span>
             </button>
           </div>
         </div>
@@ -1053,53 +1056,53 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="fh-footer-col">
               <FinHelpLogo size="sm" />
               <p className="fh-footer-desc">
-                AI-Powered Financial Intelligence Platform. Empowering accounting, audit, and equity research professionals with auditable document extraction.
+                {t.landing.footerMission}
               </p>
               <div className="fh-footer-status-wrap">
                 <span className="fh-footer-status-pill">
                   <span className="fh-footer-status-dot" />
-                  All Systems Operational
+                  {t.landing.footerStatus}
                 </span>
               </div>
             </div>
 
             {/* Col 2: Platform Capabilities */}
             <div className="fh-footer-col">
-              <div className="fh-footer-heading">Platform</div>
-              <a href="#features" className="fh-footer-link">Document Ingestion</a>
-              <a href="#features" className="fh-footer-link">Interactive Workspace Chat</a>
-              <a href="#features" className="fh-footer-link">Multi-Report Comparison</a>
-              <a href="#features" className="fh-footer-link">PDF Split-View Jumping</a>
-              <a href="#features" className="fh-footer-link">Mathematical Engine</a>
+              <div className="fh-footer-heading">{t.landing.footerPlatformHeading}</div>
+              <a href="#features" className="fh-footer-link">{t.landing.footerPlatform1}</a>
+              <a href="#features" className="fh-footer-link">{t.landing.footerPlatform2}</a>
+              <a href="#features" className="fh-footer-link">{t.landing.footerPlatform3}</a>
+              <a href="#features" className="fh-footer-link">{t.landing.footerPlatform4}</a>
+              <a href="#features" className="fh-footer-link">{t.landing.footerPlatform5}</a>
             </div>
 
             {/* Col 3: Use Cases */}
             <div className="fh-footer-col">
-              <div className="fh-footer-heading">Use Cases</div>
-              <a href="#use-cases" className="fh-footer-link">Accounting Professionals</a>
-              <a href="#use-cases" className="fh-footer-link">Statutory Auditors</a>
-              <a href="#use-cases" className="fh-footer-link">Financial Analysts &amp; M&amp;A</a>
-              <a href="#use-cases" className="fh-footer-link">SEC Form 10-K Analysis</a>
-              <a href="#trust" className="fh-footer-link">Audit Trail &amp; Provenance</a>
+              <div className="fh-footer-heading">{t.nav.useCases}</div>
+              <a href="#use-cases" className="fh-footer-link">{t.landing.footerUseCases1}</a>
+              <a href="#use-cases" className="fh-footer-link">{t.landing.footerUseCases2}</a>
+              <a href="#use-cases" className="fh-footer-link">{t.landing.footerUseCases3}</a>
+              <a href="#use-cases" className="fh-footer-link">{t.landing.footerUseCases4}</a>
+              <a href="#trust" className="fh-footer-link">{t.landing.footerUseCases5}</a>
             </div>
 
             {/* Col 4: Trust & Security */}
             <div className="fh-footer-col">
-              <div className="fh-footer-heading">Security &amp; Standards</div>
-              <a href="#trust" className="fh-footer-link">SOC-2 Type II Certified</a>
-              <a href="#trust" className="fh-footer-link">256-Bit Bank-Grade Encryption</a>
-              <a href="#trust" className="fh-footer-link">Isolated Workspace Sandboxes</a>
-              <a href="#trust" className="fh-footer-link">Zero-Data-Retention Architecture</a>
-              <a href="#trust" className="fh-footer-link">Auditable Source Verification</a>
+              <div className="fh-footer-heading">{t.landing.footerSecurityHeading}</div>
+              <a href="#trust" className="fh-footer-link">{t.landing.footerSecurity1}</a>
+              <a href="#trust" className="fh-footer-link">{t.landing.footerSecurity2}</a>
+              <a href="#trust" className="fh-footer-link">{t.landing.footerSecurity3}</a>
+              <a href="#trust" className="fh-footer-link">{t.landing.footerSecurity4}</a>
+              <a href="#trust" className="fh-footer-link">{t.landing.footerSecurity5}</a>
             </div>
           </div>
 
           {/* Bottom Sub-row */}
           <div className="fh-footer-bottom">
             <div>
-              FinHelp Financial Intelligence Platform · SOC-2 Ready · Zero Data Retention Architecture
+              {t.landing.footerBottomMeta}
             </div>
-            <div>© 2026 FinHelp Inc. All rights reserved.</div>
+            <div>{t.landing.footerCopyright}</div>
           </div>
         </div>
       </footer>

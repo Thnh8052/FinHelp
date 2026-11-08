@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useLanguage } from "../../context/LanguageContext";
 import { Navbar } from "../../components/layout/Navbar";
 import { SplitLayout } from "../../components/layout/SplitLayout";
 import { DocumentManager } from "../../components/notebook/DocumentManager";
@@ -33,6 +34,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
 
   // Catalog edit modal for documents
   const [catalogDocId, setCatalogDocId] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   const { toast, showToast, closeToast, notebookTitle, isAuthenticated, docs, chat } = useWorkspace(
     () => setAuthModalOpen(true)
@@ -41,7 +43,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const unconfirmedDocs = docs.documents.filter(needsCatalogConfirmation);
   const activeSession = chat.sessions.find((s) => s.session_id === chat.currentSessionId);
   const activeSessionTitle =
-    activeSession?.title || (isAuthenticated ? "Financial Analysis Session" : "Guest Trial Session");
+    activeSession?.title || (isAuthenticated ? t.workspace.financialAnalysisSession : t.workspace.guestTrialSession);
 
   // Khi click vào trích dẫn [1] Trang 12: Tự động mở Split-View, chuyển đúng tài liệu và nhảy tới trang đó
   const handleSelectCitation = (citation: CitationItem) => {
@@ -103,11 +105,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             {unconfirmedDocs.length > 0 && (
               <div className="catalog-confirm-banner" role="status">
                 <span>
-                  Please confirm document metadata before querying:{" "}
+                  {t.workspace.confirmMetadataNotice}{" "}
                   {unconfirmedDocs.map((d) => d.file_name).join(", ")}
                 </span>
                 <button type="button" onClick={() => setCatalogDocId(unconfirmedDocs[0].document_id)}>
-                  Confirm
+                  {t.workspace.confirmBtn}
                 </button>
               </div>
             )}

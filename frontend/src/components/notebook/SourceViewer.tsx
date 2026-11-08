@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLanguage } from "../../context/LanguageContext";
 import { CitationItem } from "../../types/chat";
 import { DocumentRecord } from "../../types/notebook";
 import { authService } from "../../services/auth";
@@ -39,6 +40,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   onClearCitation,
   onClose,
 }) => {
+  const { t } = useLanguage();
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [copied, setCopied] = useState(false);
   const [highlightPulse, setHighlightPulse] = useState(false);
@@ -107,8 +109,8 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
         <div className="pdf-empty-icon-box">
           <FileTextIcon size={24} color="var(--text-dim, #94a3b8)" />
         </div>
-        <p className="pdf-empty-title">No Filing Selected</p>
-        <p className="pdf-empty-sub">Upload or select a filing from the sources drawer to inspect original document pages.</p>
+        <p className="pdf-empty-title">{t.sourceViewer.noFilingSelected}</p>
+        <p className="pdf-empty-sub">{t.sourceViewer.noFilingSubtext}</p>
       </div>
     );
   }
@@ -126,7 +128,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
       <div className="pdf-viewer-toolbar">
         {/* Document Tab Bar */}
         <div className="pdf-docs-tab-bar scrollbar-slim">
-          <span className="pdf-tab-label">Filings:</span>
+          <span className="pdf-tab-label">{t.sourceViewer.filingsLabel}</span>
           {documents.map((doc) => {
             const isTabActive = doc.document_id === currentDoc.document_id;
             return (
@@ -240,7 +242,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
           <div className="pdf-evidence-header">
             <div className="pdf-evidence-title">
               <CheckShieldIcon size={13} color="#2563eb" />
-              <span>Verified Document Grounding: <strong>Page {activeCitation.page}</strong></span>
+              <span>{t.sourceViewer.citationFound}: <strong>{t.sourceViewer.page} {activeCitation.page}</strong></span>
               {activeCitation.row_label && (
                 <span className="pdf-evidence-row">({activeCitation.row_label})</span>
               )}
@@ -250,12 +252,12 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
                 {copied ? (
                   <>
                     <CheckIcon size={11} color="#10b981" />
-                    <span>Copied</span>
+                    <span>{t.common.copied}</span>
                   </>
                 ) : (
                   <>
                     <CopyIcon size={11} />
-                    <span>Copy</span>
+                    <span>{t.sourceViewer.copySnippet}</span>
                   </>
                 )}
               </button>

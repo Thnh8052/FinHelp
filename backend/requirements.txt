@@ -11,9 +11,15 @@ motor>=3.3.2          # Async MongoDB driver
 pymongo>=4.6.2        # Sync MongoDB driver (for migrations/tools)
 qdrant-client>=1.16.0 # >=1.16: AsyncQdrantClient.search() was removed, retrieval uses query_batch_points()
 
+# Cloud Storage (Cloudflare R2 / AWS S3)
+boto3>=1.34.0
+
 # Authentication & Security
 python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0         # used directly in app/core/security.py (passlib is not used)
+
+# Email Service
+sendgrid>=6.11.0
 
 # Financial Math & Utilities
 # Note: Financial calculations use Python's built-in decimal.Decimal for exact precision
