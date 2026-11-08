@@ -232,7 +232,7 @@
 }
 
 .navbar-login-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 5px 12px;
@@ -244,6 +244,8 @@
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
 
 .navbar-login-btn:hover {
@@ -521,19 +523,35 @@
   .navbar-version-badge {
     display: none;
   }
-  .navbar-action-btn {
-    padding: 0 7px;
-    font-size: 11px;
+  .navbar-right {
     gap: 4px;
+  }
+  .navbar-action-btn {
+    padding: 0 6px;
+    font-size: 11px;
+    gap: 3px;
   }
   .navbar-action-btn.split-toggle {
     display: inline-flex;
-    padding: 0 7px;
-    height: 30px;
-    min-width: 30px;
+    padding: 0 6px;
+    height: 28px;
+    min-width: 28px;
     justify-content: center;
   }
   .navbar-action-btn.split-toggle .navbar-btn-text {
     display: none; /* Compact icon-only button on mobile; opens full-width PDF drawer */
+  }
+  .navbar-divider {
+    margin: 0 2px;
+  }
+  .navbar-guest-actions {
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .navbar-login-btn {
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
   }
 }

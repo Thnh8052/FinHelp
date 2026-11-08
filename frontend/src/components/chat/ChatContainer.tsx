@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { ChatMessage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import { CheckIcon, ChevronRightIcon, CopyIcon, SendIcon } from "../common/Icons";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, FileTextIcon, SendIcon } from "../common/Icons";
 import "./chat.css";
 
 interface ChatContainerProps {
@@ -54,6 +54,83 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const labelOf = (id: string) => mentionOptions.find((o) => o.document_id === id)?.label || id;
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const promptsTrackRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScrollBounds = () => {
+    const el = promptsTrackRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 6);
+  };
+
+  const scrollPrompts = (direction: "left" | "right") => {
+    const el = promptsTrackRef.current;
+    if (!el) return;
+    const amount = direction === "left" ? -240 : 240;
+    el.scrollBy({ left: amount, behavior: "smooth" });
+    setTimeout(checkScrollBounds, 320);
+  };
+
+  useEffect(() => {
+    checkScrollBounds();
+    window.addEventListener("resize", checkScrollBounds);
+    return () => window.removeEventListener("resize", checkScrollBounds);
+  }, []);
+
+  useEffect(() => {
+    const el = promptsTrackRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) >= Math.abs(e.deltaX) && e.deltaY !== 0) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY * 1.25;
+      } else if (e.deltaX !== 0) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaX * 1.25;
+      }
+      checkScrollBounds();
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, []);
+
+  const handlePromptsMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = promptsTrackRef.current;
+    if (!el) return;
+    isDraggingRef.current = false;
+    dragStartXRef.current = e.pageX;
+    scrollLeftRef.current = el.scrollLeft;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const walk = (moveEvent.pageX - dragStartXRef.current) * 1.4;
+      if (Math.abs(walk) > 4) {
+        isDraggingRef.current = true;
+      }
+      el.scrollLeft = scrollLeftRef.current - walk;
+      checkScrollBounds();
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      setTimeout(() => {
+        isDraggingRef.current = false;
+      }, 60);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -69,10 +146,12 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     if (!el) return;
     el.style.height = "auto";
     const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
-    const minHeight = isMobile ? 24 : 26;
-    const maxHeight = isMobile ? 150 : 220;
+    const isSmallMobile = typeof window !== "undefined" && window.innerWidth <= 480;
+    const minHeight = isSmallMobile ? 18 : isMobile ? 20 : 22;
+    const maxHeight = isMobile ? 120 : 180;
     const newHeight = Math.min(Math.max(el.scrollHeight, minHeight), maxHeight);
     el.style.height = `${newHeight}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
   };
 
   useEffect(() => {
@@ -88,7 +167,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     setMentions([]);
     if (textareaRef.current) {
       const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
-      textareaRef.current.style.height = isMobile ? "24px" : "26px";
+      const isSmallMobile = typeof window !== "undefined" && window.innerWidth <= 480;
+      textareaRef.current.style.height = isSmallMobile ? "18px" : isMobile ? "20px" : "22px";
+      textareaRef.current.style.overflowY = "hidden";
     }
     onSendMessage(toSend, usedMentions);
   };
@@ -164,6 +245,16 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               <p className="chat-empty-desc">
                 Select or upload financial reports (PDF Form 10-K / Annual Filings), then ask natural language questions about margins, cash flows, or audit disclosures.
               </p>
+              {!hasSources && (onToggleSources || onOpenSources) && (
+                <button
+                  type="button"
+                  onClick={onToggleSources || onOpenSources}
+                  className="chat-empty-select-docs-btn"
+                >
+                  <FileTextIcon size={14} />
+                  <span>Choose Filings to Analyze</span>
+                </button>
+              )}
             </div>
           )}
           {messages.map((msg) => {
@@ -275,21 +366,54 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           {messages.length <= 3 && (
             <div className="chat-sample-prompts">
               <span className="chat-prompts-label">Suggestions:</span>
-              {samplePrompts.map((p, idx) => (
+
+              {canScrollLeft && (
                 <button
-                  key={idx}
                   type="button"
-                  onClick={() => {
-                    setInput(p);
-                    textareaRef.current?.focus();
-                  }}
-                  disabled={isLoading || !hasSources}
-                  className="chat-sample-btn"
-                  title="Insert sample query into prompt input"
+                  className="chat-prompts-nav-btn prev"
+                  onClick={() => scrollPrompts("left")}
+                  aria-label="Previous suggestions"
+                  title="Scroll left"
                 >
-                  {p}
+                  <ChevronLeftIcon size={12} />
                 </button>
-              ))}
+              )}
+
+              <div
+                ref={promptsTrackRef}
+                className="chat-sample-track"
+                onScroll={checkScrollBounds}
+                onMouseDown={handlePromptsMouseDown}
+              >
+                {samplePrompts.map((p, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      if (isDraggingRef.current) return;
+                      setInput(p);
+                      textareaRef.current?.focus();
+                    }}
+                    disabled={isLoading || !hasSources}
+                    className="chat-sample-btn"
+                    title="Insert sample query into prompt input"
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+
+              {canScrollRight && (
+                <button
+                  type="button"
+                  className="chat-prompts-nav-btn next"
+                  onClick={() => scrollPrompts("right")}
+                  aria-label="More suggestions"
+                  title="Scroll right"
+                >
+                  <ChevronRightIcon size={12} />
+                </button>
+              )}
             </div>
           )}
 
@@ -322,8 +446,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={
                 hasSources
-                  ? "Ask about your financial reports (e.g. Compare revenue growth and calculate CAGR)..."
-                  : "Please select source filings in the right panel before asking questions"
+                  ? "Ask about selected reports (e.g. revenue, CAGR, margins)..."
+                  : "Select source filings to ask questions..."
               }
               disabled={isLoading || !hasSources}
               rows={1}
