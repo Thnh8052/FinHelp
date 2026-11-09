@@ -16,7 +16,7 @@ from app.infrastructure.database.mongodb import MongoManager
 from app.infrastructure.database.qdrant import QdrantManager
 from app.modules.ingestion.pipeline import IngestionPipeline
 from app.modules.notebooks.purge import purge_expired_guests
-from app.modules.retrieval.warmup import warm_models
+from app.modules.retrieval.warmup import warm_chunk_tokenizer, warm_models
 from app.shared.upload_limit import UploadSizeLimit
 
 
@@ -60,6 +60,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not initialize admin user on startup: {e}")
 
+    await warm_chunk_tokenizer()
     warmup = asyncio.create_task(warm_models())  # the first question should not pay the model load
     housekeeping = asyncio.create_task(_housekeeping())
     yield

@@ -128,13 +128,16 @@ class QwenRerankerService:
         import httpx
 
         url = f"{settings.REMOTE_GPU_URL.rstrip('/')}/rerank"
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            resp = await client.post(
-                url,
-                json={"pairs": list(pairs)},
-            )
-            resp.raise_for_status()
-            return resp.json()["scores"]
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                resp = await client.post(
+                    url,
+                    json={"pairs": list(pairs)},
+                )
+                resp.raise_for_status()
+                return resp.json()["scores"]
+        except httpx.HTTPError as exc:  # as a RuntimeError, every caller answers from the first-stage order instead of failing the question
+            raise RuntimeError(f"Remote reranker unavailable: {type(exc).__name__}") from exc
 
     async def score_pairs(self, pairs: Sequence[Tuple[str, str]]) -> List[float]:
         if not pairs:

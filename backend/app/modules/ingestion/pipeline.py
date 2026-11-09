@@ -29,6 +29,7 @@ from app.modules.retrieval.reranker import QwenRerankerService
 from app.modules.retrieval.warmup import warm_models
 
 UPSERT_BATCH = 64
+REMOTE_PARALLEL_FILES = 2  # the remote worker runs one Docling process per GPU (Kaggle T4 x2); it queues anything beyond its GPUs
 WORKER_ID = socket.gethostname()
 ACTIVE_JOBS = {"status": {"$in": ["pending", "processing"]}}
 
@@ -76,6 +77,17 @@ async def _drain() -> None:
     await warm_models()  # the next question should not pay the model load
 
 
+# With a remote GPU no local model needs the card, so batching buys nothing: each file goes parse -> index on its own and can be
+# asked about as soon as it is done, whatever the other files are doing.
+_REMOTE_SLOTS = asyncio.Semaphore(REMOTE_PARALLEL_FILES)
+_REMOTE_TASKS: set = set()  # asyncio only keeps weak references to running tasks
+
+
+async def _ingest_remote(job: _Job) -> None:
+    if await job.pipeline._prepare(job, None):
+        await job.pipeline._index(job)
+
+
 class IngestionPipeline:
     """End-to-end ingestion: parse (Docling + postprocess) -> chunk (st1024) -> BGE-M3 embeddings -> MongoDB + Qdrant, in batches
     (see _drain), with the seconds of every stage on the job record."""
@@ -86,7 +98,7 @@ class IngestionPipeline:
         startup instead of leaving them 'processing' forever (the UI would poll them for ever)."""
         return await IngestionPipeline._fail_jobs(
             db, ACTIVE_JOBS, "Interrupted by a server restart.",
-            "Quá trình xử lý bị gián đoạn do máy chủ khởi động lại. Vui lòng tải lên lại.",
+            "Quá trình xử lý bị gián đoạn. Vui lòng tải lên lại.",
         )
 
     @staticmethod
@@ -120,11 +132,17 @@ class IngestionPipeline:
         self.dense_service = DenseEmbeddingService()
 
     async def run(self, job_id: str, document_id: str, notebook_id: str, pdf_path: Path) -> None:
-        """Queue the document for the batch worker (see _drain) and return."""
+        """Start the document (remote GPU: on its own, see _ingest_remote; local GPU: queued for the batch worker, see _drain) and return."""
         global _QUEUE, _WORKER
+        job = _Job(self, job_id, document_id, notebook_id, pdf_path)
+        if settings.REMOTE_GPU_URL:
+            task = asyncio.create_task(_ingest_remote(job))
+            _REMOTE_TASKS.add(task)
+            task.add_done_callback(_REMOTE_TASKS.discard)
+            return
         if _QUEUE is None:
             _QUEUE = asyncio.Queue()
-        await _QUEUE.put(_Job(self, job_id, document_id, notebook_id, pdf_path))
+        await _QUEUE.put(job)
         if _WORKER is None or _WORKER.done():
             _WORKER = asyncio.create_task(_drain())
 
@@ -141,22 +159,36 @@ class IngestionPipeline:
             {"status": "failed", "file_hash": None, "error_message": reason[:500], "updated_at": datetime.now(timezone.utc)},
         )
 
+    async def _parse(self, job: _Job, session: Optional[DoclingSession], info: Dict[str, Any]):
+        """Remote GPU: the slot covers the Docling call only, so the next file parses while this one is chunked, embedded and saved."""
+        if not settings.REMOTE_GPU_URL:
+            return await PDFParserService.extract_pages(job.pdf_path, job.document_id, session, info)
+        t0 = time.perf_counter()
+        async with _REMOTE_SLOTS:
+            info["slot_wait_s"] = round(time.perf_counter() - t0, 2)
+            await self._start(job)
+            return await PDFParserService.extract_pages(job.pdf_path, job.document_id, session, info)
+
+    async def _start(self, job: _Job) -> None:
+        await self.doc_repo.update_status(job.document_id, "processing")
+        await self.job_repo.start(job.job_id, WORKER_ID)
+
     async def _prepare(self, job: _Job, session: Optional[DoclingSession]) -> bool:
         """Phase 1: parse (the batch's Docling worker), start the catalog call, chunk. False when the document failed."""
         try:
             job.timings["queue_wait"] = round(time.perf_counter() - job.queued, 2)
-            await self.doc_repo.update_status(job.document_id, "processing")
-            await self.job_repo.start(job.job_id, WORKER_ID)
+            if not settings.REMOTE_GPU_URL:  # remote: once the file has a parse slot (see _parse), it stays "pending" while it waits
+                await self._start(job)
             # 0. Fail in seconds, not after minutes of parsing, if the vector store is unreachable or lacks the collection.
             if not await self.qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
                 await QdrantManager.ensure_collection()
                 if not await self.qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
-                    raise IngestionError("Kho vector chưa sẵn sàng.")
+                    raise IngestionError("Hệ thống chưa sẵn sàng. Vui lòng thử lại sau ít phút.")
             # 1. Parsing
             await self.job_repo.update_progress(job.job_id, "docling", 20)
             t0, info = time.perf_counter(), {}
-            job.pages, job.engine = await PDFParserService.extract_pages(job.pdf_path, job.document_id, session, info)
-            job.timings["parse"] = round(time.perf_counter() - t0, 2)
+            job.pages, job.engine = await self._parse(job, session, info)
+            job.timings["parse"] = round(time.perf_counter() - t0, 2)  # remote: includes docling_slot_wait_s
             job.timings.update({f"docling_{k}": v for k, v in info.items()})  # start_s (model load, first file only), convert_s, postprocess_s
             # 1b. Catalog: the API call runs while the next file parses
             job.catalog = asyncio.create_task(self._catalog(job))

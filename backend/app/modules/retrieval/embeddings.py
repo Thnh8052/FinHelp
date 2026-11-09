@@ -8,6 +8,9 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.modules.retrieval.gpu import free_gpu_memory, register_unloader, resolve_device, run_on_gpu
 
+# Measured on the T4 worker with 159 real chunks: 16 takes 5.9-7.2 s against 11-11.7 s for 128, with the same vectors.
+REMOTE_DOCUMENT_BATCH = 16
+
 
 class DenseEmbeddingService:
     """BGE-M3 dense embeddings (1024-d, cosine). One process-wide model, loaded on first use.
@@ -79,7 +82,7 @@ class DenseEmbeddingService:
         if not texts:
             return []
         if settings.REMOTE_GPU_URL:
-            return await self._encode_remote(texts, settings.EMBEDDING_MAX_LENGTH, 128, False)
+            return await self._encode_remote(texts, settings.EMBEDDING_MAX_LENGTH, REMOTE_DOCUMENT_BATCH, False)
         return (await run_on_gpu("embedder", self._encode, texts, settings.EMBEDDING_MAX_LENGTH, 8)).tolist()
 
     async def embed_documents_with_sparse(self, texts: List[str]) -> Tuple[List[List[float]], List[Dict[str, float]]]:
@@ -87,7 +90,7 @@ class DenseEmbeddingService:
         if not texts:
             return [], []
         if settings.REMOTE_GPU_URL:
-            return await self._encode_remote(texts, settings.EMBEDDING_MAX_LENGTH, 128, True)
+            return await self._encode_remote(texts, settings.EMBEDDING_MAX_LENGTH, REMOTE_DOCUMENT_BATCH, True)
         dense, sparse = await run_on_gpu("embedder", self._encode, texts, settings.EMBEDDING_MAX_LENGTH, 8, True)
         return dense.tolist(), sparse
 
