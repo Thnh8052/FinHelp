@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { Notebook } from "../../types/notebook";
-import { MessageSquareIcon, PlusIcon, TrashIcon } from "../common/Icons";
+import { CheckIcon, ChevronLeftIcon, CloseIcon, MessageSquareIcon, PlusIcon, TrashIcon } from "../common/Icons";
 import "./chat.css";
 
 interface ChatHistoryListProps {
@@ -10,6 +10,7 @@ interface ChatHistoryListProps {
   onSelectNotebook: (notebookId: string) => void;
   onNewChat: () => void;
   onDeleteNotebook: (notebookId: string) => void;
+  onOpenHub?: () => void;
   isGuest?: boolean;
 }
 
@@ -23,10 +24,12 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
   onSelectNotebook,
   onNewChat,
   onDeleteNotebook,
+  onOpenHub,
   isGuest = false,
 }) => {
   const { t, lang } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredNotebooks = notebooks.filter((s) =>
@@ -37,6 +40,12 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
     <div className="history-container">
       {/* 1. New Chat Action */}
       <div className="history-top-section">
+        {onOpenHub && (
+          <button type="button" onClick={onOpenHub} className="history-hub-link">
+            <ChevronLeftIcon size={14} />
+            <span>{t.hub.allNotebooks}</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={onNewChat}
@@ -116,7 +125,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                         {session.title || "Financial Session"}
                       </p>
                       <p className="history-card-sub">
-                        <span>{t.sidebar.isolatedFiling}</span>
+                        <span>{((session.document_count ?? 0) === 1 ? t.hub.fileOne : t.hub.fileMany).replace("{n}", String(session.document_count ?? 0))}</span>
                         <span>•</span>
                         <span className={isActive ? "status-active" : "status-saved"}>
                           {isActive ? (lang === "vi" ? "Đang mở" : "Active") : (lang === "vi" ? "Đã lưu" : "Saved")}
@@ -125,19 +134,47 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                     </div>
                   </div>
 
-                  {/* Delete Button */}
-                  {(isHovered || isActive) && !isGuest && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteNotebook(session.notebook_id);
-                      }}
-                      title="Delete this session"
-                      className="history-card-del-btn"
-                    >
-                      <TrashIcon size={12} />
-                    </button>
+                  {/* Delete: removes the chat with all its files, so it asks first */}
+                  {confirmingId === session.notebook_id ? (
+                    <div className="history-card-confirm" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        aria-label={`${t.common.delete}: ${session.title}`}
+                        title={t.hub.deleteWarning}
+                        className="history-card-confirm-yes"
+                        onClick={() => {
+                          setConfirmingId(null);
+                          onDeleteNotebook(session.notebook_id);
+                        }}
+                      >
+                        <CheckIcon size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t.common.cancel}
+                        title={t.common.cancel}
+                        className="history-card-confirm-no"
+                        onClick={() => setConfirmingId(null)}
+                        autoFocus
+                      >
+                        <CloseIcon size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    (isHovered || isActive) && !isGuest && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmingId(session.notebook_id);
+                        }}
+                        title="Delete this session"
+                        aria-label={`${t.common.delete}: ${session.title}`}
+                        className="history-card-del-btn"
+                      >
+                        <TrashIcon size={12} />
+                      </button>
+                    )
                   )}
                 </div>
               </div>

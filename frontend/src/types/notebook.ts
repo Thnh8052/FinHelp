@@ -5,6 +5,9 @@ export interface Notebook {
   owner_id: string;
   title: string;
   message_count: number;
+  /** Chỉ có ở danh sách sổ tay. */
+  document_count?: number;
+  processing_count?: number;
   created_at: string;
   updated_at: string;
 }

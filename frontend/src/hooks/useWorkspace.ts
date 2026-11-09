@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../services/api";
 import { chatService } from "../services/chat";
 import { documentService } from "../services/documents";
-import { activeNotebookStore, guestNotebook, notebookService } from "../services/notebooks";
+import { emptyOrNewNotebook, guestNotebook, notebookService } from "../services/notebooks";
 import { authService } from "../services/auth";
 import { Notebook } from "../types/notebook";
 import { useChat } from "./useChat";
@@ -17,19 +18,20 @@ const MAX_SOURCES_USER = 5;
 const attempt = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
 
 /**
- * Không gian làm việc: danh sách đoạn chat (mỗi notebook là một đoạn chat), tài liệu và tin nhắn của đoạn đang mở.
- * Người dùng đăng nhập: mở lại đoạn đang dùng trước đó. Khách: một notebook riêng do backend cấp.
+ * Không gian làm việc của một sổ tay (mỗi sổ tay là một đoạn chat).
+ * Người dùng đăng nhập: sổ tay nằm trên URL (/app/:notebookId). Khách: một sổ tay riêng do backend cấp, mã lưu trong trình duyệt.
  */
 export function useWorkspace(onLoginRequired: () => void) {
   const { isAuthenticated, isLoading: isAuthLoading, user, guestQuota } = useAuth();
   const { toast, showToast, closeToast } = useToast();
+  const { notebookId: routeNotebookId } = useParams();
+  const navigate = useNavigate();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [notebookId, setNotebookId] = useState("");
   const opening = useRef("");
   const maxSources = isAuthenticated ? MAX_SOURCES_USER : MAX_SOURCES_GUEST;
 
   const notebookTitle = notebooks.find((n) => n.notebook_id === notebookId)?.title || "Financial Statement Analysis";
-
   const maxFileSizeMb = user?.quota.max_file_size_mb ?? guestQuota?.max_file_size_mb ?? 5;
 
   const docs = useDocuments(notebookId, maxSources, maxFileSizeMb, showToast, onLoginRequired);
@@ -46,7 +48,6 @@ export function useWorkspace(onLoginRequired: () => void) {
     const id = notebook.notebook_id;
     opening.current = id;
     setNotebookId(id);
-    activeNotebookStore.set(id);
     docs.reset();
     chat.setMessages([]);
     const [documents, messages] = await Promise.all([attempt(documentService.list(id)), attempt(chatService.getMessages(id))]);
@@ -56,8 +57,7 @@ export function useWorkspace(onLoginRequired: () => void) {
   };
 
   const selectNotebook = (id: string) => {
-    const notebook = notebooks.find((n) => n.notebook_id === id);
-    if (notebook && id !== notebookId) void openNotebook(notebook);
+    if (id !== notebookId) navigate(`/app/${id}`);
   };
 
   const newChat = async () => {
@@ -66,10 +66,7 @@ export function useWorkspace(onLoginRequired: () => void) {
       return;
     }
     try {
-      const notebook = await notebookService.create();
-      setNotebooks((prev) => [notebook, ...prev]);
-      await openNotebook(notebook);
-      showToast("New analysis session created.", "success");
+      navigate(`/app/${(await emptyOrNewNotebook()).notebook_id}`);
     } catch (err) {
       showToast(err instanceof ApiError ? err.detail || "Unable to create new session." : "Connection error when creating session.", "error");
     }
@@ -78,11 +75,9 @@ export function useWorkspace(onLoginRequired: () => void) {
   const deleteNotebook = async (id: string) => {
     try {
       await notebookService.remove(id);
-      let remaining = notebooks.filter((n) => n.notebook_id !== id);
-      if (remaining.length === 0) remaining = await notebookService.list();  // the backend gives a member their first chat again
-      setNotebooks(remaining);
-      if (id === notebookId && remaining.length > 0) await openNotebook(remaining[0]);
       showToast("Session deleted successfully.", "info");
+      if (id === notebookId) navigate("/app");
+      else setNotebooks((prev) => prev.filter((n) => n.notebook_id !== id));
     } catch (err) {
       showToast(err instanceof ApiError ? err.detail || "Unable to delete session." : "Connection error when deleting session.", "error");
     }
@@ -93,13 +88,22 @@ export function useWorkspace(onLoginRequired: () => void) {
 
     const loadMemberData = async () => {
       const list = await attempt(notebookService.list());
-      if (!list || list.length === 0) return;
+      if (!list) return;
       setNotebooks(list);
-      const saved = activeNotebookStore.get();
-      await openNotebook(list.find((n) => n.notebook_id === saved) || list[0]);
+      const notebook = list.find((n) => n.notebook_id === routeNotebookId);
+      if (notebook) {
+        await openNotebook(notebook);
+      } else {
+        showToast("This analysis session does not exist or is no longer available.", "warning");
+        navigate("/app", { replace: true });
+      }
     };
 
     const loadGuestData = async () => {
+      if (routeNotebookId) {  // the id of a guest notebook is its key: it never goes in the URL
+        navigate("/app", { replace: true });
+        return;
+      }
       const notebook = await guestNotebook();
       if (!notebook) {
         docs.reset();
@@ -113,7 +117,7 @@ export function useWorkspace(onLoginRequired: () => void) {
     const load = isAuthenticated && authService.getAuthToken() ? loadMemberData : loadGuestData;
     load().catch((err) => console.warn("Unable to load workspace data:", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isAuthLoading]);
+  }, [isAuthenticated, isAuthLoading, routeNotebookId]);
 
   return {
     toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, maxFileSizeMb, docs, chat,

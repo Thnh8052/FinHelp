@@ -94,7 +94,7 @@ Toàn bộ tài liệu phân tích thiết kế, use case và sơ đồ quy trì
 - [x] Cài đặt `react-router-dom` và sửa dứt điểm lỗi CSS Tailwind v4 trên Vite.
 - [ ] Chuyển bộ script đánh giá (`g3_eval.py`, `number_check_eval.py`, `e2e_safe_flow.py`) vào `backend/evaluation/`.
 - [ ] Tích hợp `@tanstack/react-query` vào frontend để loại bỏ polling thủ công.
-- [ ] Xây dựng giao diện Multi-Notebook Hub (`/app`) cho phép tạo, sửa tên, xoá notebook.
+- [x] Xây dựng giao diện Multi-Notebook Hub (`/app`) cho phép tạo, sửa tên, xoá notebook.
 
 ### Tuần 2: Nâng cấp Trải nghiệm Hội thoại & Streaming (F4 + F5)
 - [ ] Điền `focus_state` trong collection `notebooks` (MongoDB) lưu giữ ngữ cảnh: Công ty, Năm tài chính, Chỉ tiêu.

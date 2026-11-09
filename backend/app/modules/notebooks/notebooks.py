@@ -12,16 +12,17 @@ Một notebook là một đoạn chat: danh sách lịch sử chat chính là da
 """
 
 import uuid
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 from qdrant_client import AsyncQdrantClient
 
 from app.core.logging import logger
 from app.shared.deps import GUEST_PREFIX, get_current_user_id, get_optional_user_id, require_notebook
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
+from app.modules.documents.document_repo import DocumentRepository
 from app.modules.notebooks.notebook_repo import NotebookRepository
 from app.modules.notebooks.notebook import NotebookRecord
 from app.modules.notebooks.purge import has_active_documents, purge_notebook
@@ -34,10 +35,17 @@ class CreateNotebookRequest(BaseModel):
 
 
 class UpdateNotebookRequest(BaseModel):
-    title: str
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 
 
-@router.get("", response_model=List[NotebookRecord])
+class NotebookSummary(NotebookRecord):
+    """A notebook as shown in the notebook list."""
+
+    document_count: int = 0
+    processing_count: int = 0
+
+
+@router.get("", response_model=List[NotebookSummary])
 async def list_notebooks(
     user_id: str = Depends(get_current_user_id),
     db: AsyncIOMotorDatabase = Depends(get_database),
@@ -48,8 +56,9 @@ async def list_notebooks(
     if not notebooks:
         first = NotebookRecord(notebook_id=f"nb_{uuid.uuid4().hex[:8]}", owner_id=user_id)
         await repo.save_notebook(first)
-        return [first]
-    return notebooks
+        return [NotebookSummary(**first.model_dump())]
+    counts = await DocumentRepository(db).counts_by_notebook([n.notebook_id for n in notebooks])
+    return [NotebookSummary(**n.model_dump(), **counts.get(n.notebook_id, {})) for n in notebooks]
 
 
 @router.post("", response_model=NotebookRecord)
