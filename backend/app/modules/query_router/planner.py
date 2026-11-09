@@ -162,11 +162,16 @@ def name_candidates(question: str, catalog: Sequence[CatalogEntry]) -> List[str]
     """Capitalised terms of the question that are not ordinary words and name no selected company or file."""
     known = set(words(" ".join(f"{e.company} {e.file_name}" for e in catalog)))
     cards = [{"entity": e.company or e.file_name} for e in catalog]
+    matched = set(company_matches(question, cards))
+
+    def part_of_a_match(term: str) -> bool:  # without it a company is no longer named: "JP" of "JP Morgan"
+        return set(company_matches(re.sub(rf"(?<!\w){re.escape(term)}(?!\w)", " ", question), cards)) != matched
+
     found: List[str] = []
     for match in _TOKEN.finditer(question):
         term = match.group(0).strip("-&")
         low = term.lower()
-        if len(term) < 2 or low in QUESTION_WORDS or re.fullmatch(r"fy\d*|q\d|\d+", low) or set(words(term)) <= known or company_matches(term, cards) or term in found:
+        if len(term) < 2 or low in QUESTION_WORDS or re.fullmatch(r"fy\d*|q\d|\d+", low) or set(words(term)) <= known or part_of_a_match(term) or term in found:
             continue
         found.append(term)
     return found

@@ -97,9 +97,16 @@ def test_a_named_report_type_is_preferred():
 def test_a_name_no_catalog_carries_turns_on_the_net_for_the_rest():
     rbc = doc("rbc", "Royal Bank of Canada", 2025)
     td = doc("td", "The Toronto-Dominion Bank", 2025)
-    t = decide_targets("What was the net margin of RBC and of TD in fiscal 2025?", [rbc, td], None, vi=False)
+    t = decide_targets("What was RBC's net margin according to TD in fiscal 2025?", [rbc, td], None, vi=False)
     assert t.document_ids == ["rbc"] and t.uncertain  # "TD" is no catalog name (no ticker confirmed): the TD report gets the safety net
     assert not decide_targets("Compare revenue of NVIDIA and AMD in fiscal 2025", FIVE, None, vi=False).uncertain
+
+
+def test_a_second_name_no_catalog_carries_leaves_the_choice_to_the_planner():
+    rbc = doc("rbc", "Royal Bank of Canada", 2025)
+    td = doc("td", "The Toronto-Dominion Bank", 2025)
+    t = decide_targets("What was the net margin of RBC and of TD in fiscal 2025?", [rbc, td], None, vi=False)
+    assert t.document_ids == [] and t.rule == "none"  # forcing RBC would hide the TD report from the planner
 
 
 def test_quarter_pairs_of_another_company_invent_no_comparative_assumption():

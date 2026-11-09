@@ -99,3 +99,16 @@ def test_targets_are_forced_only_by_a_real_name():
     assert pepsi.document_ids == ["pep"] and not pepsi.uncertain
     typo = decide_targets("Microsft revenue in 2022", docs, None, vi=False)
     assert typo.document_ids == ["ms"] and typo.uncertain  # one letter off: the other documents keep the safety net
+
+
+@pytest.mark.parametrize("question, forced", [
+    ("Compare Pepsi and Coke revenue in FY2022", []),  # the planner knows Coke: it must still see that report
+    ("Pepsi vs Coke net income in 2022", []),
+    ("So sánh doanh thu của Pepsi với Coke năm 2022", []),
+    ("Compare Pepsi and Coca-Cola revenue in FY2022", ["ko", "pep"]),  # both names are recognised
+    ("Pepsi revenue and net income in FY2022", ["pep"]),  # "and" alone, no other name
+    ("JP Morgan revenue and net income in FY2022", ["jpm"]),  # "JP" and "Morgan" are part of the match
+])
+def test_a_question_listing_an_unrecognised_name_is_left_to_the_planner(question, forced):
+    docs = [doc("pep", "PepsiCo, Inc.", 2022), doc("ko", "The Coca-Cola Company", 2022), doc("jpm", "JPMorgan Chase & Co.", 2022)]
+    assert sorted(decide_targets(question, docs, None, vi=False).document_ids) == forced

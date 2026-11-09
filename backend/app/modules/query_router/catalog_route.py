@@ -11,7 +11,7 @@ QPAIR = re.compile(r"(q[1-4]|first|second|third|fourth)\s*(?:quarter)?\s*(?:of\s
 QNUM = {"q1": 1, "q2": 2, "q3": 3, "q4": 4, "first": 1, "second": 2, "third": 3, "fourth": 4}
 # Ordinary words of a financial question: never a company name on their own
 QUESTION_WORDS = frozenset("""
-how which what who whom whose when where why in on at of for by from to between among using based please compare calculate determine
+how which what who whom whose when where why in on at of for by from to between among using based please compare calculate determine true false
 explain describe give show list tell is are was were did do does can could would should the a an and or as if its their this that these
 those over during across per with within without also both each either neither all any some more most less least not no yes
 gaap ifrs usd vnd eur sec form eps ebit ebitda roe roa roic fcf cfo ceo cogs sga capex opex yoy qoq ytd fy q1 q2 q3 q4 us uk eu
