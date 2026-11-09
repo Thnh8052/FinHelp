@@ -95,8 +95,8 @@ def test_only_the_owner_edits_and_bad_input_is_422(monkeypatch):
     from app.infrastructure.database.qdrant import get_qdrant_client
     from app.modules.notebooks.notebook import NotebookRecord
 
-    notebooks = {"nb": NotebookRecord(notebook_id="nb", user_id="alice", title="A"),
-                 "nb_sec_demo": NotebookRecord(notebook_id="nb_sec_demo", user_id="admin", title="S")}
+    notebooks = {"nb": NotebookRecord(notebook_id="nb", owner_id="alice", title="A"),
+                 "nb_sec_demo": NotebookRecord(notebook_id="nb_sec_demo", owner_type="system", owner_id="system", title="S")}
     docs = {"d1": _doc(company_name="AMD", fiscal_year=2024, catalog_unverified=["entity"]),
             "d2": DocumentRecord(document_id="d2", notebook_id="nb_sec_demo", file_name="s.pdf", file_size_bytes=1, file_path="p")}
     saved = []

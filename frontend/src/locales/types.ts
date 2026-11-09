@@ -240,6 +240,7 @@ export interface TranslationSchema {
     placeholderNoDocs: string;
     placeholderProcessing: string;
     processingNotice: string;
+    uploadingNotice: string;
     inputShortcuts: string;
     sourceCitationsTitle: string;
     retrievingContext: string;

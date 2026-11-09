@@ -118,7 +118,7 @@ class FakeRepo:
 @pytest.fixture
 def admin_init(monkeypatch):
     FakeRepo.saved = []
-    for name in ("UserRepository", "NotebookRepository", "ChatRepository"):
+    for name in ("UserRepository", "NotebookRepository"):
         monkeypatch.setattr(init_admin, name, FakeRepo)
     monkeypatch.setattr(init_admin.MongoManager, "db", object())
     return FakeRepo
@@ -156,13 +156,13 @@ class Stop(Exception):
     """Raised by the faked storage: the upload got past the quota gate."""
 
 
-def _doc(n, status="completed"):
-    return DocumentRecord(document_id=f"d{n}", notebook_id="nb", file_name=f"{n}.pdf", file_size_bytes=1, file_path="x", parsing_status=status)
+def _doc(n, status="ready"):
+    return DocumentRecord(document_id=f"d{n}", notebook_id="nb", file_name=f"{n}.pdf", file_size_bytes=1, file_path="x", status=status)
 
 
 @pytest.fixture
 def upload(monkeypatch):
-    state = {"user": None, "docs": [], "notebook": NotebookRecord(notebook_id=GUEST_NOTEBOOK, user_id="guest", title="g")}
+    state = {"user": None, "docs": [], "notebook": NotebookRecord(notebook_id=GUEST_NOTEBOOK, owner_type="guest", owner_id="g", title="g")}
 
     class Notebooks:
         def __init__(self, db):
@@ -209,7 +209,7 @@ def test_guest_may_upload_one_document_only(upload):
 
 def test_signed_in_user_may_upload_five_documents(upload):
     state, post = upload
-    state["user"], state["notebook"] = "alice", NotebookRecord(notebook_id="nb", user_id="alice", title="a")
+    state["user"], state["notebook"] = "alice", NotebookRecord(notebook_id="nb", owner_id="alice", title="a")
     state["docs"] = [_doc(n) for n in range(4)]
     assert post("nb") == 500
     state["docs"] = [_doc(n) for n in range(5)]
@@ -218,5 +218,5 @@ def test_signed_in_user_may_upload_five_documents(upload):
 
 def test_nobody_uploads_into_someone_elses_notebook(upload):
     state, post = upload
-    state["user"], state["notebook"] = "bob", NotebookRecord(notebook_id="nb", user_id="alice", title="a")
+    state["user"], state["notebook"] = "bob", NotebookRecord(notebook_id="nb", owner_id="alice", title="a")
     assert post("nb") == 403

@@ -404,7 +404,7 @@ def test_safety_net_keeps_its_room_above_a_large_first_stream():
 # ---------------------------------------------------------------- source selection (user chooses the files, the system never guesses)
 def _doc(doc_id, name, **meta):
     return DocumentRecord(document_id=doc_id, notebook_id="nb", file_name=name, file_size_bytes=1, file_path="p",
-                          indexing_status="completed", metadata=DocumentMetadata(**meta))
+                          status="ready", metadata=DocumentMetadata(**meta))
 
 
 def _orchestrator(docs):
@@ -442,7 +442,7 @@ async def test_unknown_or_unready_selection_is_refused():
     from app.modules.chat.orchestrator import SourceSelectionError
 
     pending = _doc("d2", "b.pdf")
-    pending.indexing_status = "indexing"
+    pending.status = "processing"
     orch = _orchestrator([_doc("d1", "a.pdf"), pending])
     for bad in (["ghost"], ["d1", "d2"]):
         with pytest.raises(SourceSelectionError):

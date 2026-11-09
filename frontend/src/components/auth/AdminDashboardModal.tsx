@@ -85,17 +85,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
                     Financial Intelligence Cluster
                   </div>
                 </div>
-
-                {/* Card 3: Estimated Cost */}
-                <div className="admin-metric-card">
-                  <span className="admin-metric-label">Estimated API Cost</span>
-                  <div className="admin-metric-val cost">
-                    ${stats.api_metrics.total_estimated_cost_usd.toFixed(4)}
-                  </div>
-                  <div className="admin-metric-sub">
-                    ~{(stats.api_metrics.total_estimated_cost_usd * 25400).toLocaleString("vi-VN")} VND
-                  </div>
-                </div>
               </div>
 
               {/* Performance Section */}

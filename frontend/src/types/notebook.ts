@@ -1,10 +1,10 @@
+/** Một notebook là một đoạn chat. */
 export interface Notebook {
   notebook_id: string;
-  user_id: string;
+  owner_type: "user" | "guest" | "system";
+  owner_id: string;
   title: string;
-  description?: string;
-  tags: string[];
-  document_ids: string[];
+  message_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -28,8 +28,7 @@ export interface DocumentRecord {
   file_size_bytes: number;
   file_path: string;
   page_count: number;
-  parsing_status: "pending" | "processing" | "completed" | "failed";
-  indexing_status: "pending" | "indexing" | "completed" | "failed";
+  status: "pending" | "processing" | "ready" | "failed";
   error_message?: string;
   parsing_engine?: string;
   created_at: string;
@@ -39,7 +38,7 @@ export interface DocumentRecord {
 export const needsCatalogConfirmation = (d: DocumentRecord): boolean => {
   const m = d.metadata || {};
   return (
-    d.indexing_status === "completed" &&
+    d.status === "ready" &&
     !m.catalog_confirmed &&
     ((m.catalog_unverified || []).length > 0 || !m.company_name || !m.fiscal_year)
   );
@@ -54,15 +53,16 @@ export const documentLabel = (d: DocumentRecord): string => {
 
 /** Tài liệu vừa tải lên và chưa xử lý xong (chưa hỏi đáp được). */
 export const isDocProcessing = (d: DocumentRecord | null | undefined): boolean =>
-  !!d && d.indexing_status !== "completed" && d.parsing_status !== "failed";
+  !!d && (d.status === "pending" || d.status === "processing");
 
-export const isDocFailed = (d: DocumentRecord | null | undefined): boolean => d?.parsing_status === "failed";
+export const isDocFailed = (d: DocumentRecord | null | undefined): boolean => d?.status === "failed";
 
 export interface IngestionJob {
   job_id: string;
   document_id: string;
   notebook_id: string;
-  status: "pending" | "parsing" | "chunking" | "indexing_qdrant" | "completed" | "failed";
+  status: "pending" | "processing" | "completed" | "failed";
+  stage: "docling" | "chunking" | "embedding" | "indexing";
   progress_percent: number;
   error_log?: string;
 }

@@ -11,8 +11,6 @@ class CitationItem(BaseModel):
     document_id: str
     page: int
     table_id: Optional[str] = None
-    row_label: Optional[str] = None
-    column_label: Optional[str] = None
     snippet: str
     score: Optional[float] = None
     cited: Optional[bool] = None  # whether the answer writes this excerpt's [n]; None when unknown (older messages, multi-question answers)
@@ -22,7 +20,8 @@ class MessageRecord(BaseSchema):
     """Chat message stored in MongoDB `messages` collection."""
 
     message_id: str
-    session_id: str
+    notebook_id: str
+    message_index: int = 0  # given by ChatRepository.append_message: 0, 1, 2... within the notebook
     role: str = Field(..., description="'user', 'assistant', 'system'")
     content: str
     citations: List[CitationItem] = Field(default_factory=list)
@@ -30,15 +29,8 @@ class MessageRecord(BaseSchema):
         None,
         description="Input policy decision, retrieval plan, sub-queries, retrieved pages"
     )
+    token_usage: Dict[str, int] = Field(default_factory=dict)  # {prompt_tokens, completion_tokens, total_tokens} of the whole request
+    latency_ms: Optional[int] = None
+    model_used: Optional[str] = None
+    user_rating: Optional[int] = None  # +1 / -1
     created_at: Any = Field(default_factory=get_utc_now)
-
-
-class ChatSessionRecord(BaseSchema):
-    """Chat session stored in MongoDB `chat_sessions` collection."""
-
-    session_id: str
-    notebook_id: str
-    user_id: str
-    title: str = "Hội thoại mới"
-    created_at: Any = Field(default_factory=get_utc_now)
-    updated_at: Any = Field(default_factory=get_utc_now)

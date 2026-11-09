@@ -92,6 +92,10 @@ class StorageService:
 
         return dest_path
 
+    def delete_notebook_folder(self, notebook_id: str) -> None:
+        """Remove the notebook's PDF folder once its documents are gone."""
+        shutil.rmtree(self.pdf_dir / notebook_id, ignore_errors=True)
+
     def get_public_pdf_url(self, notebook_id: str, document_id: str, filename: str) -> Optional[str]:
         """Return the public Cloudflare CDN URL for direct browser viewing (0$ egress)."""
         if self.backend == "r2" and settings.R2_PUBLIC_DOMAIN:
@@ -125,7 +129,7 @@ class StorageService:
     async def delete_document_files(self, notebook_id: str, document_id: str, file_path: str) -> None:
         """Remove PDF and parser artifacts from both local disk and Cloudflare R2."""
         notebook_dir = (self.pdf_dir / notebook_id).resolve()
-        stored_path = Path(file_path).resolve()
+        stored_path = (settings.STORAGE_LOCAL_DIR / file_path).resolve()
 
         try:
             stored_path.relative_to(notebook_dir)

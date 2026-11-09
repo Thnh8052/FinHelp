@@ -1,8 +1,9 @@
 import asyncio
+import socket
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -28,6 +29,8 @@ from app.modules.retrieval.reranker import QwenRerankerService
 from app.modules.retrieval.warmup import warm_models
 
 UPSERT_BATCH = 64
+WORKER_ID = socket.gethostname()
+ACTIVE_JOBS = {"status": {"$in": ["pending", "processing"]}}
 
 
 @dataclass
@@ -81,15 +84,30 @@ class IngestionPipeline:
     async def fail_interrupted(db: AsyncIOMotorDatabase) -> int:
         """Ingestion runs inside the API process, so a restart kills it mid-way. Mark such documents/jobs failed at
         startup instead of leaving them 'processing' forever (the UI would poll them for ever)."""
-        unfinished = {"status": {"$nin": ["completed", "failed"]}}
+        return await IngestionPipeline._fail_jobs(
+            db, ACTIVE_JOBS, "Interrupted by a server restart.",
+            "Quá trình xử lý bị gián đoạn do máy chủ khởi động lại. Vui lòng tải lên lại.",
+        )
+
+    @staticmethod
+    async def fail_stalled(db: AsyncIOMotorDatabase) -> int:
+        """Fail the jobs that stopped moving: a document that can neither finish nor be deleted would lock its notebook for ever."""
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=settings.INGESTION_STALL_SECONDS)
+        return await IngestionPipeline._fail_jobs(
+            db, {**ACTIVE_JOBS, "updated_at": {"$lt": cutoff}}, "No progress within INGESTION_STALL_SECONDS.",
+            "Xử lý tài liệu quá lâu và đã bị dừng. Vui lòng xóa rồi tải lên lại.",
+        )
+
+    @staticmethod
+    async def _fail_jobs(db: AsyncIOMotorDatabase, query: Dict[str, Any], error_log: str, message: str) -> int:
         jobs = db[collections.INGESTION_JOBS_COLLECTION]
-        stuck = [j["document_id"] async for j in jobs.find(unfinished, {"document_id": 1})]
+        stuck = [j["document_id"] async for j in jobs.find(query, {"document_id": 1})]
         if stuck:
-            await jobs.update_many(unfinished, {"$set": {"status": "failed", "error_log": "Interrupted by a server restart."}})
+            now = datetime.now(timezone.utc)
+            await jobs.update_many({"document_id": {"$in": stuck}}, {"$set": {"status": "failed", "error_log": error_log, "finished_at": now, "updated_at": now}})
             await db[collections.DOCUMENTS_COLLECTION].update_many(
                 {"document_id": {"$in": stuck}},
-                {"$set": {"parsing_status": "failed", "indexing_status": "failed",
-                          "error_message": "Quá trình xử lý bị gián đoạn do máy chủ khởi động lại. Vui lòng tải lên lại."}},
+                {"$set": {"status": "failed", "file_hash": None, "error_message": message, "updated_at": now}},
             )
         return len(stuck)
 
@@ -111,59 +129,41 @@ class IngestionPipeline:
             _WORKER = asyncio.create_task(_drain())
 
     async def _fail(self, job: _Job, exc: Exception) -> None:
-        if not await self._document_is_active(job.document_id):
-            # The user deleted this source while a parser/embedding task was running.
-            # The delete endpoint already removed its persisted state.
-            return
         logger.error(f"Ingestion job {job.job_id} failed: {exc!r}", exc_info=True)
         if job.catalog is not None and not job.catalog.done():
             job.catalog.cancel()
         await self._cleanup(job.document_id)
-        await self.job_repo.update_progress(job.job_id, "failed", 0, error_log=repr(exc)[:1000])
-        await self.doc_repo.update_status(job.document_id, "failed", "failed")
+        await self.job_repo.fail(job.job_id, repr(exc)[:1000])
         reason = str(exc) if isinstance(exc, (ValueError, IngestionError)) else "Hệ thống gặp lỗi khi xử lý tài liệu."
-        await self.doc_repo.update_one({"document_id": job.document_id}, {"error_message": reason[:500]})
-
-    async def _document_is_active(self, document_id: str) -> bool:
-        document = await self.doc_repo.get_by_id(document_id)
-        return bool(document and document.parsing_status != "deleting" and document.indexing_status != "deleting")
-
-    async def _stop_if_deleted(self, job: _Job) -> bool:
-        """Stop a queued/running ingestion before it can recreate deleted data."""
-        if await self._document_is_active(job.document_id):
-            return False
-        if job.catalog is not None and not job.catalog.done():
-            job.catalog.cancel()
-        return True
+        # file_hash goes back to null so that the same file can be uploaded again (unique index on notebook + hash)
+        await self.doc_repo.update_one(
+            {"document_id": job.document_id},
+            {"status": "failed", "file_hash": None, "error_message": reason[:500], "updated_at": datetime.now(timezone.utc)},
+        )
 
     async def _prepare(self, job: _Job, session: Optional[DoclingSession]) -> bool:
         """Phase 1: parse (the batch's Docling worker), start the catalog call, chunk. False when the document failed."""
         try:
-            if await self._stop_if_deleted(job):
-                return False
             job.timings["queue_wait"] = round(time.perf_counter() - job.queued, 2)
+            await self.doc_repo.update_status(job.document_id, "processing")
+            await self.job_repo.start(job.job_id, WORKER_ID)
             # 0. Fail in seconds, not after minutes of parsing, if the vector store is unreachable or lacks the collection.
             if not await self.qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
                 await QdrantManager.ensure_collection()
                 if not await self.qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
                     raise IngestionError("Kho vector chưa sẵn sàng.")
             # 1. Parsing
-            await self.job_repo.update_progress(job.job_id, "parsing", 20)
+            await self.job_repo.update_progress(job.job_id, "docling", 20)
             t0, info = time.perf_counter(), {}
             job.pages, job.engine = await PDFParserService.extract_pages(job.pdf_path, job.document_id, session, info)
-            if await self._stop_if_deleted(job):
-                return False
             job.timings["parse"] = round(time.perf_counter() - t0, 2)
             job.timings.update({f"docling_{k}": v for k, v in info.items()})  # start_s (model load, first file only), convert_s, postprocess_s
-            await self.job_repo.update_one({"job_id": job.job_id}, {"total_pages": len(job.pages), "processed_pages": len(job.pages)})
             # 1b. Catalog: the API call runs while the next file parses
             job.catalog = asyncio.create_task(self._catalog(job))
             # 2. Chunking (CPU-bound: tokenizer)
             await self.job_repo.update_progress(job.job_id, "chunking", 40)
             t0 = time.perf_counter()
             job.chunks = await asyncio.to_thread(FinancialChunkerService.chunk_document, job.notebook_id, job.document_id, job.pages)
-            if await self._stop_if_deleted(job):
-                return False
             job.timings["chunk"] = round(time.perf_counter() - t0, 2)
             if not job.chunks:
                 raise ValueError("Không trích xuất được nội dung văn bản từ tài liệu (có thể là bản scan).")
@@ -199,25 +199,19 @@ class IngestionPipeline:
     async def _index(self, job: _Job) -> None:
         """Phase 2: embeddings (BGE-M3 loaded once for the batch), MongoDB + Qdrant, completion."""
         try:
-            if await self._stop_if_deleted(job):
-                return
             chunks, document_id, job_id = job.chunks, job.document_id, job.job_id
             t0 = time.perf_counter()
             if job.catalog is not None:
                 await job.catalog
-            if await self._stop_if_deleted(job):
-                return
             job.timings["catalog_wait"] = round(time.perf_counter() - t0, 2)
             # 3. Embeddings (all before any write, so a failure leaves nothing half-indexed)
-            await self.job_repo.update_progress(job_id, "indexing_qdrant", 60)
+            await self.job_repo.update_progress(job_id, "embedding", 60)
             if not settings.REMOTE_GPU_URL and DenseEmbeddingService._model is None:
                 t0 = time.perf_counter()
                 await run_on_gpu("embedder", DenseEmbeddingService._get_model)
                 job.timings["embed_load"] = round(time.perf_counter() - t0, 2)
             t0 = time.perf_counter()
             vectors, sparse = await self.dense_service.embed_documents_with_sparse([c.content for c in chunks])
-            if await self._stop_if_deleted(job):
-                return
             job.timings["embed"] = round(time.perf_counter() - t0, 2)
             for chunk, weights in zip(chunks, sparse):
                 chunk.sparse_weights = weights
@@ -227,10 +221,7 @@ class IngestionPipeline:
             # 4. Persist: MongoDB is the source of truth for text, Qdrant only holds vectors + filters
             t0 = time.perf_counter()
             await self.chunk_repo.save_chunks(chunks)
-            if await self._stop_if_deleted(job):
-                await self._cleanup(document_id)
-                return
-            await self.job_repo.update_progress(job_id, "indexing_qdrant", 85)
+            await self.job_repo.update_progress(job_id, "indexing", 85)
             points = [
                 models.PointStruct(
                     id=str(uuid.uuid5(uuid.NAMESPACE_DNS, c.chunk_id)),
@@ -242,34 +233,22 @@ class IngestionPipeline:
                         "page": c.page,
                         "chunk_type": c.chunk_type,
                         "text_type": c.text_type,
-                        "concept_ids": c.concept_ids,
                     },
                 )
                 for c, vec in zip(chunks, vectors)
             ]
             for start in range(0, len(points), UPSERT_BATCH):
-                if await self._stop_if_deleted(job):
-                    await self._cleanup(document_id)
-                    return
                 await self.qdrant.upsert(
                     collection_name=settings.QDRANT_COLLECTION_NAME, points=points[start:start + UPSERT_BATCH], wait=True
                 )
-            if await self._stop_if_deleted(job):
-                await self._cleanup(document_id)
-                return
             job.timings["persist"] = round(time.perf_counter() - t0, 2)
             job.timings["total"] = round(time.perf_counter() - job.queued, 2)
-            # 5. Complete
+            # 5. Complete (the document last: `ready` is what unlocks the chat)
+            await self.job_repo.finish(job_id, len(chunks), job.timings)
             await self.doc_repo.update_one(
                 {"document_id": document_id},
-                {"page_count": len(job.pages), "parsing_engine": job.engine, "updated_at": datetime.now(timezone.utc)},
+                {"page_count": len(job.pages), "parsing_engine": job.engine, "status": "ready", "updated_at": datetime.now(timezone.utc)},
             )
-            await self.job_repo.update_one(
-                {"job_id": job_id},
-                {"extracted_chunks_count": len(chunks), "completed_at": datetime.now(timezone.utc), "timings": job.timings},
-            )
-            await self.job_repo.update_progress(job_id, "completed", 100)
-            await self.doc_repo.update_status(document_id, "completed", "completed")
             logger.info(f"Ingestion job {job_id}: {len(job.pages)} pages, {len(chunks)} chunks, engine={job.engine}, timings={job.timings}")
         except Exception as exc:
             await self._fail(job, exc)

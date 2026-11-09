@@ -5,22 +5,18 @@ from fastapi.testclient import TestClient
 
 from app.modules.chat import chat as chat_api
 from app.shared import deps
-from app.shared.deps import can_access_notebook, can_chat, get_optional_user_id, is_guest_notebook, owns_session
+from app.shared.deps import can_access_notebook, can_chat, get_optional_user_id
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
-from app.modules.chat.chat_models import ChatSessionRecord, MessageRecord
+from app.modules.chat.chat_models import MessageRecord
 from app.modules.notebooks.notebook import NotebookRecord
 
 GUEST_ID = "nb_guest_" + "a" * 32
 NOTEBOOKS = {
-    "nb_alice": NotebookRecord(notebook_id="nb_alice", user_id="alice", title="A"),
-    "nb_sec_demo": NotebookRecord(notebook_id="nb_sec_demo", user_id="admin", title="Mẫu"),
-    GUEST_ID: NotebookRecord(notebook_id=GUEST_ID, user_id="guest", title="Khách"),
-    "nb_guest_trial": NotebookRecord(notebook_id="nb_guest_trial", user_id="guest", title="Cũ, dùng chung"),
-}
-SESSIONS = {
-    "ses_alice": ChatSessionRecord(session_id="ses_alice", notebook_id="nb_alice", user_id="alice"),
-    "ses_guest": ChatSessionRecord(session_id="ses_guest", notebook_id=GUEST_ID, user_id="guest"),
+    "nb_alice": NotebookRecord(notebook_id="nb_alice", owner_id="alice", title="A", message_count=2),
+    "nb_new": NotebookRecord(notebook_id="nb_new", owner_id="alice"),
+    "nb_sample": NotebookRecord(notebook_id="nb_sample", owner_type="system", owner_id="system", title="Mẫu"),
+    GUEST_ID: NotebookRecord(notebook_id=GUEST_ID, owner_type="guest", owner_id="a" * 32, title="Khách"),
 }
 
 
@@ -31,23 +27,15 @@ def test_owner_reads_and_writes_others_do_not():
     assert not can_access_notebook(nb, "bob") and not can_access_notebook(nb, None)
 
 
-def test_sample_notebook_is_read_only_and_chat_needs_its_owner():
-    nb = NOTEBOOKS["nb_sec_demo"]
+def test_sample_notebook_is_read_only_and_nobody_can_chat_in_it():
+    nb = NOTEBOOKS["nb_sample"]
     assert can_access_notebook(nb, None) and can_access_notebook(nb, "bob")
     assert not can_access_notebook(nb, "bob", write=True)
-    assert not can_chat(nb, None) and not can_chat(nb, "bob") and can_chat(nb, "admin")
+    assert not can_chat(nb, None) and not can_chat(nb, "bob") and not can_chat(nb, "system")
 
 
-def test_guest_notebook_needs_an_unguessable_id():
-    assert is_guest_notebook(NOTEBOOKS[GUEST_ID]) and can_chat(NOTEBOOKS[GUEST_ID], None)
-    old = NOTEBOOKS["nb_guest_trial"]  # the shared trial notebook every guest used to see
-    assert not is_guest_notebook(old) and not can_access_notebook(old, None) and not can_chat(old, None)
-
-
-def test_session_belongs_to_one_caller():
-    assert owns_session(SESSIONS["ses_alice"], "alice") and not owns_session(SESSIONS["ses_alice"], "bob")
-    assert not owns_session(SESSIONS["ses_alice"], None) and owns_session(SESSIONS["ses_guest"], None)
-    assert not owns_session(SESSIONS["ses_guest"], "alice")
+def test_the_id_of_a_guest_notebook_is_the_guests_key():
+    assert can_access_notebook(NOTEBOOKS[GUEST_ID], None, write=True) and can_chat(NOTEBOOKS[GUEST_ID], None)
 
 
 def test_qdrant_filter_refuses_a_search_without_notebook():
@@ -70,24 +58,33 @@ class FakeNotebooks:
 
 class FakeChats:
     saved = []
+    titles = []
 
     def __init__(self, db):
         pass
 
-    async def get_session(self, session_id):
-        return SESSIONS.get(session_id)
-
-    async def get_sessions_by_notebook(self, notebook_id):
-        return [s for s in SESSIONS.values() if s.notebook_id == notebook_id]
-
-    async def get_messages(self, session_id, limit=50):
+    async def get_messages(self, notebook_id, limit=500):
         return []
 
-    async def save_session(self, session):
-        self.saved.append(session)
+    async def set_title(self, notebook_id, title):
+        self.titles.append((notebook_id, title))
 
     async def append_message(self, message):
+        self.saved.append(message)
+
+
+class FakeUsers:
+    def __init__(self, db):
         pass
+
+    allowed = True
+    consumed = []
+
+    async def check_quota(self, user_id):
+        return self.allowed
+
+    async def consume_quota(self, user_id, messages=1, tokens=0):
+        self.consumed.append((user_id, messages, tokens))
 
 
 class Stop(Exception):
@@ -99,6 +96,7 @@ def client(monkeypatch):
     caller = {"id": None}
     monkeypatch.setattr(deps, "NotebookRepository", FakeNotebooks)
     monkeypatch.setattr(chat_api, "ChatRepository", FakeChats)
+    monkeypatch.setattr(chat_api, "UserRepository", FakeUsers)
 
     async def ready(db, notebook_id, ids):
         return None
@@ -131,12 +129,12 @@ def ask(client, user, **body):
 def test_other_users_notebook_is_refused(client):
     assert ask(client, "bob", notebook_id="nb_alice", document_ids=["d1"]).status_code == 403
     assert ask(client, None, notebook_id="nb_alice", document_ids=["d1"]).status_code == 403
-    assert ask(client, None, notebook_id="nb_guest_trial", document_ids=["d1"]).status_code == 403
     assert ask(client, "bob", notebook_id="nb_missing", document_ids=["d1"]).status_code == 404
 
 
-def test_guest_cannot_chat_in_the_shared_sample(client):
-    assert ask(client, None, notebook_id="nb_sec_demo", document_ids=["d1"]).status_code == 403
+def test_nobody_can_chat_in_a_sample_notebook(client):
+    assert ask(client, None, notebook_id="nb_sample", document_ids=["d1"]).status_code == 403
+    assert ask(client, "bob", notebook_id="nb_sample", document_ids=["d1"]).status_code == 403
 
 
 def test_a_source_must_be_selected_within_the_limit(client):
@@ -145,26 +143,49 @@ def test_a_source_must_be_selected_within_the_limit(client):
     assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1", "d2"]).status_code == 422
 
 
-def test_someone_elses_session_is_refused(client):
-    assert ask(client, "bob", notebook_id="nb_alice", document_ids=["d1"], session_id="ses_alice").status_code == 403
-    assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"], session_id="ses_guest").status_code == 403  # other notebook
-    assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"], session_id="ses_ghost").status_code == 403
-
-
 def test_allowed_questions_reach_the_orchestrator(client):
-    assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"], session_id="ses_alice").status_code == 500  # Stop
     FakeChats.saved.clear()
+    assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"]).status_code == 500  # Stop
     assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1"]).status_code == 500
-    assert FakeChats.saved[-1].user_id == "guest" and len(FakeChats.saved[-1].session_id) == len("ses_") + 32
+    assert [m.notebook_id for m in FakeChats.saved] == ["nb_alice", GUEST_ID]
 
 
-def test_messages_and_session_lists_are_the_callers_own(client):
+def test_the_first_question_names_the_chat(client):
+    FakeChats.titles.clear()
+    ask(client, "alice", notebook_id="nb_new", document_ids=["d1"])
+    ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])  # already has messages
+    assert FakeChats.titles == [("nb_new", "What was revenue in FY2023?")]
+
+
+def test_a_user_over_the_daily_limit_is_refused(client, monkeypatch):
+    monkeypatch.setattr(FakeUsers, "allowed", False)
+    assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"]).status_code == 429
+    assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1"]).status_code == 500  # guests have no daily limit: Stop
+
+
+def test_an_answer_is_stored_with_its_cost_and_counted(client, monkeypatch):
+    async def answered(self, **kw):
+        return {"answer": "ok", "intent": "qa", "citations": [], "charged": False,
+                "trace": {"llm": {"calls": 2, "prompt_tokens": 90, "completion_tokens": 10}, "timings": {"total": 1.5}}}
+
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
+    FakeChats.saved.clear()
+    FakeUsers.consumed.clear()
+
+    response = ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])
+
+    assert response.status_code == 200 and response.json()["title"] == "A"
+    assert FakeUsers.consumed == [("alice", 0, 100)]  # not charged as a question, its tokens still count
+    stored = FakeChats.saved[-1]
+    assert stored.role == "assistant" and stored.token_usage == {"prompt_tokens": 90, "completion_tokens": 10, "total_tokens": 100}
+    assert stored.latency_ms == 1500 and stored.model_used
+
+
+def test_messages_are_the_notebook_owners(client):
     client.caller["id"] = "bob"
-    assert client.get("/chat/sessions/ses_alice/messages").status_code == 403
-    assert client.get("/chat/sessions/notebook/nb_alice").status_code == 403
+    assert client.get("/chat/messages/nb_alice").status_code == 403
     client.caller["id"] = "alice"
-    assert client.get("/chat/sessions/ses_alice/messages").status_code == 200
-    assert [s["session_id"] for s in client.get("/chat/sessions/notebook/nb_alice").json()] == ["ses_alice"]
+    assert client.get("/chat/messages/nb_alice").status_code == 200
 
 
 def test_document_list_and_upload_check_the_notebook(monkeypatch):
@@ -181,7 +202,7 @@ def test_document_list_and_upload_check_the_notebook(monkeypatch):
     assert c.get("/documents/notebook/nb_alice").status_code == 403
     pdf = {"file": ("r.pdf", b"%PDF-1.4", "application/pdf")}
     assert c.post("/documents/upload/nb_alice", files=pdf).status_code == 403
-    assert c.post("/documents/upload/nb_sec_demo", files=pdf).status_code == 403  # samples are read-only
+    assert c.post("/documents/upload/nb_sample", files=pdf).status_code == 403  # samples are read-only
 
 
 def test_mentions_must_be_selected_sources(client):
@@ -190,8 +211,8 @@ def test_mentions_must_be_selected_sources(client):
 
 
 def test_guest_questions_are_not_capped(client, monkeypatch):
-    async def five_questions_so_far(self, session_id, limit=50):
-        return [MessageRecord(message_id=f"m{i}", session_id=session_id, role="user", content="q") for i in range(5)]
+    async def five_questions_so_far(self, notebook_id, limit=500):
+        return [MessageRecord(message_id=f"m{i}", notebook_id=notebook_id, role="user", content="q") for i in range(5)]
 
     monkeypatch.setattr(FakeChats, "get_messages", five_questions_so_far)
-    assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1"], session_id="ses_guest").status_code == 500  # Stop: past every gate
+    assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1"]).status_code == 500  # Stop: past every gate

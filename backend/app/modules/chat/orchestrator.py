@@ -46,7 +46,7 @@ class RAGWorkflowOrchestrator:
 
     async def _ready_documents(self, notebook_id: str) -> List[DocumentRecord]:
         docs = await self.doc_repo.get_by_notebook(notebook_id)
-        return [d for d in docs if d.indexing_status == "completed"]
+        return [d for d in docs if d.status == "ready"]
 
     async def resolve_scope(
         self, notebook_id: str, document_ids: Optional[List[str]] = None, document_id: Optional[str] = None

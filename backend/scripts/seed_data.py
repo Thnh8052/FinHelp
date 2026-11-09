@@ -32,16 +32,6 @@ async def seed():
 
     # 1. Tài khoản Quản trị viên: Vũ Thành (role='admin', tier='user', max 5 docs/notebook)
     existing_user = await user_repo.get_by_username("analyst_demo")
-    standard_user_quota = {
-        "tier": "user",
-        "daily_messages_limit": 100,
-        "messages_used_today": 0,
-        "max_upload_documents": 5,
-        "max_file_size_mb": 20,
-        "total_tokens_consumed": 12500,
-        "total_cost_usd": 0.045,
-    }
-
     if not existing_user:
         demo_user = UserRecord(
             user_id="usr_vuthanh_01",
@@ -50,7 +40,6 @@ async def seed():
             hashed_password=get_password_hash("FinAnalyst2026!"),
             full_name="Vũ Thành - Chuyên Viên & Quản Trị Hệ Thống",
             role="admin",
-            quota=standard_user_quota,
         )
         await user_repo.save_user(demo_user)
         logger.info("Admin user 'analyst_demo' (Vũ Thành) seeded.")
@@ -61,7 +50,6 @@ async def seed():
                 "$set": {
                     "full_name": "Vũ Thành - Chuyên Viên & Quản Trị Hệ Thống",
                     "role": "admin",
-                    "quota": standard_user_quota,
                 }
             },
         )
@@ -86,59 +74,33 @@ async def seed():
     if not existing_nb:
         demo_nb = NotebookRecord(
             notebook_id="nb_demo_001",
-            user_id="usr_demo_001",
+            owner_id="usr_demo_001",
             title="Coca-Cola (KO) vs PepsiCo (PEP) — SEC Form 10-K Analysis",
-            description="Comparative analysis of Gross Margin, Operating Cash Flow, and Debt-to-Equity ratios.",
-            tags=["KO", "PEP", "SEC 10-K", "US GAAP", "Beverages"],
         )
         await notebook_repo.save_notebook(demo_nb)
         logger.info("Demo notebook 'nb_demo_001' (SEC 10-K) seeded.")
 
     # 3. Không gian phân tích Notebook & Phiên Chat cho Quản Trị Viên (Vũ Thành) - SEC 10-K Filings
     from app.modules.chat.chat_repo import ChatRepository
-    from app.modules.chat.chat_models import ChatSessionRecord, MessageRecord
+    from app.modules.chat.chat_models import MessageRecord
 
     chat_repo = ChatRepository(db)
     vuthanh_nb = await notebook_repo.get_by_id("nb_vuthanh_01")
     if not vuthanh_nb:
         nb_vt = NotebookRecord(
             notebook_id="nb_vuthanh_01",
-            user_id="usr_vuthanh_01",
+            owner_id="usr_vuthanh_01",
             title="Microsoft Corporation (MSFT) — SEC Form 10-K Analysis",
-            description="Deep financial analysis on Cloud segment growth, Operating Margin, and Free Cash Flow.",
-            tags=["MSFT", "SEC 10-K", "US GAAP", "FY2023"],
-            document_ids=["MICROSOFT_2023_10K.pdf"],
         )
         await notebook_repo.save_notebook(nb_vt)
         logger.info("Notebook 'nb_vuthanh_01' (Microsoft SEC 10-K) seeded.")
-    else:
-        await notebook_repo.collection.update_one(
-            {"notebook_id": "nb_vuthanh_01"},
-            {
-                "$set": {
-                    "title": "Microsoft Corporation (MSFT) — SEC Form 10-K Analysis",
-                    "description": "Deep financial analysis on Cloud segment growth, Operating Margin, and Free Cash Flow.",
-                    "tags": ["MSFT", "SEC 10-K", "US GAAP", "FY2023"],
-                    "document_ids": ["MICROSOFT_2023_10K.pdf"],
-                }
-            },
-        )
 
-    vuthanh_ses = await chat_repo.get_session("ses_vuthanh_01")
-    if not vuthanh_ses:
-        ses_vt = ChatSessionRecord(
-            session_id="ses_vuthanh_01",
-            notebook_id="nb_vuthanh_01",
-            user_id="usr_vuthanh_01",
-            title="Operating Margin & Revenue Growth Comparison (FY2023)",
-        )
-        await chat_repo.save_session(ses_vt)
-
+    if not (await notebook_repo.get_by_id("nb_vuthanh_01")).message_count:
         # User Query
         await chat_repo.append_message(
             MessageRecord(
                 message_id="msg_vt_001",
-                session_id="ses_vuthanh_01",
+                notebook_id="nb_vuthanh_01",
                 role="user",
                 content="What was Microsoft's Operating Margin in FY2023 according to Form 10-K, and how does it compare to FY2022?",
             )
@@ -147,7 +109,7 @@ async def seed():
         await chat_repo.append_message(
             MessageRecord(
                 message_id="msg_vt_002",
-                session_id="ses_vuthanh_01",
+                notebook_id="nb_vuthanh_01",
                 role="assistant",
                 content=(
                     "According to **Microsoft Corporation's Form 10-K** filed with the U.S. Securities and Exchange Commission (SEC) for the fiscal year ended June 30, 2023:\n\n"
@@ -167,9 +129,6 @@ async def seed():
                         "chunk_id": "chk_msft_item8_01",
                         "document_id": "MICROSOFT_2023_10K.pdf",
                         "page": 64,
-                        "table_id": "income_statement_p64",
-                        "row_label": "Operating income",
-                        "column_label": "Year Ended June 30, 2023",
                         "snippet": "Operating income: $88,523 million; Total revenue: $211,915 million",
                         "score": 0.94,
                     }

@@ -589,3 +589,20 @@
     white-space: nowrap;
   }
 }
+
+/* Shown while a file is being sent: leaving the page now would lose it */
+.upload-lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.55);
+  color: #ffffff;
+  font-size: 14px;
+  cursor: progress;
+}

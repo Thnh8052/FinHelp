@@ -126,7 +126,7 @@ def test_language_is_detected_for_the_messages():
 # ---------------------------------------------------------------- the orchestrator uses the decisions
 def _doc(doc_id, name, **meta):
     return DocumentRecord(document_id=doc_id, notebook_id="nb", file_name=name, file_size_bytes=1, file_path="p", page_count=60,
-                          indexing_status="completed", metadata=DocumentMetadata(**meta))
+                          status="ready", metadata=DocumentMetadata(**meta))
 
 
 def _orchestrator(docs, monkeypatch, listed=()):

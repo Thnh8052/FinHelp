@@ -20,7 +20,7 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
     setDocuments(docs);
     if (docs.length > 0) {
       setActiveDocId(docs[0].document_id);
-      const usable = docs.find((d) => !isDocFailed(d));
+      const usable = docs.find((d) => d.status === "ready");
       setSelectedDocIds(usable ? [usable.document_id] : []);
     } else {
       setActiveDocId(null);
@@ -36,7 +36,7 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
 
   const reload = async () => {
     try {
-      setDocuments(await documentService.list(notebookId));
+      setDocuments(await documentService.list(notebookId));  // keeps the selection
     } catch {
       /* giữ danh sách hiện có */
     }
@@ -53,7 +53,8 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
         setDocuments(docs);
         for (const id of watching) {
           const d = docs.find((x) => x.document_id === id);
-          if (d?.indexing_status === "completed") {
+          if (d?.status === "ready") {
+            setSelectedDocIds((prev) => (prev.includes(id) ? prev : [...prev, id].slice(-maxSources)));  // also after a reload during processing
             showToast("Document is ready. You can now ask questions.", "success");
           } else if (isDocFailed(d)) {
             setSelectedDocIds((prev) => prev.filter((x) => x !== id));  // Remove failed docs from active selection
@@ -65,7 +66,15 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
       }
     }, 3000);
     return () => clearInterval(timer);
-  }, [processingKey, notebookId, showToast]);
+  }, [processingKey, notebookId, showToast, maxSources]);
+
+  // Trong lúc đang gửi tệp lên, F5 hoặc đóng tab sẽ làm mất tệp: nhờ trình duyệt cảnh báo trước
+  useEffect(() => {
+    if (!isUploading) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isUploading]);
 
   const upload = async (file: File) => {
     if (isUploading) return;
@@ -87,13 +96,10 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
         file_size_bytes: file.size,
         file_path: `storage/pdfs/${notebookId}/${data.document_id}.pdf`,
         page_count: 0,
-        parsing_status: "processing",
-        indexing_status: "pending",
+        status: "pending",
         created_at: new Date().toISOString(),
       };
       setDocuments((prev) => [newDoc, ...prev]);
-      setActiveDocId(newDoc.document_id);
-      setSelectedDocIds((prev) => [...prev.filter((x) => x !== newDoc.document_id), newDoc.document_id].slice(-maxSources));
       showToast("Upload successful! Processing financial filing.", "success");
     } catch (err) {
       if (err instanceof ApiError) {
@@ -157,13 +163,10 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
             file_size_bytes: file.size,
             file_path: `storage/pdfs/${notebookId}/${data.document_id}.pdf`,
             page_count: 0,
-            parsing_status: "processing",
-            indexing_status: "pending",
+            status: "pending",
             created_at: new Date().toISOString(),
           };
           setDocuments((prev) => [newDoc, ...prev]);
-          setActiveDocId(newDoc.document_id);
-          setSelectedDocIds((prev) => [...prev.filter((x) => x !== newDoc.document_id), newDoc.document_id].slice(-maxSources));
           successCount++;
         } catch (fileErr) {
           if (fileErr instanceof ApiError) {
@@ -222,14 +225,15 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
 
   const toggleAll = (selectAll: boolean) => {
     if (selectAll) {
-      const usableIds = documents.filter((d) => !isDocFailed(d)).map((d) => d.document_id);
+      const usableIds = documents.filter((d) => d.status === "ready").map((d) => d.document_id);
       setSelectedDocIds(usableIds.slice(-maxSources));
     } else {
       setSelectedDocIds([]);
     }
   };
 
-  const activeDoc = documents.find((d) => d.document_id === activeDocId) || documents[0] || null;
+  const openable = documents.filter((d) => d.status === "ready");
+  const activeDoc = openable.find((d) => d.document_id === activeDocId) || openable[0] || null;
 
   return {
     documents, activeDocId, setActiveDocId, activeDoc, selectedDocIds, isUploading, isDeleting,

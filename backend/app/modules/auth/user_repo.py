@@ -6,7 +6,7 @@ Chịu trách nhiệm:
 1. Tương tác trực tiếp với MongoDB collection `users`.
 2. Truy vấn người dùng theo ID, Email, Username hoặc cả hai.
 3. Quản lý trạng thái xác thực: cập nhật mật khẩu, ghi nhận lần đăng nhập cuối, mã OTP reset token.
-4. Quản lý hạn mức Quota: cộng dồn số câu hỏi, lượng tokens tiêu thụ và chi phí API vào MongoDB.
+4. Quản lý hạn mức Quota: đếm số câu hỏi theo ngày và cộng dồn lượng tokens tiêu thụ.
 5. Cung cấp dữ liệu thống kê tổng hợp (aggregation) cho màn hình Admin Dashboard.
 """
 
@@ -15,7 +15,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.infrastructure.database import collections
 from app.shared.base_repo import BaseRepository
 from app.shared.common import get_utc_now
-from app.modules.auth.user import TIER_SPECS, UserRecord
+from app.modules.auth.user import TIER_SPECS, UserRecord, today_utc
 
 
 class UserRepository(BaseRepository):
@@ -41,7 +41,7 @@ class UserRepository(BaseRepository):
     # ĐẦU RA: UserRecord (nếu tìm thấy) hoặc None
     # ==============================================================================
     async def get_by_email(self, email: str) -> Optional[UserRecord]:
-        doc = await self.find_one({"email": email})
+        doc = await self.find_one({"email": email.strip().lower()})
         return UserRecord(**doc) if doc else None
 
     # ==============================================================================
@@ -51,7 +51,7 @@ class UserRepository(BaseRepository):
     # ĐẦU RA: UserRecord (nếu tìm thấy) hoặc None
     # ==============================================================================
     async def get_by_username(self, username: str) -> Optional[UserRecord]:
-        doc = await self.find_one({"username": username})
+        doc = await self.find_one({"username": username.strip().lower()})
         return UserRecord(**doc) if doc else None
 
     # ==============================================================================
@@ -61,6 +61,7 @@ class UserRepository(BaseRepository):
     # ĐẦU RA: UserRecord (nếu tìm thấy) hoặc None
     # ==============================================================================
     async def get_by_email_or_username(self, identifier: str) -> Optional[UserRecord]:
+        identifier = identifier.strip().lower()
         doc = await self.find_one({"$or": [{"email": identifier}, {"username": identifier}]})
         return UserRecord(**doc) if doc else None
 
@@ -112,7 +113,7 @@ class UserRepository(BaseRepository):
     # ==============================================================================
     async def set_reset_token(self, email: str, reset_token: str, expires_at: Any) -> bool:
         updated = await self.update_one(
-            {"email": email},
+            {"email": email.strip().lower()},
             {
                 "reset_token": reset_token,
                 "reset_token_expires_at": expires_at,
@@ -154,56 +155,54 @@ class UserRepository(BaseRepository):
     # ĐẦU RA: List[UserRecord]
     # ==============================================================================
     async def list_users(self, limit: int = 50, skip: int = 0) -> List[UserRecord]:
-        docs = await self.find_many({}, limit=limit, skip=skip, sort=[("created_at", -1)])
+        docs = await self.find_many({}, limit=limit, skip=skip, sort_by=[("created_at", -1)])
         return [UserRecord(**d) for d in docs]
 
     # ==============================================================================
-    # HÀM: increment_quota_usage
-    # Ý NGHĨA: Thực hiện phép toán nguyên tử ($inc trong MongoDB) để cộng dồn số câu hỏi,
-    #          tổng lượng tokens LLM tiêu thụ và chi phí USD đã sử dụng.
-    # ĐẦU VÀO: user_id (str), messages (int), tokens (int), cost_usd (float)
-    # ĐẦU RA: bool
+    # HÀM: check_quota / consume_quota
+    # Ý NGHĨA: Hai điểm duy nhất của hạn mức: kiểm tra trước khi trả lời và ghi nhận sau khi trả lời.
+    #          Khi đổi sang hạn mức theo token chỉ cần sửa ở đây.
     # ==============================================================================
-    async def increment_quota_usage(
-        self, user_id: str, messages: int = 1, tokens: int = 0, cost_usd: float = 0.0
-    ) -> bool:
+    async def check_quota(self, user_id: str) -> bool:
+        """True while the account may still ask today."""
+        user = await self.get_by_id(user_id)
+        return user is not None and user.messages_used_today() < user.daily_messages_limit
+
+    async def consume_quota(self, user_id: str, messages: int = 1, tokens: int = 0) -> bool:
+        """Count one request in a single atomic update; the first request of a new UTC day restarts the daily counter."""
+        today = today_utc()
+        new_day = {"$lt": ["$daily_window_start", today]}
         updated = await self.collection.update_one(
             {"user_id": user_id},
-            {
-                "$inc": {
-                    "quota.messages_used_today": messages,
-                    "quota.total_tokens_consumed": tokens,
-                    "quota.total_cost_usd": cost_usd,
-                },
-                "$set": {"updated_at": get_utc_now()},
-            },
+            [{
+                "$set": {
+                    "daily_messages_used": {"$cond": [new_day, messages, {"$add": ["$daily_messages_used", messages]}]},
+                    "daily_window_start": {"$cond": [new_day, today, "$daily_window_start"]},
+                    "total_tokens_consumed": {"$add": ["$total_tokens_consumed", tokens]},
+                    "updated_at": get_utc_now(),
+                }
+            }],
         )
         return updated.modified_count > 0
 
     # ==============================================================================
     # HÀM: update_user_tier
-    # Ý NGHĨA: Cập nhật hạn mức tài khoản theo chính sách ("guest" hoặc "user").
+    # Ý NGHĨA: Đặt hạn mức câu hỏi mỗi ngày của tài khoản theo chính sách của một gói.
     # ĐẦU VÀO: user_id (str), tier (str)
     # ĐẦU RA: bool
     # ==============================================================================
     async def update_user_tier(self, user_id: str, tier: str = "user") -> bool:
         spec = TIER_SPECS.get(tier, TIER_SPECS["user"])
-        new_quota = {
-            "tier": tier,
-            "daily_messages_limit": spec.get("daily_messages_limit", TIER_SPECS["user"]["daily_messages_limit"]),  # the guest tier has no question limit
-            "max_upload_documents": spec["max_upload_documents"],
-            "max_file_size_mb": spec["max_file_size_mb"],
-        }
-
-        update_fields = {f"quota.{k}": v for k, v in new_quota.items()}
-        update_fields["updated_at"] = get_utc_now()
-        updated = await self.collection.update_one({"user_id": user_id}, {"$set": update_fields})
-        return updated.modified_count > 0
+        limit = spec.get("daily_messages_limit", TIER_SPECS["user"]["daily_messages_limit"])  # the guest tier has no question limit
+        updated = await self.collection.update_one(
+            {"user_id": user_id}, {"$set": {"daily_messages_limit": limit, "updated_at": get_utc_now()}}
+        )
+        return updated.matched_count > 0
 
     # ==============================================================================
     # HÀM: get_admin_dashboard_stats
     # Ý NGHĨA: Tổng hợp số liệu thống kê toàn hệ thống bằng MongoDB Aggregation Pipeline:
-    #          Tổng số người dùng, người dùng hoạt động, phân loại vai trò, tổng tokens và chi phí USD.
+    #          Tổng số người dùng, người dùng hoạt động, phân loại vai trò và tổng tokens.
     # ĐẦU RA: dict chứa các chỉ số thống kê tổng hợp
     # ==============================================================================
     async def get_admin_dashboard_stats(self) -> dict:
@@ -212,19 +211,17 @@ class UserRepository(BaseRepository):
         admin_users = await self.collection.count_documents({"role": "admin"})
         standard_users = await self.collection.count_documents({"role": "user"})
 
-        # Pipeline tính tổng tokens và chi phí API trên toàn bộ tài khoản
+        # Pipeline tính tổng tokens trên toàn bộ tài khoản
         pipeline = [
             {
                 "$group": {
                     "_id": None,
-                    "total_tokens": {"$sum": "$quota.total_tokens_consumed"},
-                    "total_cost": {"$sum": "$quota.total_cost_usd"},
+                    "total_tokens": {"$sum": "$total_tokens_consumed"},
                 }
             }
         ]
         agg_result = await self.collection.aggregate(pipeline).to_list(1)
         total_tokens = agg_result[0]["total_tokens"] if agg_result else 0
-        total_cost = agg_result[0]["total_cost"] if agg_result else 0.0
 
         return {
             "total_users": total_users,
@@ -235,6 +232,5 @@ class UserRepository(BaseRepository):
             },
             "api_metrics": {
                 "total_tokens_consumed": total_tokens,
-                "total_estimated_cost_usd": round(total_cost, 4),
             },
         }

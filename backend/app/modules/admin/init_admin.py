@@ -11,12 +11,10 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.core.security import get_password_hash
 from app.infrastructure.database.mongodb import MongoManager
-from app.modules.chat.chat_repo import ChatRepository
 from app.modules.notebooks.notebook_repo import NotebookRepository
 from app.modules.auth.user_repo import UserRepository
-from app.modules.chat.chat_models import ChatSessionRecord
 from app.modules.notebooks.notebook import NotebookRecord
-from app.modules.auth.user import UserQuota, UserRecord
+from app.modules.auth.user import TIER_SPECS, UserRecord
 
 
 async def setup_admin_and_clean_mocks() -> dict:
@@ -28,7 +26,6 @@ async def setup_admin_and_clean_mocks() -> dict:
     db = MongoManager.db
     user_repo = UserRepository(db)
     notebook_repo = NotebookRepository(db)
-    chat_repo = ChatRepository(db)
 
     # 1. Dọn dẹp các tài khoản Mock cũ trong collection `users`
     mock_usernames = ["analyst_demo", "user_free", "usr_demo_001", "usr_free_01"]
@@ -44,24 +41,13 @@ async def setup_admin_and_clean_mocks() -> dict:
     await notebook_repo.collection.delete_many({
         "notebook_id": {"$in": ["nb_demo_001", "nb_vuthanh_01"]}
     })
-    await chat_repo.collection.delete_many({
-        "session_id": {"$in": ["ses_vuthanh_01", "ses_demo_001"]}
-    })
 
     # 3. Tạo hoặc cập nhật tài khoản Admin Full Quyền (cần ADMIN_PASSWORD: không có mật khẩu mặc định)
     if not settings.ADMIN_PASSWORD:
         logger.warning("ADMIN_PASSWORD is not set: the admin account was not created or changed.")
         return {"success": False, "detail": "ADMIN_PASSWORD is not set"}
     admin_user = await user_repo.get_by_username("admin")
-    admin_quota = UserQuota(
-        tier="admin",
-        daily_messages_limit=10000,
-        messages_used_today=0,
-        max_upload_documents=50,
-        max_file_size_mb=100,
-        total_tokens_consumed=0,
-        total_cost_usd=0.0,
-    )
+    admin_limit = TIER_SPECS["admin"]["daily_messages_limit"]
 
     admin_record = UserRecord(
         user_id="usr_admin_master",
@@ -70,7 +56,7 @@ async def setup_admin_and_clean_mocks() -> dict:
         hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
         full_name="Vũ Thành (Quản Trị Viên Full Quyền)",
         role="admin",
-        quota=admin_quota,
+        daily_messages_limit=admin_limit,
         is_active=True,
     )
 
@@ -86,7 +72,7 @@ async def setup_admin_and_clean_mocks() -> dict:
                     "hashed_password": get_password_hash(settings.ADMIN_PASSWORD),
                     "role": "admin",
                     "full_name": "Vũ Thành (Quản Trị Viên Full Quyền)",
-                    "quota": admin_quota.model_dump(),
+                    "daily_messages_limit": admin_limit,
                     "is_active": True,
                 }
             },
@@ -99,25 +85,10 @@ async def setup_admin_and_clean_mocks() -> dict:
     if not existing_nb:
         admin_notebook = NotebookRecord(
             notebook_id=admin_nb_id,
-            user_id="usr_admin_master",
+            owner_id="usr_admin_master",
             title="Phân Tích Báo Cáo Tài Chính",
-            description="Không gian làm việc chính thức phân tích báo cáo tài chính doanh nghiệp.",
-            tags=["Báo cáo tài chính", "Admin Workspace"],
-            document_ids=[],
         )
         await notebook_repo.save_notebook(admin_notebook)
-
-    # 5. Đảm bảo có Chat Session khởi đầu cho Admin
-    admin_ses_id = "ses_admin_sec_main"
-    existing_ses = await chat_repo.get_session(admin_ses_id)
-    if not existing_ses:
-        admin_session = ChatSessionRecord(
-            session_id=admin_ses_id,
-            notebook_id=admin_nb_id,
-            user_id="usr_admin_master",
-            title="Đoạn chat phân tích ban đầu",
-        )
-        await chat_repo.save_session(admin_session)
 
     return {
         "success": True,
@@ -127,6 +98,5 @@ async def setup_admin_and_clean_mocks() -> dict:
             "role": "admin",
             "tier": "admin",
             "notebook_id": admin_nb_id,
-            "session_id": admin_ses_id,
         },
     }

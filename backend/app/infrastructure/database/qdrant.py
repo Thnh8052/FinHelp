@@ -70,7 +70,6 @@ class QdrantManager:
                 ("page", models.PayloadSchemaType.INTEGER),
                 ("chunk_type", models.PayloadSchemaType.KEYWORD),
                 ("text_type", models.PayloadSchemaType.KEYWORD),
-                ("concept_ids", models.PayloadSchemaType.KEYWORD),
             ]
             for field_name, schema_type in payload_fields:
                 await cls.client.create_payload_index(

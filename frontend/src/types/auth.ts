@@ -1,11 +1,10 @@
 export interface UserQuota {
-  tier: "guest" | "user" | "free";
+  tier: "guest" | "user" | "admin";
   daily_messages_limit: number;
   messages_used_today: number;
   max_upload_documents: number;
   max_file_size_mb: number;
   total_tokens_consumed: number;
-  total_cost_usd: number;
 }
 
 export interface UserProfile {
@@ -57,7 +56,6 @@ export interface AdminDashboardStats {
   };
   api_metrics: {
     total_tokens_consumed: number;
-    total_estimated_cost_usd: number;
   };
   system_performance: {
     status: string;

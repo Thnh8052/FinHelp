@@ -77,7 +77,7 @@ async def check_auth():
         profile = res.json()
         quota = profile["quota"]
         assert quota["max_upload_documents"] == 5
-        print(f"   [PASS] Profile retrieved: Tier={quota['tier']}, Daily Limit={quota['daily_messages_limit']}, Max Docs={quota['max_upload_documents']}")
+        print(f"   [PASS] Profile retrieved: Role={quota['tier']}, Daily Limit={quota['daily_messages_limit']}, Max Docs={quota['max_upload_documents']}")
 
         # 4. TEST RBAC PROTECTION: STANDARD USER CALLS ADMIN DASHBOARD (MUST BE 403 FORBIDDEN)
         print("\n4. Testing Standard User trying to access Admin Dashboard (RBAC Check)...")
@@ -124,12 +124,12 @@ async def check_auth():
 
         # 9. TEST TRACKING API TOKEN & COST CONSUMPTION
         print("\n9. Testing Tracking API Token & Cost Consumption...")
-        await repo.increment_quota_usage(test_user_id, messages=2, tokens=1500, cost_usd=0.0045)
+        await repo.consume_quota(test_user_id, messages=2, tokens=1500)
         res = await client.get("/api/v1/auth/me", headers=headers_user)
         used_quota = res.json()["quota"]
         assert used_quota["messages_used_today"] == 2
         assert used_quota["total_tokens_consumed"] == 1500
-        print(f"   [PASS] Token tracking verified: Messages Today={used_quota['messages_used_today']}, Tokens={used_quota['total_tokens_consumed']}, Cost=${used_quota['total_cost_usd']}")
+        print(f"   [PASS] Token tracking verified: Messages Today={used_quota['messages_used_today']}, Tokens={used_quota['total_tokens_consumed']}")
 
         # 10. CLEANUP TEST USER
         await repo.delete_one({"email": test_email})

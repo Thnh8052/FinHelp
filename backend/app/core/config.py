@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     DOCLING_DEVICE: str = "auto"  # auto | cuda | cpu
     DOCLING_TIMEOUT_SECONDS: int = 3600
     DOCLING_RETRIES: int = 1
+    INGESTION_STALL_SECONDS: int = 7800  # a job this long without progress is failed; above DOCLING_TIMEOUT_SECONDS x (retries + 1), the longest a healthy file can stay silent
     CHUNK_TOKENS: int = 1024  # page-bounded structure-aware chunks (st1024)
 
     # Retrieval: BGE-M3 dense -> RRF(question x2 + first N keyword sub-queries) -> pool 20 -> Qwen3 reranker fusion -> top 6

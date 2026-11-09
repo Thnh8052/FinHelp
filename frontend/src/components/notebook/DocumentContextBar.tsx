@@ -154,7 +154,7 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
                             <FileTextIcon size={13} />
                             <span className="doc-item-name">{d.file_name}</span>
                           </button>
-                          {onEditCatalog && d.indexing_status === "completed" && (
+                          {onEditCatalog && d.status === "ready" && (
                             <button
                               type="button"
                               className="doc-item-edit"
@@ -212,7 +212,7 @@ export const DocumentContextBar: React.FC<DocumentContextBarProps> = ({
                 <span className="doc-status-dot processing" />
                 <span>Processing document layout and tables...</span>
               </>
-            ) : document?.parsing_status === "failed" ? (
+            ) : document?.status === "failed" ? (
               <>
                 <span className="doc-status-dot idle" />
                 <span>Failed to process document • Please try uploading again</span>

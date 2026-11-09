@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from app.shared import deps
 from app.modules.documents import documents as documents_api
 from app.modules.documents.document import DocumentRecord
+from app.modules.notebooks import purge
 from app.modules.notebooks.notebook import NotebookRecord
 
 
@@ -18,8 +19,7 @@ def _document(notebook_id: str) -> DocumentRecord:
         file_name="report.pdf",
         file_size_bytes=42,
         file_path="storage/pdfs/unused/report.pdf",
-        parsing_status="completed",
-        indexing_status="completed",
+        status="ready",
     )
 
 
@@ -79,15 +79,16 @@ def _setup(monkeypatch, notebook: NotebookRecord, caller: str | None):
 
     monkeypatch.setattr(deps, "NotebookRepository", Notebooks)
     monkeypatch.setattr(documents_api, "DocumentRepository", Documents)
-    monkeypatch.setattr(documents_api, "ChunkRepository", Chunks)
-    monkeypatch.setattr(documents_api, "IngestionJobRepository", Jobs)
-    monkeypatch.setattr(documents_api, "StorageService", Storage)
+    monkeypatch.setattr(purge, "DocumentRepository", Documents)
+    monkeypatch.setattr(purge, "ChunkRepository", Chunks)
+    monkeypatch.setattr(purge, "IngestionJobRepository", Jobs)
+    monkeypatch.setattr(purge, "StorageService", Storage)
 
     return state, Qdrant()
 
 
 async def test_owner_deletes_document_file_chunks_job_and_vectors(monkeypatch):
-    notebook = NotebookRecord(notebook_id="nb_alice", user_id="alice", title="Alice")
+    notebook = NotebookRecord(notebook_id="nb_alice", owner_id="alice", title="Alice")
     state, qdrant = _setup(monkeypatch, notebook, "alice")
 
     response = await documents_api.delete_document("doc_delete", user_id=state["caller"], db=None, qdrant=qdrant)
@@ -100,15 +101,36 @@ async def test_owner_deletes_document_file_chunks_job_and_vectors(monkeypatch):
 
 
 async def test_guest_deletes_its_own_document(monkeypatch):
-    notebook = NotebookRecord(notebook_id=GUEST_NOTEBOOK, user_id="guest", title="Khách")
+    notebook = NotebookRecord(notebook_id=GUEST_NOTEBOOK, owner_type="guest", owner_id="g", title="Khách")
     state, qdrant = _setup(monkeypatch, notebook, None)
 
     await documents_api.delete_document("doc_delete", user_id=state["caller"], db=None, qdrant=qdrant)
     assert state["document"] is None
 
 
+@pytest.mark.parametrize("status", ["pending", "processing"])
+async def test_a_document_being_processed_cannot_be_deleted(monkeypatch, status):
+    notebook = NotebookRecord(notebook_id="nb_alice", owner_id="alice", title="Alice")
+    state, qdrant = _setup(monkeypatch, notebook, "alice")
+    state["document"].status = status
+
+    with pytest.raises(HTTPException) as exc:
+        await documents_api.delete_document("doc_delete", user_id=state["caller"], db=None, qdrant=qdrant)
+    assert exc.value.status_code == 409
+    assert state["document"] is not None and state["files"] == [] and state["chunks"] == []
+
+
+async def test_a_failed_document_can_be_deleted(monkeypatch):
+    notebook = NotebookRecord(notebook_id="nb_alice", owner_id="alice", title="Alice")
+    state, qdrant = _setup(monkeypatch, notebook, "alice")
+    state["document"].status = "failed"
+
+    await documents_api.delete_document("doc_delete", user_id=state["caller"], db=None, qdrant=qdrant)
+    assert state["document"] is None
+
+
 async def test_other_user_cannot_delete_someone_elses_document(monkeypatch):
-    notebook = NotebookRecord(notebook_id="nb_alice", user_id="alice", title="Alice")
+    notebook = NotebookRecord(notebook_id="nb_alice", owner_id="alice", title="Alice")
     state, qdrant = _setup(monkeypatch, notebook, "bob")
 
     with pytest.raises(HTTPException) as exc:

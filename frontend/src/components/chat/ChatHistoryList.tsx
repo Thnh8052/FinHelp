@@ -1,35 +1,35 @@
 import React, { useState } from "react";
 import { useLanguage } from "../../context/LanguageContext";
-import { ChatSession } from "../../types/chat";
+import { Notebook } from "../../types/notebook";
 import { MessageSquareIcon, PlusIcon, TrashIcon } from "../common/Icons";
 import "./chat.css";
 
 interface ChatHistoryListProps {
-  sessions: ChatSession[];
-  activeSessionId: string | null;
-  onSelectSession: (sessionId: string) => void;
+  notebooks: Notebook[];
+  activeNotebookId: string | null;
+  onSelectNotebook: (notebookId: string) => void;
   onNewChat: () => void;
-  onDeleteSession: (sessionId: string) => void;
+  onDeleteNotebook: (notebookId: string) => void;
   isGuest?: boolean;
 }
 
 /**
- * Analysis sessions history list
+ * Danh sách đoạn chat (mỗi notebook là một đoạn chat)
  * Provides "New Analysis" button, session cards with metadata, and secure workspace footer.
  */
 export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
-  sessions,
-  activeSessionId,
-  onSelectSession,
+  notebooks,
+  activeNotebookId,
+  onSelectNotebook,
   onNewChat,
-  onDeleteSession,
+  onDeleteNotebook,
   isGuest = false,
 }) => {
   const { t, lang } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredSessions = sessions.filter((s) =>
+  const filteredNotebooks = notebooks.filter((s) =>
     (s.title || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -56,11 +56,11 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
       {/* 2. Section Header */}
       <div className="history-section-header">
         <span className="history-section-title">{t.sidebar.historyTitle}</span>
-        <span className="history-section-count">{sessions.length} {t.sidebar.sessionsCount}</span>
+        <span className="history-section-count">{notebooks.length} {t.sidebar.sessionsCount}</span>
       </div>
 
       {/* Search Filter */}
-      {sessions.length >= 3 && (
+      {notebooks.length >= 3 && (
         <div className="history-search-box">
           <input
             type="text"
@@ -82,22 +82,22 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
 
       {/* 3. Session Cards List */}
       <div className="history-list scrollbar-slim">
-        {filteredSessions.length === 0 ? (
+        {filteredNotebooks.length === 0 ? (
           <div className="history-empty">
             {searchTerm
               ? t.sidebar.noSessionsMatch
               : t.sidebar.noSessionsYet}
           </div>
         ) : (
-          filteredSessions.map((session) => {
-            const isActive = session.session_id === activeSessionId;
-            const isHovered = hoveredId === session.session_id;
+          filteredNotebooks.map((session) => {
+            const isActive = session.notebook_id === activeNotebookId;
+            const isHovered = hoveredId === session.notebook_id;
 
             return (
               <div
-                key={session.session_id}
-                onClick={() => onSelectSession(session.session_id)}
-                onMouseEnter={() => setHoveredId(session.session_id)}
+                key={session.notebook_id}
+                onClick={() => onSelectNotebook(session.notebook_id)}
+                onMouseEnter={() => setHoveredId(session.notebook_id)}
                 onMouseLeave={() => setHoveredId(null)}
                 className={`history-card ${isActive ? "active" : ""}`}
               >
@@ -131,7 +131,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDeleteSession(session.session_id);
+                        onDeleteNotebook(session.notebook_id);
                       }}
                       title="Delete this session"
                       className="history-card-del-btn"

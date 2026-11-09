@@ -90,7 +90,7 @@ def _token_response(user: UserRecord) -> TokenResponse:
         username=user.username,
         full_name=user.full_name,
         role=user.role,
-        tier=user.quota.tier,
+        tier=user.role,
     )
 
 

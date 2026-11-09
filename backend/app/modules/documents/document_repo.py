@@ -2,6 +2,7 @@ from typing import List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.infrastructure.database import collections
 from app.shared.base_repo import BaseRepository
+from app.shared.common import get_utc_now
 from app.modules.documents.document import DocumentRecord
 
 
@@ -19,13 +20,8 @@ class DocumentRepository(BaseRepository):
         docs = await self.find_many({"notebook_id": notebook_id}, sort_by=[("created_at", -1)])
         return [DocumentRecord(**doc) for doc in docs]
 
-    async def update_status(
-        self, document_id: str, parsing_status: str, indexing_status: Optional[str] = None
-    ) -> bool:
-        update: dict = {"parsing_status": parsing_status}
-        if indexing_status:
-            update["indexing_status"] = indexing_status
-        return await self.update_one({"document_id": document_id}, update)
+    async def update_status(self, document_id: str, status: str) -> bool:
+        return await self.update_one({"document_id": document_id}, {"status": status, "updated_at": get_utc_now()})
 
     async def save_document(self, doc: DocumentRecord) -> str:
         return await self.insert_one(doc.model_dump())

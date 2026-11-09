@@ -36,14 +36,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const [catalogDocId, setCatalogDocId] = useState<string | null>(null);
   const { t } = useLanguage();
 
-  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, docs, chat } = useWorkspace(
+  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, docs, chat, notebooks, notebookId, selectNotebook, newChat, deleteNotebook } = useWorkspace(
     () => setAuthModalOpen(true)
   );
 
   const unconfirmedDocs = docs.documents.filter(needsCatalogConfirmation);
-  const activeSession = chat.sessions.find((s) => s.session_id === chat.currentSessionId);
-  const activeSessionTitle =
-    activeSession?.title || (isAuthenticated ? t.workspace.financialAnalysisSession : t.workspace.guestTrialSession);
+  const activeSessionTitle = notebookTitle || (isAuthenticated ? t.workspace.financialAnalysisSession : t.workspace.guestTrialSession);
 
   // Khi click vào trích dẫn [1] Trang 12: Tự động mở Split-View, chuyển đúng tài liệu và nhảy tới trang đó
   const handleSelectCitation = (citation: CitationItem) => {
@@ -65,6 +63,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           docs.reload();
         }}
       />
+
+      {/* Trong lúc gửi tệp lên: chặn mọi thao tác, vì rời trang lúc này sẽ làm mất tệp đang gửi */}
+      {docs.isUploading && (
+        <div className="upload-lock-overlay" role="status" aria-live="polite">
+          <span className="chat-processing-spinner" />
+          <span>{t.workspace.uploadingNotice}</span>
+        </div>
+      )}
 
       {/* Top-Center Toast Notification */}
       <Toast toast={toast} onClose={closeToast} />
@@ -91,11 +97,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         sidebar={
           <ChatHistoryList
-            sessions={chat.sessions}
-            activeSessionId={chat.currentSessionId}
-            onSelectSession={chat.selectSession}
-            onNewChat={chat.newChat}
-            onDeleteSession={chat.deleteSession}
+            notebooks={notebooks}
+            activeNotebookId={notebookId}
+            onSelectNotebook={selectNotebook}
+            onNewChat={newChat}
+            onDeleteNotebook={deleteNotebook}
             isGuest={!isAuthenticated}
           />
         }
@@ -122,7 +128,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               onSelectCitation={handleSelectCitation}
               onClearChat={() => chat.setMessages([])}
               sessionTitle={activeSessionTitle}
-              onNewChat={chat.newChat}
+              onNewChat={newChat}
               onOpenSources={() => setIsSourcesOpen((prev) => !prev)}
               onToggleSources={() => setIsSourcesOpen((prev) => !prev)}
               isSourcesOpen={isSourcesOpen}
@@ -157,7 +163,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         isSourcesOpen={isSourcesOpen}
         pdfViewerPane={
           <SourceViewer
-            documents={docs.documents}
+            documents={docs.documents.filter((d) => d.status === "ready")}
             activeDocId={docs.activeDocId}
             onSelectDoc={docs.setActiveDocId}
             activeCitation={activeCitation}

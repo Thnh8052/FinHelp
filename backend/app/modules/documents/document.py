@@ -2,6 +2,9 @@
 from pydantic import BaseModel, Field
 from app.shared.common import BaseSchema, get_utc_now
 
+# Still being processed: chat is locked and the file cannot be opened or deleted until it is ready or failed.
+ACTIVE_STATUSES = ("pending", "processing")
+
 
 class DocumentMetadata(BaseModel):
     """Business & structural metadata extracted from PDF."""
@@ -22,9 +25,6 @@ class DocumentMetadata(BaseModel):
     user_override_unverified: List[str] = Field(default_factory=list)  # fields the user typed that the document text does not show
     name_candidates: List[Dict[str, Any]] = Field(default_factory=list)  # [{"name", "pages"}] legal names found in the text, best first
     catalog_history: List[Dict[str, Any]] = Field(default_factory=list)  # [{"at", "by", "old", "new"}] every user edit
-    currency: Optional[str] = None  # unknown until extracted: a hard-coded "VND" is wrong for SEC filings
-    unit_scale: Optional[str] = None
-    audit_firm: Optional[str] = None
 
 
 class DocumentRecord(BaseSchema):
@@ -34,18 +34,13 @@ class DocumentRecord(BaseSchema):
     notebook_id: str = Field(..., description="Parent notebook ID")
     file_name: str
     file_size_bytes: int
-    file_path: str = Field(..., description="Storage path in local filesystem or object storage")
+    file_path: str = Field(..., description="Object key relative to the storage root: pdfs/<notebook_id>/<document_id>_<name>.pdf")
     file_hash: Optional[str] = None
     page_count: int = 0
-    parsing_status: str = Field(
-        default="pending",
-        description="'pending', 'processing', 'completed', 'failed'"
-    )
-    indexing_status: str = Field(
-        default="pending",
-        description="'pending', 'indexing', 'completed', 'failed'"
-    )
+    status: str = Field(default="pending", description="'pending', 'processing', 'ready', 'failed'")
     metadata: DocumentMetadata = Field(default_factory=DocumentMetadata)
+    catalog_confirmed_by: Optional[str] = None
+    catalog_confirmed_at: Optional[Any] = None
     error_message: Optional[str] = None
     parsing_engine: Optional[str] = Field(None, description="'docling', 'pymupdf' or 'pymupdf_fallback'")
     created_at: Any = Field(default_factory=get_utc_now)

@@ -202,6 +202,7 @@ class FinancialChunkerService:
                         chunk_id=f"{document_id}_chk_{len(chunks) + 1:04d}",
                         notebook_id=notebook_id,
                         document_id=document_id,
+                        chunk_index=len(chunks),
                         page=page["page_number"],
                         section=group[0]["sec"] or None,
                         chunk_type="table" if table else "text",
@@ -212,7 +213,7 @@ class FinancialChunkerService:
                             {"title": table["ttl"], "unit": f"in {unit_match.group(1).lower()}" if unit_match else ""}
                             if table else None
                         ),
-                        page_tokens={str(page["page_number"]): tokens},
+                        embedding_model=settings.DEFAULT_EMBEDDING_MODEL,
                     )
                 )
         return chunks

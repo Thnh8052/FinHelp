@@ -238,6 +238,7 @@ export const vi: TranslationSchema = {
     suggestion3: "Phân tích xu hướng Chi phí Đầu tư (CapEx) và Dòng tiền Tự do (FCF)",
     placeholderWithDocs: "Đặt câu hỏi về báo cáo đã chọn (ví dụ: doanh thu, CAGR, biên LN)...",
     placeholderNoDocs: "Chọn báo cáo nguồn để bắt đầu đặt câu hỏi...",
+    uploadingNotice: "Đang gửi tệp lên máy chủ. Vui lòng giữ nguyên trang này trong giây lát.",
     placeholderProcessing: "Đang xử lý báo cáo PDF, vui lòng đợi...",
     processingNotice: "Đang bóc tách và lập chỉ mục báo cáo PDF. Vui lòng đợi hoàn tất trước khi đặt câu hỏi.",
     inputShortcuts: "Nhấn Enter để gửi • Shift + Enter xuống dòng • Gõ @ để tham chiếu tài liệu",
