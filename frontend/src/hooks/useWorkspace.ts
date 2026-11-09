@@ -21,7 +21,7 @@ const attempt = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
  * Người dùng đăng nhập: mở lại đoạn đang dùng trước đó. Khách: một notebook riêng do backend cấp.
  */
 export function useWorkspace(onLoginRequired: () => void) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { toast, showToast, closeToast } = useToast();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [notebookId, setNotebookId] = useState("");
@@ -87,6 +87,8 @@ export function useWorkspace(onLoginRequired: () => void) {
   };
 
   useEffect(() => {
+    if (isAuthLoading) return;  // until the token is checked a member looks like a guest and would open a guest notebook
+
     const loadMemberData = async () => {
       const list = await attempt(notebookService.list());
       if (!list || list.length === 0) return;
@@ -109,7 +111,7 @@ export function useWorkspace(onLoginRequired: () => void) {
     const load = isAuthenticated && authService.getAuthToken() ? loadMemberData : loadGuestData;
     load().catch((err) => console.warn("Unable to load workspace data:", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isAuthLoading]);
 
   return {
     toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, docs, chat,
