@@ -386,6 +386,37 @@
   background-color: #172554;
 }
 
+.chat-sample-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.chat-processing-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  background: rgba(30, 58, 138, 0.22);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 10px;
+  font-size: 11.5px;
+  color: #93c5fd;
+  line-height: 1.4;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.chat-processing-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(147, 197, 253, 0.25);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
 .chat-input-form {
   display: flex;
   align-items: center;
@@ -394,9 +425,15 @@
   border-radius: 24px;
   padding: 6px 8px 6px 14px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
   gap: 8px;
   min-height: 42px;
+}
+
+.chat-input-form.is-processing {
+  opacity: 0.72;
+  border-color: rgba(59, 130, 246, 0.35);
+  background-color: rgba(13, 20, 36, 0.85);
 }
 
 .chat-input-form:focus-within {

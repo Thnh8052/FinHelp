@@ -68,6 +68,15 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
   }, [processingKey, notebookId, showToast]);
 
   const upload = async (file: File) => {
+    if (isUploading) return;
+    const alreadyExists = documents.some(
+      (d) => !isDocFailed(d) && d.file_name.toLowerCase() === file.name.toLowerCase()
+    );
+    if (alreadyExists) {
+      showToast(`Tài liệu "${file.name}" đã tồn tại trong sổ tay.`, "warning");
+      return;
+    }
+
     setIsUploading(true);
     try {
       const data = await documentService.upload(notebookId, file);
@@ -91,6 +100,8 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
         const detail = err.detail || "Document upload failed.";
         if (err.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
           showToast(detail, "warning", "Sign in now", onLoginRequired);
+        } else if (err.status === 409) {
+          showToast(detail, "warning");
         } else {
           showToast(detail, "error");
         }
@@ -104,11 +115,39 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
 
   /** Batch upload */
   const uploadFiles = async (files: File[]) => {
-    if (files.length === 0) return;
+    if (files.length === 0 || isUploading) return;
+
+    // 1. Deduplicate files within the selected batch
+    const uniqueFiles: File[] = [];
+    const seenInBatch = new Set<string>();
+    for (const f of files) {
+      const lower = f.name.toLowerCase();
+      if (!seenInBatch.has(lower)) {
+        seenInBatch.add(lower);
+        uniqueFiles.push(f);
+      }
+    }
+
+    // 2. Filter out files already in documents list (unless failed)
+    const existingActiveNames = new Set(
+      documents.filter((d) => !isDocFailed(d)).map((d) => d.file_name.toLowerCase())
+    );
+
+    const filesToUpload: File[] = [];
+    for (const f of uniqueFiles) {
+      if (existingActiveNames.has(f.name.toLowerCase())) {
+        showToast(`Tài liệu "${f.name}" đã tồn tại trong sổ tay. Bỏ qua tệp trùng.`, "warning");
+      } else {
+        filesToUpload.push(f);
+      }
+    }
+
+    if (filesToUpload.length === 0) return;
+
     setIsUploading(true);
     let successCount = 0;
     try {
-      for (const file of files) {
+      for (const file of filesToUpload) {
         try {
           const data = await documentService.upload(notebookId, file);
           const newDoc: DocumentRecord = {
@@ -132,6 +171,8 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
             if (fileErr.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
               showToast(detail, "warning", "Sign in now", onLoginRequired);
               break;
+            } else if (fileErr.status === 409) {
+              showToast(detail, "warning");
             } else {
               showToast(detail, "error");
             }

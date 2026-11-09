@@ -63,6 +63,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    if (isUploading) return;
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const pdfFiles = Array.from(e.dataTransfer.files).filter((f) =>
         f.name.toLowerCase().endsWith(".pdf")
@@ -74,10 +75,11 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isUploading) return;
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
-      onUploadFiles(files);
       e.target.value = "";
+      onUploadFiles(files);
     }
   };
 
@@ -135,7 +137,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={() => !isUploading && fileInputRef.current?.click()}
+          onClick={(e) => {
+            if (e.target === fileInputRef.current) return;
+            if (!isUploading) fileInputRef.current?.click();
+          }}
           role="button"
           tabIndex={0}
         >

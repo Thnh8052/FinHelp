@@ -11,7 +11,7 @@ import { AdminDashboardModal } from "../../components/auth/AdminDashboardModal";
 import { Toast } from "../../components/common/Toast";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { CitationItem } from "../../types/chat";
-import { documentLabel, needsCatalogConfirmation } from "../../types/notebook";
+import { documentLabel, isDocProcessing, needsCatalogConfirmation } from "../../types/notebook";
 import { CatalogForm } from "../../components/notebook/CatalogForm";
 
 interface WorkspaceProps {
@@ -127,6 +127,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               onToggleSources={() => setIsSourcesOpen((prev) => !prev)}
               isSourcesOpen={isSourcesOpen}
               hasSources={docs.selectedDocIds.length > 0}
+              isProcessing={docs.isUploading || docs.documents.some(isDocProcessing)}
               mentionOptions={docs.documents
                 .filter((d) => docs.selectedDocIds.includes(d.document_id))
                 .map((d) => ({ document_id: d.document_id, label: documentLabel(d) }))}

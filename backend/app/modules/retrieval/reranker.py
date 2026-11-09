@@ -123,15 +123,32 @@ class QwenRerankerService:
             flush(batch)
         return scores.tolist()
 
+    @classmethod
+    async def _score_pairs_remote(cls, pairs: Sequence[Tuple[str, str]]) -> List[float]:
+        import httpx
+
+        url = f"{settings.REMOTE_GPU_URL.rstrip('/')}/rerank"
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            resp = await client.post(
+                url,
+                json={"pairs": list(pairs)},
+            )
+            resp.raise_for_status()
+            return resp.json()["scores"]
+
     async def score_pairs(self, pairs: Sequence[Tuple[str, str]]) -> List[float]:
         if not pairs:
             return []
+        if settings.REMOTE_GPU_URL:
+            return await self._score_pairs_remote(pairs)
         return await run_on_gpu("reranker", self._score_pairs, list(pairs))
 
     async def score(self, question: str, passages: List[str]) -> List[float]:
         """Batched like score_pairs (the one-pair-at-a-time _score is kept for reference: same scores within 0.01)."""
         if not passages:
             return []
+        if settings.REMOTE_GPU_URL:
+            return await self._score_pairs_remote([(question, p) for p in passages])
         return await run_on_gpu("reranker", self._score_pairs, [(question, p) for p in passages])
 
 

@@ -210,7 +210,7 @@ class IngestionPipeline:
             job.timings["catalog_wait"] = round(time.perf_counter() - t0, 2)
             # 3. Embeddings (all before any write, so a failure leaves nothing half-indexed)
             await self.job_repo.update_progress(job_id, "indexing_qdrant", 60)
-            if DenseEmbeddingService._model is None:
+            if not settings.REMOTE_GPU_URL and DenseEmbeddingService._model is None:
                 t0 = time.perf_counter()
                 await run_on_gpu("embedder", DenseEmbeddingService._get_model)
                 job.timings["embed_load"] = round(time.perf_counter() - t0, 2)

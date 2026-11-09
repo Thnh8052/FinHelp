@@ -238,6 +238,8 @@ export const en: TranslationSchema = {
     suggestion3: "Analyze Capital Expenditure and Free Cash Flow trends",
     placeholderWithDocs: "Ask about selected reports (e.g. revenue, CAGR, margins)...",
     placeholderNoDocs: "Select source filings to ask questions...",
+    placeholderProcessing: "Processing PDF reports, please wait...",
+    processingNotice: "Processing and indexing PDF filings. Please wait until indexing completes.",
     inputShortcuts: "Press Enter to send • Shift + Enter for new line • Type @ to reference a document",
     sourceCitationsTitle: "Source Citations",
     retrievingContext: "Retrieving document context and verifying financial metrics...",

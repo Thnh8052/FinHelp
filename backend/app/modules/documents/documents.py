@@ -13,6 +13,9 @@ Chịu trách nhiệm:
 6. Theo dõi trạng thái tiến độ xử lý tài liệu (GET /api/v1/documents/jobs/{job_id}).
 """
 
+import asyncio
+import hashlib
+from pathlib import Path
 import uuid
 from typing import List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
@@ -58,6 +61,15 @@ async def list_documents(
     return await repo.get_by_notebook(notebook_id)
 
 
+def _compute_sha256(file_path: Path) -> str:
+    """Tính mã băm SHA-256 của nội dung tệp tin để chống trùng lặp dữ liệu."""
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
 # ==============================================================================
 # HÀM: upload_pdf
 # Ý NGHĨA: Tiếp nhận tệp PDF BCTC, kiểm tra hạn mức (Guest: tối đa 1 doc; User: tối đa 5 docs),
@@ -87,6 +99,20 @@ async def upload_pdf(
     # Failed documents do not count toward the quota: otherwise one failed upload would block every retry.
     existing_docs = [d for d in await doc_repo.get_by_notebook(notebook_id) if d.parsing_status != "failed"]
 
+    # 0. Kiểm tra trùng lặp tên tệp trong sổ tay (Deduplication Check)
+    clean_filename = file.filename.strip()
+    for d in existing_docs:
+        if d.file_name.strip().lower() == clean_filename.lower():
+            if d.parsing_status in ("processing", "pending"):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Tài liệu '{clean_filename}' đang được xử lý trong sổ tay. Vui lòng không tải lại.",
+                )
+            raise HTTPException(
+                status_code=409,
+                detail=f"Tài liệu '{clean_filename}' đã tồn tại trong sổ tay. Vui lòng xóa tài liệu cũ nếu muốn tải lên lại.",
+            )
+
     # 1. Kiểm tra hạn mức tài liệu (Quota Gate)
     if user_id is None:
         # Khách chưa đăng nhập: Tối đa 1 tài liệu
@@ -109,6 +135,26 @@ async def upload_pdf(
 
     # 2. Lưu file vật lý vào thư mục lưu trữ
     saved_path = await storage.save_pdf(notebook_id, doc_id, file)
+    file_hash = await asyncio.to_thread(_compute_sha256, saved_path)
+
+    # 2.1. Kiểm tra trùng lặp nội dung tệp bằng mã băm SHA-256 (Content Hash Deduplication)
+    for d in existing_docs:
+        if d.file_hash and d.file_hash == file_hash:
+            # Xóa file tạm vừa ghi vì nội dung đã tồn tại
+            try:
+                saved_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+            if d.parsing_status in ("processing", "pending"):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Tệp này có nội dung trùng với '{d.file_name}' đang được xử lý trong sổ tay.",
+                )
+            raise HTTPException(
+                status_code=409,
+                detail=f"Tệp này có nội dung trùng hoàn toàn với tài liệu '{d.file_name}' đã có trong sổ tay.",
+            )
 
     # 3. Tạo bản ghi DocumentRecord trong MongoDB
     doc_record = DocumentRecord(
@@ -117,6 +163,7 @@ async def upload_pdf(
         file_name=file.filename,
         file_size_bytes=saved_path.stat().st_size,
         file_path=str(saved_path),
+        file_hash=file_hash,
         parsing_status="processing",
         indexing_status="pending",
     )

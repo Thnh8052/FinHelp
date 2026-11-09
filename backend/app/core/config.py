@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     # --- Research core (FinanceBench 118-121/150 configuration) -----------------------------------------
     # Ingestion: Docling (TableFormer ACCURATE) + postprocess in a subprocess, or "pymupdf" for a fast, lower-quality parse.
     PARSER_ENGINE: str = "docling"
+    DOCLING_MODE: str = "accurate"  # "accurate" | "fast"
     DOCLING_DEVICE: str = "auto"  # auto | cuda | cpu
     DOCLING_TIMEOUT_SECONDS: int = 3600
     DOCLING_RETRIES: int = 1
@@ -150,6 +151,9 @@ class Settings(BaseSettings):
     # Sources a question may use (the upload limit per notebook is the same): a guest 1, a signed-in user 5
     MAX_SELECTED_DOCS_GUEST: int = 1
     MAX_SELECTED_DOCS_USER: int = 5
+    # Remote GPU Worker (e.g. Google Colab / Kaggle T4 GPU via Cloudflare Tunnel)
+    REMOTE_GPU_URL: Optional[str] = None
+
     DEVICE: str = "auto"  # auto | cuda | cpu, for the embedding and reranker models
     # auto: both models stay on the GPU until the first out-of-memory error, then they take turns (small cards);
     # swap: always take turns; resident: never swap (fail on out-of-memory)

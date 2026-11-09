@@ -140,8 +140,23 @@ class DoclingSession:
 class PDFParserService:
     """Parses a financial report PDF into per-page Markdown."""
 
-    @staticmethod
-    async def extract_pages(pdf_path: Path, document_id: str = "doc", session: Optional[DoclingSession] = None,
+    @classmethod
+    async def _parse_docling_remote(cls, pdf_path: Path) -> List[Dict[str, Any]]:
+        import httpx
+
+        url = f"{settings.REMOTE_GPU_URL.rstrip('/')}/parse_docling"
+        params = {"mode": getattr(settings, "DOCLING_MODE", "accurate")}
+        logger.info(f"Sending {pdf_path.name} to Remote GPU Docling on Cloud (mode={params['mode']})...")
+        async with httpx.AsyncClient(timeout=1800.0) as client:
+            with open(pdf_path, "rb") as f:
+                files = {"file": (pdf_path.name, f, "application/pdf")}
+                resp = await client.post(url, files=files, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["pages"]
+
+    @classmethod
+    async def extract_pages(cls, pdf_path: Path, document_id: str = "doc", session: Optional[DoclingSession] = None,
                             info: Optional[Dict[str, Any]] = None) -> Tuple[List[Dict[str, Any]], str]:
         """-> (pages, engine_used). pages = [{"page_number", "text" (Markdown), "tables"}]. A Docling failure falls back to
         PyMuPDF and says so in the returned engine name instead of failing silently. `session`: the batch's Docling worker
@@ -150,15 +165,18 @@ class PDFParserService:
         if engine == "docling":
             work_dir = settings.ARTIFACTS_STORAGE_DIR / document_id
             try:
-                if session is not None:
+                if settings.REMOTE_GPU_URL:
+                    pages = await cls._parse_docling_remote(pdf_path)
+                    return [{**p, "tables": []} for p in pages], "docling"
+                elif session is not None:
                     pages, timing = await asyncio.to_thread(session.parse, pdf_path, work_dir)
                     if info is not None:
                         info.update(timing)
                 else:
                     pages = await asyncio.to_thread(_docling_pages, pdf_path, work_dir)
                 return [{**p, "tables": []} for p in pages], "docling"
-            except IngestionError as exc:
-                logger.warning(f"{exc} Falling back to the PyMuPDF parser.")
+            except (IngestionError, Exception) as exc:
+                logger.warning(f"Docling parsing failed: {exc}. Falling back to the PyMuPDF parser.")
                 engine = "pymupdf_fallback"
             finally:
                 shutil.rmtree(work_dir / "raw", ignore_errors=True)  # keep pages.json + log, drop the big raw dump

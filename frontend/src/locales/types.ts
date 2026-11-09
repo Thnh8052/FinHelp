@@ -238,6 +238,8 @@ export interface TranslationSchema {
     suggestion3: string;
     placeholderWithDocs: string;
     placeholderNoDocs: string;
+    placeholderProcessing: string;
+    processingNotice: string;
     inputShortcuts: string;
     sourceCitationsTitle: string;
     retrievingContext: string;

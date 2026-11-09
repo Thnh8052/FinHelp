@@ -54,26 +54,55 @@ class DenseEmbeddingService:
             return dense
         return dense, [{str(k): float(v) for k, v in w.items()} for w in out["lexical_weights"]]
 
+    @classmethod
+    async def _encode_remote(cls, texts: List[str], max_length: int, batch_size: int, sparse: bool = False):
+        import httpx
+
+        url = f"{settings.REMOTE_GPU_URL.rstrip('/')}/embed"
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            resp = await client.post(
+                url,
+                json={
+                    "texts": texts,
+                    "max_length": max_length,
+                    "batch_size": batch_size,
+                    "return_sparse": sparse,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not sparse:
+                return data["dense"]
+            return data["dense"], data["sparse"]
+
     async def embed_documents(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []
+        if settings.REMOTE_GPU_URL:
+            return await self._encode_remote(texts, settings.EMBEDDING_MAX_LENGTH, 128, False)
         return (await run_on_gpu("embedder", self._encode, texts, settings.EMBEDDING_MAX_LENGTH, 8)).tolist()
 
     async def embed_documents_with_sparse(self, texts: List[str]) -> Tuple[List[List[float]], List[Dict[str, float]]]:
         """Dense vectors and BGE-M3 lexical weights ({token id: weight}) in one pass: the sparse half of the multi-document hybrid search."""
         if not texts:
             return [], []
+        if settings.REMOTE_GPU_URL:
+            return await self._encode_remote(texts, settings.EMBEDDING_MAX_LENGTH, 128, True)
         dense, sparse = await run_on_gpu("embedder", self._encode, texts, settings.EMBEDDING_MAX_LENGTH, 8, True)
         return dense.tolist(), sparse
 
     async def embed_queries(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []
+        if settings.REMOTE_GPU_URL:
+            return await self._encode_remote(texts, settings.QUERY_MAX_LENGTH, 128, False)
         return (await run_on_gpu("embedder", self._encode, texts, settings.QUERY_MAX_LENGTH, 16)).tolist()
 
     async def embed_queries_with_sparse(self, texts: List[str]) -> Tuple[List[List[float]], List[Dict[str, float]]]:
         if not texts:
             return [], []
+        if settings.REMOTE_GPU_URL:
+            return await self._encode_remote(texts, settings.QUERY_MAX_LENGTH, 128, True)
         dense, sparse = await run_on_gpu("embedder", self._encode, texts, settings.QUERY_MAX_LENGTH, 16, True)
         return dense.tolist(), sparse
 

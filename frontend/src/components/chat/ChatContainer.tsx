@@ -19,6 +19,8 @@ interface ChatContainerProps {
   isSourcesOpen?: boolean;
   /** Chưa chọn tài liệu nguồn: không cho gửi (hệ thống không tự đoán phạm vi). */
   hasSources?: boolean;
+  /** Đang tải lên hoặc đang xử lý bóc tách/lập chỉ mục các file PDF. */
+  isProcessing?: boolean;
   /** Tài liệu nguồn đã chọn, để tag bằng @ (câu hỏi chỉ về các tài liệu được tag). */
   mentionOptions?: MentionOption[];
 }
@@ -34,6 +36,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   onToggleSources,
   isSourcesOpen = false,
   hasSources = true,
+  isProcessing = false,
   mentionOptions = [],
 }) => {
   const { t } = useLanguage();
@@ -162,7 +165,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!input.trim() || isLoading || !hasSources) return;
+    if (!input.trim() || isLoading || !hasSources || isProcessing) return;
     const toSend = input;
     const usedMentions = mentions.length > 0 ? mentions : undefined;
     setInput("");
@@ -195,7 +198,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     t.workspace.suggestion3,
   ];
 
-  const canSubmit = !isLoading && hasSources && !!input.trim();
+  const canSubmit = !isLoading && hasSources && !isProcessing && !!input.trim();
 
   return (
     <div className="chat-container">
@@ -395,7 +398,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                       setInput(p);
                       textareaRef.current?.focus();
                     }}
-                    disabled={isLoading || !hasSources}
+                    disabled={isLoading || !hasSources || isProcessing}
                     className="chat-sample-btn"
                     title="Insert sample query into prompt input"
                   >
@@ -415,6 +418,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   <ChevronRightIcon size={12} />
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Processing Indicator Banner */}
+          {isProcessing && (
+            <div className="chat-processing-banner">
+              <span className="chat-processing-spinner" />
+              <span>{t.workspace.processingNotice}</span>
             </div>
           )}
 
@@ -438,7 +449,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           )}
 
           {/* Clean Input Pill Container */}
-          <form onSubmit={handleSubmit} className="chat-input-form">
+          <form onSubmit={handleSubmit} className={`chat-input-form ${isProcessing ? "is-processing" : ""}`}>
             <textarea
               ref={textareaRef}
               value={input}
@@ -446,11 +457,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               onInput={autoResizeTextarea}
               onKeyDown={handleKeyDown}
               placeholder={
-                hasSources
+                isProcessing
+                  ? t.workspace.placeholderProcessing
+                  : hasSources
                   ? t.workspace.placeholderWithDocs
                   : t.workspace.placeholderNoDocs
               }
-              disabled={isLoading || !hasSources}
+              disabled={isLoading || !hasSources || isProcessing}
               rows={1}
               className="chat-input-textarea"
             />
