@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Sequence
 from app.core.config import settings
 from app.core.logging import logger
 from app.modules.generation.llm_client import LLMUnavailableError, chat_completion
+from app.modules.query_router.catalog_route import QUESTION_WORDS, company_matches, words
 
 
 def clean_label(text: str, limit: int = 120) -> str:
@@ -157,33 +158,15 @@ async def plan_multi_doc(question: str, catalog: Sequence[CatalogEntry]) -> List
 # candidate; the language model then decides whether it is a company outside the selection (it knows tickers, former names and brands:
 # "AMD" for "Advanced Micro Devices", "Block" for "Square"). Questions without a candidate cost no extra call.
 _TOKEN = re.compile(r"(?<!\w)(?:[A-Z][A-Za-z0-9&\-]*|\d+[A-Z][A-Za-z0-9&\-]*)(?!\w)")
-_COMMON = frozenset("""
-how which what who whom whose when where why in on at of for by from to between among using based please compare calculate determine
-explain describe give show list tell is are was were did do does can could would should the a an and or as if its their this that these
-those over during across per with within without also both each either neither all any some more most less least not no yes
-gaap ifrs usd vnd eur sec form eps ebit ebitda roe roa roic fcf cfo ceo cogs sga capex opex yoy qoq ytd fy q1 q2 q3 q4 us uk eu
-net total income revenue revenues sales assets liabilities equity cash flow profit margin annual quarterly quarter year years fiscal
-company companies corporation inc corp ltd plc group holdings percent percentage absolute change changed growth rate ratio larger
-higher lower bigger greater largest highest lowest reported report reports amount share shareholders statement statements balance sheet
-january february march april may june july august september october november december
-assume answer here round roughly approximately address has have had given consider suppose identify find provide state note estimate
-evaluate analyze analyse assess summarize summarise define you your we our i it he she they there then so but however although while
-since because after before about above below into out up down than too very much many few other another such like just only even still
-operating free fixed gross return earnings debt current working capital interest depreciation amortization inventory accounts long short
-average days turnover quick dividend dividends expenses expense cost costs price prices stock stocks segment segments region regions
-dpo dso dio ar ap ppne ppe pp&e p&l m&a roce nopat wacc cagr npv irr pe pb ev
-doanh loi tong so hay cho theo trong nam quy tai bao cac nhung mot cua nao bao nhieu cong ty hoi tinh
-""".split())
-
-
 def name_candidates(question: str, catalog: Sequence[CatalogEntry]) -> List[str]:
-    """Capitalised terms of the question that are not ordinary words and appear in no selected company name or file name."""
-    known = " ".join(f"{e.company} {e.file_name}" for e in catalog).lower()
+    """Capitalised terms of the question that are not ordinary words and name no selected company or file."""
+    known = set(words(" ".join(f"{e.company} {e.file_name}" for e in catalog)))
+    cards = [{"entity": e.company or e.file_name} for e in catalog]
     found: List[str] = []
     for match in _TOKEN.finditer(question):
         term = match.group(0).strip("-&")
         low = term.lower()
-        if len(term) < 2 or low in _COMMON or re.fullmatch(r"fy\d*|q\d|\d+", low) or low in known or term in found:
+        if len(term) < 2 or low in QUESTION_WORDS or re.fullmatch(r"fy\d*|q\d|\d+", low) or set(words(term)) <= known or company_matches(term, cards) or term in found:
             continue
         found.append(term)
     return found

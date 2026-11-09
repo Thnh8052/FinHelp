@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Sequence, Set
 
 from app.core.logging import logger
 from app.modules.generation.llm_client import LLMUnavailableError, chat_completion
+from app.modules.query_router.catalog_route import company_matches
 
 TERMINAL = frozenset({
     "notebook_empty", "ask_select_sources", "reject_input", "ask_rephrase", "list_sources", "not_supported", "static_reply", "refuse_concept",
@@ -29,6 +30,8 @@ class SourceInfo:
     page_count: int = 0
     file_name: str = ""
     years_covered: List[int] = field(default_factory=list)  # years heading the document's tables (catalog, code); empty = unknown
+    aliases: List[str] = field(default_factory=list)
+    ticker: Optional[str] = None
 
 
 @dataclass
@@ -61,25 +64,9 @@ def _words(text: str) -> List[str]:
 _SUFFIX = frozenset("inc incorporated corp corporation company co ltd plc llc holdings holding group the international and of sa nv ag limited".split())
 
 
-def _aliases(company: str) -> Set[str]:
-    tokens = [t for t in _words(company.replace("-", " ")) if t not in _SUFFIX]
-    out = {t for t in tokens if len(t) >= 4 or any(ch.isdigit() for ch in t)}
-    joined = "".join(tokens)
-    if joined and len(joined) >= 4:
-        out.add(joined)
-    return out
-
-
 def mentioned_sources(question: str, sources: Sequence[SourceInfo]) -> Set[int]:
     """Indexes of the sources whose company the question names (also by a prefix of the name: "Pepsi" for "PepsiCo")."""
-    words = set(_words(question.replace("'s", " ").replace("’s", " ")))
-    found: Set[int] = set()
-    for i, s in enumerate(sources):
-        for a in _aliases(s.company or s.file_name):
-            if a in words or any(len(w) >= 4 and a.startswith(w) for w in words):
-                found.add(i)
-                break
-    return found
+    return set(company_matches(question, [{"entity": s.company or s.file_name, "aliases": s.aliases, "ticker": s.ticker} for s in sources]))
 
 
 def _company_key(s: SourceInfo) -> str:

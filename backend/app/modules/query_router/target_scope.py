@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
-from app.modules.query_router.catalog_route import QNUM, QPAIR, names, question_years, words
+from app.modules.query_router.catalog_route import QNUM, QPAIR, company_matches, names, question_years, words
 from app.modules.query_router.target_resolver import Filing, Target, _key, alignment_note, resolve
 
 FISCAL = re.compile(r"\bfy\s?\d{2,4}\b|\bfiscal\b|năm tài chính", re.I)
@@ -46,8 +46,8 @@ class TargetDecision:
 
 
 def _named(question: str, docs: Sequence[ScopeDoc]) -> List[ScopeDoc]:
-    asked = set(words(question))
-    return [d for d in docs if names(d.card) & asked]
+    matches = company_matches(question, [d.card for d in docs])
+    return [docs[i] for i in sorted(matches)]
 
 
 def _understood(docs: Sequence[ScopeDoc], vi: bool, extra: str = "") -> str:
@@ -129,7 +129,8 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
             chosen.append(ids[0])
     if not chosen:
         return TargetDecision()
-    out = TargetDecision(chosen, rule="resolved", uncertain=_unknown_names(question, docs),
+    typo = 4 in company_matches(question, [d.card for d in docs]).values()  # one letter off: the other documents keep the safety net
+    out = TargetDecision(chosen, rule="resolved", uncertain=typo or _unknown_names(question, docs),
                          alternatives=[{"document_id": i, "label": by_id[i].label} for i in alternatives if i not in chosen])
     note = alignment_note(resolve(targets, filings), filings, vi)
     extra = " ".join(x for x in (("Giả định: " if vi else "Assumed: ") + "; ".join(assumptions) + "." if assumptions else "", note) if x)
