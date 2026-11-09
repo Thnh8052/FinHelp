@@ -119,22 +119,22 @@ async def handle_user_query(
         for m in await chat_repo.get_messages(req.notebook_id, limit=6)
     ]
 
-    # 2. Câu hỏi đầu tiên đặt tên cho đoạn chat; lưu tin nhắn người dùng
-    title = nb.title
-    if nb.message_count == 0:
-        title = req.query[:40]
-        await chat_repo.set_title(req.notebook_id, title)
-    await chat_repo.append_message(
-        MessageRecord(message_id=f"msg_{uuid.uuid4().hex[:8]}", notebook_id=req.notebook_id, role="user", content=req.query)
-    )
-
-    # 3. Kích hoạt RAG Workflow Orchestrator
+    # 2. Kích hoạt RAG Workflow Orchestrator
     result = await orchestrator.execute_query(
         query=req.query,
         notebook_id=req.notebook_id,
         document_ids=chosen,
         history=history,
         mentions=mentions,
+    )
+
+    # 3. Câu hỏi chỉ được lưu khi đã có câu trả lời: câu hỏi lỗi không kẹt lại trong lịch sử và ngữ cảnh. Câu đầu tiên đặt tên cho đoạn chat
+    title = nb.title
+    if nb.message_count == 0:
+        title = req.query[:40]
+        await chat_repo.set_title(req.notebook_id, title)
+    await chat_repo.append_message(
+        MessageRecord(message_id=f"msg_{uuid.uuid4().hex[:8]}", notebook_id=req.notebook_id, role="user", content=req.query)
     )
 
     # Người dùng đã đăng nhập: chỉ tính lượt hỏi khi hệ thống đã thật sự tìm và sinh câu trả lời

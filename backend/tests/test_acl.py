@@ -147,10 +147,16 @@ def test_allowed_questions_reach_the_orchestrator(client):
     FakeChats.saved.clear()
     assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"]).status_code == 500  # Stop
     assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1"]).status_code == 500
-    assert [m.notebook_id for m in FakeChats.saved] == ["nb_alice", GUEST_ID]
+    assert FakeChats.saved == []  # a question that got no answer does not stay in the history
 
 
-def test_the_first_question_names_the_chat(client):
+async def _answered(self, **kw):
+    return {"answer": "ok", "intent": "qa", "citations": [], "charged": False,
+            "trace": {"llm": {"calls": 2, "prompt_tokens": 90, "completion_tokens": 10}, "timings": {"total": 1.5}}}
+
+
+def test_the_first_question_names_the_chat(client, monkeypatch):
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", _answered)
     FakeChats.titles.clear()
     ask(client, "alice", notebook_id="nb_new", document_ids=["d1"])
     ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])  # already has messages
@@ -164,11 +170,7 @@ def test_a_user_over_the_daily_limit_is_refused(client, monkeypatch):
 
 
 def test_an_answer_is_stored_with_its_cost_and_counted(client, monkeypatch):
-    async def answered(self, **kw):
-        return {"answer": "ok", "intent": "qa", "citations": [], "charged": False,
-                "trace": {"llm": {"calls": 2, "prompt_tokens": 90, "completion_tokens": 10}, "timings": {"total": 1.5}}}
-
-    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", _answered)
     FakeChats.saved.clear()
     FakeUsers.consumed.clear()
 
@@ -176,6 +178,7 @@ def test_an_answer_is_stored_with_its_cost_and_counted(client, monkeypatch):
 
     assert response.status_code == 200 and response.json()["title"] == "A"
     assert FakeUsers.consumed == [("alice", 0, 100)]  # not charged as a question, its tokens still count
+    assert [m.role for m in FakeChats.saved] == ["user", "assistant"]
     stored = FakeChats.saved[-1]
     assert stored.role == "assistant" and stored.token_usage == {"prompt_tokens": 90, "completion_tokens": 10, "total_tokens": 100}
     assert stored.latency_ms == 1500 and stored.model_used
