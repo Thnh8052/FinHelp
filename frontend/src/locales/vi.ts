@@ -267,7 +267,7 @@ export const vi: TranslationSchema = {
     filesCount: "Tài liệu",
     dropzoneActive: "Thả file PDF để tải lên",
     dropzoneIdle: "Kéo thả file PDF hoặc bấm để chọn tệp",
-    dropzoneSubtext: "Hỗ trợ nhiều báo cáo PDF (tối đa 5 tài liệu mỗi phiên)",
+    dropzoneSubtext: "Tối đa {docs} báo cáo PDF, mỗi tệp không quá {mb} MB",
     selectAll: "Chọn tất cả để phân tích",
     activeCounter: "đang chọn",
     readyBadge: "Sẵn sàng",

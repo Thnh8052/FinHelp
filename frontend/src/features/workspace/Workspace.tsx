@@ -36,7 +36,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const [catalogDocId, setCatalogDocId] = useState<string | null>(null);
   const { t } = useLanguage();
 
-  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, docs, chat, notebooks, notebookId, selectNotebook, newChat, deleteNotebook } = useWorkspace(
+  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, maxFileSizeMb, docs, chat, notebooks, notebookId, selectNotebook, newChat, deleteNotebook } = useWorkspace(
     () => setAuthModalOpen(true)
   );
 
@@ -158,6 +158,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             onClose={() => setIsSourcesOpen(false)}
             isUploading={docs.isUploading}
             isDeleting={docs.isDeleting}
+            maxSources={maxSources}
+            maxFileSizeMb={maxFileSizeMb}
           />
         }
         isSourcesOpen={isSourcesOpen}

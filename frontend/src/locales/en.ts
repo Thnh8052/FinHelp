@@ -267,7 +267,7 @@ export const en: TranslationSchema = {
     filesCount: "Files",
     dropzoneActive: "Drop PDF filings to upload",
     dropzoneIdle: "Drop PDF filings or click to upload",
-    dropzoneSubtext: "Supports multiple PDF reports (up to 5 per session)",
+    dropzoneSubtext: "Up to {docs} PDF reports, {mb} MB each",
     selectAll: "Select all for analysis",
     activeCounter: "active",
     readyBadge: "Ready",

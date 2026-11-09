@@ -25,6 +25,8 @@ interface DocumentManagerProps {
   onClose?: () => void;
   isUploading: boolean;
   isDeleting: boolean;
+  maxSources: number;
+  maxFileSizeMb: number;
 }
 
 export const DocumentManager: React.FC<DocumentManagerProps> = ({
@@ -41,6 +43,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   onClose,
   isUploading,
   isDeleting,
+  maxSources,
+  maxFileSizeMb,
 }) => {
   const { t, lang } = useLanguage();
   const [isDragging, setIsDragging] = useState(false);
@@ -164,7 +168,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             {isBusy ? t.workspace.placeholderProcessing : t.sourcesDrawer.dropzoneIdle}
           </p>
           <p className="doc-dropzone-subtext">
-            {t.sourcesDrawer.dropzoneSubtext}
+            {t.sourcesDrawer.dropzoneSubtext.replace("{docs}", String(maxSources)).replace("{mb}", String(maxFileSizeMb))}
           </p>
         </div>
       </div>

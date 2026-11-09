@@ -21,7 +21,7 @@ const attempt = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
  * Người dùng đăng nhập: mở lại đoạn đang dùng trước đó. Khách: một notebook riêng do backend cấp.
  */
 export function useWorkspace(onLoginRequired: () => void) {
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, user, guestQuota } = useAuth();
   const { toast, showToast, closeToast } = useToast();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [notebookId, setNotebookId] = useState("");
@@ -30,7 +30,9 @@ export function useWorkspace(onLoginRequired: () => void) {
 
   const notebookTitle = notebooks.find((n) => n.notebook_id === notebookId)?.title || "Financial Statement Analysis";
 
-  const docs = useDocuments(notebookId, maxSources, showToast, onLoginRequired);
+  const maxFileSizeMb = user?.quota.max_file_size_mb ?? guestQuota?.max_file_size_mb ?? 5;
+
+  const docs = useDocuments(notebookId, maxSources, maxFileSizeMb, showToast, onLoginRequired);
   const chat = useChat({
     notebookId,
     selectedDocIds: docs.selectedDocIds,
@@ -114,7 +116,7 @@ export function useWorkspace(onLoginRequired: () => void) {
   }, [isAuthenticated, isAuthLoading]);
 
   return {
-    toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, docs, chat,
+    toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, maxFileSizeMb, docs, chat,
     notebooks, notebookId, selectNotebook, newChat, deleteNotebook,
   };
 }

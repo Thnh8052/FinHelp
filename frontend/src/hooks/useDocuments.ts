@@ -8,7 +8,7 @@ import { ShowToast } from "./useToast";
  * Danh sách tài liệu của notebook: nguồn đang xem, nguồn đã chọn (kiểu NotebookLM: câu hỏi chỉ được trả lời trên các tài liệu này,
  * hệ thống không tự đoán phạm vi), tải lên (khách 1 tài liệu, người dùng 5) và theo dõi tiến độ xử lý.
  */
-export function useDocuments(notebookId: string, maxSources: number, showToast: ShowToast, onLoginRequired: () => void) {
+export function useDocuments(notebookId: string, maxSources: number, maxFileSizeMb: number, showToast: ShowToast, onLoginRequired: () => void) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
@@ -76,49 +76,6 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
     return () => window.removeEventListener("beforeunload", warn);
   }, [isUploading]);
 
-  const upload = async (file: File) => {
-    if (isUploading) return;
-    const alreadyExists = documents.some(
-      (d) => !isDocFailed(d) && d.file_name.toLowerCase() === file.name.toLowerCase()
-    );
-    if (alreadyExists) {
-      showToast(`Tài liệu "${file.name}" đã tồn tại trong sổ tay.`, "warning");
-      return;
-    }
-
-    setIsUploading(true);
-    try {
-      const data = await documentService.upload(notebookId, file);
-      const newDoc: DocumentRecord = {
-        document_id: data.document_id,
-        notebook_id: notebookId,
-        file_name: file.name,
-        file_size_bytes: file.size,
-        file_path: `storage/pdfs/${notebookId}/${data.document_id}.pdf`,
-        page_count: 0,
-        status: "pending",
-        created_at: new Date().toISOString(),
-      };
-      setDocuments((prev) => [newDoc, ...prev]);
-      showToast("Upload successful! Processing financial filing.", "success");
-    } catch (err) {
-      if (err instanceof ApiError) {
-        const detail = err.detail || "Document upload failed.";
-        if (err.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
-          showToast(detail, "warning", "Sign in now", onLoginRequired);
-        } else if (err.status === 409) {
-          showToast(detail, "warning");
-        } else {
-          showToast(detail, "error");
-        }
-      } else {
-        showToast("Unable to connect to server during upload.", "error");
-      }
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   /** Batch upload */
   const uploadFiles = async (files: File[]) => {
     if (files.length === 0 || isUploading) return;
@@ -143,6 +100,8 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
     for (const f of uniqueFiles) {
       if (existingActiveNames.has(f.name.toLowerCase())) {
         showToast(`Tài liệu "${f.name}" đã tồn tại trong sổ tay. Bỏ qua tệp trùng.`, "warning");
+      } else if (f.size > maxFileSizeMb * 1024 * 1024) {
+        showToast(`Tệp "${f.name}" vượt quá giới hạn ${maxFileSizeMb} MB của tài khoản.`, "warning");
       } else {
         filesToUpload.push(f);
       }
@@ -237,6 +196,6 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
 
   return {
     documents, activeDocId, setActiveDocId, activeDoc, selectedDocIds, isUploading, isDeleting,
-    load, reset, reload, upload, uploadFiles, remove, toggleSelected, toggleAll,
+    load, reset, reload, uploadFiles, remove, toggleSelected, toggleAll,
   };
 }

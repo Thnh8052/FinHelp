@@ -17,6 +17,7 @@ from app.infrastructure.database.qdrant import QdrantManager
 from app.modules.ingestion.pipeline import IngestionPipeline
 from app.modules.notebooks.purge import purge_expired_guests
 from app.modules.retrieval.warmup import warm_models
+from app.shared.upload_limit import UploadSizeLimit
 
 
 HOUSEKEEPING_SECONDS = 300
@@ -76,6 +77,9 @@ app = FastAPI(
     description="Financial RAG Backend: FastAPI + MongoDB + Qdrant",
     lifespan=lifespan,
 )
+
+# Added before CORS so that CORS stays the outermost layer and a refused upload still carries its headers
+app.add_middleware(UploadSizeLimit)
 
 # CORS Middleware
 app.add_middleware(

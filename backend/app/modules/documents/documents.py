@@ -31,6 +31,8 @@ from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.ingestion.chunk_repo import ChunkRepository
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.ingestion.ingestion_job_repo import IngestionJobRepository
+from app.modules.auth.user import tier_spec
+from app.modules.auth.user_repo import UserRepository
 from app.modules.documents.document import ACTIVE_STATUSES, DocumentRecord
 from app.modules.ingestion.ingestion_job import IngestionJobRecord
 from app.modules.documents.catalog_edit import REPORT_TYPES, CatalogUpdate, catalog_changes, needs_confirmation
@@ -73,6 +75,21 @@ def _compute_sha256(file_path: Path) -> str:
     return hasher.hexdigest()
 
 
+async def _check_upload(db: AsyncIOMotorDatabase, file: UploadFile, user_id: Optional[str]) -> None:
+    """Refuse a file before it reaches storage: larger than the caller's limit, or not a PDF whatever its name says."""
+    role = None
+    if user_id is not None:
+        user = await UserRepository(db).get_by_id(user_id)
+        role = user.role if user else "user"
+    limit_mb = tier_spec(role)["max_file_size_mb"]
+    if (file.size or 0) > limit_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"Dung lượng tệp vượt quá giới hạn {limit_mb} MB của tài khoản.")
+    head = await file.read(1024)
+    await file.seek(0)
+    if b"%PDF-" not in head:
+        raise HTTPException(status_code=400, detail="Tệp này không phải là PDF hợp lệ.")
+
+
 # ==============================================================================
 # HÀM: upload_pdf
 # Ý NGHĨA: Tiếp nhận tệp PDF BCTC, kiểm tra hạn mức (Guest: tối đa 1 doc; User: tối đa 5 docs),
@@ -97,6 +114,7 @@ async def upload_pdf(
         raise HTTPException(status_code=400, detail="Hệ thống hiện tại chỉ hỗ trợ định dạng tệp PDF.")
 
     await require_notebook(db, notebook_id, user_id, write=True)
+    await _check_upload(db, file, user_id)
     doc_repo = DocumentRepository(db)
     # Failed documents do not count toward the quota: otherwise one failed upload would block every retry.
     existing_docs = [d for d in await doc_repo.get_by_notebook(notebook_id) if d.status != "failed"]
@@ -310,6 +328,7 @@ async def get_document_file(
     return FileResponse(
         path=pdf_path,
         media_type="application/pdf",
-        filename=doc.file_name,
-        headers={"Content-Disposition": f'inline; filename="{doc.file_name}"'},
+        filename=doc.file_name,  # encoded by Starlette: a raw header fails on Vietnamese names such as "tổng hợp"
+        content_disposition_type="inline",
+        headers={"Cache-Control": "private, max-age=3600"},  # a document's PDF never changes: reuse it instead of downloading it again
     )

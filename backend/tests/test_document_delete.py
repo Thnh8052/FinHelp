@@ -100,6 +100,25 @@ async def test_owner_deletes_document_file_chunks_job_and_vectors(monkeypatch):
     assert state["vector_delete"]["wait"] is True
 
 
+async def test_the_pdf_response_accepts_vietnamese_names_and_can_be_cached(monkeypatch, tmp_path):
+    notebook = NotebookRecord(notebook_id="nb_alice", owner_id="alice", title="Alice")
+    state, _ = _setup(monkeypatch, notebook, "alice")
+    state["document"].file_name = "Báo cáo tổng hợp quý 3.pdf"
+    pdf = tmp_path / "x.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+
+    class Storage:
+        def get_pdf_path(self, *_):
+            return pdf
+
+    monkeypatch.setattr(documents_api, "StorageService", Storage)
+
+    response = await documents_api.get_document_file("doc_delete", token=None, db=None, user_id="alice")
+
+    assert response.headers["content-disposition"].startswith("inline; filename*=utf-8''")
+    assert "max-age" in response.headers["cache-control"]
+
+
 async def test_guest_deletes_its_own_document(monkeypatch):
     notebook = NotebookRecord(notebook_id=GUEST_NOTEBOOK, owner_type="guest", owner_id="g", title="Khách")
     state, qdrant = _setup(monkeypatch, notebook, None)

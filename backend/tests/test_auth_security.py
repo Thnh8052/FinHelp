@@ -1,4 +1,6 @@
 """Auth hardening and the guest / user / admin rules (no database, no network: repositories are faked)."""
+import types
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -182,7 +184,15 @@ def upload(monkeypatch):
         async def save_pdf(self, *args):
             raise Stop()
 
+    class Users:
+        def __init__(self, db):
+            pass
+
+        async def get_by_id(self, _id):
+            return types.SimpleNamespace(role=state.get("role", "user"))
+
     monkeypatch.setattr(deps, "NotebookRepository", Notebooks)
+    monkeypatch.setattr(documents_api, "UserRepository", Users)
     monkeypatch.setattr(documents_api, "DocumentRepository", Documents)
     monkeypatch.setattr(documents_api, "StorageService", Storage)
     app = FastAPI()
@@ -192,8 +202,8 @@ def upload(monkeypatch):
     app.dependency_overrides[get_optional_user_id] = lambda: state["user"]
     client = TestClient(app, raise_server_exceptions=False)
 
-    def post(notebook_id):
-        return client.post(f"/documents/upload/{notebook_id}", files={"file": ("r.pdf", b"%PDF-1.4", "application/pdf")}).status_code
+    def post(notebook_id, content=b"%PDF-1.4"):
+        return client.post(f"/documents/upload/{notebook_id}", files={"file": ("r.pdf", content, "application/pdf")}).status_code
 
     return state, post
 
@@ -214,6 +224,58 @@ def test_signed_in_user_may_upload_five_documents(upload):
     assert post("nb") == 500
     state["docs"] = [_doc(n) for n in range(5)]
     assert post("nb") == 403
+
+
+MB = 1024 * 1024
+
+
+def _pdf_of(megabytes):
+    return b"%PDF-1.4" + b"0" * (megabytes * MB)
+
+
+@pytest.mark.parametrize("role, limit", [("user", 20), ("admin", 100)])
+def test_each_role_has_its_own_file_size_limit(upload, role, limit):
+    state, post = upload
+    state["user"], state["role"], state["notebook"] = "alice", role, NotebookRecord(notebook_id="nb", owner_id="alice", title="a")
+    assert post("nb", _pdf_of(limit - 1)) == 500  # Stop: reached the storage
+    assert post("nb", _pdf_of(limit + 1)) == 413
+
+
+def test_a_guest_file_is_limited_to_five_megabytes(upload):
+    _, post = upload
+    assert post(GUEST_NOTEBOOK, _pdf_of(4)) == 500
+    assert post(GUEST_NOTEBOOK, _pdf_of(6)) == 413
+
+
+@pytest.mark.parametrize("content", [b"", b"this is only named .pdf", b"<html>%PDF</html>"])
+def test_a_file_that_is_not_a_pdf_is_refused_before_storage(upload, content):
+    _, post = upload
+    assert post(GUEST_NOTEBOOK, content) == 400
+
+
+async def _through_the_limit(path, headers, method="POST"):
+    from app.shared.upload_limit import UploadSizeLimit
+
+    reached, sent = [], []
+
+    async def app(scope, receive, send):
+        reached.append(scope["path"])
+
+    async def send(message):
+        sent.append(message)
+
+    await UploadSizeLimit(app)({"type": "http", "method": method, "path": path, "headers": headers}, None, send)
+    return bool(reached), sent[0]["status"] if sent else None
+
+
+async def test_an_oversized_upload_is_refused_before_its_body_is_read():
+    from app.shared.upload_limit import MAX_UPLOAD_BODY
+
+    path = "/api/v1/documents/upload/nb"
+    assert await _through_the_limit(path, [(b"content-length", str(MAX_UPLOAD_BODY + 1).encode())]) == (False, 413)
+    assert await _through_the_limit(path, []) == (False, 411)
+    assert await _through_the_limit(path, [(b"content-length", b"1000")]) == (True, None)
+    assert await _through_the_limit("/api/v1/chat/query", []) == (True, None)  # other routes are untouched
 
 
 def test_nobody_uploads_into_someone_elses_notebook(upload):

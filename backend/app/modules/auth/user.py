@@ -29,6 +29,11 @@ TIER_SPECS = {
 }
 
 
+def tier_spec(role: Optional[str]) -> dict:
+    """The limits of an account by its role; None is a guest."""
+    return TIER_SPECS["guest"] if role is None else TIER_SPECS.get(role, TIER_SPECS["user"])
+
+
 def today_utc() -> datetime:
     """00:00 UTC of the current day: the start of the daily question window."""
     return get_utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -90,7 +95,7 @@ class UserRecord(BaseSchema):
 
     @property
     def quota(self) -> UserQuota:
-        spec = TIER_SPECS.get(self.role, TIER_SPECS["user"])
+        spec = tier_spec(self.role)
         return UserQuota(
             tier=self.role,
             daily_messages_limit=self.daily_messages_limit,
