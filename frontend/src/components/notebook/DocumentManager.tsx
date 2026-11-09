@@ -227,7 +227,9 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                         {doc.file_name}
                       </span>
                       <span className="doc-card-tag">
-                        {isProcessing
+                        {doc.status === "pending"
+                          ? (lang === "vi" ? "Đang xếp hàng..." : "Queued...")
+                          : isProcessing
                           ? (lang === "vi" ? "Đang xử lý..." : "Processing...")
                           : isFailed
                           ? t.sourcesDrawer.failedBadge
@@ -248,6 +250,13 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                     </div>
 
                     {isFailed && doc.error_message && <p className="doc-card-error">{doc.error_message}</p>}
+                    {doc.parsing_engine === "pymupdf_fallback" && (
+                      <p className="doc-card-error">
+                        {lang === "vi"
+                          ? "Một số bảng trong tài liệu này có thể chưa được đọc chính xác. Nên xóa và tải lên lại sau ít phút."
+                          : "Some tables in this document may not have been read accurately. Delete and upload it again in a few minutes."}
+                      </p>
+                    )}
 
                     {/* Action Bar: nothing while the file is being processed; a failed file can only be deleted */}
                     {!isProcessing && <div className="doc-card-actions">

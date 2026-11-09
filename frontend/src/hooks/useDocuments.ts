@@ -51,16 +51,19 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
       try {
         const docs = await documentService.list(notebookId);
         setDocuments(docs);
+        let anyReady = false;
         for (const id of watching) {
           const d = docs.find((x) => x.document_id === id);
           if (d?.status === "ready") {
             setSelectedDocIds((prev) => (prev.includes(id) ? prev : [...prev, id].slice(-maxSources)));  // also after a reload during processing
-            showToast("Document is ready. You can now ask questions.", "success");
+            anyReady = true;
           } else if (isDocFailed(d)) {
             setSelectedDocIds((prev) => prev.filter((x) => x !== id));  // Remove failed docs from active selection
             showToast("Failed to process document. Please try uploading again.", "error");
           }
         }
+        // Mỗi file đã có trạng thái riêng trong danh sách; chat chỉ mở khi mọi file xong nên chỉ báo một lần lúc đó
+        if (anyReady && !docs.some(isDocProcessing)) showToast("All documents are ready. You can now ask questions.", "success");
       } catch {
         /* Network retry */
       }
@@ -108,6 +111,7 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
     }
 
     if (filesToUpload.length === 0) return;
+    filesToUpload.sort((a, b) => a.size - b.size);  // tải lần lượt nên file nhẹ vào hàng trước và xong trước
 
     setIsUploading(true);
     let successCount = 0;
