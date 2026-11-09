@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLanguage } from "../context/LanguageContext";
 import { ApiError } from "../services/api";
 import { chatService } from "../services/chat";
 import { ChatMessage } from "../types/chat";
@@ -17,6 +18,7 @@ interface ChatOptions {
 export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onLoginRequired, onTitle }: ChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const { t } = useLanguage();
 
   const loginWarning = (detail: string) => showToast(detail, "warning", "Sign in now", onLoginRequired);
 
@@ -68,7 +70,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       onTitle(notebookId, data.title);
     } catch (err) {
       if (err instanceof ApiError) {
-        const detail = err.detail || `Server error (HTTP ${err.status})`;
+        const detail = err.status >= 500 || !err.detail ? t.workspace.systemBusy : err.detail;  // lỗi hệ thống không lộ chi tiết cho người dùng
         // Auth required
         if (err.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
           loginWarning(detail);
@@ -77,11 +79,8 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
         }
         setMessages((prev) => [...prev, assistantNote("msg_err", `⚠️ ${detail}`)]);
       } else {
-        showToast("Unable to connect to backend server.", "error");
-        setMessages((prev) => [
-          ...prev,
-          assistantNote("msg_err", "⚠️ Unable to connect to server. Please check your network connection."),
-        ]);
+        showToast(t.workspace.connectionFailed, "error");
+        setMessages((prev) => [...prev, assistantNote("msg_err", `⚠️ ${t.workspace.connectionFailed}`)]);
       }
     } finally {
       setIsLoading(false);

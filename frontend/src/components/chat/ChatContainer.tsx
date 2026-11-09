@@ -44,6 +44,15 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const [mentions, setMentions] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Câu trả lời đến một lần sau 10-25 giây: đổi dòng chữ theo thời gian chờ để người dùng biết hệ thống vẫn đang chạy
+  const [loadingStep, setLoadingStep] = useState(0);
+  useEffect(() => {
+    if (!isLoading) return;
+    setLoadingStep(0);
+    const timers = [3, 10, 25].map((seconds, i) => setTimeout(() => setLoadingStep(i + 1), seconds * 1000));
+    return () => timers.forEach(clearTimeout);
+  }, [isLoading]);
+
   // "@" vừa gõ ở cuối ô nhập: hiện danh sách tài liệu nguồn để chọn
   const mentionQuery = /(?:^|\s)@([^\s@]*)$/.exec(input)?.[1];
   const mentionMatches =
@@ -354,7 +363,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               <span className="chat-sender-label">{t.workspace.aiLabel}</span>
               <div className="chat-loading-bubble">
                 <div className="chat-loading-spinner" />
-                <span>{t.workspace.retrievingContext}</span>
+                <span role="status">{t.workspace.loadingSteps[loadingStep]}</span>
               </div>
             </div>
           )}

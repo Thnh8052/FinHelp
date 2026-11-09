@@ -243,7 +243,9 @@ export interface TranslationSchema {
     uploadingNotice: string;
     inputShortcuts: string;
     sourceCitationsTitle: string;
-    retrievingContext: string;
+    loadingSteps: string[];
+    systemBusy: string;
+    connectionFailed: string;
     youLabel: string;
     aiLabel: string;
     confirmMetadataNotice: string;
