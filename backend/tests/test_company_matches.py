@@ -54,6 +54,33 @@ def test_ordinary_words_and_other_companies_force_nothing(question, entity):
     assert level(question, entity) == 0
 
 
+@pytest.mark.parametrize("question, entity", [
+    ("What did management say about liquidity?", "Waste Management, Inc."),
+    ("What is the fair value of financial instruments?", "Texas Instruments Incorporated"),
+    ("What was third quarter revenue?", "Fifth Third Bancorp"),
+    ("Which one had higher revenue?", "Capital One Financial Corporation"),
+    ("Show the consolidated balance sheets", "Consolidated Edison, Inc."),
+    ("Street lighting costs in 2022", "State Street Corporation"),  # capitalised only because it opens the sentence, and not the start of the name
+    ("How does the policy apply to leases?", "Apple Inc."),
+    ("Shares shall be issued at par", "Shell plc"),
+    ("What is inter segment revenue?", "Intel Corporation"),
+    ("Intel revenue in 2022", "Intelsat S.A."),
+])
+def test_one_ordinary_word_of_a_longer_name_is_not_the_company(question, entity):
+    assert level(question, entity) == 0
+
+
+@pytest.mark.parametrize("question, entity", [
+    ("Waste Management revenue in 2022", "Waste Management, Inc."),
+    ("Texas Instruments analog revenue", "Texas Instruments Incorporated"),
+    ("Lockheed backlog in 2022", "Lockheed Martin Corporation"),  # opens the sentence and begins the name
+    ("backlog of lockheed in 2022", "Lockheed Martin Corporation"),  # no capitals anywhere: casing says nothing
+    ("The parks of Disney in 2022", "The Walt Disney Company"),  # capitalised inside the sentence
+])
+def test_a_written_company_is_still_found(question, entity):
+    assert level(question, entity) > 0
+
+
 @pytest.mark.parametrize("question, expected", [("Target's revenue in 2022", 1), ("Revenue of Target in 2022", 1), ("target revenue", 0)])
 def test_a_name_that_is_an_ordinary_word_needs_capitals(question, expected):
     assert level(question, "Target Corporation") == expected

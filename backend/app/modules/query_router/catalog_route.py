@@ -33,8 +33,10 @@ general american america americas national first united states home bank banks f
 health care beauty water works foot square materials applied advanced micro devices systems intelligent platform platforms digital solar energy
 gas oil power electric technology technologies software communications services solutions industries products global world pacific atlantic
 north south east west southwest best buy target block gap visa chase wells mills martin johnson george being depot pdf key cat low fast gold pay bill
+consolidated principal public progressive southern northern dollar service business management data supply payment payments instruments trust brands
+one two third fifth new york ball news processing machines automatic storage booking parcel street tower apply shall inter
 """.split())
-PREFIX_MIN_LEN, PREFIX_MIN_COVER = 4, 0.6  # "Pepsi" covers 71 % of "pepsico", "Intel" only 45 % of "intelligent"
+PREFIX_MIN_LEN, PREFIX_MIN_COVER = 4, 0.7  # "Pepsi" covers 71 % of "pepsico", "Intel" only 62 % of "intelsat"
 TYPO_MIN_LEN = 5  # one wrong letter, never the first (Meilisearch's rule for one typo)
 
 
@@ -103,9 +105,16 @@ def _level(question, plain, grams, card):
             return 1
     distinctive = {w for n in names_ for w in words(n) if w not in STOP and w not in ORDINARY and len(w) >= 3}
     pairs = {a + b for toks in parts for a, b in zip(toks, toks[1:]) if a not in ORDINARY or b not in ORDINARY}  # "Wal-Mart" as "Walmart", not "bank" + "canada"
-    if (distinctive | pairs) & grams:
+    # One word of a longer name is weak evidence: "instruments" is not Texas Instruments unless the writer capitalised it, and a capital at the
+    # start of the sentence proves nothing unless the word begins the name. A question with no capitals at all says nothing either way.
+    tokens = re.findall(r"[A-Za-z0-9&]+", re.sub(r"['’]s\b", "", question))
+    capitals, first = {t.lower() for t in tokens if t != t.lower()}, tokens[0].lower() if tokens else ""
+    casual, heads = question == question.lower(), {toks[0] for toks in parts if toks}
+    if pairs & grams or any(t not in plain or casual or (t in capitals and (t in heads or t != first)) for t in distinctive & grams):
         return 2
-    asked = [w for w in plain if w not in ORDINARY]
+    if any(len(toks) > 2 and _capitalised(toks[:2], question) for toks in parts):  # "Capital One" of Capital One Financial
+        return 2
+    asked = [w for w in plain if w not in ORDINARY and (casual or w in capitals)]
     if any(len(w) >= PREFIX_MIN_LEN and t.startswith(w) and len(w) / len(t) >= PREFIX_MIN_COVER for w in asked for t in distinctive):
         return 3
     if any(len(w) >= TYPO_MIN_LEN and w[0] == t[0] and w != t and _one_edit(w, t) for w in asked for t in distinctive):
