@@ -57,7 +57,7 @@ export const authService = {
     return apiRequest<{ success: boolean; tiers: Record<string, TierSpec> }>("/auth/tiers");
   },
 
-  async forgotPassword(email: string): Promise<{ success: boolean; message: string; otp_debug?: string }> {
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
     return apiRequest("/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email }),
