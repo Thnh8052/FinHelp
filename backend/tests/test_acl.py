@@ -155,11 +155,18 @@ async def _answered(self, **kw):
             "trace": {"llm": {"calls": 2, "prompt_tokens": 90, "completion_tokens": 10}, "timings": {"total": 1.5}}}
 
 
-def test_the_first_question_names_the_chat(client, monkeypatch):
-    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", _answered)
+def test_the_first_searched_question_names_the_chat(client, monkeypatch):
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", _answered)  # a reply that searched nothing (a greeting, a refusal)
     FakeChats.titles.clear()
     ask(client, "alice", notebook_id="nb_new", document_ids=["d1"])
-    ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])  # already has messages
+    assert FakeChats.titles == []
+
+    async def searched(self, **kw):
+        return {**await _answered(self), "charged": True}
+
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", searched)
+    ask(client, "alice", notebook_id="nb_new", document_ids=["d1"])
+    ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])  # already has a title
     assert FakeChats.titles == [("nb_new", "What was revenue in FY2023?")]
 
 

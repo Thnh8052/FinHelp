@@ -2,6 +2,7 @@ from typing import Any, Dict
 from pydantic import Field
 from app.shared.common import BaseSchema, get_utc_now
 
+GUEST_TITLE = "Không Gian Dùng Thử (Khách Chưa Đăng Nhập)"  # a guest notebook's title until its first searched question names it
 
 class NotebookRecord(BaseSchema):
     """Notebook record stored in MongoDB `notebooks` collection. One notebook is one conversation: its documents and messages point to it."""

@@ -39,3 +39,6 @@ class ChatRepository(BaseRepository):
 
     async def set_title(self, notebook_id: str, title: str) -> None:
         await self.notebooks.update_one({"notebook_id": notebook_id}, {"$set": {"title": title}})
+
+    async def set_focus(self, notebook_id: str, focus: dict) -> None:
+        await self.notebooks.update_one({"notebook_id": notebook_id}, {"$set": {"focus_state": focus}})

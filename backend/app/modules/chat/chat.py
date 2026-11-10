@@ -27,9 +27,13 @@ from app.modules.documents.document import ACTIVE_STATUSES
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.auth.user_repo import UserRepository
 from app.modules.chat.chat_models import MessageRecord
+from app.modules.notebooks.notebook import GUEST_TITLE, NotebookRecord
 from app.modules.chat.orchestrator import RAGWorkflowOrchestrator, SourceSelectionError
 
 router = APIRouter(prefix="/chat", tags=["Chat & RAG"])
+
+MAX_QUERY_CHARS = 4000
+UNTITLED = {NotebookRecord.model_fields["title"].default, GUEST_TITLE}  # titles nobody chose
 
 
 def selected_ids(document_ids: Optional[List[str]], document_id: Optional[str]) -> List[str]:
@@ -101,6 +105,8 @@ async def handle_user_query(
     mentions = list(dict.fromkeys(req.mentions or []))
     if any(m not in chosen for m in mentions):
         raise HTTPException(status_code=422, detail="Chỉ tag (@) được các tài liệu nguồn đã chọn.")
+    if len(req.query) > MAX_QUERY_CHARS:  # refused here, before anything is stored (the input policy has the same limit)
+        raise HTTPException(status_code=422, detail=f"Câu hỏi quá dài (tối đa {MAX_QUERY_CHARS:,} ký tự). Hãy rút gọn rồi gửi lại.".replace(",", "."))
     await ensure_documents_ready(db, req.notebook_id, chosen)
     users = UserRepository(db)
     if user_id is not None and not await users.check_quota(user_id):
@@ -126,11 +132,13 @@ async def handle_user_query(
         document_ids=chosen,
         history=history,
         mentions=mentions,
+        focus_state=nb.focus_state,
     )
 
-    # 3. Câu hỏi chỉ được lưu khi đã có câu trả lời: câu hỏi lỗi không kẹt lại trong lịch sử và ngữ cảnh. Câu đầu tiên đặt tên cho đoạn chat
+    # 3. Câu hỏi chỉ được lưu khi đã có câu trả lời: câu hỏi lỗi không kẹt lại trong lịch sử và ngữ cảnh. Câu hỏi đầu tiên
+    # được tìm trong tài liệu đặt tên cho đoạn chat (câu chào hay câu bị từ chối thì không)
     title = nb.title
-    if nb.message_count == 0:
+    if nb.title in UNTITLED and result.get("charged", True):
         title = req.query[:40]
         await chat_repo.set_title(req.notebook_id, title)
     await chat_repo.append_message(
@@ -159,6 +167,8 @@ async def handle_user_query(
             model_used=settings.DEFAULT_LLM_MODEL if llm.get("calls") else None,
         )
     )
+    if result.get("focus"):  # only once the answer is stored: a failed question cannot move the topic
+        await chat_repo.set_focus(req.notebook_id, result["focus"])
 
     return QueryResponse(
         title=title,

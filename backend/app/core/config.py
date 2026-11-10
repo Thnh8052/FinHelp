@@ -171,6 +171,11 @@ class Settings(BaseSettings):
     # A2: an answer with a figure the excerpts do not show, a citation to no excerpt or to another company / period is rewritten once
     # with the list of problems; what is still wrong after that is flagged in the answer ("chưa kiểm chứng"), never silently kept.
     ANSWER_REPAIR_ENABLED: bool = True
+    # Guardrails. The intent router turns away small talk, off-topic requests, requests for advice... that the rules let through
+    # (query_router/intent.py: one short encode on the embedding model, no language-model call). False = the rules alone, as measured before.
+    INTENT_ROUTER_ENABLED: bool = True
+    # The answer is checked before it is shown (generation/answer_check/policy.py): advice, leaked instructions, internal names, foul language.
+    OUTPUT_POLICY_ENABLED: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",

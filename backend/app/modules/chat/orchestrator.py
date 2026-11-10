@@ -2,6 +2,8 @@ import asyncio
 import time
 from collections import Counter
 from typing import Any, Dict, List, Optional
+
+import httpx
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from qdrant_client import AsyncQdrantClient
 
@@ -12,10 +14,14 @@ from app.modules.documents.document import DocumentRecord
 from app.modules.documents.catalog_edit import needs_confirmation
 from app.modules.generation.llm_client import REQUEST_USAGE, LLMUnavailableError
 from app.modules.query_router.input_policy import COMPARE_CUE, MSG, TERMINAL, Decision, decide, detect_language, mentioned_sources, rewrite_followup
+from app.modules.query_router.focus import METRICS, build_focus, fill_from_focus, focus_view
+from app.modules.query_router.intent import ROUTES, Intent
+from app.modules.query_router.intent import classify as classify_intent
 from app.modules.query_router.planner import PlanItem, unlisted_companies
 from app.modules.query_router.target_scope import TargetDecision, decide_targets
 from app.modules.generation.citation_generator import CitationGenerator
-from app.modules.generation.generator import generate_answer, split_answer
+from app.modules.generation.answer_check import policy
+from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
 from app.modules.generation.replies import NO_DATA_ANSWER, sources_message, terminal, unlisted_message
 from app.modules.chat.retrieval_step import RetrievalResult, retrieve_for_scope
 from app.modules.chat.scope import catalog_entry, document_label, scope_doc, source_info
@@ -135,11 +141,19 @@ class RAGWorkflowOrchestrator:
             answer = flag_unverified(answer, number_check, cite_check, decision.lang)
         verification = {"passed": not issues, "repaired": repaired, "unverified_figures": number_check["unverified"], "citations": cite_check,
                         "first_issues": first_issues}  # what the first answer got wrong (why a repair was tried), kept for the trace
-        cited = cited_numbers(split_answer(answer)[0])
+        text, meta = split_answer(answer)
+        cited = cited_numbers(text)
         timings = {**found.timings, "generate": round(t1 - t0, 2), "verify_repair": round(time.perf_counter() - t1, 2)}
+        # "The selected reports do not contain this": the conversation's topic stays where it was, and excerpts the answer does not use are not shown as its sources
+        not_found = (meta or {}).get("status") == "not_found"
+        if not_found and not cited:
+            citations = []
+        focus_docs = [] if not_found else targets.document_ids or [c.document_id for n, c in enumerate(citations, 1) if n in cited] or [c.document_id for c in citations]
         return {
             "answer": answer,
             "intent": "retrieval_rag",
+            "focus_docs": focus_docs,  # the documents this answer is about, for the conversation's focus
+            "focus_query": query,
             # "cited" lets the UI show only the excerpts the answer uses; numbers stay as they are. Only where the answer's [n] are the
             # list positions (a question of its own: with an offset the [n] of this part restart at 1)
             "citations": [{**c.model_dump(), **({"cited": idx + 1 in cited} if citation_offset == 0 else {})} for idx, c in enumerate(citations)],
@@ -199,18 +213,33 @@ class RAGWorkflowOrchestrator:
         """The whole question, with its cost in the trace (P7): LLM calls and tokens of this request, total seconds, and what the
         user was shown as the understanding (kept with the message so a reloaded chat shows it again)."""
         usage: Counter = Counter()
-        token = REQUEST_USAGE.set(usage)
+        checks: List[Dict[str, Any]] = []
+        token, checks_token = REQUEST_USAGE.set(usage), policy.EVENTS.set(checks)
         t0 = time.perf_counter()
         try:
             result = await self._execute_query(query, notebook_id, **kwargs)
         finally:
             REQUEST_USAGE.reset(token)
+            policy.EVENTS.reset(checks_token)
         trace = result.setdefault("trace", {})
         trace["llm"] = dict(usage)
+        if checks:
+            trace["output_policy"] = checks  # what the answer broke and what was done about it
         trace.setdefault("timings", {})["total"] = round(time.perf_counter() - t0, 2)
         if result.get("understood"):
             trace["understood"], trace["alternatives"] = result["understood"], result.get("alternatives", [])
         return result
+
+    async def _intent(self, query: str, decision: Decision) -> Optional[Intent]:
+        """The intent of a question the rules did not settle (None: nothing to ask the router). The router failing changes nothing: the
+        question goes on to the search as it did before the router existed."""
+        if not settings.INTENT_ROUTER_ENABLED or decision.action in TERMINAL or decision.action in ("overview", "use_previous_citations"):
+            return None
+        try:
+            return await classify_intent(query, self.hybrid_search.embedder.embed_queries, decision.evidence)
+        except (RuntimeError, httpx.HTTPError) as exc:
+            logger.warning(f"Intent router skipped: {type(exc).__name__}: {str(exc)[:120]}")
+            return None
 
     async def _execute_query(
         self,
@@ -220,6 +249,7 @@ class RAGWorkflowOrchestrator:
         document_ids: Optional[List[str]] = None,
         history: Optional[List[dict]] = None,
         mentions: Optional[List[str]] = None,
+        focus_state: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         scope = await self.resolve_scope(notebook_id, document_ids, document_id)
         unconfirmed = [d for d in scope if needs_confirmation(d)]
@@ -233,12 +263,23 @@ class RAGWorkflowOrchestrator:
         ready = await self._ready_documents(notebook_id)
         infos = [source_info(d) for d in scope]
         history = history or []
-        decision = decide(query, infos, len(ready), history)
-        prefix = ""
+        tagged = {**focus_state, "document_ids": mentions} if mentions and focus_state else focus_state  # @file names the company: the topic only gives the item and year
+        focus = focus_view(tagged, [d.document_id for d in scope], infos)
+        decision = decide(query, infos, len(ready), history, focus)
+        # What the rules let through is still checked for what it is (small talk, an off-topic request, a request for advice...): turned
+        # away here, before a follow-up is rewritten or anything is searched
+        intent = await self._intent(query, decision)
+        if intent and intent.blocked:
+            action, key = ROUTES[intent.label]
+            return terminal(action, MSG[key][decision.lang], {"decision": {"action": action}, "intent": intent.trace()})
+        prefix, followup = "", None
         if decision.action == "rewrite_followup":  # "And the net income?" -> a standalone question, shown to the user
-            rewritten = await rewrite_followup(query, history)
+            filled = None if {"correction", "outside_name"} & set(decision.flags) else fill_from_focus(query, focus, infos, decision.lang)
+            topic = [{"role": "current topic", "content": f"{', '.join(focus.companies)}; {focus.years}; {METRICS[focus.metric][1] if focus.metric else 'no item yet'}"}] if focus else []
+            rewritten = filled or await rewrite_followup(query, history + topic)
             if not rewritten:
                 return terminal("ask_clarify", MSG["ask_clarify"][decision.lang])
+            followup = {"method": "focus" if filled else "llm", "resolved": rewritten}
             prefix = (f"Tôi hiểu câu hỏi là: “{rewritten}”\n\n" if decision.lang == "vi" else f"I understood the question as: “{rewritten}”\n\n")
             query = rewritten
             decision = decide(rewritten, infos, len(ready), [])
@@ -252,7 +293,7 @@ class RAGWorkflowOrchestrator:
         elif decision.action == "use_previous_citations":
             result = await self._from_previous_citations(query, scope, history)
         elif decision.action == "split_questions":
-            parts, citations, offset, charged = [], [], 0, False
+            parts, citations, offset, charged, last_part = [], [], 0, False, {}
             earlier: List[dict] = []
             for n, sub in enumerate(decision.sub_questions, 1):
                 # "How about its total assets?" leans on the first question of the same message: treat the earlier ones as the conversation
@@ -273,10 +314,19 @@ class RAGWorkflowOrchestrator:
                 citations += one["citations"]
                 offset += len(one["citations"])
                 charged = charged or one.get("charged", False)
+                last_part = one if one.get("focus_docs") else last_part
             result = {"answer": "\n\n".join(parts), "intent": "multi_question", "citations": citations, "retrieved_chunks_count": len(citations),
-                      "charged": charged, "trace": {"decision": {"action": "split_questions", "sub_questions": decision.sub_questions}}}
+                      "charged": charged, "trace": {"decision": {"action": "split_questions", "sub_questions": decision.sub_questions}},
+                      "focus_docs": last_part.get("focus_docs"), "focus_query": last_part.get("focus_query")}
         else:  # proceed, answer_per_source_and_ask
             result = await self._answer_one(query, notebook_id, scope, decision, mentions=mentions)
+        if result.get("focus_docs"):  # a searched question moves the focus; refusals, greetings and lists of sources do not
+            years = {d.document_id: d.metadata.fiscal_year for d in scope}
+            result["focus"] = build_focus(result["focus_query"], result["focus_docs"], years, focus_state)
+        if followup:
+            result.setdefault("trace", {})["followup"] = followup
+        if intent:
+            result.setdefault("trace", {})["intent"] = intent.trace()
         if prefix:
             result["answer"] = prefix + result["answer"]
         result["answer"], meta = split_answer(result["answer"])  # prompt v3: the machine block goes to the trace, not to the user
@@ -284,12 +334,36 @@ class RAGWorkflowOrchestrator:
             result.setdefault("trace", {})["answer_meta"] = meta
         return result
 
+    async def _within_policy(self, answer: str, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]], max_tokens: int, lang: str) -> str:
+        """The answer as it may be shown (answer_check/policy.py): outside links removed; rewritten once when it breaks a rule; replaced by a
+        fixed reply when it breaks a hard rule (advice, its own instructions, an internal name, foul language) and the rewrite does too."""
+        answer = policy.clean(answer, chunks)
+        first = policy.check(answer, chunks, lang)
+        if not first:
+            return answer
+        try:
+            again: Optional[str] = policy.clean(await generate_answer(query, chunks, list(notes or []) + [policy.rewrite_note(first)], max_tokens), chunks)
+            second = policy.check(again, chunks, lang)
+        except LLMUnavailableError:
+            again, second = None, first
+        hard = any(p.hard for p in first)
+        if again is not None and not any(p.hard for p in second) and (hard or len(second) < len(first)):
+            outcome, shown = "rewritten", again
+        elif hard:
+            outcome, shown = "blocked", policy.blocked(lang, settings.GENERATION_PROMPT in STRUCTURED_PROMPTS)
+        else:
+            outcome, shown = "kept", answer  # only a soft problem, and the rewrite did no better
+        logger.warning(f"Output policy: {[p.kind for p in first]} -> {outcome}")
+        policy.record({"problems": [p.kind for p in first], "after_rewrite": [p.kind for p in second] if again is not None else None, "outcome": outcome})
+        return shown
+
     async def _answer(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]] = None, max_tokens: int = 1200) -> str:
         vi = detect_language(query) == "vi"
         if not chunks:
             return NO_DATA_ANSWER["vi" if vi else "en"]
         try:
-            return await generate_answer(query, chunks, notes, max_tokens)
+            answer = await generate_answer(query, chunks, notes, max_tokens)
+            return await self._within_policy(answer, query, chunks, notes, max_tokens, "vi" if vi else "en") if settings.OUTPUT_POLICY_ENABLED else answer
         except LLMUnavailableError as exc:
             logger.warning(f"Answer generation unavailable: {exc.message}")
             excerpts = "\n\n".join(f"**{'Trang' if vi else 'Page'} {c['page']}**\n> " + c["content"][:400].replace("\n", "\n> ") for c in chunks[:3])

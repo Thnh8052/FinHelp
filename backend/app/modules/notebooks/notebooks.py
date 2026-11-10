@@ -24,7 +24,7 @@ from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.notebooks.notebook_repo import NotebookRepository
-from app.modules.notebooks.notebook import NotebookRecord
+from app.modules.notebooks.notebook import GUEST_TITLE, NotebookRecord
 from app.modules.notebooks.purge import has_active_documents, purge_notebook
 
 router = APIRouter(prefix="/notebooks", tags=["Notebooks"])
@@ -91,7 +91,7 @@ async def create_guest_notebook(db: AsyncIOMotorDatabase = Depends(get_database)
         notebook_id=f"{GUEST_PREFIX}{key}",
         owner_type="guest",
         owner_id=key,
-        title="Không Gian Dùng Thử (Khách Chưa Đăng Nhập)",
+        title=GUEST_TITLE,
     )
     await NotebookRepository(db).save_notebook(record)
     return record
