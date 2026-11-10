@@ -77,8 +77,9 @@ class UserRecord(BaseSchema):
     last_login_at: Optional[Any] = None
 
     # Khôi phục mật khẩu (Forgot/Reset Password)
-    reset_token: Optional[str] = None
+    reset_token: Optional[str] = None  # keyed hash of the OTP (auth.py: _otp_hash), never the code itself
     reset_token_expires_at: Optional[Any] = None
+    reset_attempts: int = 0  # codes tried against the current OTP; it dies after MAX_RESET_ATTEMPTS
 
     @field_validator("email", "username", mode="before")
     @classmethod

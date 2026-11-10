@@ -12,24 +12,42 @@ Chịu trách nhiệm:
 """
 
 from datetime import datetime, timedelta, timezone
+import hmac
 import secrets
 from typing import Any, Optional
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, EmailStr, Field
 
 from app.shared.deps import get_current_user
 from app.core.config import settings
+from app.core.logging import logger
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.infrastructure.database.mongodb import get_database
+from app.shared.rate_limit import enforce, limiter
 from app.modules.auth.user_repo import UserRepository
 from app.modules.auth.user import TIER_SPECS, UserQuota, UserRecord
 from app.services.email_service import email_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# Guessing limits: wrong passwords per account and per address, reset-code requests and tries (all within RATE_WINDOW seconds)
+RATE_WINDOW = 15 * 60
+LOGIN_FAILS_PER_ACCOUNT, LOGIN_FAILS_PER_IP = 10, 30
+FORGOT_PER_EMAIL, FORGOT_PER_IP, RESET_PER_IP = 3, 10, 20
+MAX_RESET_ATTEMPTS = 5  # wrong codes before an OTP dies; the user must ask for a new one
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _otp_hash(email: str, code: str) -> str:
+    """What is stored instead of the code (a 6-digit code has only 900,000 values, so a plain hash would not protect it): keyed with the secret."""
+    return hmac.new(settings.SECRET_KEY.encode(), f"{email.strip().lower()}:{code}".encode(), "sha256").hexdigest()
 
 
 # --- Schemas ---
@@ -94,10 +112,16 @@ def _token_response(user: UserRecord) -> TokenResponse:
     )
 
 
-async def _authenticate(repo: UserRepository, identifier: str, password: str) -> TokenResponse:
-    """Password login by email or username: the same check for the form and the JSON endpoint, no account has another way in."""
+async def _authenticate(repo: UserRepository, identifier: str, password: str, ip: str) -> TokenResponse:
+    """Password login by email or username: the same check for the form and the JSON endpoint, no account has another way in.
+    Wrong passwords are counted per account (not per spelling of it) and per address; past the limit even the right password is refused."""
     user = await repo.get_by_email_or_username(identifier)
+    account, address = f"login:account:{user.user_id if user else identifier.strip().lower()}", f"login:ip:{ip}"
+    enforce(account, LOGIN_FAILS_PER_ACCOUNT, RATE_WINDOW)
+    enforce(address, LOGIN_FAILS_PER_IP, RATE_WINDOW)
     if not user or not verify_password(password, user.hashed_password):
+        limiter.record(account)
+        limiter.record(address)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tên đăng nhập / Email hoặc mật khẩu không chính xác",
@@ -107,6 +131,7 @@ async def _authenticate(repo: UserRepository, identifier: str, password: str) ->
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tài khoản hiện đang bị tạm khóa",
         )
+    limiter.clear(account)
     await repo.update_last_login(user.user_id)
     return _token_response(user)
 
@@ -192,11 +217,12 @@ async def register(req: RegisterRequest, db: AsyncIOMotorDatabase = Depends(get_
 # ==============================================================================
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """Đăng nhập chuẩn OAuth2 (hỗ trợ cả username hoặc email qua trường username)."""
-    return await _authenticate(UserRepository(db), form_data.username, form_data.password)
+    return await _authenticate(UserRepository(db), form_data.username, form_data.password, _client_ip(request))
 
 
 # ==============================================================================
@@ -210,11 +236,12 @@ async def login(
 # ==============================================================================
 @router.post("/login-json", response_model=TokenResponse)
 async def login_json(
+    request: Request,
     req: LoginRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """Đăng nhập bằng JSON payload tiện lợi cho giao diện Frontend Web/SPA."""
-    return await _authenticate(UserRepository(db), req.identifier, req.password)
+    return await _authenticate(UserRepository(db), req.identifier, req.password, _client_ip(request))
 
 
 # ==============================================================================
@@ -248,14 +275,20 @@ async def get_me(current_user: UserRecord = Depends(get_current_user)):
 # ĐẦU VÀO:
 #   - req (ForgotPasswordRequest): email của người dùng.
 # ĐẦU RA:
-#   - JSON thông báo gửi thành công kèm otp_debug (phục vụ môi trường kiểm thử trực tiếp).
+#   - JSON thông báo gửi thành công. Mã OTP chỉ đi qua email, không bao giờ nằm trong phản hồi.
 # ==============================================================================
 @router.post("/forgot-password")
 async def forgot_password(
+    request: Request,
     req: ForgotPasswordRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """Tạo mã OTP 6 số để khôi phục mật khẩu (lưu vào MongoDB kèm thời hạn 15 phút)."""
+    email, address = f"forgot:email:{req.email.strip().lower()}", f"forgot:ip:{_client_ip(request)}"
+    enforce(email, FORGOT_PER_EMAIL, RATE_WINDOW)  # counted for unknown emails too: the answer does not tell which exist
+    enforce(address, FORGOT_PER_IP, RATE_WINDOW)
+    limiter.record(email)
+    limiter.record(address)
     repo = UserRepository(db)
     user = await repo.get_by_email(req.email)
     if not user:
@@ -267,13 +300,11 @@ async def forgot_password(
     otp_code = f"{secrets.randbelow(900000) + 100000}"
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
-    await repo.set_reset_token(req.email, otp_code, expires_at)
-    email_service.send_password_reset_otp(req.email, otp_code)
+    await repo.set_reset_token(req.email, _otp_hash(req.email, otp_code), expires_at)
+    if not email_service.send_password_reset_otp(req.email, otp_code) and settings.ENVIRONMENT == "development":
+        logger.warning(f"[dev] No email was sent (SendGrid not configured). Reset code for {req.email}: {otp_code}")  # server log only, never the response
 
-    response = {"success": True, "message": "A verification code has been sent to your email."}
-    if settings.ENVIRONMENT == "development":
-        response["otp_debug"] = otp_code
-    return response
+    return {"success": True, "message": "A verification code has been sent to your email."}
 
 
 # ==============================================================================
@@ -287,25 +318,27 @@ async def forgot_password(
 # ==============================================================================
 @router.post("/reset-password")
 async def reset_password(
+    request: Request,
     req: ResetPasswordRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
-    """Xác thực mã OTP và cập nhật mật khẩu mới trong MongoDB."""
+    """Xác thực mã OTP và cập nhật mật khẩu mới trong MongoDB. Mỗi OTP chỉ được thử MAX_RESET_ATTEMPTS lần."""
+    address = f"reset:ip:{_client_ip(request)}"
+    enforce(address, RESET_PER_IP, RATE_WINDOW)
+    limiter.record(address)
     repo = UserRepository(db)
-    user = await repo.get_by_email(req.email)
+    user = await repo.use_reset_attempt(req.email, MAX_RESET_ATTEMPTS)  # None: unknown email, no code pending, or all tries used
     if not user:
-        raise HTTPException(status_code=400, detail="Invalid request")
+        raise HTTPException(status_code=400, detail="Invalid or expired verification code")
 
-    if not user.reset_token or user.reset_token != req.otp_code:
+    if not hmac.compare_digest(user.reset_token or "", _otp_hash(req.email, req.otp_code.strip())):
         raise HTTPException(status_code=400, detail="Invalid verification code")
 
-    if user.reset_token_expires_at:
-        now_utc = datetime.now(timezone.utc)
-        expires_at = user.reset_token_expires_at
-        if hasattr(expires_at, "tzinfo") and expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        if now_utc > expires_at:
-            raise HTTPException(status_code=400, detail="Verification code has expired")
+    expires_at = user.reset_token_expires_at
+    if hasattr(expires_at, "tzinfo") and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if not expires_at or datetime.now(timezone.utc) > expires_at:
+        raise HTTPException(status_code=400, detail="Verification code has expired")
 
     new_hash = get_password_hash(req.new_password)
     await repo.update_password(user.user_id, new_hash)

@@ -71,12 +71,116 @@ def test_admin_has_no_password_shortcut(app_client, path, body):
     assert ok.status_code == 200 and ok.json()["role"] == "admin"
 
 
-def test_reset_code_is_shown_only_while_developing(app_client, monkeypatch):
-    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
-    dev = app_client.post("/api/v1/auth/forgot-password", json={"email": ADMIN.email}).json()
-    assert len(dev["otp_debug"]) == 6 and dev["otp_debug"].isdigit()
-    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
-    assert "otp_debug" not in app_client.post("/api/v1/auth/forgot-password", json={"email": ADMIN.email}).json()
+class ResetUsers:
+    """In-memory users collection for the reset-code flow: the same rules as UserRepository (hash stored, tries counted)."""
+    user = None
+
+    def __init__(self, db):
+        pass
+
+    async def get_by_email_or_username(self, identifier):
+        return self.user if identifier in (self.user.username, self.user.email) else None
+
+    async def get_by_email(self, email):
+        return self.user if email == self.user.email else None
+
+    async def set_reset_token(self, email, token, expires_at):
+        self.user.reset_token, self.user.reset_token_expires_at, self.user.reset_attempts = token, expires_at, 0
+        return True
+
+    async def use_reset_attempt(self, email, max_attempts):
+        if email != self.user.email or not self.user.reset_token or self.user.reset_attempts >= max_attempts:
+            return None
+        self.user.reset_attempts += 1
+        return self.user
+
+    async def update_password(self, user_id, new_hash):
+        self.user.hashed_password, self.user.reset_token = new_hash, None
+        return True
+
+    async def update_last_login(self, user_id):
+        return True
+
+
+@pytest.fixture
+def reset_flow(monkeypatch):
+    """(client, codes): the codes the server "emailed"; the API response is the only other thing the client sees."""
+    ResetUsers.user = UserRecord(user_id="usr_a", email="a@example.com", username="alice", hashed_password=get_password_hash(REAL_PASSWORD))
+    codes = []
+    monkeypatch.setattr(auth_api, "UserRepository", ResetUsers)
+    monkeypatch.setattr(auth_api.email_service, "send_password_reset_otp", lambda email, code, *a, **k: codes.append(code) or True)
+    monkeypatch.setattr(auth_api.email_service, "send_password_changed_notification", lambda **kw: True)
+    app = FastAPI()
+    app.include_router(api_v1_router, prefix="/api/v1")
+    app.dependency_overrides[get_database] = lambda: None
+    return TestClient(app, raise_server_exceptions=False), codes
+
+
+def _forgot(client, email="a@example.com"):
+    return client.post("/api/v1/auth/forgot-password", json={"email": email})
+
+
+def _reset(client, code, password="brand-new-password"):
+    return client.post("/api/v1/auth/reset-password", json={"email": "a@example.com", "otp_code": code, "new_password": password})
+
+
+@pytest.mark.parametrize("environment", ["development", "production"])
+def test_reset_code_is_never_in_the_response(reset_flow, monkeypatch, environment):
+    client, codes = reset_flow
+    monkeypatch.setattr(settings, "ENVIRONMENT", environment)
+    response = _forgot(client)
+    assert response.status_code == 200 and codes and codes[0] not in response.text and "otp" not in response.text.lower()
+    assert _forgot(client, "nobody@example.com").json().keys() == response.json().keys()  # unknown emails look the same
+
+
+def test_environment_defaults_to_production():
+    assert Settings.model_fields["ENVIRONMENT"].default == "production"
+
+
+def test_reset_code_is_stored_as_a_hash_and_resets_the_password(reset_flow):
+    client, codes = reset_flow
+    _forgot(client)
+    assert ResetUsers.user.reset_token != codes[0] and codes[0] not in ResetUsers.user.reset_token
+    assert _reset(client, codes[0]).status_code == 200
+    assert verify_password("brand-new-password", ResetUsers.user.hashed_password)
+    assert _reset(client, codes[0]).status_code == 400  # a code works once
+
+
+def test_reset_code_dies_after_five_wrong_tries(reset_flow):
+    client, codes = reset_flow
+    _forgot(client)
+    wrong = "000000" if codes[0] != "000000" else "111111"
+    assert [_reset(client, wrong).status_code for _ in range(5)] == [400] * 5
+    assert _reset(client, codes[0]).status_code == 400  # the right code is too late
+    assert not verify_password("brand-new-password", ResetUsers.user.hashed_password)
+    _forgot(client)  # a fresh code starts with fresh tries
+    assert _reset(client, codes[-1]).status_code == 200
+
+
+def test_reset_requests_are_limited_per_email_and_per_address(reset_flow):
+    client, _ = reset_flow
+    assert [_forgot(client).status_code for _ in range(4)] == [200, 200, 200, 429]
+    assert _forgot(client, "other@example.com").status_code == 200  # another email is another count
+
+
+def test_login_is_blocked_after_ten_wrong_passwords(reset_flow):
+    client, _ = reset_flow
+
+    def attempt(who, password):
+        return client.post("/api/v1/auth/login-json", json={"identifier": who, "password": password}).status_code
+
+    assert [attempt("alice", "wrong") for _ in range(10)] == [401] * 10
+    assert attempt("alice", REAL_PASSWORD) == 429  # even the right password
+    assert attempt("a@example.com", REAL_PASSWORD) == 429  # the email is the same account, not a fresh count
+
+
+def test_right_password_clears_the_failed_count(reset_flow):
+    client, _ = reset_flow
+    body = {"identifier": "alice", "password": "wrong"}
+    for _ in range(9):
+        assert client.post("/api/v1/auth/login-json", json=body).status_code == 401
+    assert client.post("/api/v1/auth/login-json", json={**body, "password": REAL_PASSWORD}).status_code == 200
+    assert [client.post("/api/v1/auth/login-json", json=body).status_code for _ in range(9)] == [401] * 9
 
 
 def test_admin_routes_are_closed_to_users_and_guests(app_client):

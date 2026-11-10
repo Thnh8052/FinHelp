@@ -12,6 +12,7 @@ Chịu trách nhiệm:
 
 from typing import Any, List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo import ReturnDocument
 from app.infrastructure.database import collections
 from app.shared.base_repo import BaseRepository
 from app.shared.common import get_utc_now
@@ -87,6 +88,7 @@ class UserRepository(BaseRepository):
                 "hashed_password": new_hashed_password,
                 "reset_token": None,
                 "reset_token_expires_at": None,
+                "reset_attempts": 0,
                 "updated_at": get_utc_now(),
             },
         )
@@ -107,8 +109,8 @@ class UserRepository(BaseRepository):
 
     # ==============================================================================
     # HÀM: set_reset_token
-    # Ý NGHĨA: Lưu mã OTP khôi phục mật khẩu 6 số kèm thời gian hết hạn (15 phút) vào MongoDB.
-    # ĐẦU VÀO: email (str), reset_token (str), expires_at (datetime)
+    # Ý NGHĨA: Lưu mã băm của OTP khôi phục mật khẩu kèm thời hạn, và đặt lại số lần thử về 0.
+    # ĐẦU VÀO: email (str), reset_token (str: mã băm, không phải mã OTP), expires_at (datetime)
     # ĐẦU RA: bool
     # ==============================================================================
     async def set_reset_token(self, email: str, reset_token: str, expires_at: Any) -> bool:
@@ -117,19 +119,24 @@ class UserRepository(BaseRepository):
             {
                 "reset_token": reset_token,
                 "reset_token_expires_at": expires_at,
+                "reset_attempts": 0,
                 "updated_at": get_utc_now(),
             },
         )
         return updated > 0
 
     # ==============================================================================
-    # HÀM: get_by_reset_token
-    # Ý NGHĨA: Tìm kiếm người dùng dựa trên mã OTP / reset token.
-    # ĐẦU VÀO: reset_token (str)
-    # ĐẦU RA: UserRecord hoặc None
+    # HÀM: use_reset_attempt
+    # Ý NGHĨA: Tính một lần thử mã OTP và trả về tài khoản; một lệnh nguyên tử nên các yêu cầu đồng thời không vượt được giới hạn.
+    # ĐẦU RA: UserRecord, hoặc None khi không có OTP đang chờ hoặc đã hết lượt thử
     # ==============================================================================
-    async def get_by_reset_token(self, reset_token: str) -> Optional[UserRecord]:
-        doc = await self.find_one({"reset_token": reset_token})
+    async def use_reset_attempt(self, email: str, max_attempts: int) -> Optional[UserRecord]:
+        doc = await self.collection.find_one_and_update(
+            {"email": email.strip().lower(), "reset_token": {"$ne": None}, "reset_attempts": {"$lt": max_attempts}},
+            {"$inc": {"reset_attempts": 1}},
+            return_document=ReturnDocument.AFTER,
+            projection={"_id": 0},
+        )
         return UserRecord(**doc) if doc else None
 
     # ==============================================================================

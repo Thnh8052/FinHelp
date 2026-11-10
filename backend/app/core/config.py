@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = True
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: str = "production"  # safe unless a developer sets "development" in their own .env
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [

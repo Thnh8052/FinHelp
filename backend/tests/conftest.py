@@ -14,3 +14,11 @@ def _measured_prompt(monkeypatch):
     monkeypatch.setattr(settings, "GENERATION_PROMPT", "v2")
     monkeypatch.setattr(settings, "INTENT_ROUTER_ENABLED", False)
     monkeypatch.setattr(settings, "OUTPUT_POLICY_ENABLED", False)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """The login / reset-code limits live in memory: every test starts with none used."""
+    from app.shared.rate_limit import limiter
+
+    limiter.reset()
