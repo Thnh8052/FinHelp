@@ -311,24 +311,30 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     </div>
                   )}
 
-                  {/* Grounded Evidence Citations */}
-                  {msg.citations && msg.citations.length > 0 && (
-                    <div className="chat-citations-container">
-                      <div className="chat-citations-title">
-                        {t.workspace.sourceCitationsTitle} ({msg.citations.length}):
+                  {/* Grounded Evidence Citations: only the excerpts the answer uses, each keeping its own [n] */}
+                  {(() => {
+                    const used = (msg.citations || [])
+                      .map((cite, idx) => ({ cite, index: idx + 1 }))
+                      .filter(({ cite }) => cite.cited !== false);
+                    if (used.length === 0) return null;
+                    return (
+                      <div className="chat-citations-container">
+                        <div className="chat-citations-title">
+                          {t.workspace.sourceCitationsTitle} ({used.length}):
+                        </div>
+                        <div className="chat-citations-list">
+                          {used.map(({ cite, index }) => (
+                            <CitationBadge
+                              key={cite.citation_id}
+                              citation={cite}
+                              index={index}
+                              onClick={() => onSelectCitation(cite)}
+                            />
+                          ))}
+                        </div>
                       </div>
-                      <div className="chat-citations-list">
-                        {msg.citations.map((cite, idx) => (
-                          <CitationBadge
-                            key={cite.citation_id}
-                            citation={cite}
-                            index={idx + 1}
-                            onClick={() => onSelectCitation(cite)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Actions: Copy */}
                   {!isUser && (

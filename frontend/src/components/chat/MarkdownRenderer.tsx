@@ -114,7 +114,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       <ReactMarkdown
         remarkPlugins={REMARK_PLUGINS}
         rehypePlugins={REHYPE_PLUGINS}
+        // An answer is built from uploaded files: text hidden in a PDF must never make the browser load an outside image or offer an outside link
+        disallowedElements={["img"]}
         components={{
+          a: ({ children }) => <>{children}</>,
           table: ({ children }) => (
             <div className="table-responsive-container">
               <table className="financial-markdown-table">{children}</table>
