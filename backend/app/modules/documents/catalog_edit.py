@@ -113,7 +113,9 @@ def catalog_changes(doc: DocumentRecord, req: CatalogUpdate, document_text: str,
            "fiscal_year": req.fiscal_year, "fiscal_quarter": req.fiscal_quarter, "period_end": req.period_end,
            "comparable_year": comparable_year(req.period_end) if req.report_type == "10-K" else None}
     old = {k: getattr(doc.metadata, k) for k in new}
-    entry = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "by": user, "old": old, "new": new}
+    now = datetime.datetime.now(datetime.timezone.utc)
+    entry = {"at": now.isoformat(), "by": user, "old": old, "new": new}
     return {**{f"metadata.{k}": v for k, v in new.items()},
+            "catalog_confirmed_by": user, "catalog_confirmed_at": now,
             "metadata.catalog_source": "user", "metadata.catalog_confirmed": True, "metadata.catalog_unverified": [],
             "metadata.user_override_unverified": unverified, "metadata.catalog_history": (doc.metadata.catalog_history + [entry])[-20:]}

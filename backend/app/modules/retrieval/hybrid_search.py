@@ -154,7 +154,6 @@ class HybridSearchService:
                 "chunk_type": c.chunk_type,
                 "score": scores.get(c.chunk_id, 0.0),
                 "content": c.content,
-                "concept_ids": c.concept_ids,
                 "flags": list(getattr(c, "flags", None) or []),
             }
             for c in chunk_docs

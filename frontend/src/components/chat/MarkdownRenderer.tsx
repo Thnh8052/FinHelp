@@ -1,7 +1,25 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { CitationItem } from "../../types/chat";
+
+// A single $ stays plain text: answers are full of amounts such as "$1,234 and $5,678", which must never be read as a formula.
+const REMARK_PLUGINS = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as React.ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
+const REHYPE_PLUGINS = [[rehypeKatex, { strict: "ignore" }]] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+
+const LOOKS_LIKE_MATH = /\\[a-zA-Z]|[=^]/;
+const inlineMath = (body: string) => `$$${body.trim()}$$`;
+const blockMath = (body: string) => `\n\n$$\n${body.trim()}\n$$\n\n`;
+
+/** Bring the other ways of writing a formula to $$...$$; `\[1\]` and plain amounts have no LaTeX command or operator and are left alone. */
+const normalizeMath = (text: string): string =>
+  text
+    .replace(/\\\[([\s\S]+?)\\\]/g, (all, body: string) => (LOOKS_LIKE_MATH.test(body) ? blockMath(body) : all))
+    .replace(/\\\(([\s\S]+?)\\\)/g, (all, body: string) => (LOOKS_LIKE_MATH.test(body) ? inlineMath(body) : all))
+    .replace(/(?<![$\w])\$(?!\$)([^$\n]*\\[a-zA-Z][^$\n]*)\$(?!\$)/g, (_all, body: string) => inlineMath(body));
 
 interface MarkdownRendererProps {
   content: string;
@@ -86,7 +104,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   // Preprocess: ensure Markdown tables have blank lines before and after so remark-gfm parses them reliably
   const normalizeMarkdown = (raw: string): string => {
     if (!raw) return "";
-    let normalized = raw.replace(/([^\n|])\n(\|[^\n]+\|)/g, "$1\n\n$2");
+    let normalized = normalizeMath(raw).replace(/([^\n|])\n(\|[^\n]+\|)/g, "$1\n\n$2");
     normalized = normalized.replace(/(\|[^\n]+\|)\n([^\n|])/g, "$1\n\n$2");
     return normalized;
   };
@@ -94,8 +112,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   return (
     <div className="markdown-prose">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={REMARK_PLUGINS}
+        rehypePlugins={REHYPE_PLUGINS}
+        // An answer is built from uploaded files: text hidden in a PDF must never make the browser load an outside image or offer an outside link
+        disallowedElements={["img"]}
         components={{
+          a: ({ children }) => <>{children}</>,
           table: ({ children }) => (
             <div className="table-responsive-container">
               <table className="financial-markdown-table">{children}</table>

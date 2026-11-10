@@ -1,4 +1,6 @@
 """Auth hardening and the guest / user / admin rules (no database, no network: repositories are faked)."""
+import types
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -69,12 +71,116 @@ def test_admin_has_no_password_shortcut(app_client, path, body):
     assert ok.status_code == 200 and ok.json()["role"] == "admin"
 
 
-def test_reset_code_is_shown_only_while_developing(app_client, monkeypatch):
-    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
-    dev = app_client.post("/api/v1/auth/forgot-password", json={"email": ADMIN.email}).json()
-    assert len(dev["otp_debug"]) == 6 and dev["otp_debug"].isdigit()
-    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
-    assert "otp_debug" not in app_client.post("/api/v1/auth/forgot-password", json={"email": ADMIN.email}).json()
+class ResetUsers:
+    """In-memory users collection for the reset-code flow: the same rules as UserRepository (hash stored, tries counted)."""
+    user = None
+
+    def __init__(self, db):
+        pass
+
+    async def get_by_email_or_username(self, identifier):
+        return self.user if identifier in (self.user.username, self.user.email) else None
+
+    async def get_by_email(self, email):
+        return self.user if email == self.user.email else None
+
+    async def set_reset_token(self, email, token, expires_at):
+        self.user.reset_token, self.user.reset_token_expires_at, self.user.reset_attempts = token, expires_at, 0
+        return True
+
+    async def use_reset_attempt(self, email, max_attempts):
+        if email != self.user.email or not self.user.reset_token or self.user.reset_attempts >= max_attempts:
+            return None
+        self.user.reset_attempts += 1
+        return self.user
+
+    async def update_password(self, user_id, new_hash):
+        self.user.hashed_password, self.user.reset_token = new_hash, None
+        return True
+
+    async def update_last_login(self, user_id):
+        return True
+
+
+@pytest.fixture
+def reset_flow(monkeypatch):
+    """(client, codes): the codes the server "emailed"; the API response is the only other thing the client sees."""
+    ResetUsers.user = UserRecord(user_id="usr_a", email="a@example.com", username="alice", hashed_password=get_password_hash(REAL_PASSWORD))
+    codes = []
+    monkeypatch.setattr(auth_api, "UserRepository", ResetUsers)
+    monkeypatch.setattr(auth_api.email_service, "send_password_reset_otp", lambda email, code, *a, **k: codes.append(code) or True)
+    monkeypatch.setattr(auth_api.email_service, "send_password_changed_notification", lambda **kw: True)
+    app = FastAPI()
+    app.include_router(api_v1_router, prefix="/api/v1")
+    app.dependency_overrides[get_database] = lambda: None
+    return TestClient(app, raise_server_exceptions=False), codes
+
+
+def _forgot(client, email="a@example.com"):
+    return client.post("/api/v1/auth/forgot-password", json={"email": email})
+
+
+def _reset(client, code, password="brand-new-password"):
+    return client.post("/api/v1/auth/reset-password", json={"email": "a@example.com", "otp_code": code, "new_password": password})
+
+
+@pytest.mark.parametrize("environment", ["development", "production"])
+def test_reset_code_is_never_in_the_response(reset_flow, monkeypatch, environment):
+    client, codes = reset_flow
+    monkeypatch.setattr(settings, "ENVIRONMENT", environment)
+    response = _forgot(client)
+    assert response.status_code == 200 and codes and codes[0] not in response.text and "otp" not in response.text.lower()
+    assert _forgot(client, "nobody@example.com").json().keys() == response.json().keys()  # unknown emails look the same
+
+
+def test_environment_defaults_to_production():
+    assert Settings.model_fields["ENVIRONMENT"].default == "production"
+
+
+def test_reset_code_is_stored_as_a_hash_and_resets_the_password(reset_flow):
+    client, codes = reset_flow
+    _forgot(client)
+    assert ResetUsers.user.reset_token != codes[0] and codes[0] not in ResetUsers.user.reset_token
+    assert _reset(client, codes[0]).status_code == 200
+    assert verify_password("brand-new-password", ResetUsers.user.hashed_password)
+    assert _reset(client, codes[0]).status_code == 400  # a code works once
+
+
+def test_reset_code_dies_after_five_wrong_tries(reset_flow):
+    client, codes = reset_flow
+    _forgot(client)
+    wrong = "000000" if codes[0] != "000000" else "111111"
+    assert [_reset(client, wrong).status_code for _ in range(5)] == [400] * 5
+    assert _reset(client, codes[0]).status_code == 400  # the right code is too late
+    assert not verify_password("brand-new-password", ResetUsers.user.hashed_password)
+    _forgot(client)  # a fresh code starts with fresh tries
+    assert _reset(client, codes[-1]).status_code == 200
+
+
+def test_reset_requests_are_limited_per_email_and_per_address(reset_flow):
+    client, _ = reset_flow
+    assert [_forgot(client).status_code for _ in range(4)] == [200, 200, 200, 429]
+    assert _forgot(client, "other@example.com").status_code == 200  # another email is another count
+
+
+def test_login_is_blocked_after_ten_wrong_passwords(reset_flow):
+    client, _ = reset_flow
+
+    def attempt(who, password):
+        return client.post("/api/v1/auth/login-json", json={"identifier": who, "password": password}).status_code
+
+    assert [attempt("alice", "wrong") for _ in range(10)] == [401] * 10
+    assert attempt("alice", REAL_PASSWORD) == 429  # even the right password
+    assert attempt("a@example.com", REAL_PASSWORD) == 429  # the email is the same account, not a fresh count
+
+
+def test_right_password_clears_the_failed_count(reset_flow):
+    client, _ = reset_flow
+    body = {"identifier": "alice", "password": "wrong"}
+    for _ in range(9):
+        assert client.post("/api/v1/auth/login-json", json=body).status_code == 401
+    assert client.post("/api/v1/auth/login-json", json={**body, "password": REAL_PASSWORD}).status_code == 200
+    assert [client.post("/api/v1/auth/login-json", json=body).status_code for _ in range(9)] == [401] * 9
 
 
 def test_admin_routes_are_closed_to_users_and_guests(app_client):
@@ -118,7 +224,7 @@ class FakeRepo:
 @pytest.fixture
 def admin_init(monkeypatch):
     FakeRepo.saved = []
-    for name in ("UserRepository", "NotebookRepository", "ChatRepository"):
+    for name in ("UserRepository", "NotebookRepository"):
         monkeypatch.setattr(init_admin, name, FakeRepo)
     monkeypatch.setattr(init_admin.MongoManager, "db", object())
     return FakeRepo
@@ -156,13 +262,13 @@ class Stop(Exception):
     """Raised by the faked storage: the upload got past the quota gate."""
 
 
-def _doc(n, status="completed"):
-    return DocumentRecord(document_id=f"d{n}", notebook_id="nb", file_name=f"{n}.pdf", file_size_bytes=1, file_path="x", parsing_status=status)
+def _doc(n, status="ready"):
+    return DocumentRecord(document_id=f"d{n}", notebook_id="nb", file_name=f"{n}.pdf", file_size_bytes=1, file_path="x", status=status)
 
 
 @pytest.fixture
 def upload(monkeypatch):
-    state = {"user": None, "docs": [], "notebook": NotebookRecord(notebook_id=GUEST_NOTEBOOK, user_id="guest", title="g")}
+    state = {"user": None, "docs": [], "notebook": NotebookRecord(notebook_id=GUEST_NOTEBOOK, owner_type="guest", owner_id="g", title="g")}
 
     class Notebooks:
         def __init__(self, db):
@@ -182,7 +288,15 @@ def upload(monkeypatch):
         async def save_pdf(self, *args):
             raise Stop()
 
+    class Users:
+        def __init__(self, db):
+            pass
+
+        async def get_by_id(self, _id):
+            return types.SimpleNamespace(role=state.get("role", "user"))
+
     monkeypatch.setattr(deps, "NotebookRepository", Notebooks)
+    monkeypatch.setattr(documents_api, "UserRepository", Users)
     monkeypatch.setattr(documents_api, "DocumentRepository", Documents)
     monkeypatch.setattr(documents_api, "StorageService", Storage)
     app = FastAPI()
@@ -192,8 +306,8 @@ def upload(monkeypatch):
     app.dependency_overrides[get_optional_user_id] = lambda: state["user"]
     client = TestClient(app, raise_server_exceptions=False)
 
-    def post(notebook_id):
-        return client.post(f"/documents/upload/{notebook_id}", files={"file": ("r.pdf", b"%PDF-1.4", "application/pdf")}).status_code
+    def post(notebook_id, content=b"%PDF-1.4"):
+        return client.post(f"/documents/upload/{notebook_id}", files={"file": ("r.pdf", content, "application/pdf")}).status_code
 
     return state, post
 
@@ -209,14 +323,66 @@ def test_guest_may_upload_one_document_only(upload):
 
 def test_signed_in_user_may_upload_five_documents(upload):
     state, post = upload
-    state["user"], state["notebook"] = "alice", NotebookRecord(notebook_id="nb", user_id="alice", title="a")
+    state["user"], state["notebook"] = "alice", NotebookRecord(notebook_id="nb", owner_id="alice", title="a")
     state["docs"] = [_doc(n) for n in range(4)]
     assert post("nb") == 500
     state["docs"] = [_doc(n) for n in range(5)]
     assert post("nb") == 403
 
 
+MB = 1024 * 1024
+
+
+def _pdf_of(megabytes):
+    return b"%PDF-1.4" + b"0" * (megabytes * MB)
+
+
+@pytest.mark.parametrize("role, limit", [("user", 20), ("admin", 100)])
+def test_each_role_has_its_own_file_size_limit(upload, role, limit):
+    state, post = upload
+    state["user"], state["role"], state["notebook"] = "alice", role, NotebookRecord(notebook_id="nb", owner_id="alice", title="a")
+    assert post("nb", _pdf_of(limit - 1)) == 500  # Stop: reached the storage
+    assert post("nb", _pdf_of(limit + 1)) == 413
+
+
+def test_a_guest_file_is_limited_to_five_megabytes(upload):
+    _, post = upload
+    assert post(GUEST_NOTEBOOK, _pdf_of(4)) == 500
+    assert post(GUEST_NOTEBOOK, _pdf_of(6)) == 413
+
+
+@pytest.mark.parametrize("content", [b"", b"this is only named .pdf", b"<html>%PDF</html>"])
+def test_a_file_that_is_not_a_pdf_is_refused_before_storage(upload, content):
+    _, post = upload
+    assert post(GUEST_NOTEBOOK, content) == 400
+
+
+async def _through_the_limit(path, headers, method="POST"):
+    from app.shared.upload_limit import UploadSizeLimit
+
+    reached, sent = [], []
+
+    async def app(scope, receive, send):
+        reached.append(scope["path"])
+
+    async def send(message):
+        sent.append(message)
+
+    await UploadSizeLimit(app)({"type": "http", "method": method, "path": path, "headers": headers}, None, send)
+    return bool(reached), sent[0]["status"] if sent else None
+
+
+async def test_an_oversized_upload_is_refused_before_its_body_is_read():
+    from app.shared.upload_limit import MAX_UPLOAD_BODY
+
+    path = "/api/v1/documents/upload/nb"
+    assert await _through_the_limit(path, [(b"content-length", str(MAX_UPLOAD_BODY + 1).encode())]) == (False, 413)
+    assert await _through_the_limit(path, []) == (False, 411)
+    assert await _through_the_limit(path, [(b"content-length", b"1000")]) == (True, None)
+    assert await _through_the_limit("/api/v1/chat/query", []) == (True, None)  # other routes are untouched
+
+
 def test_nobody_uploads_into_someone_elses_notebook(upload):
     state, post = upload
-    state["user"], state["notebook"] = "bob", NotebookRecord(notebook_id="nb", user_id="alice", title="a")
+    state["user"], state["notebook"] = "bob", NotebookRecord(notebook_id="nb", owner_id="alice", title="a")
     assert post("nb") == 403

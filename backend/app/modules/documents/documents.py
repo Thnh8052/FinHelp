@@ -13,25 +13,33 @@ Chịu trách nhiệm:
 6. Theo dõi trạng thái tiến độ xử lý tài liệu (GET /api/v1/documents/jobs/{job_id}).
 """
 
+import asyncio
+import hashlib
+from pathlib import Path
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.errors import DuplicateKeyError
 from qdrant_client import AsyncQdrantClient
-from qdrant_client.http import models
 
 from app.shared.deps import get_optional_user_id, require_notebook
 from app.core.config import settings
+from app.core.logging import logger
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.ingestion.chunk_repo import ChunkRepository
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.ingestion.ingestion_job_repo import IngestionJobRepository
-from app.modules.documents.document import DocumentRecord
+from app.modules.auth.user import tier_spec
+from app.modules.auth.user_repo import UserRepository
+from app.modules.documents.document import ACTIVE_STATUSES, DocumentRecord
 from app.modules.ingestion.ingestion_job import IngestionJobRecord
 from app.modules.documents.catalog_edit import REPORT_TYPES, CatalogUpdate, catalog_changes, needs_confirmation
 from app.modules.ingestion.pipeline import IngestionPipeline
 from app.infrastructure.storage.local_fs import StorageService
+from app.modules.notebooks.notebook_repo import NotebookRepository
+from app.modules.notebooks.purge import purge_document
 
 router = APIRouter(prefix="/documents", tags=["Documents & Ingestion"])
 
@@ -58,6 +66,30 @@ async def list_documents(
     return await repo.get_by_notebook(notebook_id)
 
 
+def _compute_sha256(file_path: Path) -> str:
+    """Tính mã băm SHA-256 của nội dung tệp tin để chống trùng lặp dữ liệu."""
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+async def _check_upload(db: AsyncIOMotorDatabase, file: UploadFile, user_id: Optional[str]) -> None:
+    """Refuse a file before it reaches storage: larger than the caller's limit, or not a PDF whatever its name says."""
+    role = None
+    if user_id is not None:
+        user = await UserRepository(db).get_by_id(user_id)
+        role = user.role if user else "user"
+    limit_mb = tier_spec(role)["max_file_size_mb"]
+    if (file.size or 0) > limit_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"Dung lượng tệp vượt quá giới hạn {limit_mb} MB của tài khoản.")
+    head = await file.read(1024)
+    await file.seek(0)
+    if b"%PDF-" not in head:
+        raise HTTPException(status_code=400, detail="Tệp này không phải là PDF hợp lệ.")
+
+
 # ==============================================================================
 # HÀM: upload_pdf
 # Ý NGHĨA: Tiếp nhận tệp PDF BCTC, kiểm tra hạn mức (Guest: tối đa 1 doc; User: tối đa 5 docs),
@@ -72,7 +104,6 @@ async def list_documents(
 @router.post("/upload/{notebook_id}")
 async def upload_pdf(
     notebook_id: str,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user_id: Optional[str] = Depends(get_optional_user_id),
     db: AsyncIOMotorDatabase = Depends(get_database),
@@ -83,9 +114,24 @@ async def upload_pdf(
         raise HTTPException(status_code=400, detail="Hệ thống hiện tại chỉ hỗ trợ định dạng tệp PDF.")
 
     await require_notebook(db, notebook_id, user_id, write=True)
+    await _check_upload(db, file, user_id)
     doc_repo = DocumentRepository(db)
     # Failed documents do not count toward the quota: otherwise one failed upload would block every retry.
-    existing_docs = [d for d in await doc_repo.get_by_notebook(notebook_id) if d.parsing_status != "failed"]
+    existing_docs = [d for d in await doc_repo.get_by_notebook(notebook_id) if d.status != "failed"]
+
+    # 0. Kiểm tra trùng lặp tên tệp trong sổ tay (Deduplication Check)
+    clean_filename = file.filename.strip()
+    for d in existing_docs:
+        if d.file_name.strip().lower() == clean_filename.lower():
+            if d.status in ACTIVE_STATUSES:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Tài liệu '{clean_filename}' đang được xử lý trong sổ tay. Vui lòng không tải lại.",
+                )
+            raise HTTPException(
+                status_code=409,
+                detail=f"Tài liệu '{clean_filename}' đã tồn tại trong sổ tay. Vui lòng xóa tài liệu cũ nếu muốn tải lên lại.",
+            )
 
     # 1. Kiểm tra hạn mức tài liệu (Quota Gate)
     if user_id is None:
@@ -109,6 +155,26 @@ async def upload_pdf(
 
     # 2. Lưu file vật lý vào thư mục lưu trữ
     saved_path = await storage.save_pdf(notebook_id, doc_id, file)
+    file_hash = await asyncio.to_thread(_compute_sha256, saved_path)
+
+    # 2.1. Kiểm tra trùng lặp nội dung tệp bằng mã băm SHA-256 (Content Hash Deduplication)
+    for d in existing_docs:
+        if d.file_hash and d.file_hash == file_hash:
+            # Xóa file tạm vừa ghi vì nội dung đã tồn tại
+            try:
+                saved_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+            if d.status in ACTIVE_STATUSES:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Tệp này có nội dung trùng với '{d.file_name}' đang được xử lý trong sổ tay.",
+                )
+            raise HTTPException(
+                status_code=409,
+                detail=f"Tệp này có nội dung trùng hoàn toàn với tài liệu '{d.file_name}' đã có trong sổ tay.",
+            )
 
     # 3. Tạo bản ghi DocumentRecord trong MongoDB
     doc_record = DocumentRecord(
@@ -116,11 +182,14 @@ async def upload_pdf(
         notebook_id=notebook_id,
         file_name=file.filename,
         file_size_bytes=saved_path.stat().st_size,
-        file_path=str(saved_path),
-        parsing_status="processing",
-        indexing_status="pending",
+        file_path=saved_path.relative_to(settings.STORAGE_LOCAL_DIR).as_posix(),
+        file_hash=file_hash,
     )
-    await doc_repo.save_document(doc_record)
+    try:
+        await doc_repo.save_document(doc_record)
+    except DuplicateKeyError:  # two uploads of the same content raced past the check above
+        saved_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=409, detail="Tệp này có nội dung trùng với một tài liệu đã có trong sổ tay.")
 
     # 4. Tạo bản ghi IngestionJobRecord theo dõi tiến độ
     job_repo = IngestionJobRepository(db)
@@ -128,14 +197,12 @@ async def upload_pdf(
         job_id=job_id,
         document_id=doc_id,
         notebook_id=notebook_id,
-        status="parsing",
-        progress_percent=10,
     )
     await job_repo.save_job(job_record)
+    await NotebookRepository(db).touch(notebook_id)
 
-    # 5. Kích hoạt Ingestion Pipeline chạy nền
-    pipeline = IngestionPipeline(db, qdrant)
-    background_tasks.add_task(pipeline.run, job_id, doc_id, notebook_id, saved_path)
+    # 5. Xếp vào hàng đợi xử lý: chạy độc lập với trình duyệt, người dùng F5 hay mất mạng vẫn xử lý tiếp
+    await IngestionPipeline(db, qdrant).run(job_id, doc_id, notebook_id, saved_path)
 
     return {
         "message": "Tải tệp lên thành công. Hệ thống đang tiến hành trích xuất dữ liệu.",
@@ -176,43 +243,13 @@ async def delete_document(
 ):
     """Permanently remove one source and every derived artifact it owns."""
     document = await _document(db, document_id, user_id, write=True)
-    doc_repo = DocumentRepository(db)
-    # This marker makes any queued/running ingestion stop before it can write a
-    # chunk or vector after this endpoint has cleaned it up.
-    await doc_repo.update_one(
-        {"document_id": document_id},
-        {"parsing_status": "deleting", "indexing_status": "deleting"},
-    )
-
+    if document.status in ACTIVE_STATUSES:  # so a running ingestion can never recreate data after this cleanup
+        raise HTTPException(status_code=409, detail="Tài liệu đang được xử lý. Vui lòng đợi xử lý xong rồi mới xóa.")
     try:
-        if await qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
-            await qdrant.delete(
-                collection_name=settings.QDRANT_COLLECTION_NAME,
-                points_selector=models.FilterSelector(
-                    filter=models.Filter(must=[models.FieldCondition(
-                        key="document_id", match=models.MatchValue(value=document_id)
-                    )])
-                ),
-                wait=True,
-            )
-    except Exception as exc:
-        # Do not remove the source record if its search index could not be cleaned:
-        # a retry must remain possible and must not leave a hidden searchable document.
-        await doc_repo.update_one(
-            {"document_id": document_id},
-            {"parsing_status": document.parsing_status, "indexing_status": document.indexing_status},
-        )
-        raise HTTPException(status_code=503, detail="Không thể dọn dữ liệu tìm kiếm của tài liệu. Vui lòng thử lại.") from exc
-
-    storage = StorageService()
-    try:
-        await storage.delete_document_files(document.notebook_id, document.document_id, document.file_path)
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail="Không thể xóa tệp tài liệu trên máy chủ. Vui lòng thử lại.") from exc
-
-    await ChunkRepository(db).delete_by_document(document_id)
-    await IngestionJobRepository(db).delete_by_document(document_id)
-    await doc_repo.delete_document(document_id)
+        await purge_document(db, qdrant, document)
+    except Exception as exc:  # the record is removed last, so a retry stays possible
+        logger.error(f"Could not purge document {document_id}: {type(exc).__name__}: {exc}")
+        raise HTTPException(status_code=503, detail="Không thể xóa đầy đủ dữ liệu của tài liệu. Vui lòng thử lại.") from exc
 
     return {"message": "Đã xóa tài liệu và dữ liệu phân tích liên quan.", "document_id": document_id}
 
@@ -291,6 +328,7 @@ async def get_document_file(
     return FileResponse(
         path=pdf_path,
         media_type="application/pdf",
-        filename=doc.file_name,
-        headers={"Content-Disposition": f'inline; filename="{doc.file_name}"'},
+        filename=doc.file_name,  # encoded by Starlette: a raw header fails on Vietnamese names such as "tổng hợp"
+        content_disposition_type="inline",
+        headers={"Cache-Control": "private, max-age=3600"},  # a document's PDF never changes: reuse it instead of downloading it again
     )

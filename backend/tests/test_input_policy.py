@@ -60,6 +60,92 @@ def test_domain_rules_refuse_concepts_advice_and_off_topic_but_not_document_ques
     assert act("Write a Python script to sort a list", [NIKE23]).action == "refuse_out_of_domain"
 
 
+AMD18 = SourceInfo("Advanced Micro Devices, Inc.", "10-K", 2018, None, "AMD | 10-K | FY2018")
+
+
+def test_an_off_topic_word_inside_a_report_question_is_answered():
+    assert act("Thời tiết ảnh hưởng thế nào đến doanh thu?", [AMD18]).action == "proceed"
+    assert act("What does the company translate foreign currency with?", [AMD18]).action == "proceed"
+    assert act("Thời tiết hôm nay thế nào?", [AMD18]).action == "refuse_out_of_domain"
+
+
+@pytest.mark.parametrize("question", ["bạn tên gì", "ban la ai", "Bạn dùng model gì?", "bạn là ChatGPT à", "What model are you?", "who made you", "ai tạo ra bạn"])
+def test_who_the_assistant_is_gets_the_fixed_description_which_names_no_component(question):
+    d = act(question, [AMD18])
+    assert d.reply == "capabilities" and not any(name in d.message.lower() for name in ("deepseek", "qwen", "bge", "gpt", "docling", "qdrant"))
+
+
+def test_a_report_question_about_a_model_is_not_a_question_about_the_assistant():
+    assert act("What model does the company use to value stock options?", [AMD18]).action == "proceed"
+
+
+@pytest.mark.parametrize("question", ["ROE là gì", "cách tính ROA", "công thức tính EPS", "thế nào là dòng tiền tự do", "EBITDA la gi"])
+def test_definitions_are_refused_however_they_are_asked(question):
+    assert act(question, [AMD18]).action == "refuse_concept"
+    assert act(question, [AMD18], history=HIST).action == "refuse_concept"  # never taken for a follow-up
+
+
+def test_a_definition_tied_to_the_report_is_answered():
+    assert act("Cách tính EPS của công ty trong báo cáo này?", [AMD18]).action == "proceed"
+
+
+@pytest.mark.parametrize("question", ["tôi muốn tự tử", "I want to kill myself", "toi khong muon song nua"])
+def test_a_person_in_crisis_gets_the_support_message(question):
+    d = act(question, [AMD18])
+    assert d.action == "support" and ("115" in d.message or "emergency" in d.message)
+
+
+def test_crisis_words_are_not_read_into_ordinary_questions():
+    assert act("Làm từ từ thôi, doanh thu là bao nhiêu?", [AMD18]).action == "proceed"  # "từ từ" without accents is not "tự tử"
+    assert act("Does the company describe any suicide prevention programme?", [AMD18]).action == "proceed"
+
+
+def test_vietnamese_without_accents_is_vietnamese_and_a_short_message_takes_the_previous_language():
+    assert act("doanh thu nam 2018 la bao nhieu", [AMD18]).lang == "vi"
+    assert act("ban la ai", [AMD18]).lang == "vi"
+    assert act("haha", [AMD18], history=[{"role": "user", "content": "Doanh thu là bao nhiêu?"}]).lang == "vi"
+    assert act("haha", [AMD18]).lang == "en"
+    assert act("What was the revenue?", [AMD18], history=[{"role": "user", "content": "Doanh thu là bao nhiêu?"}]).lang == "en"
+
+
+@pytest.mark.parametrize("question", [
+    "cổ phiếu AMD có đáng mua không", "AMD có phải cổ phiếu tốt không", "mua AMD hay NVIDIA", "nen mua co phieu AMD khong", "tôi nên bỏ tiền vào AMD không",
+    "is AMD a buy", "should I put money in AMD", "will AMD stock go up", "what is your price target for AMD",
+])
+def test_the_usual_ways_of_asking_whether_to_buy_are_refused(question):
+    assert act(question, [AMD18]).action == "refuse_advice"
+
+
+@pytest.mark.parametrize("question", [
+    "What is the target price range in the guidance?", "Nền bán lẻ của công ty tăng trưởng thế nào?", "AMD có mua lại cổ phiếu không", "Did AMD buy any companies in 2018?",
+    "Giá bán sản phẩm sẽ tăng theo dự báo của ban lãnh đạo không?",
+])
+def test_report_questions_with_words_of_buying_and_prices_are_not_advice(question):
+    assert act(question, [AMD18]).action == "proceed"
+
+
+def test_asking_what_a_line_item_means_is_a_definition_but_asking_for_its_figure_is_not():
+    assert act("cổ tức là gì", [AMD18]).action == "refuse_concept"
+    assert act("phân biệt nợ ngắn hạn và nợ dài hạn", [AMD18]).action == "refuse_concept"
+    assert act("What is the dollar amount of goodwill?", [AMD18]).action == "proceed"
+    assert act("What is the gap between GAAP and adjusted income?", [AMD18]).action == "proceed"
+    assert act("Giải thích vì sao doanh thu giảm", [AMD18]).action == "proceed"
+
+
+def test_weather_as_a_risk_is_a_report_question_and_the_rules_also_read_vietnamese_without_accents():
+    assert act("rủi ro về thời tiết và thiên tai", [AMD18]).action == "proceed"
+    assert act("thoi tiet hom nay the nao", [AMD18]).action == "refuse_out_of_domain"
+    assert act("tom tat bao cao nay", [AMD18]).action == "overview"
+    assert act("xin chao ban", [AMD18]).reply == "greeting"
+
+
+def test_the_evidence_that_ties_a_question_to_the_reports_is_found_with_or_without_accents():
+    assert "term" in act("cong ty co lai khong", [AMD18]).evidence and "term" in act("Who is the CEO?", [AMD18]).evidence
+    assert "metric" in act("co chia co tuc khong", [AMD18]).evidence and "metric" in act("lợi nhuận gộp?", [AMD18]).evidence
+    assert act("AMD có lãi không?", [AMD18]).evidence == ["company"] and act("Doanh thu năm 2018?", [AMD18]).evidence == ["metric", "year"]
+    assert act("bạn ổn không ?", [AMD18]).evidence == [] and act("giá vàng hôm nay", [AMD18]).evidence == []
+
+
 # ---------------------------------------------------------------- E: earlier turns
 def test_follow_ups_need_history():
     assert act("And the net income?", [NIKE19, NIKE23], history=HIST).action == "rewrite_followup"
@@ -126,7 +212,7 @@ def test_language_is_detected_for_the_messages():
 # ---------------------------------------------------------------- the orchestrator uses the decisions
 def _doc(doc_id, name, **meta):
     return DocumentRecord(document_id=doc_id, notebook_id="nb", file_name=name, file_size_bytes=1, file_path="p", page_count=60,
-                          indexing_status="completed", metadata=DocumentMetadata(**meta))
+                          status="ready", metadata=DocumentMetadata(**meta))
 
 
 def _orchestrator(docs, monkeypatch, listed=()):
@@ -200,6 +286,19 @@ async def test_terminal_replies_are_not_charged_and_need_no_retrieval(monkeypatc
         r = await orch.execute_query(q, "nb", document_ids=["d1", "d2"])
         assert r["intent"] == intent and r["charged"] is False and r["citations"] == []
     assert "nike19.pdf" in r["answer"] and "60" in r["answer"] and not orch.hybrid_search.calls and "answers" not in seen
+
+
+async def test_an_answer_that_finds_nothing_shows_no_sources_and_keeps_the_topic(monkeypatch):
+    from app.modules.chat import orchestrator as orch_mod
+
+    async def nothing(query, chunks, notes=None, max_tokens=1200):
+        return 'The selected reports do not contain this.\n<answer_meta>{"status": "not_found", "short_answer": "not found", "citations": []}</answer_meta>'
+
+    orch, _ = _orchestrator(NIKE_DOCS[1:], monkeypatch)
+    monkeypatch.setattr(orch_mod, "generate_answer", nothing)
+    state = {"document_ids": ["d2"], "fiscal_years": [2023], "metric": "revenue"}
+    r = await orch.execute_query("Who runs the staff cafeteria?", "nb", document_ids=["d2"], focus_state=state)
+    assert r["intent"] == "retrieval_rag" and r["citations"] == [] and "focus" not in r and r["charged"] is True
 
 
 async def test_partial_answer_when_one_part_is_about_a_selected_company(monkeypatch):

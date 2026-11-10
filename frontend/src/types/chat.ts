@@ -4,8 +4,6 @@ export interface CitationItem {
   document_id: string;
   page: number;
   table_id?: string;
-  row_label?: string;
-  column_label?: string;
   snippet: string;
   score?: number;
   /** Câu trả lời có dùng đoạn này ([n]) hay không; không có thì hiện như đã được dùng. */
@@ -14,7 +12,7 @@ export interface CitationItem {
 
 export interface ChatMessage {
   message_id: string;
-  session_id: string;
+  notebook_id: string;
   role: "user" | "assistant" | "system";
   content: string;
   citations?: CitationItem[];
@@ -31,14 +29,5 @@ export interface ChatMessage {
 export interface MentionOption {
   document_id: string;
   label: string;
-}
-
-export interface ChatSession {
-  session_id: string;
-  notebook_id: string;
-  user_id?: string;
-  title: string;
-  created_at?: string;
-  updated_at?: string;
 }
 

@@ -20,7 +20,6 @@ from app.core.config import settings
 from app.infrastructure.database.mongodb import get_database
 from app.modules.notebooks.notebook_repo import NotebookRepository
 from app.modules.auth.user_repo import UserRepository
-from app.modules.chat.chat_models import ChatSessionRecord
 from app.modules.notebooks.notebook import NotebookRecord
 from app.modules.auth.user import UserRecord
 
@@ -151,26 +150,20 @@ async def require_admin(
 
 
 # ==============================================================================
-# QUYỀN TRUY CẬP NOTEBOOK / PHIÊN CHAT (một nơi duy nhất, mọi route dùng chung)
-# - Chủ sở hữu: đọc + ghi.
-# - Notebook khách (nb_guest_ + 32 ký tự hex ngẫu nhiên, cấp bởi POST /notebooks/guest): mã notebook là chìa khóa của khách.
-# - Notebook mẫu nb_sec_*: chỉ đọc (xem tài liệu); hỏi đáp cần đăng nhập để phiên chat không bị chia sẻ giữa các khách.
+# QUYỀN TRUY CẬP NOTEBOOK (một nơi duy nhất, mọi route dùng chung)
+# - owner_type = user: chỉ chủ sở hữu.
+# - owner_type = guest (nb_guest_ + 32 ký tự hex ngẫu nhiên, cấp bởi POST /notebooks/guest): mã notebook là chìa khóa của khách.
+# - owner_type = system: notebook mẫu, ai cũng xem được, không ai ghi hay hỏi đáp được.
 # ==============================================================================
 GUEST_PREFIX = "nb_guest_"
-GUEST_KEY_LEN = 32
-SAMPLE_PREFIX = "nb_sec_"
-
-
-def is_guest_notebook(nb: NotebookRecord) -> bool:
-    return nb.user_id == "guest" and nb.notebook_id.startswith(GUEST_PREFIX) and len(nb.notebook_id) >= len(GUEST_PREFIX) + GUEST_KEY_LEN
 
 
 def can_access_notebook(nb: NotebookRecord, user_id: Optional[str], write: bool = False) -> bool:
-    if user_id and nb.user_id == user_id:
+    if nb.owner_type == "guest":
         return True
-    if is_guest_notebook(nb):
-        return True
-    return not write and nb.notebook_id.startswith(SAMPLE_PREFIX)
+    if nb.owner_type == "system":
+        return not write
+    return user_id is not None and nb.owner_id == user_id
 
 
 async def require_notebook(db: AsyncIOMotorDatabase, notebook_id: str, user_id: Optional[str], write: bool = False) -> NotebookRecord:
@@ -184,13 +177,5 @@ async def require_notebook(db: AsyncIOMotorDatabase, notebook_id: str, user_id: 
 
 
 def can_chat(nb: NotebookRecord, user_id: Optional[str]) -> bool:
-    """Asking questions writes a session: the owner, or a guest in their own guest notebook."""
-    return bool(user_id and nb.user_id == user_id) or is_guest_notebook(nb)
-
-
-def session_owner(user_id: Optional[str]) -> str:
-    return user_id or "guest"
-
-
-def owns_session(session: ChatSessionRecord, user_id: Optional[str]) -> bool:
-    return session.user_id == session_owner(user_id)
+    """Asking writes to the notebook's conversation: its owner, or a guest in their own guest notebook."""
+    return nb.owner_type != "system" and can_access_notebook(nb, user_id, write=True)

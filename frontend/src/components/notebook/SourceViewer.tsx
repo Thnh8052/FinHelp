@@ -243,9 +243,6 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
             <div className="pdf-evidence-title">
               <CheckShieldIcon size={13} color="#2563eb" />
               <span>{t.sourceViewer.citationFound}: <strong>{t.sourceViewer.page} {activeCitation.page}</strong></span>
-              {activeCitation.row_label && (
-                <span className="pdf-evidence-row">({activeCitation.row_label})</span>
-              )}
             </div>
             <div className="pdf-evidence-actions">
               <button onClick={handleCopy} className="pdf-copy-excerpt-btn">

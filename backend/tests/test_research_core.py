@@ -55,7 +55,7 @@ def test_chunks_are_page_bounded_and_keep_table_with_title_and_footnote():
     assert first.chunk_type == "table"
     assert "Consolidated Balance Sheets" in first.content and "| Cash | 10 | 8 |" in first.content
     assert "(1) Cash includes restricted cash." in first.content
-    assert first.page_tokens == {"7": first.token_count}
+    assert first.chunk_index == 0 and first.embedding_model
     assert chunks[1].chunk_type == "text" and chunks[1].chunk_id == "doc_chk_0002"
 
 

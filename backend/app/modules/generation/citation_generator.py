@@ -1,37 +1,23 @@
-from typing import Any, Dict, List
+from typing import Any, Dict
 from app.modules.chat.chat_models import CitationItem
 
 # The evidence pane is for checking numbers against the source, so show the excerpt itself, not a teaser.
 SNIPPET_CHARS = 1200
 
 
+def clip_snippet(content: str, limit: int = SNIPPET_CHARS) -> str:
+    """At most `limit` characters ending at a line break, so that a row of a Markdown table is never cut in half; a paragraph without
+    line breaks is cut at a space. The ellipsis says the excerpt goes on; its blank line keeps it out of the table."""
+    if len(content) <= limit:
+        return content
+    cut = content.rfind("\n", 0, limit + 1)
+    if cut <= 0:
+        cut = content.rfind(" ", 0, limit + 1)
+    return content[: cut if cut > 0 else limit].rstrip() + "\n\n…"
+
+
 class CitationGenerator:
     """Builds verifiable citation references with exact document provenance."""
-
-    @staticmethod
-    def from_financial_evidence(
-        document_id: str,
-        evidence_dict: Dict[str, Any],
-        raw_label: str,
-        value: str,
-    ) -> CitationItem:
-        page = evidence_dict.get("page", 1)
-        row = evidence_dict.get("row_label", raw_label)
-        col = evidence_dict.get("column_label", "")
-        table = evidence_dict.get("table_id", "")
-
-        snippet = f"{row} | {col}: {value}" if col else f"{row}: {value}"
-
-        return CitationItem(
-            citation_id=f"cite_fact_{page}_{table}",
-            chunk_id=table or f"doc_{document_id}_p{page}",
-            document_id=document_id,
-            page=page,
-            table_id=table,
-            row_label=row,
-            column_label=col,
-            snippet=snippet,
-        )
 
     @staticmethod
     def from_retrieved_chunk(chunk: Dict[str, Any], rank_idx: int) -> CitationItem:
@@ -40,6 +26,6 @@ class CitationGenerator:
             chunk_id=chunk["chunk_id"],
             document_id=chunk["document_id"],
             page=chunk["page"],
-            snippet=chunk["content"][:SNIPPET_CHARS],
+            snippet=clip_snippet(chunk["content"]),
             score=chunk.get("score"),
         )

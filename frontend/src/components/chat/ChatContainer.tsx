@@ -19,6 +19,8 @@ interface ChatContainerProps {
   isSourcesOpen?: boolean;
   /** Chưa chọn tài liệu nguồn: không cho gửi (hệ thống không tự đoán phạm vi). */
   hasSources?: boolean;
+  /** Đang tải lên hoặc đang xử lý bóc tách/lập chỉ mục các file PDF. */
+  isProcessing?: boolean;
   /** Tài liệu nguồn đã chọn, để tag bằng @ (câu hỏi chỉ về các tài liệu được tag). */
   mentionOptions?: MentionOption[];
 }
@@ -34,12 +36,22 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   onToggleSources,
   isSourcesOpen = false,
   hasSources = true,
+  isProcessing = false,
   mentionOptions = [],
 }) => {
   const { t } = useLanguage();
   const [input, setInput] = useState("");
   const [mentions, setMentions] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Câu trả lời đến một lần sau 10-25 giây: đổi dòng chữ theo thời gian chờ để người dùng biết hệ thống vẫn đang chạy
+  const [loadingStep, setLoadingStep] = useState(0);
+  useEffect(() => {
+    if (!isLoading) return;
+    setLoadingStep(0);
+    const timers = [3, 10, 25].map((seconds, i) => setTimeout(() => setLoadingStep(i + 1), seconds * 1000));
+    return () => timers.forEach(clearTimeout);
+  }, [isLoading]);
 
   // "@" vừa gõ ở cuối ô nhập: hiện danh sách tài liệu nguồn để chọn
   const mentionQuery = /(?:^|\s)@([^\s@]*)$/.exec(input)?.[1];
@@ -162,7 +174,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!input.trim() || isLoading || !hasSources) return;
+    if (!input.trim() || isLoading || !hasSources || isProcessing) return;
     const toSend = input;
     const usedMentions = mentions.length > 0 ? mentions : undefined;
     setInput("");
@@ -195,7 +207,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     t.workspace.suggestion3,
   ];
 
-  const canSubmit = !isLoading && hasSources && !!input.trim();
+  const canSubmit = !isLoading && hasSources && !isProcessing && !!input.trim();
 
   return (
     <div className="chat-container">
@@ -299,24 +311,30 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     </div>
                   )}
 
-                  {/* Grounded Evidence Citations */}
-                  {msg.citations && msg.citations.length > 0 && (
-                    <div className="chat-citations-container">
-                      <div className="chat-citations-title">
-                        {t.workspace.sourceCitationsTitle} ({msg.citations.length}):
+                  {/* Grounded Evidence Citations: only the excerpts the answer uses, each keeping its own [n] */}
+                  {(() => {
+                    const used = (msg.citations || [])
+                      .map((cite, idx) => ({ cite, index: idx + 1 }))
+                      .filter(({ cite }) => cite.cited !== false);
+                    if (used.length === 0) return null;
+                    return (
+                      <div className="chat-citations-container">
+                        <div className="chat-citations-title">
+                          {t.workspace.sourceCitationsTitle} ({used.length}):
+                        </div>
+                        <div className="chat-citations-list">
+                          {used.map(({ cite, index }) => (
+                            <CitationBadge
+                              key={cite.citation_id}
+                              citation={cite}
+                              index={index}
+                              onClick={() => onSelectCitation(cite)}
+                            />
+                          ))}
+                        </div>
                       </div>
-                      <div className="chat-citations-list">
-                        {msg.citations.map((cite, idx) => (
-                          <CitationBadge
-                            key={cite.citation_id}
-                            citation={cite}
-                            index={idx + 1}
-                            onClick={() => onSelectCitation(cite)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Actions: Copy */}
                   {!isUser && (
@@ -351,7 +369,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               <span className="chat-sender-label">{t.workspace.aiLabel}</span>
               <div className="chat-loading-bubble">
                 <div className="chat-loading-spinner" />
-                <span>{t.workspace.retrievingContext}</span>
+                <span role="status">{t.workspace.loadingSteps[loadingStep]}</span>
               </div>
             </div>
           )}
@@ -395,7 +413,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                       setInput(p);
                       textareaRef.current?.focus();
                     }}
-                    disabled={isLoading || !hasSources}
+                    disabled={isLoading || !hasSources || isProcessing}
                     className="chat-sample-btn"
                     title="Insert sample query into prompt input"
                   >
@@ -415,6 +433,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   <ChevronRightIcon size={12} />
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Processing Indicator Banner */}
+          {isProcessing && (
+            <div className="chat-processing-banner">
+              <span className="chat-processing-spinner" />
+              <span>{t.workspace.processingNotice}</span>
             </div>
           )}
 
@@ -438,7 +464,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           )}
 
           {/* Clean Input Pill Container */}
-          <form onSubmit={handleSubmit} className="chat-input-form">
+          <form onSubmit={handleSubmit} className={`chat-input-form ${isProcessing ? "is-processing" : ""}`}>
             <textarea
               ref={textareaRef}
               value={input}
@@ -446,11 +472,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               onInput={autoResizeTextarea}
               onKeyDown={handleKeyDown}
               placeholder={
-                hasSources
+                isProcessing
+                  ? t.workspace.placeholderProcessing
+                  : hasSources
                   ? t.workspace.placeholderWithDocs
                   : t.workspace.placeholderNoDocs
               }
-              disabled={isLoading || !hasSources}
+              disabled={isLoading || !hasSources || isProcessing}
               rows={1}
               className="chat-input-textarea"
             />

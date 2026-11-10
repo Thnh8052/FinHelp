@@ -50,7 +50,7 @@ class ChunkRepository(BaseRepository):
         query = {"document_id": document_id}
         if page is not None:
             query["page"] = page
-        docs = await self.find_many(query, sort_by=[("page", 1), ("chunk_id", 1)])
+        docs = await self.find_many(query, sort_by=[("chunk_index", 1)], limit=0)
         return [ChunkDocument(**doc) for doc in docs]
 
     async def save_chunks(self, chunks: List[ChunkDocument]) -> List[str]:

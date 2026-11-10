@@ -13,12 +13,15 @@
     "backend": "cd ../backend && .venv\\Scripts\\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
   },
   "dependencies": {
+    "katex": "^0.16.22",
     "lucide-react": "^0.363.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.5",
-    "remark-gfm": "^4.0.1"
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",

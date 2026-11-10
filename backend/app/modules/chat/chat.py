@@ -1,17 +1,14 @@
 """
-API Router: Phiên Chat & Truy Vấn RAG Tài Chính (Chat Sessions & Financial RAG)
+API Router: Hỏi Đáp RAG Tài Chính (Financial RAG Chat)
 Tác giả: Vũ Thành - FinAnalyst AI
 
-Chịu trách nhiệm:
+Mỗi notebook là một đoạn chat.
 1. Tiếp nhận câu hỏi tài chính từ người dùng (POST /api/v1/chat/query).
 2. Hỗ trợ 2 chế độ:
    - Chưa đăng nhập (Guest): Hỏi trong notebook khách của mình, không giới hạn số câu hỏi (chỉ 1 tài liệu nguồn).
-   - Đã đăng nhập (User): Được lưu vết đầy đủ trong hồ sơ tài khoản.
-3. Tự động khởi tạo phiên hội thoại (Chat Session) nếu chưa có session_id.
-4. Lưu vết tin nhắn người dùng và phản hồi của trợ lý AI (kèm citations) vào MongoDB.
-5. Lấy lịch sử hội thoại của một phiên (GET /api/v1/chat/sessions/{session_id}/messages).
-6. Quản lý danh sách các phiên chat trong sổ tay (GET /api/v1/chat/sessions/notebook/{notebook_id}).
-7. Tạo mới và Xóa phiên chat kèm dọn dẹp tin nhắn (POST /sessions & DELETE /sessions/{session_id}).
+   - Đã đăng nhập (User): Có hạn mức câu hỏi mỗi ngày.
+3. Lưu tin nhắn người dùng và phản hồi của trợ lý AI (kèm citations, token, độ trễ) vào MongoDB.
+4. Lấy lịch sử hội thoại của một notebook (GET /api/v1/chat/messages/{notebook_id}).
 """
 
 import uuid
@@ -21,17 +18,22 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient
 
-from app.shared.deps import can_chat, get_optional_user_id, owns_session, require_notebook, session_owner
+from app.shared.deps import can_chat, get_optional_user_id, require_notebook
 from app.core.config import settings
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.chat.chat_repo import ChatRepository
+from app.modules.documents.document import ACTIVE_STATUSES
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.auth.user_repo import UserRepository
-from app.modules.chat.chat_models import ChatSessionRecord, MessageRecord
+from app.modules.chat.chat_models import MessageRecord
+from app.modules.notebooks.notebook import GUEST_TITLE, NotebookRecord
 from app.modules.chat.orchestrator import RAGWorkflowOrchestrator, SourceSelectionError
 
 router = APIRouter(prefix="/chat", tags=["Chat & RAG"])
+
+MAX_QUERY_CHARS = 4000
+UNTITLED = {NotebookRecord.model_fields["title"].default, GUEST_TITLE}  # titles nobody chose
 
 
 def selected_ids(document_ids: Optional[List[str]], document_id: Optional[str]) -> List[str]:
@@ -40,31 +42,21 @@ def selected_ids(document_ids: Optional[List[str]], document_id: Optional[str]) 
 
 
 async def ensure_documents_ready(db: AsyncIOMotorDatabase, notebook_id: str, document_ids: List[str]) -> None:
-    """With a selection: 422 if a selected document is unknown / failed, 409 while one is still processing.
-    Without: 409 while every document of the notebook is still being processed, 422 if all failed."""
-    repo = DocumentRepository(db)
-    if document_ids:
-        docs = [await repo.get_by_id(i) for i in document_ids]
-        if any(d is None or d.notebook_id != notebook_id for d in docs):
-            raise HTTPException(status_code=422, detail="Có tài liệu được chọn không thuộc notebook này.")
-        if any(d.parsing_status == "failed" for d in docs):
-            raise HTTPException(status_code=422, detail="Không xử lý được tài liệu này. Vui lòng thử tải lên lại hoặc chọn tệp PDF khác.")
-        if any(d.indexing_status != "completed" for d in docs):
-            raise HTTPException(status_code=409, detail="Tài liệu đang được xử lý và phân tích. Vui lòng đợi hệ thống báo sẵn sàng rồi đặt câu hỏi.")
-        return
-    docs = await repo.get_by_notebook(notebook_id)
-    if not docs or any(d.indexing_status == "completed" for d in docs):
-        return  # nothing uploaded yet is answered by the orchestrator; any ready document is enough
-    if all(d.parsing_status == "failed" for d in docs):
+    """Strict chat gating: 409 while ANY document of the notebook is still being processed (a failed one does not block);
+    422 if a selected document is unknown or failed."""
+    docs = {d.document_id: d for d in await DocumentRepository(db).get_by_notebook(notebook_id)}
+    if any(i not in docs for i in document_ids):
+        raise HTTPException(status_code=422, detail="Có tài liệu được chọn không thuộc notebook này.")
+    if any(d.status in ACTIVE_STATUSES for d in docs.values()):
+        raise HTTPException(status_code=409, detail="Tài liệu đang được xử lý và phân tích. Vui lòng đợi hệ thống báo sẵn sàng rồi đặt câu hỏi.")
+    if any(docs[i].status == "failed" for i in document_ids):
         raise HTTPException(status_code=422, detail="Không xử lý được tài liệu này. Vui lòng thử tải lên lại hoặc chọn tệp PDF khác.")
-    raise HTTPException(status_code=409, detail="Tài liệu đang được xử lý và phân tích. Vui lòng đợi hệ thống báo sẵn sàng rồi đặt câu hỏi.")
 
 
 # --- Schemas ---
 
 class QueryRequest(BaseModel):
     notebook_id: str
-    session_id: Optional[str] = None
     query: str
     document_id: Optional[str] = None  # one source (older clients)
     document_ids: Optional[List[str]] = None  # the sources selected by the user (at least one)
@@ -72,7 +64,7 @@ class QueryRequest(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    session_id: str
+    title: str  # the notebook's title: named after the first question
     query: str
     answer: str
     intent: str
@@ -82,29 +74,15 @@ class QueryResponse(BaseModel):
     verification: dict = {}  # A2: {"passed", "repaired", "unverified_figures", "citations"}
 
 
-class CreateSessionRequest(BaseModel):
-    notebook_id: str
-    title: Optional[str] = "Hội thoại mới"
-
-
 # --- Endpoints ---
 
 # ==============================================================================
 # HÀM: handle_user_query
-# Ý NGHĨA: Điểm đầu vào chính của quy trình hỏi đáp tài chính RAG (Retrieval-Augmented Generation):
-#          1. Kiểm tra quyền truy cập notebook, phiên chat và nguồn tài liệu đã chọn.
-#          2. Tự tạo phiên chat mới trong MongoDB nếu chưa có session_id.
-#          3. Lưu tin nhắn của người dùng vào MongoDB collection `messages`.
-#          4. Kích hoạt Orchestrator điều phối pipeline tìm kiếm ngữ nghĩa và sinh câu trả lời.
-#          5. Lưu câu trả lời của AI kèm danh sách trích dẫn (citations).
-#          6. Cập nhật số lượt hỏi vào MongoDB và trả về kết quả cho Frontend.
-# ĐẦU VÀO:
-#   - req (QueryRequest): notebook_id, session_id, query (câu hỏi), document_id.
-#   - user_id: Mã người dùng nếu đã đăng nhập, hoặc None nếu là Guest.
-#   - db: Kết nối MongoDB Motor.
-#   - qdrant: Kết nối cơ sở dữ liệu vector Qdrant.
-# ĐẦU RA:
-#   - QueryResponse: session_id, query, answer, intent, citations.
+# Ý NGHĨA: Điểm đầu vào chính của quy trình hỏi đáp tài chính RAG:
+#          1. Kiểm tra quyền truy cập notebook, nguồn tài liệu đã chọn và hạn mức.
+#          2. Lưu tin nhắn của người dùng vào MongoDB collection `messages`.
+#          3. Kích hoạt Orchestrator điều phối pipeline tìm kiếm ngữ nghĩa và sinh câu trả lời.
+#          4. Ghi nhận hạn mức, lưu câu trả lời kèm trích dẫn và số liệu (token, độ trễ, model).
 # ==============================================================================
 @router.post("/query", response_model=QueryResponse)
 async def handle_user_query(
@@ -114,7 +92,7 @@ async def handle_user_query(
     qdrant: AsyncQdrantClient = Depends(get_qdrant_client),
 ):
     """Xử lý câu hỏi tài chính, thực thi luồng RAG và lưu lịch sử vào MongoDB."""
-    # 0. Tài liệu phải xử lý xong mới truy vấn được (nạp Docling có thể mất vài phút); chặn trước khi trừ hạn mức
+    # 0. Tài liệu phải xử lý xong mới truy vấn được; chặn trước khi trừ hạn mức
     nb = await require_notebook(db, req.notebook_id, user_id)
     if not can_chat(nb, user_id):
         raise HTTPException(status_code=403, detail="Hãy đăng nhập để đặt câu hỏi trên notebook này.")
@@ -127,79 +105,73 @@ async def handle_user_query(
     mentions = list(dict.fromkeys(req.mentions or []))
     if any(m not in chosen for m in mentions):
         raise HTTPException(status_code=422, detail="Chỉ tag (@) được các tài liệu nguồn đã chọn.")
+    if len(req.query) > MAX_QUERY_CHARS:  # refused here, before anything is stored (the input policy has the same limit)
+        raise HTTPException(status_code=422, detail=f"Câu hỏi quá dài (tối đa {MAX_QUERY_CHARS:,} ký tự). Hãy rút gọn rồi gửi lại.".replace(",", "."))
     await ensure_documents_ready(db, req.notebook_id, chosen)
+    users = UserRepository(db)
+    if user_id is not None and not await users.check_quota(user_id):
+        raise HTTPException(status_code=429, detail="Bạn đã dùng hết số câu hỏi của hôm nay. Vui lòng quay lại vào ngày mai.")
     orchestrator = RAGWorkflowOrchestrator(db, qdrant)
-    try:  # a question without a usable source choice is refused before it costs quota or creates a session
+    try:  # a question without a usable source choice is refused before it costs quota or writes a message
         await orchestrator.resolve_scope(req.notebook_id, chosen)
     except SourceSelectionError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
     chat_repo = ChatRepository(db)
 
-    # 1. Quản lý phiên hội thoại
-    # A session id sent by the client must be the caller's own, in this notebook: its history is fed to the model.
-    session_id = req.session_id
-    if session_id:
-        session = await chat_repo.get_session(session_id)
-        if not session or session.notebook_id != req.notebook_id or not owns_session(session, user_id):
-            raise HTTPException(status_code=403, detail="Không có quyền dùng phiên hội thoại này")
-    else:
-        session_id = f"ses_{uuid.uuid4().hex}"
-        session = ChatSessionRecord(
-            session_id=session_id,
-            notebook_id=req.notebook_id,
-            user_id=session_owner(user_id),
-            title=req.query[:40],
-        )
-        await chat_repo.save_session(session)
+    # 1. Các lượt trước (để hiểu câu hỏi nối tiếp như "còn lợi nhuận thì sao?")
+    history = [
+        {"role": m.role, "content": m.content, "citations": [c.model_dump() for c in m.citations]}
+        for m in await chat_repo.get_messages(req.notebook_id, limit=6)
+    ]
 
-    # Các lượt trước của phiên (để hiểu câu hỏi nối tiếp như "còn lợi nhuận thì sao?")
-    existing_msgs = await chat_repo.get_messages(session_id, limit=200)
-    history = [{"role": m.role, "content": m.content, "citations": [c.model_dump() for c in m.citations]} for m in existing_msgs[-6:]]
-
-    # 2. Lưu tin nhắn người dùng vào MongoDB
-    user_msg_id = f"msg_{uuid.uuid4().hex[:8]}"
-    await chat_repo.append_message(
-        MessageRecord(
-            message_id=user_msg_id,
-            session_id=session_id,
-            role="user",
-            content=req.query,
-        )
-    )
-
-    # 3. Kích hoạt RAG Workflow Orchestrator
+    # 2. Kích hoạt RAG Workflow Orchestrator
     result = await orchestrator.execute_query(
         query=req.query,
         notebook_id=req.notebook_id,
         document_ids=chosen,
         history=history,
         mentions=mentions,
+        focus_state=nb.focus_state,
     )
 
-    # Người dùng đã đăng nhập: ghi nhận số lượt hỏi; chỉ tính khi hệ thống đã thật sự tìm và sinh câu trả lời
-    # (từ chối, câu chào, lệnh liệt kê nguồn, hỏi lại... không bị tính)
-    if user_id is not None and result.get("charged", True):
-        await UserRepository(db).increment_quota_usage(user_id, messages=1)
+    # 3. Câu hỏi chỉ được lưu khi đã có câu trả lời: câu hỏi lỗi không kẹt lại trong lịch sử và ngữ cảnh. Câu hỏi đầu tiên
+    # được tìm trong tài liệu đặt tên cho đoạn chat (câu chào hay câu bị từ chối thì không)
+    title = nb.title
+    if nb.title in UNTITLED and result.get("charged", True):
+        title = req.query[:40]
+        await chat_repo.set_title(req.notebook_id, title)
+    await chat_repo.append_message(
+        MessageRecord(message_id=f"msg_{uuid.uuid4().hex[:8]}", notebook_id=req.notebook_id, role="user", content=req.query)
+    )
 
-    # 4. Lưu câu trả lời của AI kèm trích dẫn và tính toán tài chính vào MongoDB
-    asst_msg_id = f"msg_{uuid.uuid4().hex[:8]}"
+    # Người dùng đã đăng nhập: chỉ tính lượt hỏi khi hệ thống đã thật sự tìm và sinh câu trả lời
+    # (từ chối, câu chào, lệnh liệt kê nguồn, hỏi lại... không bị tính); token thì luôn ghi đúng lượng đã dùng
+    trace = result.get("trace", {})
+    llm = trace.get("llm", {})
+    prompt_tokens, completion_tokens = llm.get("prompt_tokens", 0), llm.get("completion_tokens", 0)
+    if user_id is not None:
+        await users.consume_quota(user_id, messages=1 if result.get("charged", True) else 0, tokens=prompt_tokens + completion_tokens)
+
+    # 4. Lưu câu trả lời của AI kèm trích dẫn và số liệu thực nghiệm vào MongoDB
     await chat_repo.append_message(
         MessageRecord(
-            message_id=asst_msg_id,
-            session_id=session_id,
+            message_id=f"msg_{uuid.uuid4().hex[:8]}",
+            notebook_id=req.notebook_id,
             role="assistant",
             content=result["answer"],
             citations=result["citations"],
-            trace_info={
-                "intent": result["intent"],
-                **result.get("trace", {}),
-            },
+            trace_info={"intent": result["intent"], **trace},
+            token_usage={"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_tokens": prompt_tokens + completion_tokens},
+            latency_ms=round(trace.get("timings", {}).get("total", 0) * 1000),
+            model_used=settings.DEFAULT_LLM_MODEL if llm.get("calls") else None,
         )
     )
+    if result.get("focus"):  # only once the answer is stored: a failed question cannot move the topic
+        await chat_repo.set_focus(req.notebook_id, result["focus"])
 
     return QueryResponse(
-        session_id=session_id,
+        title=title,
         query=req.query,
         answer=result["answer"],
         intent=result["intent"],
@@ -211,123 +183,15 @@ async def handle_user_query(
 
 
 # ==============================================================================
-# HÀM: get_session_messages
-# Ý NGHĨA: Lấy toàn bộ lịch sử tin nhắn của một phiên hội thoại cụ thể từ collection `messages`
-#          để Frontend hiển thị lại dòng trao đổi khi người dùng bấm vào một phiên chat cũ.
-# ĐẦU VÀO:
-#   - session_id: Mã phiên hội thoại.
-#   - user_id: Lấy tùy chọn từ JWT (None nếu là Guest).
-# ĐẦU RA:
-#   - List[MessageRecord]: Danh sách tin nhắn sắp xếp theo thứ tự thời gian.
+# HÀM: get_messages
+# Ý NGHĨA: Lấy lịch sử tin nhắn của một notebook để Frontend hiển thị lại đoạn chat.
 # ==============================================================================
-@router.get("/sessions/{session_id}/messages", response_model=List[MessageRecord])
-async def get_session_messages(
-    session_id: str,
-    user_id: Optional[str] = Depends(get_optional_user_id),
-    db: AsyncIOMotorDatabase = Depends(get_database),
-):
-    """Lấy toàn bộ lịch sử tin nhắn của một phiên hội thoại từ MongoDB."""
-    chat_repo = ChatRepository(db)
-    session = await chat_repo.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Không tìm thấy phiên hội thoại")
-    await require_notebook(db, session.notebook_id, user_id)
-    if not owns_session(session, user_id):
-        raise HTTPException(status_code=403, detail="Không có quyền xem phiên hội thoại này")
-    return await chat_repo.get_messages(session_id)
-
-
-# ==============================================================================
-# HÀM: list_notebook_sessions
-# Ý NGHĨA: Lấy danh sách các phiên hội thoại thuộc một sổ tay (notebook_id) cụ thể.
-# ĐẦU VÀO:
-#   - notebook_id: Mã sổ tay.
-#   - user_id: Lấy tùy chọn từ JWT.
-# ĐẦU RA:
-#   - List[ChatSessionRecord]: Danh sách các phiên hội thoại trong sổ tay.
-# ==============================================================================
-@router.get("/sessions/notebook/{notebook_id}", response_model=List[ChatSessionRecord])
-async def list_notebook_sessions(
+@router.get("/messages/{notebook_id}", response_model=List[MessageRecord])
+async def get_messages(
     notebook_id: str,
     user_id: Optional[str] = Depends(get_optional_user_id),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
-    """Lấy danh sách các phiên hội thoại trong Notebook."""
-    nb = await require_notebook(db, notebook_id, user_id)
-    chat_repo = ChatRepository(db)
-    sessions = [s for s in await chat_repo.get_sessions_by_notebook(notebook_id) if owns_session(s, user_id)]
-    if not sessions and user_id and can_chat(nb, user_id):
-        default_ses = ChatSessionRecord(
-            session_id=f"ses_{uuid.uuid4().hex}",
-            notebook_id=notebook_id,
-            user_id=user_id,
-            title="Đoạn chat phân tích",
-        )
-        await chat_repo.save_session(default_ses)
-        return [default_ses]
-    return sessions
-
-
-# ==============================================================================
-# HÀM: create_chat_session
-# Ý NGHĨA: Chủ động tạo một phiên hội thoại mới trong Sổ tay theo yêu cầu người dùng.
-# ĐẦU VÀO:
-#   - req (CreateSessionRequest): notebook_id, title (tiêu đề phiên chat).
-#   - user_id: Mã người dùng (hoặc 'guest' nếu chưa đăng nhập).
-# ĐẦU RA:
-#   - ChatSessionRecord: Phiên hội thoại vừa được tạo.
-# ==============================================================================
-@router.post("/sessions", response_model=ChatSessionRecord)
-async def create_chat_session(
-    req: CreateSessionRequest,
-    user_id: Optional[str] = Depends(get_optional_user_id),
-    db: AsyncIOMotorDatabase = Depends(get_database),
-):
-    """Tạo một phiên hội thoại mới trong Notebook (yêu cầu đăng nhập)."""
-    if not user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Bạn cần đăng nhập để tạo thêm đoạn chat mới và lưu trữ lịch sử!",
-        )
-
-    nb = await require_notebook(db, req.notebook_id, user_id)
-    if not can_chat(nb, user_id):
-        raise HTTPException(status_code=403, detail="Không có quyền tạo phiên hội thoại trong notebook này")
-    chat_repo = ChatRepository(db)
-    session_id = f"ses_{uuid.uuid4().hex}"
-    session = ChatSessionRecord(
-        session_id=session_id,
-        notebook_id=req.notebook_id,
-        user_id=user_id,
-        title=req.title or "Hội thoại mới",
-    )
-    await chat_repo.save_session(session)
-    return session
-
-
-# ==============================================================================
-# HÀM: delete_chat_session
-# Ý NGHĨA: Xóa một phiên hội thoại khỏi MongoDB và kích hoạt xóa toàn bộ tin nhắn liên quan
-#          (Cascade Delete) để giải phóng dung lượng và bảo mật dữ liệu.
-# ĐẦU VÀO:
-#   - session_id: Mã phiên chat cần xóa.
-#   - user_id: Người dùng đăng nhập (phải là chủ sở hữu phiên chat).
-# ĐẦU RA:
-#   - JSON thông báo xóa phiên hội thoại thành công.
-# ==============================================================================
-@router.delete("/sessions/{session_id}")
-async def delete_chat_session(
-    session_id: str,
-    user_id: Optional[str] = Depends(get_optional_user_id),
-    db: AsyncIOMotorDatabase = Depends(get_database),
-):
-    """Xóa một phiên hội thoại và dọn dẹp tin nhắn khỏi MongoDB."""
-    chat_repo = ChatRepository(db)
-    session = await chat_repo.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Không tìm thấy phiên hội thoại")
-    await require_notebook(db, session.notebook_id, user_id)
-    if not owns_session(session, user_id):  # a guest (user_id None) must not delete a signed-in user's chat
-        raise HTTPException(status_code=403, detail="Không có quyền xóa phiên hội thoại này")
-    success = await chat_repo.delete_session(session_id)
-    return {"success": success, "message": "Đã xóa phiên hội thoại thành công"}
+    """Lấy các tin nhắn mới nhất của một notebook, theo đúng thứ tự hội thoại."""
+    await require_notebook(db, notebook_id, user_id)
+    return await ChatRepository(db).get_messages(notebook_id)

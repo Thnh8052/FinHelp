@@ -15,7 +15,25 @@ from app.modules.admin.init_admin import setup_admin_and_clean_mocks
 from app.infrastructure.database.mongodb import MongoManager
 from app.infrastructure.database.qdrant import QdrantManager
 from app.modules.ingestion.pipeline import IngestionPipeline
-from app.modules.retrieval.warmup import warm_models
+from app.modules.notebooks.purge import purge_expired_guests
+from app.modules.retrieval.warmup import warm_chunk_tokenizer, warm_models
+from app.shared.upload_limit import UploadSizeLimit
+
+
+HOUSEKEEPING_SECONDS = 300
+
+
+async def _housekeeping() -> None:
+    """Fail ingestion jobs that stopped moving and remove guest notebooks unused for 24 hours."""
+    while True:
+        await asyncio.sleep(HOUSEKEEPING_SECONDS)
+        try:
+            stalled = await IngestionPipeline.fail_stalled(MongoManager.db)
+            expired = await purge_expired_guests(MongoManager.db, QdrantManager.client)
+            if stalled or expired:
+                logger.info(f"Housekeeping: {stalled} stalled job(s) failed, {expired} expired guest notebook(s) removed.")
+        except Exception as e:
+            logger.warning(f"Housekeeping round failed: {type(e).__name__}: {e}")
 
 
 @asynccontextmanager
@@ -42,9 +60,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not initialize admin user on startup: {e}")
 
+    await warm_chunk_tokenizer()
     warmup = asyncio.create_task(warm_models())  # the first question should not pay the model load
+    housekeeping = asyncio.create_task(_housekeeping())
     yield
     warmup.cancel()
+    housekeeping.cancel()
 
     logger.info("Shutting down DATN Finance backend application...")
     await MongoManager.close_database_connection()
@@ -57,6 +78,9 @@ app = FastAPI(
     description="Financial RAG Backend: FastAPI + MongoDB + Qdrant",
     lifespan=lifespan,
 )
+
+# Added before CORS so that CORS stays the outermost layer and a refused upload still carries its headers
+app.add_middleware(UploadSizeLimit)
 
 # CORS Middleware
 app.add_middleware(

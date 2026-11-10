@@ -438,6 +438,11 @@
     display: none;
   }
 
+  /* Ẩn nút toggle sources trên navbar ở mobile vì đã có nút "Manage Sources >" ngay trong chat header */
+  #btn-toggle-sources {
+    display: none !important;
+  }
+
   .navbar-action-btn.split-toggle {
     padding: 0 8px;
     height: 30px;
@@ -567,4 +572,37 @@
     white-space: nowrap !important;
     flex-shrink: 0 !important;
   }
+  .navbar-user-chip {
+    padding: 2px 6px 2px 3px;
+    gap: 5px;
+  }
+  .navbar-avatar {
+    width: 22px;
+    height: 22px;
+    font-size: 9px;
+  }
+  .navbar-username {
+    font-size: 11px;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Shown while a file is being sent: leaving the page now would lose it */
+.upload-lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.55);
+  color: #ffffff;
+  font-size: 14px;
+  cursor: progress;
 }

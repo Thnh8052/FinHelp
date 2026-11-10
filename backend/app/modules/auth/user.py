@@ -1,5 +1,6 @@
+from datetime import datetime, timezone
 from typing import Any, Optional
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.shared.common import BaseSchema, get_utc_now
 
 
@@ -26,25 +27,31 @@ TIER_SPECS = {
         "cost_description": "Toàn quyền quản trị, không giới hạn tài liệu & câu hỏi",
     },
 }
-# Alias tương thích ngược nếu bản ghi cũ lưu 'free'
-TIER_SPECS["free"] = TIER_SPECS["user"]
+
+
+def tier_spec(role: Optional[str]) -> dict:
+    """The limits of an account by its role; None is a guest."""
+    return TIER_SPECS["guest"] if role is None else TIER_SPECS.get(role, TIER_SPECS["user"])
+
+
+def today_utc() -> datetime:
+    """00:00 UTC of the current day: the start of the daily question window."""
+    return get_utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 class UserQuota(BaseModel):
-    """Mô hình quản lý Hạn mức người dùng: no login (1 doc, 2 msgs) vs login (5 docs/notebook)."""
+    """Hạn mức trả về cho giao diện. Không lưu trong MongoDB: các giới hạn tra từ TIER_SPECS theo role, số đếm nằm trên UserRecord."""
 
-    tier: str = Field(default="user", description="'guest' (no login) hoặc 'user' (login)")
-    daily_messages_limit: int = Field(default=100, description="Giới hạn số tin nhắn / lượt hỏi mỗi ngày")
-    messages_used_today: int = Field(default=0, description="Số tin nhắn đã sử dụng trong ngày")
-    max_upload_documents: int = Field(default=5, description="Số tài liệu tối đa tải lên mỗi Notebook (Giới hạn: 5)")
-    max_file_size_mb: int = Field(default=20, description="Dung lượng tối đa mỗi file PDF/Excel (20MB)")
-    total_tokens_consumed: int = Field(default=0, description="Tổng token AI đã sử dụng qua các API")
-    total_cost_usd: float = Field(default=0.0, description="Ước tính chi phí API đã tiêu thụ (USD)")
-
+    tier: str = "user"
+    daily_messages_limit: int = 100
+    messages_used_today: int = 0
+    max_upload_documents: int = 5
+    max_file_size_mb: int = 20
+    total_tokens_consumed: int = 0
 
 
 class UserRecord(BaseSchema):
-    """User account record stored in MongoDB `users` collection."""
+    """User account record stored in MongoDB `users` collection (registered accounts only, guests are never stored here)."""
 
     user_id: str = Field(..., description="Unique user ID (usr_001)")
     email: EmailStr
@@ -58,8 +65,11 @@ class UserRecord(BaseSchema):
         description="'admin' (quản trị, xem performance, chi phí API, quản lý user) hoặc 'user' (sử dụng tính năng mở khóa)",
     )
 
-    # Quota & Hạn mức tính năng mở khóa kiểu ChatGPT / Claude
-    quota: UserQuota = Field(default_factory=UserQuota)
+    # Hạn mức theo ngày: daily_window_start là 00:00 UTC của ngày đang đếm; sang ngày mới thì đếm lại (consume_quota)
+    daily_messages_limit: int = TIER_SPECS["user"]["daily_messages_limit"]
+    daily_messages_used: int = 0
+    daily_window_start: Any = Field(default_factory=today_utc)
+    total_tokens_consumed: int = 0
 
     is_active: bool = True
     created_at: Any = Field(default_factory=get_utc_now)
@@ -67,6 +77,31 @@ class UserRecord(BaseSchema):
     last_login_at: Optional[Any] = None
 
     # Khôi phục mật khẩu (Forgot/Reset Password)
-    reset_token: Optional[str] = None
+    reset_token: Optional[str] = None  # keyed hash of the OTP (auth.py: _otp_hash), never the code itself
     reset_token_expires_at: Optional[Any] = None
+    reset_attempts: int = 0  # codes tried against the current OTP; it dies after MAX_RESET_ATTEMPTS
 
+    @field_validator("email", "username", mode="before")
+    @classmethod
+    def _lowercase(cls, value: Any) -> Any:
+        """One account per name whatever its case: A@x.com and a@x.com are the same person."""
+        return value.strip().lower() if isinstance(value, str) else value
+
+    def messages_used_today(self) -> int:
+        """The counter of the current day: a window from an earlier day counts as nothing used yet."""
+        start = self.daily_window_start
+        if start.tzinfo is None:  # MongoDB returns naive UTC datetimes
+            start = start.replace(tzinfo=timezone.utc)
+        return self.daily_messages_used if start >= today_utc() else 0
+
+    @property
+    def quota(self) -> UserQuota:
+        spec = tier_spec(self.role)
+        return UserQuota(
+            tier=self.role,
+            daily_messages_limit=self.daily_messages_limit,
+            messages_used_today=self.messages_used_today(),
+            max_upload_documents=spec["max_upload_documents"],
+            max_file_size_mb=spec["max_file_size_mb"],
+            total_tokens_consumed=self.total_tokens_consumed,
+        )

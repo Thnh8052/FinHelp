@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = True
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: str = "production"  # safe unless a developer sets "development" in their own .env
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [
@@ -80,9 +80,11 @@ class Settings(BaseSettings):
     # --- Research core (FinanceBench 118-121/150 configuration) -----------------------------------------
     # Ingestion: Docling (TableFormer ACCURATE) + postprocess in a subprocess, or "pymupdf" for a fast, lower-quality parse.
     PARSER_ENGINE: str = "docling"
+    DOCLING_MODE: str = "accurate"  # "accurate" | "fast"
     DOCLING_DEVICE: str = "auto"  # auto | cuda | cpu
     DOCLING_TIMEOUT_SECONDS: int = 3600
     DOCLING_RETRIES: int = 1
+    INGESTION_STALL_SECONDS: int = 7800  # a job this long without progress is failed; above DOCLING_TIMEOUT_SECONDS x (retries + 1), the longest a healthy file can stay silent
     CHUNK_TOKENS: int = 1024  # page-bounded structure-aware chunks (st1024)
 
     # Retrieval: BGE-M3 dense -> RRF(question x2 + first N keyword sub-queries) -> pool 20 -> Qwen3 reranker fusion -> top 6
@@ -150,6 +152,9 @@ class Settings(BaseSettings):
     # Sources a question may use (the upload limit per notebook is the same): a guest 1, a signed-in user 5
     MAX_SELECTED_DOCS_GUEST: int = 1
     MAX_SELECTED_DOCS_USER: int = 5
+    # Remote GPU Worker (e.g. Google Colab / Kaggle T4 GPU via Cloudflare Tunnel)
+    REMOTE_GPU_URL: Optional[str] = None
+
     DEVICE: str = "auto"  # auto | cuda | cpu, for the embedding and reranker models
     # auto: both models stay on the GPU until the first out-of-memory error, then they take turns (small cards);
     # swap: always take turns; resident: never swap (fail on out-of-memory)
@@ -166,6 +171,11 @@ class Settings(BaseSettings):
     # A2: an answer with a figure the excerpts do not show, a citation to no excerpt or to another company / period is rewritten once
     # with the list of problems; what is still wrong after that is flagged in the answer ("chưa kiểm chứng"), never silently kept.
     ANSWER_REPAIR_ENABLED: bool = True
+    # Guardrails. The intent router turns away small talk, off-topic requests, requests for advice... that the rules let through
+    # (query_router/intent.py: one short encode on the embedding model, no language-model call). False = the rules alone, as measured before.
+    INTENT_ROUTER_ENABLED: bool = True
+    # The answer is checked before it is shown (generation/answer_check/policy.py): advice, leaked instructions, internal names, foul language.
+    OUTPUT_POLICY_ENABLED: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",

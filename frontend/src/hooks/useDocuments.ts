@@ -8,7 +8,7 @@ import { ShowToast } from "./useToast";
  * Danh sách tài liệu của notebook: nguồn đang xem, nguồn đã chọn (kiểu NotebookLM: câu hỏi chỉ được trả lời trên các tài liệu này,
  * hệ thống không tự đoán phạm vi), tải lên (khách 1 tài liệu, người dùng 5) và theo dõi tiến độ xử lý.
  */
-export function useDocuments(notebookId: string, maxSources: number, showToast: ShowToast, onLoginRequired: () => void) {
+export function useDocuments(notebookId: string, maxSources: number, maxFileSizeMb: number, showToast: ShowToast, onLoginRequired: () => void) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
@@ -20,7 +20,7 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
     setDocuments(docs);
     if (docs.length > 0) {
       setActiveDocId(docs[0].document_id);
-      const usable = docs.find((d) => !isDocFailed(d));
+      const usable = docs.find((d) => d.status === "ready");
       setSelectedDocIds(usable ? [usable.document_id] : []);
     } else {
       setActiveDocId(null);
@@ -36,7 +36,7 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
 
   const reload = async () => {
     try {
-      setDocuments(await documentService.list(notebookId));
+      setDocuments(await documentService.list(notebookId));  // keeps the selection
     } catch {
       /* giữ danh sách hiện có */
     }
@@ -51,64 +51,72 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
       try {
         const docs = await documentService.list(notebookId);
         setDocuments(docs);
+        let anyReady = false;
         for (const id of watching) {
           const d = docs.find((x) => x.document_id === id);
-          if (d?.indexing_status === "completed") {
-            showToast("Document is ready. You can now ask questions.", "success");
+          if (d?.status === "ready") {
+            setSelectedDocIds((prev) => (prev.includes(id) ? prev : [...prev, id].slice(-maxSources)));  // also after a reload during processing
+            anyReady = true;
           } else if (isDocFailed(d)) {
             setSelectedDocIds((prev) => prev.filter((x) => x !== id));  // Remove failed docs from active selection
             showToast("Failed to process document. Please try uploading again.", "error");
           }
         }
+        // Mỗi file đã có trạng thái riêng trong danh sách; chat chỉ mở khi mọi file xong nên chỉ báo một lần lúc đó
+        if (anyReady && !docs.some(isDocProcessing)) showToast("All documents are ready. You can now ask questions.", "success");
       } catch {
         /* Network retry */
       }
     }, 3000);
     return () => clearInterval(timer);
-  }, [processingKey, notebookId, showToast]);
+  }, [processingKey, notebookId, showToast, maxSources]);
 
-  const upload = async (file: File) => {
-    setIsUploading(true);
-    try {
-      const data = await documentService.upload(notebookId, file);
-      const newDoc: DocumentRecord = {
-        document_id: data.document_id,
-        notebook_id: notebookId,
-        file_name: file.name,
-        file_size_bytes: file.size,
-        file_path: `storage/pdfs/${notebookId}/${data.document_id}.pdf`,
-        page_count: 0,
-        parsing_status: "processing",
-        indexing_status: "pending",
-        created_at: new Date().toISOString(),
-      };
-      setDocuments((prev) => [newDoc, ...prev]);
-      setActiveDocId(newDoc.document_id);
-      setSelectedDocIds((prev) => [...prev.filter((x) => x !== newDoc.document_id), newDoc.document_id].slice(-maxSources));
-      showToast("Upload successful! Processing financial filing.", "success");
-    } catch (err) {
-      if (err instanceof ApiError) {
-        const detail = err.detail || "Document upload failed.";
-        if (err.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
-          showToast(detail, "warning", "Sign in now", onLoginRequired);
-        } else {
-          showToast(detail, "error");
-        }
-      } else {
-        showToast("Unable to connect to server during upload.", "error");
-      }
-    } finally {
-      setIsUploading(false);
-    }
-  };
+  // Trong lúc đang gửi tệp lên, F5 hoặc đóng tab sẽ làm mất tệp: nhờ trình duyệt cảnh báo trước
+  useEffect(() => {
+    if (!isUploading) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isUploading]);
 
   /** Batch upload */
   const uploadFiles = async (files: File[]) => {
-    if (files.length === 0) return;
+    if (files.length === 0 || isUploading) return;
+
+    // 1. Deduplicate files within the selected batch
+    const uniqueFiles: File[] = [];
+    const seenInBatch = new Set<string>();
+    for (const f of files) {
+      const lower = f.name.toLowerCase();
+      if (!seenInBatch.has(lower)) {
+        seenInBatch.add(lower);
+        uniqueFiles.push(f);
+      }
+    }
+
+    // 2. Filter out files already in documents list (unless failed)
+    const existingActiveNames = new Set(
+      documents.filter((d) => !isDocFailed(d)).map((d) => d.file_name.toLowerCase())
+    );
+
+    const filesToUpload: File[] = [];
+    for (const f of uniqueFiles) {
+      if (existingActiveNames.has(f.name.toLowerCase())) {
+        showToast(`Tài liệu "${f.name}" đã tồn tại trong sổ tay. Bỏ qua tệp trùng.`, "warning");
+      } else if (f.size > maxFileSizeMb * 1024 * 1024) {
+        showToast(`Tệp "${f.name}" vượt quá giới hạn ${maxFileSizeMb} MB của tài khoản.`, "warning");
+      } else {
+        filesToUpload.push(f);
+      }
+    }
+
+    if (filesToUpload.length === 0) return;
+    filesToUpload.sort((a, b) => a.size - b.size);  // tải lần lượt nên file nhẹ vào hàng trước và xong trước
+
     setIsUploading(true);
     let successCount = 0;
     try {
-      for (const file of files) {
+      for (const file of filesToUpload) {
         try {
           const data = await documentService.upload(notebookId, file);
           const newDoc: DocumentRecord = {
@@ -118,13 +126,10 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
             file_size_bytes: file.size,
             file_path: `storage/pdfs/${notebookId}/${data.document_id}.pdf`,
             page_count: 0,
-            parsing_status: "processing",
-            indexing_status: "pending",
+            status: "pending",
             created_at: new Date().toISOString(),
           };
           setDocuments((prev) => [newDoc, ...prev]);
-          setActiveDocId(newDoc.document_id);
-          setSelectedDocIds((prev) => [...prev.filter((x) => x !== newDoc.document_id), newDoc.document_id].slice(-maxSources));
           successCount++;
         } catch (fileErr) {
           if (fileErr instanceof ApiError) {
@@ -132,6 +137,8 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
             if (fileErr.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
               showToast(detail, "warning", "Sign in now", onLoginRequired);
               break;
+            } else if (fileErr.status === 409) {
+              showToast(detail, "warning");
             } else {
               showToast(detail, "error");
             }
@@ -181,17 +188,18 @@ export function useDocuments(notebookId: string, maxSources: number, showToast: 
 
   const toggleAll = (selectAll: boolean) => {
     if (selectAll) {
-      const usableIds = documents.filter((d) => !isDocFailed(d)).map((d) => d.document_id);
+      const usableIds = documents.filter((d) => d.status === "ready").map((d) => d.document_id);
       setSelectedDocIds(usableIds.slice(-maxSources));
     } else {
       setSelectedDocIds([]);
     }
   };
 
-  const activeDoc = documents.find((d) => d.document_id === activeDocId) || documents[0] || null;
+  const openable = documents.filter((d) => d.status === "ready");
+  const activeDoc = openable.find((d) => d.document_id === activeDocId) || openable[0] || null;
 
   return {
     documents, activeDocId, setActiveDocId, activeDoc, selectedDocIds, isUploading, isDeleting,
-    load, reset, reload, upload, uploadFiles, remove, toggleSelected, toggleAll,
+    load, reset, reload, uploadFiles, remove, toggleSelected, toggleAll,
   };
 }

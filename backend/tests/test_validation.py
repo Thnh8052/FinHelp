@@ -48,9 +48,9 @@ def _orchestrator(answers, monkeypatch):
 
 
 def _scope():
-    return [DocumentRecord(document_id="amd", notebook_id="nb", file_name="a.pdf", file_size_bytes=1, file_path="p", indexing_status="completed",
+    return [DocumentRecord(document_id="amd", notebook_id="nb", file_name="a.pdf", file_size_bytes=1, file_path="p", status="ready",
                            metadata=DocumentMetadata(company_name="Advanced Micro Devices, Inc.", ticker="AMD", fiscal_year=2024, years_covered=[2024, 2023])),
-            DocumentRecord(document_id="nv", notebook_id="nb", file_name="n.pdf", file_size_bytes=1, file_path="p", indexing_status="completed",
+            DocumentRecord(document_id="nv", notebook_id="nb", file_name="n.pdf", file_size_bytes=1, file_path="p", status="ready",
                            metadata=DocumentMetadata(company_name="NVIDIA Corporation", ticker="NVDA", fiscal_year=2024, years_covered=[2024, 2023]))]
 
 

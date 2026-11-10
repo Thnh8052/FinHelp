@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
-from app.modules.query_router.catalog_route import QNUM, QPAIR, names, question_years, words
+from app.modules.query_router.catalog_route import QNUM, QPAIR, company_matches, names, question_years, words
 from app.modules.query_router.target_resolver import Filing, Target, _key, alignment_note, resolve
 
 FISCAL = re.compile(r"\bfy\s?\d{2,4}\b|\bfiscal\b|năm tài chính", re.I)
@@ -21,6 +21,7 @@ CALENDAR = re.compile(r"\bcalendar\b|năm dương lịch", re.I)
 RELATIVE = re.compile(r"\b(?:a|one) year (?:earlier|before|ago)\b|\b(?:previous|prior|preceding) (?:fiscal )?year\b|\bthe year before\b|"
                       r"\byear[- ]over[- ]year\b|\byoy\b|năm trước|cùng kỳ năm", re.I)
 ACRONYM = re.compile(r"[A-Z][A-Z&.]{1,5}")  # "TD", "RBC", "P&G": the shape of an abbreviated company name
+LINK = r"(?:and|or|vs\.?|versus|with|against|và|với|hay)"  # the words that list one company after another
 # a report type the question names: only that type of the company's documents, when it has one
 FORMS = {"8-K": re.compile(r"\b8-?K\b", re.I), "10-Q": re.compile(r"\b10-?Q\b", re.I), "10-K": re.compile(r"\b10-?K\b", re.I),
          "earnings release": re.compile(r"\b(?:earnings|press) release\b", re.I)}
@@ -46,8 +47,8 @@ class TargetDecision:
 
 
 def _named(question: str, docs: Sequence[ScopeDoc]) -> List[ScopeDoc]:
-    asked = set(words(question))
-    return [d for d in docs if names(d.card) & asked]
+    matches = company_matches(question, [d.card for d in docs])
+    return [docs[i] for i in sorted(matches)]
 
 
 def _understood(docs: Sequence[ScopeDoc], vi: bool, extra: str = "") -> str:
@@ -81,19 +82,28 @@ def from_mentions(question: str, docs: Sequence[ScopeDoc], mentions: Sequence[st
     return out
 
 
-def _unknown_names(question: str, docs: Sequence[ScopeDoc]) -> bool:
+def _unmatched_names(question: str, docs: Sequence[ScopeDoc]) -> List[str]:
     """Capitalised terms (not ordinary words) that no selected document's catalog names: "TD" when the catalog only says
     "The Toronto-Dominion Bank" and no ticker was confirmed."""
     from app.modules.query_router.planner import CatalogEntry, name_candidates  # local import: planner imports the LLM client
 
+    return name_candidates(question, [CatalogEntry(d.document_id, d.filing.company, d.filing.form, "", "") for d in docs])
+
+
+def _lists_an_unmatched_name(question: str, docs: Sequence[ScopeDoc]) -> bool:
+    """A name no catalog carries written next to a listing word: "Pepsi and Coke", "RBC vs TD", "BofA, JPMorgan"."""
+    return any(re.search(rf"(?:\b{LINK}|,)\s+(?:of\s+|của\s+)?{re.escape(t)}(?!\w)|(?<!\w){re.escape(t)}(?:['’]s)?(?:\s+{LINK}\b|,)", question, re.I)
+               for t in _unmatched_names(question, docs))
+
+
+def _unknown_names(question: str, docs: Sequence[ScopeDoc]) -> bool:
     known = set().union(*(names(d.card) for d in docs)) if docs else set()
-    terms = name_candidates(question, [CatalogEntry(d.document_id, d.filing.company, d.filing.form, "", "") for d in docs])
-    return any(ACRONYM.fullmatch(t) and not (set(words(t)) & known) for t in terms)
+    return any(ACRONYM.fullmatch(t) and not (set(words(t)) & known) for t in _unmatched_names(question, docs))
 
 
 def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecision:
     named = _named(question, docs)
-    if not named:
+    if not named or _lists_an_unmatched_name(question, docs):  # "Pepsi and Coke": forcing Pepsi would hide Coke from the planner
         return TargetDecision()
     by_id = {d.document_id: d for d in docs}
     basis = "fiscal" if FISCAL.search(question) else ("calendar" if CALENDAR.search(question) else "unspecified")
@@ -129,7 +139,8 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
             chosen.append(ids[0])
     if not chosen:
         return TargetDecision()
-    out = TargetDecision(chosen, rule="resolved", uncertain=_unknown_names(question, docs),
+    typo = 4 in company_matches(question, [d.card for d in docs]).values()  # one letter off: the other documents keep the safety net
+    out = TargetDecision(chosen, rule="resolved", uncertain=typo or _unknown_names(question, docs),
                          alternatives=[{"document_id": i, "label": by_id[i].label} for i in alternatives if i not in chosen])
     note = alignment_note(resolve(targets, filings), filings, vi)
     extra = " ".join(x for x in (("Giả định: " if vi else "Assumed: ") + "; ".join(assumptions) + "." if assumptions else "", note) if x)

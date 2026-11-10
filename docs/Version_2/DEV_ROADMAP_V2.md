@@ -17,10 +17,11 @@
 | **F1** | Tái cấu trúc Backend Modular Monolith (Clean Arch) | ✅ | 2026-11-07 | Di chuyển 122 files bằng `git mv` (giữ nguyên tên gốc, bảo toàn 95–100% similarity). Cập nhật 307 import statements. Bộ test **199/199 passed in 8.5s**. |
 | **F2** | Chuyển bộ đánh giá sang `backend/evaluation/` | 🚧 | Dự kiến 09/11 | Port `number_check_eval.py`, `e2e_safe_flow.py`, `g3_eval.py` trỏ trực tiếp vào module mới, đo trực tiếp trên pipeline production. |
 | **F3** | Frontend Router (`react-router-dom`), Landing Page & Multi-Notebook Hub | 🚧 | 2026-11-07 | Đã cài đặt `react-router-dom`, tạo Landing Page 9 section chuẩn SaaS, logo vector mới `FinHelpLogo`, modal Sơ đồ API, cấu hình định tuyến `/` và `/app`. Đang tích hợp TanStack Query và Hub quản lý Notebooks. |
-| **F4** | Nâng cấp mô hình hội thoại (`focus_state`, gợi ý tiếp, 👍/👎) | ⬜ | Dự kiến 12/11 | Lưu `focus_state` (công ty, năm, chỉ tiêu) sau mỗi lượt hỏi; nhận diện câu nối tiếp không cần regex cứng; sinh gợi ý tiếp theo dạng chip; hỗ trợ phân nhánh tin nhắn `parent_message_id`. |
+| **F3.5** | Hoàn thiện schema MongoDB V3.1 (notebook 1:1, `status` duy nhất, xoá dây chuyền, quota theo ngày) | 🚧 | Dự kiến 14/11 | Code xong, 222 test passed; còn chạy `scripts/migrate_mongo_v3.py` và kiểm thử end-to-end. Đặc tả: `PILLAR_2_MONGODB_SPECIFICATION.md`. |
+| **F4** | Nâng cấp mô hình hội thoại (`focus_state`, gợi ý tiếp, 👍/👎) | ⬜ | Dự kiến 17/11 | Lưu `notebooks.focus_state` (công ty, năm, chỉ tiêu) sau mỗi lượt hỏi; nhận diện câu nối tiếp không cần regex cứng; sinh gợi ý tiếp theo dạng chip; hỗ trợ phân nhánh tin nhắn `parent_message_id`. |
 | **F5** | SSE Streaming (`/chat/query-stream`) & Tiến trình Ingestion | ⬜ | Dự kiến 15/11 | Chuyển luồng trả lời sang Server-Sent Events kèm token streaming mượt mà; Stepper hiển thị tiến trình (1. Phân tích câu hỏi → 2. Truy xuất tài liệu → 3. Kiểm chứng số liệu → 4. Trả lời). |
 | **F6** | Hàng đợi bất đồng bộ Redis + `arq` worker | ⬜ | Dự kiến 18/11 | Tách rời tiến trình bóc tách Docling nặng ra khỏi FastAPI process; mỗi GPU worker nhận 1 task parsing/embedding qua Redis. |
-| **F7** | Xác thực người dùng nâng cao & Email OTP (Resend) | ⬜ | Dự kiến 20/11 | Quên mật khẩu, gửi mã OTP kích hoạt qua Email, rate-limit chống spam brute-force. |
+| **F7** | Xác thực người dùng nâng cao & Email OTP (SendGrid) | ⬜ | Dự kiến 20/11 | Quên mật khẩu, gửi mã OTP kích hoạt qua Email, rate-limit chống spam brute-force. |
 | **F8** | Tích hợp Cloudflare R2 Object Storage | ⬜ | Dự kiến 23/11 | Thay thế lưu trữ local disk bằng Cloudflare R2 (tương thích S3 API, miễn phí 10 GB lưu trữ, 0 đồng phí egress bandwidth). |
 | **F9** | PDF Viewer nâng cao với Text Layer Highlighting | ⬜ | Dự kiến 26/11 | Tích hợp PDF.js với text layer chuẩn; click trích dẫn `[1] Trang 45` tự động cuộn và vẽ khung viền sáng quanh dòng BCTC gốc. |
 | **F10** | Admin Portal toàn diện (Quản trị tri thức & Giám sát) | ⬜ | Dự kiến 29/11 | Quản lý người dùng, phân cấp hạn mức (Free/Pro/Admin), thống kê token sử dụng, nhật ký audit logs. |
@@ -93,17 +94,17 @@ Toàn bộ tài liệu phân tích thiết kế, use case và sơ đồ quy trì
 - [x] Cài đặt `react-router-dom` và sửa dứt điểm lỗi CSS Tailwind v4 trên Vite.
 - [ ] Chuyển bộ script đánh giá (`g3_eval.py`, `number_check_eval.py`, `e2e_safe_flow.py`) vào `backend/evaluation/`.
 - [ ] Tích hợp `@tanstack/react-query` vào frontend để loại bỏ polling thủ công.
-- [ ] Xây dựng giao diện Multi-Notebook Hub (`/app`) cho phép tạo, sửa tên, xoá notebook.
+- [x] Xây dựng giao diện Multi-Notebook Hub (`/app`) cho phép tạo, sửa tên, xoá notebook.
 
 ### Tuần 2: Nâng cấp Trải nghiệm Hội thoại & Streaming (F4 + F5)
-- [ ] Thêm `focus_state` vào bảng `conversations` (MongoDB) lưu giữ ngữ cảnh: Công ty, Năm tài chính, Chỉ tiêu.
+- [ ] Điền `focus_state` trong collection `notebooks` (MongoDB) lưu giữ ngữ cảnh: Công ty, Năm tài chính, Chỉ tiêu.
 - [ ] Triển khai thuật ngữ nhận diện câu hỏi thiếu chủ thể (Contextual Follow-up Resolution).
 - [ ] Sinh chip gợi ý câu hỏi tiếp theo dựa trên chỉ số tài chính liên quan.
 - [ ] Xây dựng endpoint SSE `POST /api/v1/chat/query-stream` trả về tiến trình Stepper và token chữ mượt mà.
 
 ### Tuần 3: Tối ưu Hạ tầng Ingestion & Bộ nhớ đệm (F6 + F7 + F8)
 - [ ] Cài đặt hàng đợi `arq` trên Redis để xử lý tác vụ Docling PDF nặng trong background.
-- [ ] Tích hợp dịch vụ gửi Email OTP (Resend API) cho tính năng Quên mật khẩu và Kích hoạt tài khoản.
+- [ ] Tích hợp dịch vụ gửi Email OTP (SendGrid) cho tính năng Quên mật khẩu và Kích hoạt tài khoản.
 - [ ] Kết nối Cloudflare R2 lưu trữ file PDF gốc, hỗ trợ signed URL an toàn.
 
 ### Tuần 4: Đánh giá Chất lượng, Admin Portal & Báo cáo Tốt nghiệp (F9 + F10 + F12)

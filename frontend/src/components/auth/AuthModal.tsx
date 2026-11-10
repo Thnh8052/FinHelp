@@ -29,7 +29,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
   const [forgotEmail, setForgotEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [otpDebug, setOtpDebug] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -70,11 +69,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
     setError(null);
     setLoading(true);
     try {
-      const res = await authService.forgotPassword(forgotEmail);
-      if (res.otp_debug) {
-        setOtpDebug(res.otp_debug);
-      }
-      setSuccessMsg("OTP code generated. Please enter code and your new password below.");
+      await authService.forgotPassword(forgotEmail);
+      setSuccessMsg("If the email is registered, a verification code has been sent. Enter it with your new password below.");
       setForgotStep(2);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unable to send OTP code.");
@@ -94,7 +90,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
         setTab("signin");
         setForgotStep(1);
         setSuccessMsg(null);
-        setOtpDebug(null);
       }, 1500);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "OTP verification failed.");
@@ -326,12 +321,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                 </form>
               ) : (
                 <form onSubmit={handleForgotStep2} className="auth-form">
-                  {otpDebug && (
-                    <div className="auth-otp-debug">
-                      Development Demo OTP: <strong>{otpDebug}</strong>
-                    </div>
-                  )}
-
                   <div className="auth-field">
                     <label className="auth-label">
                       OTP Code (6 digits)

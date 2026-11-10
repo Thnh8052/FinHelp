@@ -2,22 +2,15 @@
 Quản Lý Kết Nối & Khởi Tạo Chỉ Mục MongoDB (MongoDB Lifecycle & Indexing)
 Tác giả: Vũ Thành - FinAnalyst AI
 
-Chịu trách nhiệm:
-1. Quản lý vòng đời kết nối Motor Async MongoDB (kết nối khi ứng dụng khởi động, đóng pool khi tắt).
-2. Tự động khởi tạo và kiểm tra các Chỉ mục (Indexes) đơn lẻ và phức hợp (Compound Indexes)
-   trên toàn bộ các collection:
-   - users: Chỉ mục unique trên user_id, email, username; chỉ mục thưa (sparse) trên reset_token.
-   - notebooks: Chỉ mục unique trên notebook_id; chỉ mục kết hợp [user_id, updated_at].
-   - documents: Chỉ mục kết hợp [notebook_id, created_at].
-   - chunks: Chỉ mục unique trên chunk_id; chỉ mục kết hợp [notebook_id, document_id].
-   - chat_sessions: Chỉ mục unique trên session_id; chỉ mục kết hợp [notebook_id, user_id, updated_at].
-   - messages: Chỉ mục unique trên message_id; chỉ mục kết hợp [session_id, created_at].
-   - ingestion_jobs: Chỉ mục unique trên job_id.
+1. Quản lý vòng đời kết nối Motor Async MongoDB.
+2. Tạo các chỉ mục theo đặc tả docs/Version_2/PILLAR_2_MONGODB_SPECIFICATION.md. Chỉ mục unique là ràng buộc dữ liệu, nên tạo
+   thất bại thì ứng dụng dừng khởi động thay vì âm thầm chạy thiếu ràng buộc.
 3. Cung cấp Dependency `get_database` cho FastAPI Router.
 """
 
 from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from pymongo.collation import Collation
 from app.core.config import settings
 from app.core.logging import logger
 from app.infrastructure.database import collections
@@ -37,7 +30,6 @@ class MongoManager:
     @classmethod
     async def connect_to_database(cls) -> None:
         """Khởi tạo Client Motor và tự động kiểm tra/tạo các chỉ mục CSDL."""
-        logger.info(f"Connecting to MongoDB at {settings.MONGODB_URI}...")
         cls.client = AsyncIOMotorClient(settings.MONGODB_URI)
         cls.db = cls.client[settings.MONGODB_DB_NAME]
         logger.info(f"Connected to MongoDB database: '{settings.MONGODB_DB_NAME}'")
@@ -55,58 +47,45 @@ class MongoManager:
             cls.client.close()
             logger.info("MongoDB connection closed.")
 
-    # ==============================================================================
-    # HÀM: ensure_indexes
-    # Ý NGHĨA: Đảm bảo toàn bộ các chỉ mục duy nhất (unique) và chỉ mục kết hợp (compound)
-    #          được thiết lập chuẩn xác nhằm tối ưu hóa tốc độ truy vấn và ngăn chặn trùng lặp dữ liệu.
-    # ==============================================================================
     @classmethod
     async def ensure_indexes(cls) -> None:
-        """Tạo các Index duy nhất và Compound Index tối ưu hóa truy vấn trên các Collection."""
+        """Create every index of the specification; a failure stops the startup (a missing unique index is a missing constraint)."""
         if cls.db is None:
             return
+        case_insensitive = Collation(locale="en", strength=2)
+        guest_only = {"owner_type": "guest"}
+        string_hash = {"file_hash": {"$type": "string"}}
 
-        try:
-            # Collection users: Đảm bảo user_id, email, username là duy nhất
-            await cls.db[collections.USERS_COLLECTION].create_index("user_id", unique=True)
-            await cls.db[collections.USERS_COLLECTION].create_index("email", unique=True)
-            await cls.db[collections.USERS_COLLECTION].create_index("username", unique=True)
-            await cls.db[collections.USERS_COLLECTION].create_index("reset_token", sparse=True)
+        users = cls.db[collections.USERS_COLLECTION]
+        await users.create_index("user_id", unique=True)
+        await users.create_index("email", unique=True, collation=case_insensitive)
+        await users.create_index("username", unique=True, collation=case_insensitive)
+        await users.create_index("reset_token", sparse=True)
 
-            # Collection notebooks: Sắp xếp và truy vấn nhanh theo user_id và thời gian cập nhật
-            await cls.db[collections.NOTEBOOKS_COLLECTION].create_index("notebook_id", unique=True)
-            await cls.db[collections.NOTEBOOKS_COLLECTION].create_index(
-                [("user_id", 1), ("updated_at", -1)]
-            )
+        notebooks = cls.db[collections.NOTEBOOKS_COLLECTION]
+        await notebooks.create_index("notebook_id", unique=True)
+        await notebooks.create_index([("owner_id", 1), ("updated_at", -1)])
+        await notebooks.create_index("updated_at", partialFilterExpression=guest_only)  # expiry of guest notebooks
 
-            # Collection documents: Truy vấn nhanh danh sách tài liệu theo notebook
-            await cls.db[collections.DOCUMENTS_COLLECTION].create_index(
-                [("notebook_id", 1), ("created_at", -1)]
-            )
+        documents = cls.db[collections.DOCUMENTS_COLLECTION]
+        await documents.create_index("document_id", unique=True)
+        await documents.create_index([("notebook_id", 1), ("created_at", -1)])
+        await documents.create_index([("notebook_id", 1), ("file_hash", 1)], unique=True, partialFilterExpression=string_hash)
 
-            # Collection chunks: Truy vấn đoạn văn bản theo chunk_id và tài liệu
-            await cls.db[collections.CHUNKS_COLLECTION].create_index(
-                [("chunk_id", 1)], unique=True
-            )
-            await cls.db[collections.CHUNKS_COLLECTION].create_index(
-                [("notebook_id", 1), ("document_id", 1)]
-            )
+        jobs = cls.db[collections.INGESTION_JOBS_COLLECTION]
+        await jobs.create_index("job_id", unique=True)
+        await jobs.create_index("document_id", unique=True)
+        await jobs.create_index([("status", 1), ("queued_at", 1)])
 
-            # Collection chat_sessions & messages: Tối ưu tải lịch sử chat theo notebook và session
-            await cls.db[collections.CHAT_SESSIONS_COLLECTION].create_index("session_id", unique=True)
-            await cls.db[collections.CHAT_SESSIONS_COLLECTION].create_index(
-                [("notebook_id", 1), ("user_id", 1), ("updated_at", -1)]
-            )
-            await cls.db[collections.MESSAGES_COLLECTION].create_index("message_id", unique=True)
-            await cls.db[collections.MESSAGES_COLLECTION].create_index(
-                [("session_id", 1), ("created_at", 1)]
-            )
+        chunks = cls.db[collections.CHUNKS_COLLECTION]
+        await chunks.create_index("chunk_id", unique=True)
+        await chunks.create_index([("notebook_id", 1), ("document_id", 1)])
+        await chunks.create_index([("document_id", 1), ("chunk_index", 1)])
 
-            # Collection ingestion_jobs: Theo dõi tiến độ trích xuất tài liệu
-            await cls.db[collections.INGESTION_JOBS_COLLECTION].create_index("job_id", unique=True)
-            logger.info("MongoDB indexes verified successfully.")
-        except Exception as exc:
-            logger.warning(f"Could not verify MongoDB indexes: {exc}")
+        messages = cls.db[collections.MESSAGES_COLLECTION]
+        await messages.create_index("message_id", unique=True)
+        await messages.create_index([("notebook_id", 1), ("message_index", 1)], unique=True)
+        logger.info("MongoDB indexes verified successfully.")
 
 
 # ==============================================================================

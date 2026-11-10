@@ -20,7 +20,6 @@ class QdrantRetriever:
         self,
         notebook_id: str,
         document_id: Optional[Union[str, Sequence[str]]] = None,
-        concept_ids: Optional[List[str]] = None,
         chunk_type: Optional[str] = None,
     ) -> models.Filter:
         """Build strict Qdrant payload filter ensuring users cannot leak cross-notebook data.
@@ -34,8 +33,6 @@ class QdrantRetriever:
             must_conditions.append(models.FieldCondition(key="document_id", match=models.MatchValue(value=document_id)))
         elif document_id:
             must_conditions.append(models.FieldCondition(key="document_id", match=models.MatchAny(any=list(document_id))))
-        if concept_ids:
-            must_conditions.append(models.FieldCondition(key="concept_ids", match=models.MatchAny(any=concept_ids)))
         if chunk_type:
             must_conditions.append(models.FieldCondition(key="chunk_type", match=models.MatchValue(value=chunk_type)))
         return models.Filter(must=must_conditions)

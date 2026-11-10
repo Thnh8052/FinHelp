@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../../context/LanguageContext";
 import { Navbar } from "../../components/layout/Navbar";
 import { SplitLayout } from "../../components/layout/SplitLayout";
@@ -11,7 +12,7 @@ import { AdminDashboardModal } from "../../components/auth/AdminDashboardModal";
 import { Toast } from "../../components/common/Toast";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { CitationItem } from "../../types/chat";
-import { documentLabel, needsCatalogConfirmation } from "../../types/notebook";
+import { documentLabel, isDocProcessing, needsCatalogConfirmation } from "../../types/notebook";
 import { CatalogForm } from "../../components/notebook/CatalogForm";
 
 interface WorkspaceProps {
@@ -36,14 +37,21 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const [catalogDocId, setCatalogDocId] = useState<string | null>(null);
   const { t } = useLanguage();
 
-  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, docs, chat } = useWorkspace(
+  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, maxFileSizeMb, docs, chat, notebooks, notebookId, selectNotebook, newChat, deleteNotebook } = useWorkspace(
     () => setAuthModalOpen(true)
   );
 
+  const navigate = useNavigate();
+
+  // Trích dẫn và form đang mở thuộc về đoạn chat cũ
+  useEffect(() => {
+    setActiveCitation(null);
+    setCatalogDocId(null);
+  }, [notebookId]);
+
   const unconfirmedDocs = docs.documents.filter(needsCatalogConfirmation);
-  const activeSession = chat.sessions.find((s) => s.session_id === chat.currentSessionId);
-  const activeSessionTitle =
-    activeSession?.title || (isAuthenticated ? t.workspace.financialAnalysisSession : t.workspace.guestTrialSession);
+  const notebookList = notebooks.map((n) => (n.notebook_id === notebookId ? { ...n, document_count: docs.documents.length } : n));
+  const activeSessionTitle = notebookTitle || (isAuthenticated ? t.workspace.financialAnalysisSession : t.workspace.guestTrialSession);
 
   // Khi click vào trích dẫn [1] Trang 12: Tự động mở Split-View, chuyển đúng tài liệu và nhảy tới trang đó
   const handleSelectCitation = (citation: CitationItem) => {
@@ -65,6 +73,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           docs.reload();
         }}
       />
+
+      {/* Trong lúc gửi tệp lên: chặn mọi thao tác, vì rời trang lúc này sẽ làm mất tệp đang gửi */}
+      {docs.isUploading && (
+        <div className="upload-lock-overlay" role="status" aria-live="polite">
+          <span className="chat-processing-spinner" />
+          <span>{t.workspace.uploadingNotice}</span>
+        </div>
+      )}
 
       {/* Top-Center Toast Notification */}
       <Toast toast={toast} onClose={closeToast} />
@@ -91,11 +107,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         sidebar={
           <ChatHistoryList
-            sessions={chat.sessions}
-            activeSessionId={chat.currentSessionId}
-            onSelectSession={chat.selectSession}
-            onNewChat={chat.newChat}
-            onDeleteSession={chat.deleteSession}
+            notebooks={notebookList}
+            activeNotebookId={notebookId}
+            onOpenHub={isAuthenticated ? () => navigate("/app") : undefined}
+            onSelectNotebook={selectNotebook}
+            onNewChat={newChat}
+            onDeleteNotebook={deleteNotebook}
             isGuest={!isAuthenticated}
           />
         }
@@ -122,11 +139,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               onSelectCitation={handleSelectCitation}
               onClearChat={() => chat.setMessages([])}
               sessionTitle={activeSessionTitle}
-              onNewChat={chat.newChat}
+              onNewChat={newChat}
               onOpenSources={() => setIsSourcesOpen((prev) => !prev)}
               onToggleSources={() => setIsSourcesOpen((prev) => !prev)}
               isSourcesOpen={isSourcesOpen}
               hasSources={docs.selectedDocIds.length > 0}
+              isProcessing={docs.isUploading || docs.documents.some(isDocProcessing)}
               mentionOptions={docs.documents
                 .filter((d) => docs.selectedDocIds.includes(d.document_id))
                 .map((d) => ({ document_id: d.document_id, label: documentLabel(d) }))}
@@ -151,12 +169,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             onClose={() => setIsSourcesOpen(false)}
             isUploading={docs.isUploading}
             isDeleting={docs.isDeleting}
+            maxSources={maxSources}
+            maxFileSizeMb={maxFileSizeMb}
           />
         }
         isSourcesOpen={isSourcesOpen}
         pdfViewerPane={
           <SourceViewer
-            documents={docs.documents}
+            documents={docs.documents.filter((d) => d.status === "ready")}
             activeDocId={docs.activeDocId}
             onSelectDoc={docs.setActiveDocId}
             activeCitation={activeCitation}
