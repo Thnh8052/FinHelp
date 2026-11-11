@@ -21,9 +21,10 @@
 }
 
 .hub-title {
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
   color: var(--text-primary);
 }
 
@@ -340,14 +341,105 @@
 }
 
 .hub-state-title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.015em;
   color: var(--text-primary);
 }
 
 .hub-state-text {
   font-size: 14px;
   color: var(--text-muted);
+}
+
+/* Mobile type scale: smaller screens use smaller text, in two steps */
+@media (max-width: 600px) {
+  .hub-main {
+    padding: 20px 12px;
+  }
+
+  .hub-header {
+    margin-bottom: 16px;
+  }
+
+  .hub-title {
+    font-size: 24px;
+  }
+
+  .hub-subtitle,
+  .hub-state-text {
+    font-size: 12.5px;
+  }
+
+  .hub-state-title {
+    font-size: 17px;
+  }
+
+  .hub-new-btn,
+  .hub-text-btn {
+    font-size: 12.5px;
+  }
+
+  .hub-new-btn {
+    padding: 6px 14px;
+  }
+
+  /* 16px stops iOS Safari from zooming into the field on focus */
+  .hub-input {
+    font-size: 16px;
+  }
+
+  .hub-search {
+    margin-bottom: 12px;
+  }
+
+  .hub-grid {
+    gap: 12px;
+  }
+
+  .hub-card {
+    min-height: 120px;
+    padding: 12px;
+    gap: 12px;
+    border-radius: 12px;
+  }
+
+  .hub-card-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+  }
+
+  .hub-card-title,
+  .hub-confirm-title {
+    font-size: 13.5px;
+  }
+
+  .hub-card-meta,
+  .hub-confirm-note {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 380px) {
+  .hub-title {
+    font-size: 21px;
+  }
+
+  .hub-new-btn {
+    font-size: 12px;
+  }
+
+  .hub-card-title,
+  .hub-confirm-title {
+    font-size: 13px;
+  }
+
+  .hub-card-meta,
+  .hub-confirm-note {
+    font-size: 10.5px;
+  }
 }
 
 @media (pointer: coarse) {
