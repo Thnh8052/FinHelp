@@ -250,7 +250,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                     </div>
 
                     {isFailed && doc.error_message && <p className="doc-card-error">{doc.error_message}</p>}
-                    {doc.parsing_engine === "pymupdf_fallback" && (
+                    {doc.tables_may_be_inaccurate && (
                       <p className="doc-card-error">
                         {lang === "vi"
                           ? "Một số bảng trong tài liệu này có thể chưa được đọc chính xác. Nên xóa và tải lên lại sau ít phút."

@@ -1,10 +1,11 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from qdrant_client import AsyncQdrantClient
 
-from app.shared.deps import get_current_user_id, require_notebook
+from app.modules.auth.user import UserRecord
+from app.shared.deps import require_admin, require_notebook
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.chat.chat import ensure_documents_ready, selected_ids
@@ -21,17 +22,17 @@ class SearchRequest(BaseModel):
     notebook_id: str
     query: str
     document_id: Optional[str] = None
-    top_k: int = 5
+    top_k: int = Field(default=5, ge=1, le=50)
 
 
 @router.post("/search")
 async def inspect_hybrid_search(
     req: SearchRequest,
-    user_id: str = Depends(get_current_user_id),
+    admin: UserRecord = Depends(require_admin),
     db: AsyncIOMotorDatabase = Depends(get_database),
     qdrant: AsyncQdrantClient = Depends(get_qdrant_client),
 ):
-    await require_notebook(db, req.notebook_id, user_id)
+    await require_notebook(db, req.notebook_id, admin.user_id)
     service = HybridSearchService(db, qdrant)
     results = await service.retrieve_hydrated_chunks(
         query=req.query,
@@ -51,12 +52,12 @@ class ResearchSearchRequest(BaseModel):
 @router.post("/research")
 async def inspect_research_retrieval(
     req: ResearchSearchRequest,
-    user_id: str = Depends(get_current_user_id),
+    admin: UserRecord = Depends(require_admin),
     db: AsyncIOMotorDatabase = Depends(get_database),
     qdrant: AsyncQdrantClient = Depends(get_qdrant_client),
 ):
     """Retrieval only (no answer is generated): the selected sources, the sub-queries / plan, and the chunks that would be sent to the LLM."""
-    await require_notebook(db, req.notebook_id, user_id)
+    await require_notebook(db, req.notebook_id, admin.user_id)
     chosen = selected_ids(req.document_ids, None)
     await ensure_documents_ready(db, req.notebook_id, chosen)
     orchestrator = RAGWorkflowOrchestrator(db, qdrant)

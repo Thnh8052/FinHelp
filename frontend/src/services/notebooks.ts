@@ -1,4 +1,4 @@
-import { apiRequest } from "./api";
+import { ApiError, apiRequest } from "./api";
 import { Notebook } from "../types/notebook";
 
 export const notebookService = {
@@ -51,7 +51,8 @@ export async function guestNotebook(): Promise<Notebook | null> {
     const notebook = await notebookService.createGuest();
     writeKey(GUEST_NOTEBOOK_KEY, notebook.notebook_id);
     return notebook;
-  } catch {
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 429) throw err;  // the guest has to be told why the workspace is empty
     return null;
   }
 }

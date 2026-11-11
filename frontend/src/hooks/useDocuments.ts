@@ -124,7 +124,6 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
             notebook_id: notebookId,
             file_name: file.name,
             file_size_bytes: file.size,
-            file_path: `storage/pdfs/${notebookId}/${data.document_id}.pdf`,
             page_count: 0,
             status: "pending",
             created_at: new Date().toISOString(),
@@ -134,7 +133,7 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
         } catch (fileErr) {
           if (fileErr instanceof ApiError) {
             const detail = fileErr.detail || `Upload of ${file.name} failed.`;
-            if (fileErr.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
+            if (fileErr.status === 401 || fileErr.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
               showToast(detail, "warning", "Sign in now", onLoginRequired);
               break;
             } else if (fileErr.status === 409) {

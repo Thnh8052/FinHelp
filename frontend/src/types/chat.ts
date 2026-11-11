@@ -1,11 +1,8 @@
 export interface CitationItem {
   citation_id: string;
-  chunk_id: string;
   document_id: string;
   page: number;
-  table_id?: string;
   snippet: string;
-  score?: number;
   /** Câu trả lời có dùng đoạn này ([n]) hay không; không có thì hiện như đã được dùng. */
   cited?: boolean | null;
 }

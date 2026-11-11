@@ -188,11 +188,11 @@ async def _ask(monkeypatch, nb, result, query="q"):
     monkeypatch.setattr(chat_api, "require_notebook", lambda *a, **k: _value(nb))
     monkeypatch.setattr(chat_api, "can_chat", lambda *a: True)
     monkeypatch.setattr(chat_api, "ensure_documents_ready", none)
-    monkeypatch.setattr(chat_api, "UserRepository", lambda db: types.SimpleNamespace(check_quota=_true, consume_quota=none))
+    monkeypatch.setattr(chat_api, "UserRepository", lambda db: types.SimpleNamespace(reserve_quota=_true, consume_quota=none))
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "__init__", lambda self, db, qdrant: None)
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "resolve_scope", none)
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
-    response = await chat_api.handle_user_query(chat_api.QueryRequest(notebook_id="nb", query=query, document_ids=["d1"]), "u", None, None)
+    response = await chat_api.handle_user_query(None, chat_api.QueryRequest(notebook_id="nb", query=query, document_ids=["d1"]), "u", None, None)
     return order, response
 
 

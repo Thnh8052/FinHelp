@@ -17,13 +17,15 @@ import asyncio
 import hashlib
 from pathlib import Path
 import uuid
-from typing import List, Optional
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 from qdrant_client import AsyncQdrantClient
 
 from app.shared.deps import get_optional_user_id, require_notebook
+from app.shared.rate_limit import spend_guest_allowance
 from app.core.config import settings
 from app.core.logging import logger
 from app.infrastructure.database.mongodb import get_database
@@ -44,6 +46,39 @@ from app.modules.notebooks.purge import purge_document
 router = APIRouter(prefix="/documents", tags=["Documents & Ingestion"])
 
 
+LISTED_METADATA = {"company_name", "ticker", "report_type", "fiscal_year", "fiscal_quarter", "catalog_unverified", "catalog_confirmed", "user_override_unverified"}
+
+
+class DocumentOut(BaseModel):
+    """A document as the interface shows it: no storage paths, hashes or names of internal components."""
+
+    document_id: str
+    notebook_id: str
+    file_name: str
+    file_size_bytes: int
+    page_count: int
+    status: str
+    metadata: Dict[str, Any]
+    error_message: Optional[str] = None
+    tables_may_be_inaccurate: bool  # the document was read by the fallback parser
+    created_at: Any
+
+    @classmethod
+    def of(cls, doc: DocumentRecord) -> "DocumentOut":
+        fields = doc.model_dump(exclude={"metadata"})
+        return cls(**fields, metadata=doc.metadata.model_dump(include=LISTED_METADATA), tables_may_be_inaccurate=doc.parsing_engine == "pymupdf_fallback")
+
+
+class JobOut(BaseModel):
+    """Progress of a document being processed: no host names, error traces or timings."""
+
+    job_id: str
+    document_id: str
+    notebook_id: str
+    status: str
+    progress_percent: int
+
+
 # ==============================================================================
 # HÀM: list_documents
 # Ý NGHĨA: Lấy danh sách các tài liệu PDF đã nạp vào một sổ tay (notebook_id).
@@ -52,9 +87,9 @@ router = APIRouter(prefix="/documents", tags=["Documents & Ingestion"])
 #   - notebook_id: Mã định danh sổ tay.
 #   - user_id: Lấy tùy chọn từ JWT (None nếu là Guest).
 # ĐẦU RA:
-#   - List[DocumentRecord]: Danh sách tài liệu trong sổ tay.
+#   - List[DocumentOut]: Danh sách tài liệu trong sổ tay.
 # ==============================================================================
-@router.get("/notebook/{notebook_id}", response_model=List[DocumentRecord])
+@router.get("/notebook/{notebook_id}", response_model=List[DocumentOut])
 async def list_documents(
     notebook_id: str,
     user_id: Optional[str] = Depends(get_optional_user_id),
@@ -62,8 +97,7 @@ async def list_documents(
 ):
     """Lấy danh sách các tài liệu thuộc về Notebook chỉ định."""
     await require_notebook(db, notebook_id, user_id)
-    repo = DocumentRepository(db)
-    return await repo.get_by_notebook(notebook_id)
+    return [DocumentOut.of(d) for d in await DocumentRepository(db).get_by_notebook(notebook_id)]
 
 
 def _compute_sha256(file_path: Path) -> str:
@@ -103,6 +137,7 @@ async def _check_upload(db: AsyncIOMotorDatabase, file: UploadFile, user_id: Opt
 # ==============================================================================
 @router.post("/upload/{notebook_id}")
 async def upload_pdf(
+    request: Request,
     notebook_id: str,
     file: UploadFile = File(...),
     user_id: Optional[str] = Depends(get_optional_user_id),
@@ -141,6 +176,7 @@ async def upload_pdf(
                 status_code=403,
                 detail="Chế độ dùng thử (chưa đăng nhập) chỉ hỗ trợ tối đa 1 tài liệu. Vui lòng đăng nhập để phân tích tối đa 5 tài liệu!",
             )
+        spend_guest_allowance(request, "upload", settings.GUEST_DAILY_UPLOADS)  # only a file that would really be processed counts
     else:
         # Người dùng đã đăng nhập: Tối đa 5 tài liệu / notebook
         if len(existing_docs) >= settings.MAX_SELECTED_DOCS_USER:
@@ -219,7 +255,7 @@ async def upload_pdf(
 # ĐẦU RA:
 #   - IngestionJobRecord: Trạng thái hiện tại (parsing, extracting_tables, indexing, completed).
 # ==============================================================================
-@router.get("/jobs/{job_id}", response_model=IngestionJobRecord)
+@router.get("/jobs/{job_id}", response_model=JobOut)
 async def get_job_status(
     job_id: str,
     user_id: Optional[str] = Depends(get_optional_user_id),
@@ -301,28 +337,17 @@ async def update_catalog(
 # HÀM: get_document_file
 # Ý NGHĨA: Phục vụ tệp PDF gốc để trình đọc BCTC Split-View tải trực tiếp.
 # ==============================================================================
-@router.get("/{document_id}/file/{token}")
 @router.get("/{document_id}/file")
 async def get_document_file(
     document_id: str,
-    token: Optional[str] = None,
     db: AsyncIOMotorDatabase = Depends(get_database),
     user_id: Optional[str] = Depends(get_optional_user_id),
 ):
     from fastapi.responses import FileResponse
-    from jose import JWTError, jwt
-
-    # Thẻ <iframe> trong trình duyệt không gửi header Authorization: Bearer, do đó nhận token qua Query Param
-    if not user_id and token:
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            user_id = payload.get("sub")
-        except JWTError:
-            pass
 
     doc = await _document(db, document_id, user_id, write=False)
     storage = StorageService()
-    pdf_path = storage.get_pdf_path(doc.notebook_id, doc.document_id, doc.file_name)
+    pdf_path = await asyncio.to_thread(storage.get_pdf_path, doc.notebook_id, doc.document_id, doc.file_name)  # may download from R2
     if not pdf_path.is_file():
         raise HTTPException(status_code=404, detail="Tệp PDF không tồn tại trên hệ thống lưu trữ.")
     return FileResponse(
@@ -330,5 +355,6 @@ async def get_document_file(
         media_type="application/pdf",
         filename=doc.file_name,  # encoded by Starlette: a raw header fails on Vietnamese names such as "tổng hợp"
         content_disposition_type="inline",
-        headers={"Cache-Control": "private, max-age=3600"},  # a document's PDF never changes: reuse it instead of downloading it again
+        # A document's PDF never changes: reuse it instead of downloading it again, but only for the same sign-in (the address is the same for everyone)
+        headers={"Cache-Control": "private, max-age=3600", "Vary": "Authorization"},
     )

@@ -113,10 +113,11 @@ async def test_the_pdf_response_accepts_vietnamese_names_and_can_be_cached(monke
 
     monkeypatch.setattr(documents_api, "StorageService", Storage)
 
-    response = await documents_api.get_document_file("doc_delete", token=None, db=None, user_id="alice")
+    response = await documents_api.get_document_file("doc_delete", db=None, user_id="alice")
 
     assert response.headers["content-disposition"].startswith("inline; filename*=utf-8''")
     assert "max-age" in response.headers["cache-control"]
+    assert response.headers["vary"] == "Authorization"  # the address is the same for everyone: a signed-out browser must not reopen it from its cache
 
 
 async def test_guest_deletes_its_own_document(monkeypatch):

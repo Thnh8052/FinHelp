@@ -5,7 +5,6 @@ import { ApiError } from "../services/api";
 import { chatService } from "../services/chat";
 import { documentService } from "../services/documents";
 import { emptyOrNewNotebook, guestNotebook, notebookService } from "../services/notebooks";
-import { authService } from "../services/auth";
 import { Notebook } from "../types/notebook";
 import { useChat } from "./useChat";
 import { useDocuments } from "./useDocuments";
@@ -114,8 +113,11 @@ export function useWorkspace(onLoginRequired: () => void) {
       await openNotebook(notebook);
     };
 
-    const load = isAuthenticated && authService.getAuthToken() ? loadMemberData : loadGuestData;
-    load().catch((err) => console.warn("Unable to load workspace data:", err));
+    const load = isAuthenticated ? loadMemberData : loadGuestData;
+    load().catch((err) => {
+      if (err instanceof ApiError && err.status === 429 && err.detail) showToast(err.detail, "warning");
+      else console.warn("Unable to load workspace data:", err);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isAuthLoading, routeNotebookId]);
 

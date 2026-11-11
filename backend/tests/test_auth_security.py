@@ -1,4 +1,5 @@
 """Auth hardening and the guest / user / admin rules (no database, no network: repositories are faked)."""
+from datetime import datetime, timedelta, timezone
 import types
 
 import pytest
@@ -133,6 +134,23 @@ def test_reset_code_is_never_in_the_response(reset_flow, monkeypatch, environmen
     assert _forgot(client, "nobody@example.com").json().keys() == response.json().keys()  # unknown emails look the same
 
 
+def test_forgot_password_gives_every_email_the_same_answer(reset_flow):
+    client, _ = reset_flow
+    assert _forgot(client).json() == _forgot(client, "nobody@example.com").json()
+
+
+def test_a_refused_reset_does_not_tell_whether_the_account_exists(reset_flow):
+    client, codes = reset_flow
+    _forgot(client)
+    wrong = "000000" if codes[0] != "000000" else "111111"
+    known_wrong_code = _reset(client, wrong)
+    unknown_email = client.post("/api/v1/auth/reset-password", json={"email": "nobody@example.com", "otp_code": wrong, "new_password": "brand-new-password"})
+    ResetUsers.user.reset_token_expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    expired = _reset(client, codes[0])
+    assert {r.status_code for r in (known_wrong_code, unknown_email, expired)} == {400}
+    assert known_wrong_code.json() == unknown_email.json() == expired.json()
+
+
 def test_environment_defaults_to_production():
     assert Settings.model_fields["ENVIRONMENT"].default == "production"
 
@@ -240,6 +258,27 @@ async def test_admin_account_needs_an_explicit_password(admin_init, monkeypatch)
     assert admin_init.saved[0].role == "admin" and verify_password(REAL_PASSWORD, admin_init.saved[0].hashed_password)
 
 
+@pytest.mark.parametrize("password, moved", [(REAL_PASSWORD, 0), ("a-different-admin-password", 1)])
+async def test_only_a_new_admin_password_ends_the_admins_sessions(admin_init, monkeypatch, password, moved):
+    updates = []
+
+    class Recording(_Collection):
+        async def update_one(self, query, update):
+            updates.append(update)
+
+    class Existing(FakeRepo):
+        def __init__(self, db):
+            self.collection = Recording()
+
+        async def get_by_username(self, name):
+            return ADMIN
+
+    monkeypatch.setattr(init_admin, "UserRepository", Existing)
+    monkeypatch.setattr(settings, "ADMIN_PASSWORD", password)
+    await init_admin.setup_admin_and_clean_mocks()
+    assert updates[0]["$inc"] == {"token_version": moved}
+
+
 # ---------------------------------------------------------------- settings
 def test_secret_key_has_no_default(monkeypatch):
     monkeypatch.delenv("SECRET_KEY", raising=False)
@@ -319,6 +358,13 @@ def test_guest_may_upload_one_document_only(upload):
     assert post(GUEST_NOTEBOOK) == 403
     state["docs"] = [_doc(1, status="failed")]
     assert post(GUEST_NOTEBOOK) == 500  # a failed document does not count: the guest can retry
+
+
+def test_guest_uploads_stop_at_the_daily_allowance(upload, monkeypatch):
+    monkeypatch.setattr(settings, "GUEST_DAILY_UPLOADS", 2)
+    _, post = upload
+    assert post(GUEST_NOTEBOOK, b"this is only named .pdf") == 400  # a refused file does not use the allowance
+    assert [post(GUEST_NOTEBOOK) for _ in range(3)] == [500, 500, 429]  # 500: Stop, the file reached the storage
 
 
 def test_signed_in_user_may_upload_five_documents(upload):

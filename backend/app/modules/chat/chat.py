@@ -5,20 +5,21 @@ Tác giả: Vũ Thành - FinAnalyst AI
 Mỗi notebook là một đoạn chat.
 1. Tiếp nhận câu hỏi tài chính từ người dùng (POST /api/v1/chat/query).
 2. Hỗ trợ 2 chế độ:
-   - Chưa đăng nhập (Guest): Hỏi trong notebook khách của mình, không giới hạn số câu hỏi (chỉ 1 tài liệu nguồn).
+   - Chưa đăng nhập (Guest): Hỏi trong notebook khách của mình, giới hạn số câu mỗi ngày theo địa chỉ IP (chỉ 1 tài liệu nguồn).
    - Đã đăng nhập (User): Có hạn mức câu hỏi mỗi ngày.
 3. Lưu tin nhắn người dùng và phản hồi của trợ lý AI (kèm citations, token, độ trễ) vào MongoDB.
 4. Lấy lịch sử hội thoại của một notebook (GET /api/v1/chat/messages/{notebook_id}).
 """
 
 import uuid
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient
 
 from app.shared.deps import can_chat, get_optional_user_id, require_notebook
+from app.shared.rate_limit import spend_guest_allowance
 from app.core.config import settings
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
@@ -63,15 +64,41 @@ class QueryRequest(BaseModel):
     mentions: Optional[List[str]] = None  # @file: selected documents the question is explicitly about (ids, never parsed from the text)
 
 
+class CitationOut(BaseModel):
+    """An excerpt as the interface shows it: no chunk ids or search scores."""
+
+    citation_id: str
+    document_id: str
+    page: int
+    snippet: str
+    cited: Optional[bool] = None
+
+
 class QueryResponse(BaseModel):
     title: str  # the notebook's title: named after the first question
     query: str
     answer: str
-    intent: str
-    citations: List[dict]
+    citations: List[CitationOut]
     understood: str = ""  # G3: how the question was understood (documents, assumptions), shown above the answer
     alternatives: List[dict] = []  # other selected documents that also match: [{"document_id", "label"}]
-    verification: dict = {}  # A2: {"passed", "repaired", "unverified_figures", "citations"}
+
+
+class MessageOut(BaseModel):
+    """A stored message as the interface shows it: of its trace, only how the question was understood."""
+
+    message_id: str
+    notebook_id: str
+    role: str
+    content: str
+    citations: List[CitationOut]
+    understood: str
+    alternatives: List[dict]
+    created_at: Any
+
+    @classmethod
+    def of(cls, message: MessageRecord) -> "MessageOut":
+        trace = message.trace_info or {}
+        return cls(**message.model_dump(exclude={"trace_info"}), understood=trace.get("understood") or "", alternatives=trace.get("alternatives") or [])
 
 
 # --- Endpoints ---
@@ -86,6 +113,7 @@ class QueryResponse(BaseModel):
 # ==============================================================================
 @router.post("/query", response_model=QueryResponse)
 async def handle_user_query(
+    request: Request,
     req: QueryRequest,
     user_id: Optional[str] = Depends(get_optional_user_id),
     db: AsyncIOMotorDatabase = Depends(get_database),
@@ -108,9 +136,6 @@ async def handle_user_query(
     if len(req.query) > MAX_QUERY_CHARS:  # refused here, before anything is stored (the input policy has the same limit)
         raise HTTPException(status_code=422, detail=f"Câu hỏi quá dài (tối đa {MAX_QUERY_CHARS:,} ký tự). Hãy rút gọn rồi gửi lại.".replace(",", "."))
     await ensure_documents_ready(db, req.notebook_id, chosen)
-    users = UserRepository(db)
-    if user_id is not None and not await users.check_quota(user_id):
-        raise HTTPException(status_code=429, detail="Bạn đã dùng hết số câu hỏi của hôm nay. Vui lòng quay lại vào ngày mai.")
     orchestrator = RAGWorkflowOrchestrator(db, qdrant)
     try:  # a question without a usable source choice is refused before it costs quota or writes a message
         await orchestrator.resolve_scope(req.notebook_id, chosen)
@@ -125,17 +150,29 @@ async def handle_user_query(
         for m in await chat_repo.get_messages(req.notebook_id, limit=6)
     ]
 
-    # 2. Kích hoạt RAG Workflow Orchestrator
-    result = await orchestrator.execute_query(
-        query=req.query,
-        notebook_id=req.notebook_id,
-        document_ids=chosen,
-        history=history,
-        mentions=mentions,
-        focus_state=nb.focus_state,
-    )
+    # 2. Giữ chỗ hạn mức ngay trước pipeline, không phải sau: các câu gửi cùng lúc không thể cùng thấy "còn lượt"
+    users = UserRepository(db)
+    if user_id is None:
+        spend_guest_allowance(request, "question", settings.GUEST_DAILY_QUESTIONS)
+    elif not await users.reserve_quota(user_id):
+        raise HTTPException(status_code=429, detail="Bạn đã dùng hết số câu hỏi của hôm nay. Vui lòng quay lại vào ngày mai.")
 
-    # 3. Câu hỏi chỉ được lưu khi đã có câu trả lời: câu hỏi lỗi không kẹt lại trong lịch sử và ngữ cảnh. Câu hỏi đầu tiên
+    # 3. Kích hoạt RAG Workflow Orchestrator
+    try:
+        result = await orchestrator.execute_query(
+            query=req.query,
+            notebook_id=req.notebook_id,
+            document_ids=chosen,
+            history=history,
+            mentions=mentions,
+            focus_state=nb.focus_state,
+        )
+    except Exception:
+        if user_id is not None:  # không có câu trả lời thì trả lại lượt đã giữ
+            await users.consume_quota(user_id, messages=-1)
+        raise
+
+    # 4. Câu hỏi chỉ được lưu khi đã có câu trả lời: câu hỏi lỗi không kẹt lại trong lịch sử và ngữ cảnh. Câu hỏi đầu tiên
     # được tìm trong tài liệu đặt tên cho đoạn chat (câu chào hay câu bị từ chối thì không)
     title = nb.title
     if nb.title in UNTITLED and result.get("charged", True):
@@ -145,15 +182,15 @@ async def handle_user_query(
         MessageRecord(message_id=f"msg_{uuid.uuid4().hex[:8]}", notebook_id=req.notebook_id, role="user", content=req.query)
     )
 
-    # Người dùng đã đăng nhập: chỉ tính lượt hỏi khi hệ thống đã thật sự tìm và sinh câu trả lời
-    # (từ chối, câu chào, lệnh liệt kê nguồn, hỏi lại... không bị tính); token thì luôn ghi đúng lượng đã dùng
+    # Người dùng đã đăng nhập: lượt hỏi đã được giữ ở bước 2; câu không thật sự tìm và sinh câu trả lời
+    # (từ chối, câu chào, lệnh liệt kê nguồn, hỏi lại...) được trả lại lượt; token thì luôn ghi đúng lượng đã dùng
     trace = result.get("trace", {})
     llm = trace.get("llm", {})
     prompt_tokens, completion_tokens = llm.get("prompt_tokens", 0), llm.get("completion_tokens", 0)
     if user_id is not None:
-        await users.consume_quota(user_id, messages=1 if result.get("charged", True) else 0, tokens=prompt_tokens + completion_tokens)
+        await users.consume_quota(user_id, messages=0 if result.get("charged", True) else -1, tokens=prompt_tokens + completion_tokens)
 
-    # 4. Lưu câu trả lời của AI kèm trích dẫn và số liệu thực nghiệm vào MongoDB
+    # 5. Lưu câu trả lời của AI kèm trích dẫn và số liệu thực nghiệm vào MongoDB
     await chat_repo.append_message(
         MessageRecord(
             message_id=f"msg_{uuid.uuid4().hex[:8]}",
@@ -161,7 +198,7 @@ async def handle_user_query(
             role="assistant",
             content=result["answer"],
             citations=result["citations"],
-            trace_info={"intent": result["intent"], **trace},
+            trace_info={**trace, "intent": result["intent"], "router": trace.get("intent")},  # the router's verdict has the same key in the trace
             token_usage={"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_tokens": prompt_tokens + completion_tokens},
             latency_ms=round(trace.get("timings", {}).get("total", 0) * 1000),
             model_used=settings.DEFAULT_LLM_MODEL if llm.get("calls") else None,
@@ -174,11 +211,9 @@ async def handle_user_query(
         title=title,
         query=req.query,
         answer=result["answer"],
-        intent=result["intent"],
         citations=result["citations"],
         understood=result.get("understood", ""),
         alternatives=result.get("alternatives", []),
-        verification=result.get("verification", {}),
     )
 
 
@@ -186,7 +221,7 @@ async def handle_user_query(
 # HÀM: get_messages
 # Ý NGHĨA: Lấy lịch sử tin nhắn của một notebook để Frontend hiển thị lại đoạn chat.
 # ==============================================================================
-@router.get("/messages/{notebook_id}", response_model=List[MessageRecord])
+@router.get("/messages/{notebook_id}", response_model=List[MessageOut])
 async def get_messages(
     notebook_id: str,
     user_id: Optional[str] = Depends(get_optional_user_id),
@@ -194,4 +229,4 @@ async def get_messages(
 ):
     """Lấy các tin nhắn mới nhất của một notebook, theo đúng thứ tự hội thoại."""
     await require_notebook(db, notebook_id, user_id)
-    return await ChatRepository(db).get_messages(notebook_id)
+    return [MessageOut.of(m) for m in await ChatRepository(db).get_messages(notebook_id)]

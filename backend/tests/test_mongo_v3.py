@@ -1,4 +1,5 @@
 """MongoDB schema V3 rules (no database, no network: collections and repositories are faked)."""
+import asyncio
 from datetime import datetime, timedelta, timezone
 import types
 
@@ -58,23 +59,28 @@ def test_a_window_from_an_earlier_day_counts_as_nothing_used():
 
 
 def _evaluate(expression, doc):
-    """The few aggregation operators consume_quota uses."""
+    """The few aggregation operators the quota updates use."""
     if isinstance(expression, str) and expression.startswith("$"):
-        return doc[expression[1:]]
+        return doc.get(expression[1:])
     if isinstance(expression, dict):
         operator, arguments = next(iter(expression.items()))
         values = [_evaluate(a, doc) for a in arguments]
-        return {"$cond": lambda: values[1] if values[0] else values[2], "$lt": lambda: values[0] < values[1], "$add": lambda: sum(values)}[operator]()
+        return {"$cond": lambda: values[1] if values[0] else values[2], "$lt": lambda: values[0] < values[1], "$add": lambda: sum(values),
+                "$max": lambda: max(values), "$ifNull": lambda: values[1] if values[0] is None else values[0]}[operator]()
     return expression
 
 
 class Users:
+    """One document; like MongoDB, each update checks its filter and writes without letting another request in between (no await inside)."""
+
     def __init__(self, doc):
         self.doc = doc
 
-    async def update_one(self, _query, pipeline):
+    async def update_one(self, query, pipeline):
+        if "$expr" in query and not _evaluate(query["$expr"], self.doc):
+            return types.SimpleNamespace(matched_count=0, modified_count=0)
         self.doc.update({k: _evaluate(v, self.doc) for k, v in pipeline[0]["$set"].items()})
-        return types.SimpleNamespace(modified_count=1)
+        return types.SimpleNamespace(matched_count=1, modified_count=1)
 
 
 async def _consume(window_start, messages=1, tokens=100):
@@ -100,17 +106,93 @@ async def test_an_uncharged_request_still_records_its_tokens():
     assert (doc["daily_messages_used"], doc["total_tokens_consumed"]) == (5, 1040)
 
 
-async def test_check_quota_refuses_at_the_limit(monkeypatch):
+def _quota_repo(used, limit=100, window_start=None):
+    doc = {"daily_messages_used": used, "daily_messages_limit": limit, "daily_window_start": window_start or today_utc(), "total_tokens_consumed": 0}
     repo = UserRepository.__new__(UserRepository)
+    repo.collection = Users(doc)
+    return repo, doc
 
-    async def at(used):
-        async def get_by_id(_):
-            return _user(daily_messages_limit=2, daily_messages_used=used)
 
-        monkeypatch.setattr(repo, "get_by_id", get_by_id, raising=False)
-        return await repo.check_quota("u1")
+async def test_a_question_is_reserved_only_within_the_limit():
+    repo, doc = _quota_repo(used=1, limit=2)
+    assert await repo.reserve_quota("u1") is True and doc["daily_messages_used"] == 2
+    assert await repo.reserve_quota("u1") is False and doc["daily_messages_used"] == 2
 
-    assert await at(1) is True and await at(2) is False
+
+async def test_the_first_reservation_of_a_new_day_restarts_the_count():
+    repo, doc = _quota_repo(used=2, limit=2, window_start=today_utc() - timedelta(days=1))
+    assert await repo.reserve_quota("u1") is True
+    assert (doc["daily_messages_used"], doc["daily_window_start"]) == (1, today_utc())
+
+
+async def test_an_account_stored_without_a_limit_gets_the_default_one():
+    repo, doc = _quota_repo(used=3)
+    del doc["daily_messages_limit"]
+    assert await repo.reserve_quota("u1") is True
+
+
+@pytest.mark.parametrize("window_start, expected", [(today_utc(), 4), (today_utc() - timedelta(days=1), 0)])
+async def test_giving_a_question_back_never_goes_below_zero(window_start, expected):
+    repo, doc = _quota_repo(used=5, window_start=window_start)
+    await repo.consume_quota("u1", messages=-1)
+    assert doc["daily_messages_used"] == expected
+
+
+async def _ask_together(monkeypatch, repo, requests, execute):
+    class Chats:
+        def __init__(self, db):
+            pass
+
+        async def get_messages(self, *a, **k):
+            return []
+
+        async def append_message(self, message):
+            pass
+
+    async def none(*a, **k):
+        return None
+
+    async def notebook(*a, **k):
+        return types.SimpleNamespace(title="T", focus_state=None)
+
+    monkeypatch.setattr(chat_api, "UserRepository", lambda db: repo)
+    monkeypatch.setattr(chat_api, "ChatRepository", Chats)
+    monkeypatch.setattr(chat_api, "require_notebook", notebook)
+    monkeypatch.setattr(chat_api, "can_chat", lambda *a: True)
+    monkeypatch.setattr(chat_api, "ensure_documents_ready", none)
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "__init__", lambda self, db, qdrant: None)
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "resolve_scope", none)
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", execute)
+    question = chat_api.QueryRequest(notebook_id="nb", query="q", document_ids=["d1"])
+    return await asyncio.gather(*[chat_api.handle_user_query(None, question, "u1", None, None) for _ in range(requests)], return_exceptions=True)
+
+
+async def test_questions_sent_together_cannot_pass_the_daily_limit(monkeypatch):
+    repo, doc = _quota_repo(used=99, limit=100)
+    started = []
+
+    async def execute(self, **kw):
+        started.append(1)
+        await asyncio.sleep(0)  # the other requests run while this one is in the pipeline
+        return {"answer": "ok", "intent": "qa", "citations": [], "trace": {}}
+
+    results = await _ask_together(monkeypatch, repo, 5, execute)
+
+    assert len(started) == 1  # one pipeline run for the one question left
+    assert sorted(getattr(r, "status_code", 200) for r in results) == [200, 429, 429, 429, 429]
+    assert doc["daily_messages_used"] == 100
+
+
+async def test_several_failures_give_every_reserved_question_back(monkeypatch):
+    repo, doc = _quota_repo(used=10)
+
+    async def execute(self, **kw):
+        await asyncio.sleep(0)
+        raise RuntimeError("the pipeline broke")
+
+    results = await _ask_together(monkeypatch, repo, 3, execute)
+
+    assert all(isinstance(r, RuntimeError) for r in results) and doc["daily_messages_used"] == 10
 
 
 # ---------------------------------------------------------------- strict chat gating
@@ -339,5 +421,5 @@ async def test_a_job_that_stopped_moving_fails_and_frees_its_file():
 
 
 def test_the_quota_module_is_the_single_place_that_counts():
-    assert hasattr(user_repo_module.UserRepository, "check_quota") and hasattr(user_repo_module.UserRepository, "consume_quota")
+    assert hasattr(user_repo_module.UserRepository, "reserve_quota") and hasattr(user_repo_module.UserRepository, "consume_quota")
     assert not hasattr(user_repo_module.UserRepository, "increment_quota_usage")

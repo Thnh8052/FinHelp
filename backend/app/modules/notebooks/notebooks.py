@@ -12,14 +12,16 @@ Một notebook là một đoạn chat: danh sách lịch sử chat chính là da
 """
 
 import uuid
-from typing import Annotated, List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated, Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, StringConstraints
 from qdrant_client import AsyncQdrantClient
 
+from app.core.config import settings
 from app.core.logging import logger
 from app.shared.deps import GUEST_PREFIX, get_current_user_id, get_optional_user_id, require_notebook
+from app.shared.rate_limit import spend_guest_allowance
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.documents.document_repo import DocumentRepository
@@ -31,14 +33,24 @@ router = APIRouter(prefix="/notebooks", tags=["Notebooks"])
 
 
 class CreateNotebookRequest(BaseModel):
-    title: Optional[str] = None
+    title: Optional[Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)]] = None
 
 
 class UpdateNotebookRequest(BaseModel):
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 
 
-class NotebookSummary(NotebookRecord):
+class NotebookOut(BaseModel):
+    """A notebook as the interface shows it: no owner key or conversation focus."""
+
+    notebook_id: str
+    title: str
+    message_count: int
+    created_at: Any
+    updated_at: Any
+
+
+class NotebookSummary(NotebookOut):
     """A notebook as shown in the notebook list."""
 
     document_count: int = 0
@@ -61,7 +73,7 @@ async def list_notebooks(
     return [NotebookSummary(**n.model_dump(), **counts.get(n.notebook_id, {})) for n in notebooks]
 
 
-@router.post("", response_model=NotebookRecord)
+@router.post("", response_model=NotebookOut)
 async def create_notebook(
     req: CreateNotebookRequest,
     user_id: str = Depends(get_current_user_id),
@@ -74,7 +86,7 @@ async def create_notebook(
 
 
 # Khách có thể xem notebook của mình (mã notebook là chìa khóa) và mọi người có thể xem notebook mẫu (owner_type = system).
-@router.get("/{notebook_id}", response_model=NotebookRecord)
+@router.get("/{notebook_id}", response_model=NotebookOut)
 async def get_notebook(
     notebook_id: str,
     user_id: Optional[str] = Depends(get_optional_user_id),
@@ -84,8 +96,9 @@ async def get_notebook(
 
 
 # Mỗi khách chưa đăng nhập có một notebook riêng (nb_guest_ + 32 ký tự hex ngẫu nhiên), tự xóa sau 24 giờ không dùng.
-@router.post("/guest", response_model=NotebookRecord)
-async def create_guest_notebook(db: AsyncIOMotorDatabase = Depends(get_database)):
+@router.post("/guest", response_model=NotebookOut)
+async def create_guest_notebook(request: Request, db: AsyncIOMotorDatabase = Depends(get_database)):
+    spend_guest_allowance(request, "notebook", settings.GUEST_DAILY_NOTEBOOKS)  # each new guest notebook allows one more upload
     key = uuid.uuid4().hex
     record = NotebookRecord(
         notebook_id=f"{GUEST_PREFIX}{key}",

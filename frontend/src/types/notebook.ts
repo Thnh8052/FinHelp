@@ -1,8 +1,6 @@
 /** Một notebook là một đoạn chat. */
 export interface Notebook {
   notebook_id: string;
-  owner_type: "user" | "guest" | "system";
-  owner_id: string;
   title: string;
   message_count: number;
   /** Chỉ có ở danh sách sổ tay. */
@@ -29,11 +27,11 @@ export interface DocumentRecord {
   notebook_id: string;
   file_name: string;
   file_size_bytes: number;
-  file_path: string;
   page_count: number;
   status: "pending" | "processing" | "ready" | "failed";
   error_message?: string;
-  parsing_engine?: string;
+  /** Tài liệu được đọc bằng cách dự phòng: một số bảng có thể chưa chính xác. */
+  tables_may_be_inaccurate?: boolean;
   created_at: string;
 }
 
@@ -65,7 +63,5 @@ export interface IngestionJob {
   document_id: string;
   notebook_id: string;
   status: "pending" | "processing" | "completed" | "failed";
-  stage: "docling" | "chunking" | "embedding" | "indexing";
   progress_percent: number;
-  error_log?: string;
 }
