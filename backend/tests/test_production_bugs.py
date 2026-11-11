@@ -1,4 +1,4 @@
-"""Bugs #15, #17, #18, #19, #21, #22, #23, #25 and #27 of docs/Version_3/production_bugs.md (no database, no network, no email: everything outside the code under test is faked).
+"""Bugs #2, #15, #17, #18, #19, #21, #22, #23, #25 and #27 of docs/Version_3/production_bugs.md (no database, no network, no email: everything outside the code under test is faked).
 The daily quota of #16 is tested with the other quota rules in test_mongo_v3.py and test_acl.py."""
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -10,11 +10,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from jose import jwt
 from pymongo.errors import DuplicateKeyError
+import httpx
 import pytest
 
 from app import main
 from app.api_router import api_v1_router
 from app.core.config import settings
+from app.core.exceptions import DomainException, ServiceUnavailableError
 from app.core.security import create_access_token
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.storage.local_fs import StorageService
@@ -27,6 +29,8 @@ from app.modules.documents import documents as documents_api
 from app.modules.documents.document import DocumentMetadata, DocumentRecord
 from app.modules.ingestion.ingestion_job import IngestionJobRecord
 from app.modules.notebooks import notebooks as notebooks_api
+from app.modules.retrieval.embeddings import DenseEmbeddingService
+from app.modules.retrieval.reranker import QwenRerankerService
 from app.shared import deps
 from app.shared.deps import get_current_user_id, get_optional_user_id
 from app.shared.rate_limit import spend_guest_allowance
@@ -592,3 +596,36 @@ def test_a_pdf_address_with_a_token_signs_nobody_in(monkeypatch):
 
     assert TestClient(app).get(f"/documents/d/file?token={token}").status_code == 403
     assert seen == [None]  # the token in the address was ignored
+
+
+# ---------------------------------------------------------------- #2 the remote GPU worker does not answer
+@pytest.fixture
+def worker_down(monkeypatch):
+    async def post(self, url, **kwargs):
+        raise httpx.ConnectError("tunnel closed")
+
+    monkeypatch.setattr(settings, "REMOTE_GPU_URL", "https://worker.example")
+    monkeypatch.setattr(httpx.AsyncClient, "post", post)
+
+
+async def test_embedding_without_the_worker_is_a_service_unavailable_answer(worker_down):
+    with pytest.raises(ServiceUnavailableError) as raised:
+        await DenseEmbeddingService().embed_queries(["revenue 2023"])
+    assert raised.value.code == "system_not_ready" and raised.value.status_code == 503
+
+
+async def test_reranking_without_the_worker_lets_the_first_stage_order_answer(worker_down):
+    with pytest.raises(RuntimeError):  # every reranking caller catches RuntimeError and keeps the first-stage order
+        await QwenRerankerService().score_pairs([("revenue", "Revenue was 10")])
+
+
+def test_a_service_unavailable_error_reaches_the_browser_as_503_with_its_code():
+    app = FastAPI()
+    app.add_exception_handler(DomainException, main.domain_exception_handler)
+
+    @app.get("/x")
+    async def x():
+        raise ServiceUnavailableError("system_not_ready")
+
+    response = TestClient(app).get("/x")
+    assert response.status_code == 503 and response.json() == {"detail": {"code": "system_not_ready", "params": {}}}

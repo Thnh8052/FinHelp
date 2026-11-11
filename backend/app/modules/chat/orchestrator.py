@@ -10,7 +10,7 @@ from qdrant_client import AsyncQdrantClient
 
 from app.core.config import settings
 from app.core.error_codes import Code
-from app.core.exceptions import DomainException
+from app.core.exceptions import DomainException, ServiceUnavailableError
 from app.core.logging import logger
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.documents.document import DocumentRecord
@@ -284,7 +284,7 @@ class RAGWorkflowOrchestrator:
             return None
         try:
             return await classify_intent(query, self.hybrid_search.embedder.embed_queries, decision.evidence)
-        except (RuntimeError, httpx.HTTPError) as exc:
+        except (RuntimeError, httpx.HTTPError, ServiceUnavailableError) as exc:
             logger.warning(f"Intent router skipped: {type(exc).__name__}: {str(exc)[:120]}")
             return None
 
