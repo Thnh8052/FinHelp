@@ -82,6 +82,20 @@ class QdrantManager:
             logger.warning(f"Could not initialize Qdrant collection: {exc}")
 
 
+async def delete_document_vectors(qdrant: AsyncQdrantClient, document_id: str) -> None:
+    """Every vector of one document, waiting until Qdrant has removed them; nothing to do when the collection does not exist.
+    The one way vectors are deleted: document / notebook purge and the cleanup after a failed ingestion."""
+    if not await qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
+        return
+    await qdrant.delete(
+        collection_name=settings.QDRANT_COLLECTION_NAME,
+        points_selector=models.FilterSelector(
+            filter=models.Filter(must=[models.FieldCondition(key="document_id", match=models.MatchValue(value=document_id))])
+        ),
+        wait=True,
+    )
+
+
 async def get_qdrant_client() -> AsyncQdrantClient:
     """Dependency helper to get the active Qdrant client instance."""
     if QdrantManager.client is None:

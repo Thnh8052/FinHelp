@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.exceptions import IngestionError
 from app.core.logging import logger
 from app.infrastructure.database import collections
-from app.infrastructure.database.qdrant import QdrantManager
+from app.infrastructure.database.qdrant import QdrantManager, delete_document_vectors
 from app.modules.ingestion.chunk_repo import ChunkRepository
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.ingestion.ingestion_job_repo import IngestionJobRepository
@@ -286,15 +286,10 @@ class IngestionPipeline:
             await self._fail(job, exc)
 
     async def _cleanup(self, document_id: str) -> None:
-        """Remove whatever a failed run already wrote so a retry starts clean."""
+        """Remove the chunks and vectors a failed run already wrote, so a failed document holds no searchable data (a new upload
+        of the same file gets a new document id)."""
         try:
-            await self.db[collections.CHUNKS_COLLECTION].delete_many({"document_id": document_id})
-            await self.qdrant.delete(
-                collection_name=settings.QDRANT_COLLECTION_NAME,
-                points_selector=models.FilterSelector(
-                    filter=models.Filter(must=[models.FieldCondition(
-                        key="document_id", match=models.MatchValue(value=document_id))])
-                ),
-            )
+            await self.chunk_repo.delete_by_document(document_id)
+            await delete_document_vectors(self.qdrant, document_id)
         except Exception as exc:
             logger.warning(f"Cleanup after failed ingestion of {document_id} was incomplete: {exc}")

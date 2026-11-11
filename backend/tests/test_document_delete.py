@@ -149,6 +149,55 @@ async def test_a_failed_document_can_be_deleted(monkeypatch):
     assert state["document"] is None
 
 
+async def test_a_missing_collection_skips_the_vector_delete_but_removes_the_rest(monkeypatch):
+    notebook = NotebookRecord(notebook_id="nb_alice", owner_id="alice", title="Alice")
+    state, _ = _setup(monkeypatch, notebook, "alice")
+
+    class NoCollection:
+        async def collection_exists(self, _collection):
+            return False
+
+        async def delete(self, **kwargs):
+            raise AssertionError("no collection: nothing to delete")
+
+    await documents_api.delete_document("doc_delete", user_id=state["caller"], db=None, qdrant=NoCollection())
+    assert state["document"] is None and state["chunks"] == ["doc_delete"]
+
+
+async def test_a_failed_ingestion_removes_the_chunks_and_vectors_it_wrote():
+    """The failure path deletes vectors the same way a document deletion does: waiting until Qdrant has removed them."""
+    from pathlib import Path
+    from unittest.mock import AsyncMock
+
+    from app.modules.ingestion.pipeline import IngestionPipeline, _Job
+
+    calls = {}
+
+    class Chunks:
+        async def delete_by_document(self, document_id):
+            calls["chunks"] = document_id
+
+    class Qdrant:
+        async def collection_exists(self, _collection):
+            return True
+
+        async def delete(self, **kwargs):
+            calls["vectors"] = kwargs
+
+    class Pipeline(IngestionPipeline):
+        def __init__(self):
+            self.doc_repo, self.job_repo, self.chunk_repo, self.qdrant = AsyncMock(), AsyncMock(), Chunks(), Qdrant()
+
+    pipeline = Pipeline()
+    await pipeline._fail(_Job(pipeline, "job_x", "doc_x", "nb_alice", Path("x.pdf")), ValueError("parse failed"))
+
+    assert calls["chunks"] == "doc_x"
+    assert calls["vectors"]["wait"] is True
+    assert calls["vectors"]["points_selector"].filter.must[0].match.value == "doc_x"
+    pipeline.job_repo.fail.assert_awaited_once()
+    assert pipeline.doc_repo.update_one.await_args.args[1]["status"] == "failed"
+
+
 async def test_other_user_cannot_delete_someone_elses_document(monkeypatch):
     notebook = NotebookRecord(notebook_id="nb_alice", owner_id="alice", title="Alice")
     state, qdrant = _setup(monkeypatch, notebook, "bob")
