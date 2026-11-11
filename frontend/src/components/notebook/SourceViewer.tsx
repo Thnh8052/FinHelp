@@ -177,7 +177,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
             onClick={handlePrevPage}
             disabled={currentPage <= 1}
             className="pdf-page-btn"
-            title="Previous page"
+            title={t.sourceViewer.prevPage}
           >
             <ChevronLeftIcon size={13} />
           </button>
@@ -191,7 +191,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
             onClick={handleNextPage}
             disabled={currentPage >= totalPages}
             className="pdf-page-btn"
-            title="Next page"
+            title={t.sourceViewer.nextPage}
           >
             <ChevronRightIcon size={13} />
           </button>
@@ -203,7 +203,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
             type="button"
             onClick={handleZoomOut}
             className="pdf-page-btn"
-            title="Zoom out (-15%)"
+            title={t.sourceViewer.zoomOutPct}
           >
             <ZoomOutIcon size={13} />
           </button>
@@ -212,17 +212,17 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
             type="button"
             onClick={handleToggleFitWidth}
             className={`pdf-zoom-indicator ${isFitWidth ? "active" : ""}`}
-            title={isFitWidth ? "Fit width (Click for 100%)" : `${zoomLevel}% (Click to fit width)`}
+            title={isFitWidth ? t.sourceViewer.fitWidthClick : t.sourceViewer.zoomPctClick.replace("{zoom}", String(zoomLevel))}
           >
             <FitWidthIcon size={12} />
-            <span>{isFitWidth ? "Fit" : `${zoomLevel}%`}</span>
+            <span>{isFitWidth ? t.sourceViewer.fit : `${zoomLevel}%`}</span>
           </button>
 
           <button
             type="button"
             onClick={handleZoomIn}
             className="pdf-page-btn"
-            title="Zoom in (+15%)"
+            title={t.sourceViewer.zoomInPct}
           >
             <ZoomInIcon size={13} />
           </button>
@@ -236,7 +236,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
               target="_blank"
               rel="noopener noreferrer"
               className="pdf-page-btn"
-              title={`Open Page ${currentPage} in new tab`}
+              title={t.sourceViewer.openPageNewTab.replace("{page}", String(currentPage))}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -251,7 +251,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
               type="button"
               onClick={onClose}
               className="pdf-close-btn"
-              title="Close split-view viewer"
+              title={t.sourceViewer.closeViewer}
             >
               <CloseIcon size={13} />
             </button>
@@ -284,7 +284,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
               <button
                 onClick={onClearCitation}
                 className="pdf-clear-cite-btn"
-                title="Clear citation highlight"
+                title={t.sourceViewer.clearHighlight}
               >
                 <CloseIcon size={11} />
               </button>
@@ -303,7 +303,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
           <iframe
             key={`${currentDoc.document_id}-p${currentPage}`} // the page number stays in the key: Chrome's PDF viewer ignores a changed #page on a frame already open
             src={pdfUrl}
-            title={`Financial Report: ${currentDoc.file_name}`}
+            title={t.sourceViewer.reportTitle.replace("{name}", currentDoc.file_name)}
             className="pdf-render-frame"
           />
         ) : (

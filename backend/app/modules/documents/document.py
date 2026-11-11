@@ -41,7 +41,7 @@ class DocumentRecord(BaseSchema):
     metadata: DocumentMetadata = Field(default_factory=DocumentMetadata)
     catalog_confirmed_by: Optional[str] = None
     catalog_confirmed_at: Optional[Any] = None
-    error_message: Optional[str] = None
+    error_message: Optional[str] = None  # a code from app/core/error_codes.py: the interface writes the sentence
     parsing_engine: Optional[str] = Field(None, description="'docling', 'pymupdf' or 'pymupdf_fallback'")
     created_at: Any = Field(default_factory=get_utc_now)
     updated_at: Any = Field(default_factory=get_utc_now)

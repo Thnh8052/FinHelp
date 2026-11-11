@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useLanguage } from "../../context/LanguageContext";
+import { processingErrorText } from "../../services/api";
 import { DocumentRecord, isDocProcessing, isDocFailed } from "../../types/notebook";
 import {
   FileTextIcon,
@@ -46,7 +47,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   maxSources,
   maxFileSizeMb,
 }) => {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const [isDragging, setIsDragging] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -128,7 +129,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             type="button"
             onClick={onClose}
             className="doc-drawer-close-btn"
-            title="Close filings drawer"
+            title={t.sourcesDrawer.closeDrawer}
           >
             <CloseIcon size={13} />
           </button>
@@ -218,7 +219,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                     disabled={isProcessing || isFailed}
                     onChange={() => onToggleDoc(doc.document_id)}
                     className="doc-checkbox"
-                    title={isSelected ? "Exclude from analysis" : "Include in analysis"}
+                    title={isSelected ? t.sourcesDrawer.excludeFromAnalysis : t.sourcesDrawer.includeInAnalysis}
                   />
 
                   <div className="doc-card-details">
@@ -228,17 +229,17 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                       </span>
                       <span className="doc-card-tag">
                         {doc.status === "pending"
-                          ? (lang === "vi" ? "Đang xếp hàng..." : "Queued...")
+                          ? t.sourcesDrawer.queued
                           : isProcessing
-                          ? (lang === "vi" ? "Đang xử lý..." : "Processing...")
+                          ? t.sourcesDrawer.processingDots
                           : isFailed
                           ? t.sourcesDrawer.failedBadge
-                          : (lang === "vi" ? "Báo cáo Đã kiểm toán" : "Audited Filing")}
+                          : t.sourcesDrawer.auditedFiling}
                       </span>
                     </div>
 
                     <div className="doc-card-meta">
-                      {doc.page_count ? <span>{doc.page_count} {lang === "vi" ? "trang" : "pages"}</span> : null}
+                      {doc.page_count ? <span>{t.sourcesDrawer.pagesCount.replace("{n}", String(doc.page_count))}</span> : null}
                       {doc.page_count ? <span>•</span> : null}
                       <span>{formatFileSize(doc.file_size_bytes)}</span>
                       {doc.status === "ready" && (
@@ -249,12 +250,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                       )}
                     </div>
 
-                    {isFailed && doc.error_message && <p className="doc-card-error">{doc.error_message}</p>}
+                    {isFailed && doc.error_message && <p className="doc-card-error">{processingErrorText(doc.error_message, t)}</p>}
                     {doc.tables_may_be_inaccurate && (
                       <p className="doc-card-error">
-                        {lang === "vi"
-                          ? "Một số bảng trong tài liệu này có thể chưa được đọc chính xác. Nên xóa và tải lên lại sau ít phút."
-                          : "Some tables in this document may not have been read accurately. Delete and upload it again in a few minutes."}
+                        {t.sourcesDrawer.tablesWarning}
                       </p>
                     )}
 
@@ -265,7 +264,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                           type="button"
                           onClick={() => onOpenDocPdf(doc)}
                           className="doc-btn-open-pdf"
-                          title="Open filing in split-view reader"
+                          title={t.sourcesDrawer.openInReader}
                         >
                           <FileTextIcon size={12} color="#60a5fa" />
                           <span>{t.sourcesDrawer.viewPdf}</span>
@@ -278,10 +277,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                             type="button"
                             onClick={() => onEditCatalog(doc.document_id)}
                             className="doc-subaction-btn"
-                            title="View metadata & reporting period"
+                            title={t.sourcesDrawer.viewMetadata}
                           >
                             <InfoCircleIcon size={12} />
-                            <span>{lang === "vi" ? "Chi tiết" : "Details"}</span>
+                            <span>{t.sourcesDrawer.details}</span>
                           </button>
                         )}
 
@@ -298,7 +297,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                               }}
                               disabled={isDeleting}
                               className="doc-confirm-yes"
-                              title="Confirm delete"
+                              title={t.sourcesDrawer.confirmDelete}
                             >
                               <CheckIcon size={12} />
                             </button>
@@ -306,7 +305,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                               type="button"
                               onClick={() => setDeleteTargetId(null)}
                               className="doc-confirm-no"
-                              title="Cancel"
+                              title={t.common.cancel}
                             >
                               <CloseIcon size={12} />
                             </button>
@@ -316,7 +315,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                             type="button"
                             onClick={() => setDeleteTargetId(doc.document_id)}
                             className="doc-subaction-btn delete"
-                            title="Delete document from session"
+                            title={t.sourcesDrawer.deleteFromSession}
                           >
                             <TrashIcon size={12} />
                             <span>{t.common.delete}</span>

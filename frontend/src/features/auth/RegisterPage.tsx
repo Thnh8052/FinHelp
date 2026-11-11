@@ -5,6 +5,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
 import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import "./auth-pages.css";
+import { errorText } from "../../services/api";
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,11 +34,7 @@ export const RegisterPage: React.FC = () => {
       await register(email, username, password, fullName || undefined);
       navigate("/app");
     } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t.auth.errorInvalidCredentials
-      );
+      setError(errorText(err, t, t.auth.errorInvalidCredentials));
     } finally {
       setLoading(false);
     }
@@ -91,7 +88,7 @@ export const RegisterPage: React.FC = () => {
               title={t.auth.usernameRule}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. analyst_pro"
+              placeholder={t.auth.exampleUsername}
               className="auth-page-input"
             />
           </div>
@@ -103,7 +100,7 @@ export const RegisterPage: React.FC = () => {
               maxLength={120}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. Alex Morgan"
+              placeholder={t.auth.exampleName}
               className="auth-page-input"
             />
           </div>

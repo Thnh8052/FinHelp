@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { AlertCircleIcon, CheckIcon, CloseIcon, InfoCircleIcon } from "./Icons";
+import { useLanguage } from "../../context/LanguageContext";
 import "./toast.css";
 
 export interface ToastData {
@@ -23,6 +24,7 @@ interface ToastProps {
  * mà không chặn người dùng bằng pop-up confirm gây khó chịu.
  */
 export const Toast: React.FC<ToastProps> = ({ toast, onClose }) => {
+  const { t } = useLanguage();
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => {
@@ -71,7 +73,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onClose }) => {
 
       <button
         onClick={onClose}
-        aria-label="Close notification"
+        aria-label={t.common.closeNotification}
         className="toast-close-btn"
       >
         <CloseIcon size={14} />

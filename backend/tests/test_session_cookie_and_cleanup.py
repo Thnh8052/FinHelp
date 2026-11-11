@@ -153,7 +153,7 @@ async def test_the_list_of_ended_sessions_cannot_grow_without_limit():
 def test_a_taken_email_and_a_taken_username_look_alike(client, monkeypatch, taken):
     monkeypatch.setattr(Accounts, taken, True)
     response = client.post("/api/v1/auth/register", json=NEW_ACCOUNT)
-    assert response.status_code == 400 and response.json()["detail"] == auth_api.ACCOUNT_NOT_AVAILABLE
+    assert response.status_code == 400 and response.json()["detail"]["code"] == auth_api.ACCOUNT_NOT_AVAILABLE
 
 
 def test_probing_for_taken_accounts_is_limited(client, monkeypatch):

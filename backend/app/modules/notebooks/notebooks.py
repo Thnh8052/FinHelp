@@ -13,12 +13,13 @@ Một notebook là một đoạn chat: danh sách lịch sử chat chính là da
 
 import uuid
 from typing import Annotated, Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, StringConstraints
 from qdrant_client import AsyncQdrantClient
 
 from app.core.config import settings
+from app.core.error_codes import Code, api_error
 from app.core.logging import logger
 from app.shared.deps import GUEST_PREFIX, get_current_user_id, get_optional_user_id, require_notebook
 from app.shared.rate_limit import spend_guest_allowance
@@ -113,7 +114,7 @@ async def create_guest_notebook(request: Request, db: AsyncIOMotorDatabase = Dep
 async def _own_notebook(db: AsyncIOMotorDatabase, notebook_id: str, user_id: str) -> NotebookRecord:
     notebook = await NotebookRepository(db).get_by_id(notebook_id)
     if not notebook or notebook.owner_type != "user" or notebook.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="Không tìm thấy Notebook hoặc không có quyền thao tác")
+        raise api_error(status_code=404, code=Code.NOTEBOOK_NOT_FOUND)
     return notebook
 
 
@@ -127,7 +128,7 @@ async def update_notebook(
     """Đổi tiêu đề đoạn chat."""
     await _own_notebook(db, notebook_id, user_id)
     success = await NotebookRepository(db).rename(notebook_id, req.title)
-    return {"success": success, "message": "Cập nhật Notebook thành công"}
+    return {"success": success}
 
 
 @router.delete("/{notebook_id}")
@@ -140,10 +141,10 @@ async def delete_notebook(
     """Xóa đoạn chat cùng toàn bộ tài liệu, vector, tệp PDF và tin nhắn của nó."""
     await _own_notebook(db, notebook_id, user_id)
     if await has_active_documents(db, notebook_id):
-        raise HTTPException(status_code=409, detail="Tài liệu trong đoạn chat này đang được xử lý. Vui lòng đợi xử lý xong rồi mới xóa.")
+        raise api_error(status_code=409, code=Code.NOTEBOOK_BUSY_DELETE)
     try:
         await purge_notebook(db, qdrant, notebook_id)
     except Exception as exc:
         logger.error(f"Could not purge notebook {notebook_id}: {type(exc).__name__}: {exc}")
-        raise HTTPException(status_code=503, detail="Không thể xóa đầy đủ dữ liệu của đoạn chat. Vui lòng thử lại.") from exc
-    return {"success": True, "message": "Xóa Notebook thành công"}
+        raise api_error(status_code=503, code=Code.NOTEBOOK_DELETE_FAILED) from exc
+    return {"success": True}

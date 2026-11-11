@@ -48,7 +48,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
                 {user.full_name || user.username}
               </span>
               <span className={`dropdown-role-tag ${user.role === "admin" ? "admin" : "user"}`}>
-                {user.role === "admin" ? "ADMIN" : "MEMBER"}
+                {user.role === "admin" ? t.nav.roleAdmin : t.userDropdown.roleMember}
               </span>
             </div>
             <div className="dropdown-email">
@@ -86,7 +86,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
             <div className="dropdown-metric-row">
               <span className="dropdown-metric-label">{t.userDropdown.uploadedFilings}</span>
               <span className="dropdown-metric-val">
-                Max {user.quota.max_upload_documents} docs
+                {t.userDropdown.maxDocs.replace("{n}", String(user.quota.max_upload_documents))}
               </span>
             </div>
             <div className="dropdown-metric-row">
@@ -101,7 +101,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
             <div className="dropdown-metric-row">
               <span className="dropdown-metric-label">{t.userDropdown.uploadedFilings}</span>
               <span className="dropdown-metric-val">
-                Max {guestQuota?.max_upload_documents || 1} doc
+                {t.userDropdown.maxDocs.replace("{n}", String(guestQuota?.max_upload_documents || 1))}
               </span>
             </div>
           </div>

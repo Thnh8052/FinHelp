@@ -215,7 +215,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       <div className="chat-header">
         <div className="chat-header-title-box">
           <span className="chat-header-title">
-            {sessionTitle || "Current Session"}
+            {sessionTitle || t.workspace.currentSession}
           </span>
         </div>
 
@@ -305,7 +305,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                           disabled={isLoading}
                           onClick={() => onSendMessage(msg.query!, [a.document_id])}
                         >
-                          Query with {a.label}
+                          {t.workspace.queryWith.replace("{label}", a.label)}
                         </button>
                       ))}
                     </div>
@@ -391,8 +391,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   type="button"
                   className="chat-prompts-nav-btn prev"
                   onClick={() => scrollPrompts("left")}
-                  aria-label="Previous suggestions"
-                  title="Scroll left"
+                  aria-label={t.workspace.prevSuggestions}
+                  title={t.workspace.scrollLeft}
                 >
                   <ChevronLeftIcon size={12} />
                 </button>
@@ -415,7 +415,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     }}
                     disabled={isLoading || !hasSources || isProcessing}
                     className="chat-sample-btn"
-                    title="Insert sample query into prompt input"
+                    title={t.workspace.insertSample}
                   >
                     {p}
                   </button>
@@ -427,8 +427,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   type="button"
                   className="chat-prompts-nav-btn next"
                   onClick={() => scrollPrompts("right")}
-                  aria-label="More suggestions"
-                  title="Scroll right"
+                  aria-label={t.workspace.moreSuggestions}
+                  title={t.workspace.scrollRight}
                 >
                   <ChevronRightIcon size={12} />
                 </button>
@@ -450,7 +450,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               {mentions.map((id) => (
                 <span key={id} className="chat-mention-chip">
                   @{labelOf(id)}
-                  <button type="button" aria-label="Remove tag" onClick={() => setMentions(mentions.filter((m) => m !== id))}>
+                  <button type="button" aria-label={t.workspace.removeTag} onClick={() => setMentions(mentions.filter((m) => m !== id))}>
                     ×
                   </button>
                 </span>
@@ -486,7 +486,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             <button
               type="submit"
               disabled={!canSubmit}
-              aria-label="Send"
+              aria-label={t.workspace.sendBtn}
               className={`chat-send-btn ${canSubmit ? "active" : "inactive"}`}
             >
               <SendIcon size={14} />

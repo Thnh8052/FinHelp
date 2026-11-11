@@ -66,7 +66,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         documentId={catalogDocId}
         onClose={() => setCatalogDocId(null)}
         onSaved={() => {
-          showToast("Document metadata saved.", "success");
+          showToast(t.toasts.catalogSaved, "success");
           docs.reload();
         }}
       />

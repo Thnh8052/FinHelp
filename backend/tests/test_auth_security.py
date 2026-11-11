@@ -283,7 +283,7 @@ async def test_a_user_who_registered_as_admin_is_never_promoted(admin_init, monk
 @pytest.mark.parametrize("username, email", [("Admin", "new@example.com"), ("someone", ADMIN_EMAIL.upper())])
 def test_nobody_can_register_the_admins_names(app_client, username, email):
     response = app_client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": REAL_PASSWORD})
-    assert response.status_code == 400 and response.json()["detail"] == auth_api.ACCOUNT_NOT_AVAILABLE
+    assert response.status_code == 400 and response.json()["detail"]["code"] == auth_api.ACCOUNT_NOT_AVAILABLE
 
 
 # ---------------------------------------------------------------- settings

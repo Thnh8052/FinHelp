@@ -181,7 +181,7 @@ def test_a_user_over_the_daily_limit_is_refused(client, monkeypatch):
 
 def test_a_question_without_a_usable_source_reserves_nothing(client, monkeypatch):
     async def refuse(self, notebook_id, ids, document_id=None):
-        raise chat_api.SourceSelectionError("no usable source")
+        raise chat_api.SourceSelectionError("no_source_selected")
 
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "resolve_scope", refuse)
     FakeUsers.reserved.clear()

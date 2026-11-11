@@ -6,6 +6,7 @@ from typing import Dict, List
 import httpx
 
 from app.core.config import settings
+from app.core.error_codes import Code
 from app.core.exceptions import DomainException
 from app.core.logging import logger
 
@@ -33,7 +34,7 @@ async def chat_completion(
     `max_tokens` is raised to LLM_MIN_MAX_TOKENS: the reasoning of deepseek-flash counts against it, and a small budget made the
     planner come back empty on ambiguous questions (finish_reason 'length', no content). A cut reply is retried with twice the budget."""
     if not settings.DEEPSEEK_API_KEY:
-        raise LLMUnavailableError("Chưa cấu hình khóa dịch vụ ngôn ngữ (DEEPSEEK_API_KEY).")
+        raise LLMUnavailableError(Code.LLM_NOT_CONFIGURED)
 
     payload: Dict = {
         "model": settings.DEFAULT_LLM_MODEL,
@@ -65,11 +66,11 @@ async def chat_completion(
                     return content
                 if resp.status_code < 500 and resp.status_code not in RETRYABLE_STATUS:
                     # Auth / bad-request errors do not heal by retrying.
-                    raise LLMUnavailableError(f"Dịch vụ ngôn ngữ từ chối yêu cầu (HTTP {resp.status_code}).")
+                    raise LLMUnavailableError(Code.LLM_REJECTED, status=resp.status_code)
                 logger.warning(f"LLM call attempt {attempt}/{retries}: HTTP {resp.status_code}")
             except httpx.HTTPError as exc:
                 logger.warning(f"LLM call attempt {attempt}/{retries} failed: {type(exc).__name__}")
             if attempt < retries:
                 await asyncio.sleep(delay)
                 delay = min(delay * 1.6, 20.0)
-    raise LLMUnavailableError("Dịch vụ tạo câu trả lời tạm thời chưa sẵn sàng.")
+    raise LLMUnavailableError(Code.LLM_UNAVAILABLE)

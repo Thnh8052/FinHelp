@@ -5,6 +5,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
 import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import "./auth-pages.css";
+import { errorText } from "../../services/api";
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,11 +34,7 @@ export const LoginPage: React.FC = () => {
       await login(identifier, password);
       navigate("/app");
     } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t.auth.errorInvalidCredentials
-      );
+      setError(errorText(err, t, t.auth.errorInvalidCredentials));
     } finally {
       setLoading(false);
     }

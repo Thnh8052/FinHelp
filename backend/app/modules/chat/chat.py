@@ -13,13 +13,14 @@ Mỗi notebook là một đoạn chat.
 
 import uuid
 from typing import Any, List, Optional, Tuple
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient
 
 from app.shared.deps import can_chat, get_optional_user_id, require_notebook
 from app.shared.rate_limit import spend_guest_allowance
+from app.core.error_codes import Code, api_error
 from app.core.config import settings
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
@@ -49,14 +50,14 @@ def validate_question(document_ids: Optional[List[str]], document_id: Optional[s
     chosen = selected_ids(document_ids, document_id)
     limit = settings.MAX_SELECTED_DOCS_USER if signed_in else settings.MAX_SELECTED_DOCS_GUEST
     if not chosen:
-        raise HTTPException(status_code=422, detail="Hãy chọn tài liệu nguồn trước khi đặt câu hỏi.")
+        raise api_error(status_code=422, code=Code.NO_SOURCE_SELECTED)
     if len(chosen) > limit:
-        raise HTTPException(status_code=422, detail=f"Chỉ được chọn tối đa {limit} tài liệu nguồn cho một câu hỏi.")
+        raise api_error(status_code=422, code=Code.TOO_MANY_SOURCES, max=limit)
     tagged = list(dict.fromkeys(mentions or []))
     if any(m not in chosen for m in tagged):
-        raise HTTPException(status_code=422, detail="Chỉ tag (@) được các tài liệu nguồn đã chọn.")
+        raise api_error(status_code=422, code=Code.MENTION_NOT_SELECTED)
     if len(query) > MAX_QUERY_CHARS:  # the input policy has the same limit
-        raise HTTPException(status_code=422, detail=f"Câu hỏi quá dài (tối đa {MAX_QUERY_CHARS:,} ký tự). Hãy rút gọn rồi gửi lại.".replace(",", "."))
+        raise api_error(status_code=422, code=Code.QUESTION_TOO_LONG, max=MAX_QUERY_CHARS)
     return chosen, tagged
 
 
@@ -71,11 +72,11 @@ async def ensure_documents_ready(db: AsyncIOMotorDatabase, notebook_id: str, doc
     422 if a selected document is unknown or failed."""
     docs = {d.document_id: d for d in await DocumentRepository(db).get_by_notebook(notebook_id)}
     if any(i not in docs for i in document_ids):
-        raise HTTPException(status_code=422, detail="Có tài liệu được chọn không thuộc notebook này.")
+        raise api_error(status_code=422, code=Code.SOURCE_NOT_IN_NOTEBOOK)
     if any(d.status in ACTIVE_STATUSES for d in docs.values()):
-        raise HTTPException(status_code=409, detail="Tài liệu đang được xử lý và phân tích. Vui lòng đợi hệ thống báo sẵn sàng rồi đặt câu hỏi.")
+        raise api_error(status_code=409, code=Code.DOCUMENTS_BUSY)
     if any(docs[i].status == "failed" for i in document_ids):
-        raise HTTPException(status_code=422, detail="Không xử lý được tài liệu này. Vui lòng thử tải lên lại hoặc chọn tệp PDF khác.")
+        raise api_error(status_code=422, code=Code.SOURCE_FAILED)
 
 
 # --- Schemas ---
@@ -147,14 +148,14 @@ async def handle_user_query(
     # 0. Tài liệu phải xử lý xong mới truy vấn được; chặn trước khi trừ hạn mức
     nb = await require_notebook(db, req.notebook_id, user_id)
     if not can_chat(nb, user_id):  # past require_notebook, only a read-only sample notebook is refused: signing in does not change that
-        raise HTTPException(status_code=403, detail="Notebook mẫu chỉ để xem, không đặt câu hỏi được.")
+        raise api_error(status_code=403, code=Code.SAMPLE_NOTEBOOK_READ_ONLY)
     chosen, mentions = validate_question(req.document_ids, req.document_id, req.mentions, req.query, signed_in=user_id is not None)
     await ensure_documents_ready(db, req.notebook_id, chosen)
     orchestrator = RAGWorkflowOrchestrator(db, qdrant)
     try:  # a question without a usable source choice is refused before it costs quota or writes a message
         await orchestrator.resolve_scope(req.notebook_id, chosen)
     except SourceSelectionError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise api_error(status_code=422, code=exc.code, **exc.params)
 
     chat_repo = ChatRepository(db)
 
@@ -166,7 +167,7 @@ async def handle_user_query(
     if user_id is None:
         spend_guest_allowance(request, "question", settings.GUEST_DAILY_QUESTIONS)
     elif not await users.reserve_quota(user_id):
-        raise HTTPException(status_code=429, detail="Bạn đã dùng hết số câu hỏi của hôm nay. Vui lòng quay lại vào ngày mai.")
+        raise api_error(status_code=429, code=Code.QUESTION_QUOTA_USED)
 
     # 3. Kích hoạt RAG Workflow Orchestrator
     try:

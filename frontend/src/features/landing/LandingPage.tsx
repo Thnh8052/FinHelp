@@ -101,7 +101,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Live Platform Operational Status */}
             <div
               className="fh-btn-api-map"
-              title="FinHelp Platform Status"
+              title={t.landing.platformStatus}
             >
               <span className={`fh-status-dot ${systemStatus === "online" ? "online" : "connecting"}`} />
               <span>
@@ -272,7 +272,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       </thead>
                       <tbody>
                         <tr>
-                          <td className="fh-table-company-name">Company A</td>
+                          <td className="fh-table-company-name">{t.landing.demoCompanyA}</td>
                           <td className="fh-table-val-muted">$14,200M</td>
                           <td className="fh-table-val-highlight">$17,902M</td>
                           <td className="fh-table-val-highlight">+26.1%</td>
@@ -280,7 +280,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             <button
                               onClick={() =>
                                 setActiveCitationAlert(
-                                  "Citation [1]: Company_A_Report.pdf — Page 45 (Consolidated Statement of Income)."
+                                  t.landing.alertCitation1
                                 )
                               }
                               className="fh-citation-btn"
@@ -290,7 +290,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           </td>
                         </tr>
                         <tr>
-                          <td className="fh-table-company-name">Company B</td>
+                          <td className="fh-table-company-name">{t.landing.demoCompanyB}</td>
                           <td className="fh-table-val-muted">$28,500M</td>
                           <td className="fh-table-val-neutral">$30,120M</td>
                           <td className="fh-table-val-neutral">+5.7%</td>
@@ -298,7 +298,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             <button
                               onClick={() =>
                                 setActiveCitationAlert(
-                                  "Citation [2]: Company_B_Report.pdf — Page 32 (Item 8 Financial Disclosures)."
+                                  t.landing.alertCitation2
                                 )
                               }
                               className="fh-citation-btn"
@@ -343,11 +343,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="fh-preview-code-box">
                     <div className="fh-calc-row">
                       <span>{t.landing.receivables1to6}</span>
-                      <span className="fh-val-bright">$45.2M (Provision allowance: $12.0M)</span>
+                      <span className="fh-val-bright">{t.landing.receivables1to6Value}</span>
                     </div>
                     <div className="fh-calc-row">
                       <span>{t.landing.receivablesOver1yr}</span>
-                      <span className="fh-val-warning">$18.5M (100% reserved)</span>
+                      <span className="fh-val-warning">{t.landing.receivablesOverValue}</span>
                     </div>
                   </div>
                 </>
@@ -385,13 +385,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="fh-sources-grid">
                   <div className="fh-source-item">
                     <span>
-                      <strong>[1]</strong> Company_A_Report.pdf — Page 45 (Income Statement)
+                      <strong>[1]</strong> {t.landing.sourceRef1}
                     </span>
                     <span className="fh-source-page">#page=45</span>
                   </div>
                   <div className="fh-source-item">
                     <span>
-                      <strong>[2]</strong> Company_B_Report.pdf — Page 32 (Item 8 Financials)
+                      <strong>[2]</strong> {t.landing.sourceRef2}
                     </span>
                     <span className="fh-source-page">#page=32</span>
                   </div>

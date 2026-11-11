@@ -9,6 +9,8 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from qdrant_client import AsyncQdrantClient
 
 from app.core.config import settings
+from app.core.error_codes import Code
+from app.core.exceptions import DomainException
 from app.core.logging import logger
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.documents.document import DocumentRecord
@@ -31,8 +33,8 @@ from app.modules.generation.verification import flag_unverified, verify
 from app.modules.retrieval.hybrid_search import HybridSearchService
 
 
-class SourceSelectionError(ValueError):
-    """The selected sources are unusable, or none was selected where a choice is needed."""
+class SourceSelectionError(DomainException):
+    """The selected sources are unusable, or none was selected where a choice is needed. `code` says which (see error_codes)."""
 
 
 @dataclass
@@ -89,10 +91,10 @@ class RAGWorkflowOrchestrator:
             by_id = {d.document_id: d for d in ready}
             missing = [i for i in requested if i not in by_id]
             if missing:
-                raise SourceSelectionError(f"Tài liệu chưa sẵn sàng hoặc không thuộc notebook này: {', '.join(missing)}")
+                raise SourceSelectionError(Code.SOURCE_NOT_READY)
             return [by_id[i] for i in requested]
         if ready:
-            raise SourceSelectionError("Hãy chọn tài liệu nguồn muốn hỏi trước khi đặt câu hỏi.")
+            raise SourceSelectionError(Code.NO_SOURCE_SELECTED)
         return ready  # no document: the input policy answers "notebook_empty"
 
     async def find_unlisted(self, query: str, scope: List[DocumentRecord]) -> List[str]:
@@ -487,7 +489,7 @@ class RAGWorkflowOrchestrator:
             answer = await generate_answer(query, chunks, notes, max_tokens)
             return await self._within_policy(answer, query, chunks, notes, max_tokens, "vi" if vi else "en") if settings.OUTPUT_POLICY_ENABLED else answer
         except LLMUnavailableError as exc:
-            logger.warning(f"Answer generation unavailable: {exc.message}")
+            logger.warning(f"Answer generation unavailable: {exc.code}")
             excerpts = "\n\n".join(f"**{'Trang' if vi else 'Page'} {c['page']}**\n> " + c["content"][:400].replace("\n", "\n> ") for c in chunks[:3])
             if vi:
                 return ("Hệ thống chưa tạo được câu trả lời tự động lúc này. Các đoạn liên quan nhất trong báo cáo:\n\n"

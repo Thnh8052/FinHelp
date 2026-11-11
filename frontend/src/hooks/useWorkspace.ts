@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
-import { ApiError } from "../services/api";
+import { ApiError, errorText } from "../services/api";
 import { chatService } from "../services/chat";
 import { documentService } from "../services/documents";
 import { emptyOrNewNotebook, guestNotebook, notebookService } from "../services/notebooks";
@@ -21,6 +22,7 @@ const attempt = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
  */
 export function useWorkspace(onLoginRequired: () => void) {
   const { isAuthenticated, isLoading: isAuthLoading, user, guestQuota } = useAuth();
+  const { t } = useLanguage();
   const { toast, showToast, closeToast } = useToast();
   const { notebookId: routeNotebookId } = useParams();
   const navigate = useNavigate();
@@ -69,13 +71,13 @@ export function useWorkspace(onLoginRequired: () => void) {
 
   const newChat = async () => {
     if (!isAuthenticated) {
-      showToast("Please sign in to create new analysis sessions and save history!", "warning", "Sign in now", onLoginRequired);
+      showToast(t.toasts.signInToCreate, "warning", t.toasts.signInNow, onLoginRequired);
       return;
     }
     try {
       navigate(`/app/${(await emptyOrNewNotebook()).notebook_id}`);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.detail || "Unable to create new session." : "Connection error when creating session.", "error");
+      showToast(err instanceof ApiError ? errorText(err, t, t.toasts.sessionCreateFailed) : t.toasts.sessionCreateConnection, "error");
     }
   };
 
@@ -85,7 +87,7 @@ export function useWorkspace(onLoginRequired: () => void) {
       setNotebooks((prev) => prev.map((n) => (n.notebook_id === id ? { ...n, title } : n)));
       return true;
     } catch (err) {
-      showToast(err instanceof ApiError ? err.detail || "Unable to rename session." : "Connection error when renaming session.", "error");
+      showToast(err instanceof ApiError ? errorText(err, t, t.toasts.sessionRenameFailed) : t.toasts.sessionRenameConnection, "error");
       return false;
     }
   };
@@ -93,11 +95,11 @@ export function useWorkspace(onLoginRequired: () => void) {
   const deleteNotebook = async (id: string) => {
     try {
       await notebookService.remove(id);
-      showToast("Session deleted successfully.", "info");
+      showToast(t.toasts.sessionDeleted, "info");
       if (id === notebookId) navigate("/app");
       else setNotebooks((prev) => prev.filter((n) => n.notebook_id !== id));
     } catch (err) {
-      showToast(err instanceof ApiError ? err.detail || "Unable to delete session." : "Connection error when deleting session.", "error");
+      showToast(err instanceof ApiError ? errorText(err, t, t.toasts.sessionDeleteFailed) : t.toasts.sessionDeleteConnection, "error");
     }
   };
 
@@ -116,7 +118,7 @@ export function useWorkspace(onLoginRequired: () => void) {
       if (notebook) {
         await openNotebook(notebook);
       } else {
-        showToast("This analysis session does not exist or is no longer available.", "warning");
+        showToast(t.toasts.sessionMissing, "warning");
         navigate("/app", { replace: true });
       }
     };
@@ -138,7 +140,7 @@ export function useWorkspace(onLoginRequired: () => void) {
 
     const load = isAuthenticated ? loadMemberData : loadGuestData;
     load().catch((err) => {
-      if (err instanceof ApiError && err.status === 429 && err.detail) showToast(err.detail, "warning");
+      if (err instanceof ApiError && err.status === 429) showToast(errorText(err, t, t.errors.too_many_attempts), "warning");
       else console.warn("Unable to load workspace data:", err);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

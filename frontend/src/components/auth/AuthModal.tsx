@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { authService } from "../../services/auth";
+import { errorText } from "../../services/api";
 import { LanguageToggle } from "../common/LanguageToggle";
 import { CloseIcon, SparklesIcon } from "../common/Icons";
 import "./auth.css";
@@ -14,7 +15,7 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTab = "signin" }) => {
   const { login, register, continueAsGuest } = useAuth();
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const [tab, setTab] = useState<"signin" | "signup" | "forgot">(initialTab);
 
   // Form states
@@ -44,7 +45,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
       await login(identifier, password);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Sign in failed. Please verify your credentials.");
+      setError(errorText(err, t, t.auth.errorSignInFallback));
     } finally {
       setLoading(false);
     }
@@ -58,7 +59,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
       await register(email, username, password, fullName);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Registration failed. Email or username may already exist.");
+      setError(errorText(err, t, t.auth.errorRegisterFallback));
     } finally {
       setLoading(false);
     }
@@ -70,10 +71,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
     setLoading(true);
     try {
       await authService.forgotPassword(forgotEmail);
-      setSuccessMsg("If the email is registered, a verification code has been sent. Enter it with your new password below.");
+      setSuccessMsg(t.auth.codeSentGeneric);
       setForgotStep(2);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unable to send OTP code.");
+      setError(errorText(err, t, t.auth.errorSendOtpFallback));
     } finally {
       setLoading(false);
     }
@@ -84,15 +85,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
     setError(null);
     setLoading(true);
     try {
-      const res = await authService.resetPassword(forgotEmail, otpCode, newPassword);
-      setSuccessMsg(res.message);
+      await authService.resetPassword(forgotEmail, otpCode, newPassword);
+      setSuccessMsg(t.auth.passwordResetSuccess);
       setTimeout(() => {
         setTab("signin");
         setForgotStep(1);
         setSuccessMsg(null);
       }, 1500);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "OTP verification failed.");
+      setError(errorText(err, t, t.auth.errorOtpFallback));
     } finally {
       setLoading(false);
     }
@@ -117,7 +118,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
           </div>
           <div className="auth-header-actions">
             <LanguageToggle size="sm" />
-            <button onClick={onClose} className="auth-close-btn" aria-label="Close">
+            <button onClick={onClose} className="auth-close-btn" aria-label={t.common.close}>
               <CloseIcon size={16} />
             </button>
           </div>
@@ -214,7 +215,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
               <form onSubmit={handleSignUp} className="auth-form-dense">
                 <div className="auth-field">
                   <label className="auth-label">
-                    Email <span className="auth-required">*</span>
+                    {t.auth.emailAddress} <span className="auth-required">*</span>
                   </label>
                   <input
                     type="email"
@@ -228,7 +229,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
 
                 <div className="auth-field">
                   <label className="auth-label">
-                    Username <span className="auth-required">*</span>
+                    {t.auth.username} <span className="auth-required">*</span>
                   </label>
                   <input
                     type="text"
@@ -237,7 +238,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     title={t.auth.usernameRule}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="e.g. financial_analyst"
+                    placeholder={t.auth.exampleUsername}
                     className="auth-input"
                   />
                 </div>
@@ -266,7 +267,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     maxLength={120}
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g. John Doe"
+                    placeholder={t.auth.exampleName}
                     className="auth-input"
                   />
                 </div>
@@ -302,7 +303,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
               {forgotStep === 1 ? (
                 <form onSubmit={handleForgotStep1} className="auth-form">
                   <p className="auth-hint-text">
-                    Enter your registered email address to receive a 6-digit OTP verification code (valid for 15 minutes):
+                    {t.auth.forgotHint}
                   </p>
                   <div>
                     <input
@@ -319,14 +320,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     disabled={loading}
                     className="auth-submit-btn"
                   >
-                    {loading ? "Sending..." : "Send OTP Code"}
+                    {loading ? t.auth.sendingCode : t.auth.sendCodeBtn}
                   </button>
                 </form>
               ) : (
                 <form onSubmit={handleForgotStep2} className="auth-form">
                   <div className="auth-field">
                     <label className="auth-label">
-                      OTP Code (6 digits)
+                      {t.auth.otpCode}
                     </label>
                     <input
                       type="text"
@@ -374,7 +375,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   }}
                   className="auth-link-btn secondary"
                 >
-                  {lang === "vi" ? "← Quay lại Đăng nhập" : "← Back to Sign In"}
+                  {t.auth.backToSignIn}
                 </button>
               </div>
             </div>

@@ -225,7 +225,7 @@ async def test_a_question_that_is_too_long_is_refused_before_anything_is_stored(
 
     with pytest.raises(HTTPException) as refused:
         await _ask(monkeypatch, NotebookRecord(notebook_id="nb", owner_id="u"), {}, "x" * 4001)
-    assert refused.value.status_code == 422 and isinstance(refused.value.detail, str) and "4.000" in refused.value.detail
+    assert refused.value.status_code == 422 and refused.value.detail == {"code": "question_too_long", "params": {"max": 4000}}
 
 
 async def _value(v):

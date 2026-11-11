@@ -4,7 +4,7 @@ import { CatalogPayload, CatalogUpdate, DocumentRecord } from "../types/notebook
 export const documentService = {
   list: (notebookId: string) => apiRequest<DocumentRecord[]>(`/documents/notebook/${notebookId}`),
 
-  remove: (documentId: string) => apiRequest<{ document_id: string; message: string }>(`/documents/${documentId}`, {
+  remove: (documentId: string) => apiRequest<{ document_id: string }>(`/documents/${documentId}`, {
     method: "DELETE",
   }),
 

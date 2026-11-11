@@ -5,10 +5,12 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api_router import api_v1_router
 from app.core.config import settings
+from app.core.error_codes import FIELD_CODES, Code
 from app.core.exceptions import DomainException
 from app.core.logging import logger
 from app.modules.admin.init_admin import ensure_admin
@@ -99,11 +101,23 @@ app.add_middleware(
 # Domain Exception Handler
 @app.exception_handler(DomainException)
 async def domain_exception_handler(request: Request, exc: DomainException):
-    logger.warning(f"Domain exception occurred: {exc.message}")
+    logger.warning(f"Domain exception occurred: {exc.code} {exc.params}")
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content={"detail": exc.message},
+        content={"detail": {"code": exc.code, "params": exc.params}},
     )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """A refused body or form. The field validators of the catalog form name their own code and params; any other field gets
+    'invalid_field' (no pydantic English reaches the interface)."""
+    fields = []
+    for err in exc.errors():
+        known = err["type"] in FIELD_CODES
+        params = {k: v for k, v in (err.get("ctx") or {}).items() if isinstance(v, (int, float, str))} if known else {}
+        fields.append({"field": str(err["loc"][-1]) if err.get("loc") else "", "code": err["type"] if known else Code.INVALID_FIELD, "params": params})
+    return JSONResponse(status_code=422, content={"detail": {"code": Code.VALIDATION_FAILED, "fields": fields}})
 
 
 # Include API v1

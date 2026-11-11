@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ApiError } from "../services/api";
+import { useLanguage } from "../context/LanguageContext";
+import { ApiError, errorText, signInHelps } from "../services/api";
 import { documentService } from "../services/documents";
 import { DocumentRecord, isDocFailed, isDocProcessing } from "../types/notebook";
 import { ShowToast } from "./useToast";
@@ -9,6 +10,7 @@ import { ShowToast } from "./useToast";
  * hệ thống không tự đoán phạm vi), tải lên (khách 1 tài liệu, người dùng 5) và theo dõi tiến độ xử lý.
  */
 export function useDocuments(notebookId: string, maxSources: number, maxFileSizeMb: number, showToast: ShowToast, onLoginRequired: () => void) {
+  const { t } = useLanguage();
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
@@ -59,11 +61,11 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
             anyReady = true;
           } else if (isDocFailed(d)) {
             setSelectedDocIds((prev) => prev.filter((x) => x !== id));  // Remove failed docs from active selection
-            showToast("Failed to process document. Please try uploading again.", "error");
+            showToast(t.toasts.processFailed, "error");
           }
         }
         // Mỗi file đã có trạng thái riêng trong danh sách; chat chỉ mở khi mọi file xong nên chỉ báo một lần lúc đó
-        if (anyReady && !docs.some(isDocProcessing)) showToast("All documents are ready. You can now ask questions.", "success");
+        if (anyReady && !docs.some(isDocProcessing)) showToast(t.toasts.allReady, "success");
       } catch {
         /* Network retry */
       }
@@ -102,9 +104,9 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
     const filesToUpload: File[] = [];
     for (const f of uniqueFiles) {
       if (existingActiveNames.has(f.name.toLowerCase())) {
-        showToast(`Tài liệu "${f.name}" đã tồn tại trong sổ tay. Bỏ qua tệp trùng.`, "warning");
+        showToast(t.toasts.duplicateSkipped.replace("{name}", f.name), "warning");
       } else if (f.size > maxFileSizeMb * 1024 * 1024) {
-        showToast(`Tệp "${f.name}" vượt quá giới hạn ${maxFileSizeMb} MB của tài khoản.`, "warning");
+        showToast(t.toasts.tooLarge.replace("{name}", f.name).replace("{mb}", String(maxFileSizeMb)), "warning");
       } else {
         filesToUpload.push(f);
       }
@@ -132,10 +134,10 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
           successCount++;
         } catch (fileErr) {
           if (fileErr instanceof ApiError) {
-            const detail = fileErr.detail || `Upload of ${file.name} failed.`;
-            // Signing in helps only on 401 or when the backend says so (a guest's limit); a signed-in account at its limit gets a plain warning
-            if (fileErr.status === 401 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
-              showToast(detail, "warning", "Sign in now", onLoginRequired);
+            const detail = errorText(fileErr, t, t.toasts.uploadFailed.replace("{name}", file.name));
+            // Signing in helps only on 401 or for a guest's limit; a signed-in account at its limit gets a plain warning
+            if (signInHelps(fileErr)) {
+              showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
               break;
             } else if (fileErr.status === 403) {  // the notebook is full: the next files would be refused the same way
               showToast(detail, "warning");
@@ -149,7 +151,7 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
         }
       }
       if (successCount > 0) {
-        showToast(`Uploaded ${successCount} report(s)! Extracting document layout.`, "success");
+        showToast(t.toasts.uploaded.replace("{n}", String(successCount)), "success");
       }
     } finally {
       setIsUploading(false);
@@ -166,10 +168,10 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
         return remaining;
       });
       setSelectedDocIds((previous) => previous.filter((id) => id !== documentId));
-      showToast("Document deleted successfully.", "success");
+      showToast(t.toasts.docDeleted, "success");
       return true;
     } catch (err) {
-      const message = err instanceof ApiError ? err.detail || "Unable to delete document." : "Unable to connect to server to delete document.";
+      const message = err instanceof ApiError ? errorText(err, t, t.toasts.docDeleteFailed) : t.toasts.docDeleteConnection;
       showToast(message, "error");
       return false;
     } finally {
@@ -181,9 +183,9 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
     if (selectedDocIds.includes(docId)) {
       setSelectedDocIds(selectedDocIds.filter((x) => x !== docId));
     } else if (isDocFailed(documents.find((d) => d.document_id === docId))) {
-      showToast("This document encountered processing errors and cannot be queried. Please re-upload.", "warning");
+      showToast(t.toasts.docErrorsNoQuery, "warning");
     } else if (selectedDocIds.length >= maxSources) {
-      showToast(`Maximum ${maxSources} filings can be active simultaneously.`, "warning");
+      showToast(t.toasts.maxActive.replace("{n}", String(maxSources)), "warning");
     } else {
       setSelectedDocIds([...selectedDocIds, docId]);
     }

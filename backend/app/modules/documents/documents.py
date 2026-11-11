@@ -18,7 +18,7 @@ import hashlib
 from pathlib import Path
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
@@ -27,6 +27,7 @@ from qdrant_client import AsyncQdrantClient
 from app.shared.deps import get_optional_user_id, require_notebook
 from app.shared.rate_limit import spend_guest_allowance
 from app.core.config import settings
+from app.core.error_codes import Code, api_error
 from app.core.logging import logger
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
@@ -117,11 +118,11 @@ async def _check_upload(db: AsyncIOMotorDatabase, file: UploadFile, user_id: Opt
         role = user.role if user else "user"
     limit_mb = tier_spec(role)["max_file_size_mb"]
     if (file.size or 0) > limit_mb * 1024 * 1024:
-        raise HTTPException(status_code=413, detail=f"Dung lượng tệp vượt quá giới hạn {limit_mb} MB của tài khoản.")
+        raise api_error(status_code=413, code=Code.FILE_TOO_LARGE, limit_mb=limit_mb)
     head = await file.read(1024)
     await file.seek(0)
     if b"%PDF-" not in head:
-        raise HTTPException(status_code=400, detail="Tệp này không phải là PDF hợp lệ.")
+        raise api_error(status_code=400, code=Code.NOT_A_PDF)
 
 
 # ==============================================================================
@@ -146,7 +147,7 @@ async def upload_pdf(
 ):
     """Tải lên tệp PDF Báo cáo tài chính và khởi chạy tiến trình trích xuất."""
     if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Hệ thống hiện tại chỉ hỗ trợ định dạng tệp PDF.")
+        raise api_error(status_code=400, code=Code.UNSUPPORTED_FILE_TYPE)
 
     await require_notebook(db, notebook_id, user_id, write=True)
     await _check_upload(db, file, user_id)
@@ -159,33 +160,19 @@ async def upload_pdf(
     for d in existing_docs:
         if d.file_name.strip().lower() == clean_filename.lower():
             if d.status in ACTIVE_STATUSES:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Tài liệu '{clean_filename}' đang được xử lý trong sổ tay. Vui lòng không tải lại.",
-                )
-            raise HTTPException(
-                status_code=409,
-                detail=f"Tài liệu '{clean_filename}' đã tồn tại trong sổ tay. Vui lòng xóa tài liệu cũ nếu muốn tải lên lại.",
-            )
+                raise api_error(status_code=409, code=Code.DOCUMENT_SAME_NAME_PROCESSING, name=clean_filename)
+            raise api_error(status_code=409, code=Code.DOCUMENT_SAME_NAME, name=clean_filename)
 
     # 1. Kiểm tra hạn mức tài liệu (Quota Gate)
     if user_id is None:
         # Khách chưa đăng nhập: Tối đa MAX_SELECTED_DOCS_GUEST tài liệu
         if len(existing_docs) >= settings.MAX_SELECTED_DOCS_GUEST:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Chế độ dùng thử (chưa đăng nhập) chỉ hỗ trợ tối đa {settings.MAX_SELECTED_DOCS_GUEST} tài liệu. "
-                       f"Vui lòng đăng nhập để phân tích tối đa {settings.MAX_SELECTED_DOCS_USER} tài liệu!",
-            )
+            raise api_error(status_code=403, code=Code.GUEST_DOCUMENT_LIMIT, guest_max=settings.MAX_SELECTED_DOCS_GUEST, user_max=settings.MAX_SELECTED_DOCS_USER)
         spend_guest_allowance(request, "upload", settings.GUEST_DAILY_UPLOADS)  # only a file that would really be processed counts
     else:
         # Mọi tài khoản đã đăng nhập (kể cả admin): Tối đa MAX_SELECTED_DOCS_USER tài liệu / notebook
         if len(existing_docs) >= settings.MAX_SELECTED_DOCS_USER:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Bạn đã đạt giới hạn tối đa {settings.MAX_SELECTED_DOCS_USER} tài liệu trong sổ tay này. "
-                       "Vui lòng tạo sổ tay mới hoặc xóa tài liệu cũ.",
-            )
+            raise api_error(status_code=403, code=Code.NOTEBOOK_DOCUMENT_LIMIT, max=settings.MAX_SELECTED_DOCS_USER)
 
     storage = StorageService()
     doc_id = f"doc_{uuid.uuid4().hex[:8]}"
@@ -205,14 +192,8 @@ async def upload_pdf(
                 pass
 
             if d.status in ACTIVE_STATUSES:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Tệp này có nội dung trùng với '{d.file_name}' đang được xử lý trong sổ tay.",
-                )
-            raise HTTPException(
-                status_code=409,
-                detail=f"Tệp này có nội dung trùng hoàn toàn với tài liệu '{d.file_name}' đã có trong sổ tay.",
-            )
+                raise api_error(status_code=409, code=Code.CONTENT_DUPLICATE_PROCESSING, name=d.file_name)
+            raise api_error(status_code=409, code=Code.CONTENT_DUPLICATE, name=d.file_name)
 
     # 3. Tạo bản ghi DocumentRecord trong MongoDB
     doc_record = DocumentRecord(
@@ -227,7 +208,7 @@ async def upload_pdf(
         await doc_repo.save_document(doc_record)
     except DuplicateKeyError:  # two uploads of the same content raced past the check above
         saved_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=409, detail="Tệp này có nội dung trùng với một tài liệu đã có trong sổ tay.")
+        raise api_error(status_code=409, code=Code.CONTENT_DUPLICATE_ANY)
 
     # 4. Tạo bản ghi IngestionJobRecord theo dõi tiến độ
     job_repo = IngestionJobRepository(db)
@@ -243,7 +224,6 @@ async def upload_pdf(
     await IngestionPipeline(db, qdrant).run(job_id, doc_id, notebook_id, saved_path)
 
     return {
-        "message": "Tải tệp lên thành công. Hệ thống đang tiến hành trích xuất dữ liệu.",
         "document_id": doc_id,
         "job_id": job_id,
     }
@@ -267,7 +247,7 @@ async def get_job_status(
     job_repo = IngestionJobRepository(db)
     job = await job_repo.get_by_id(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Không tìm thấy tiến trình xử lý")
+        raise api_error(status_code=404, code=Code.JOB_NOT_FOUND)
     await require_notebook(db, job.notebook_id, user_id)
     return job
 
@@ -282,14 +262,14 @@ async def delete_document(
     """Permanently remove one source and every derived artifact it owns."""
     document = await _document(db, document_id, user_id, write=True)
     if document.status in ACTIVE_STATUSES:  # so a running ingestion can never recreate data after this cleanup
-        raise HTTPException(status_code=409, detail="Tài liệu đang được xử lý. Vui lòng đợi xử lý xong rồi mới xóa.")
+        raise api_error(status_code=409, code=Code.DOCUMENT_BUSY_DELETE)
     try:
         await purge_document(db, qdrant, document)
     except Exception as exc:  # the record is removed last, so a retry stays possible
         logger.error(f"Could not purge document {document_id}: {type(exc).__name__}: {exc}")
-        raise HTTPException(status_code=503, detail="Không thể xóa đầy đủ dữ liệu của tài liệu. Vui lòng thử lại.") from exc
+        raise api_error(status_code=503, code=Code.DOCUMENT_DELETE_FAILED) from exc
 
-    return {"message": "Đã xóa tài liệu và dữ liệu phân tích liên quan.", "document_id": document_id}
+    return {"document_id": document_id}
 
 
 # ==============================================================================
@@ -301,7 +281,7 @@ async def delete_document(
 async def _document(db: AsyncIOMotorDatabase, document_id: str, user_id: Optional[str], write: bool = False) -> DocumentRecord:
     doc = await DocumentRepository(db).get_by_id(document_id)
     if not doc:
-        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+        raise api_error(status_code=404, code=Code.DOCUMENT_NOT_FOUND)
     await require_notebook(db, doc.notebook_id, user_id, write=write)
     return doc
 
@@ -351,7 +331,7 @@ async def get_document_file(
     storage = StorageService()
     pdf_path = await asyncio.to_thread(storage.get_pdf_path, doc.notebook_id, doc.document_id, doc.file_name)  # may download from R2
     if not pdf_path.is_file():
-        raise HTTPException(status_code=404, detail="Tệp PDF không tồn tại trên hệ thống lưu trữ.")
+        raise api_error(status_code=404, code=Code.PDF_MISSING)
     return FileResponse(
         path=pdf_path,
         media_type="application/pdf",

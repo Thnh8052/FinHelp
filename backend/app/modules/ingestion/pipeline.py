@@ -11,7 +11,8 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
 
 from app.core.config import settings
-from app.core.exceptions import IngestionError
+from app.core.error_codes import Code
+from app.core.exceptions import DomainException, IngestionError
 from app.core.logging import logger
 from app.infrastructure.database import collections
 from app.infrastructure.database.qdrant import QdrantManager, delete_document_vectors
@@ -98,7 +99,7 @@ class IngestionPipeline:
         startup instead of leaving them 'processing' forever (the UI would poll them for ever)."""
         return await IngestionPipeline._fail_jobs(
             db, ACTIVE_JOBS, "Interrupted by a server restart.",
-            "Quá trình xử lý bị gián đoạn. Vui lòng tải lên lại.",
+            Code.INGESTION_INTERRUPTED,
         )
 
     @staticmethod
@@ -107,7 +108,7 @@ class IngestionPipeline:
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=settings.INGESTION_STALL_SECONDS)
         return await IngestionPipeline._fail_jobs(
             db, {**ACTIVE_JOBS, "updated_at": {"$lt": cutoff}}, "No progress within INGESTION_STALL_SECONDS.",
-            "Xử lý tài liệu quá lâu và đã bị dừng. Vui lòng xóa rồi tải lên lại.",
+            Code.INGESTION_STALLED,
         )
 
     @staticmethod
@@ -152,7 +153,7 @@ class IngestionPipeline:
             job.catalog.cancel()
         await self._cleanup(job.document_id)
         await self.job_repo.fail(job.job_id, repr(exc)[:1000])
-        reason = str(exc) if isinstance(exc, (ValueError, IngestionError)) else "Hệ thống gặp lỗi khi xử lý tài liệu."
+        reason = exc.code if isinstance(exc, DomainException) else Code.INGESTION_UNEXPECTED
         # file_hash goes back to null so that the same file can be uploaded again (unique index on notebook + hash)
         await self.doc_repo.update_one(
             {"document_id": job.document_id},
@@ -183,7 +184,7 @@ class IngestionPipeline:
             if not await self.qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
                 await QdrantManager.ensure_collection()
                 if not await self.qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
-                    raise IngestionError("Hệ thống chưa sẵn sàng. Vui lòng thử lại sau ít phút.")
+                    raise IngestionError(Code.SYSTEM_NOT_READY)
             # 1. Parsing
             await self.job_repo.update_progress(job.job_id, "docling", 20)
             t0, info = time.perf_counter(), {}
@@ -198,7 +199,7 @@ class IngestionPipeline:
             job.chunks = await asyncio.to_thread(FinancialChunkerService.chunk_document, job.notebook_id, job.document_id, job.pages)
             job.timings["chunk"] = round(time.perf_counter() - t0, 2)
             if not job.chunks:
-                raise ValueError("Không trích xuất được nội dung văn bản từ tài liệu (có thể là bản scan).")
+                raise IngestionError(Code.NO_TEXT_EXTRACTED)
             return True
         except Exception as exc:
             await self._fail(job, exc)

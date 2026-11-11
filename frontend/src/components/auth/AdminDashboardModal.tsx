@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { useLanguage } from "../../context/LanguageContext";
 import { authService } from "../../services/auth";
+import { errorText } from "../../services/api";
 import { AdminDashboardStats } from "../../types/auth";
 import { CloseIcon, ShieldIcon } from "../common/Icons";
 import "./auth.css";
@@ -13,6 +15,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   const fetchStats = async () => {
     setLoading(true);
@@ -21,7 +24,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
       const data = await authService.getAdminDashboard();
       setStats(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unable to load Admin Dashboard metrics");
+      setError(errorText(err, t, t.admin.loadFailed));
     } finally {
       setLoading(false);
     }
@@ -44,10 +47,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
             <ShieldIcon size={18} color="#3b82f6" />
             <div>
               <h2 className="auth-title">
-                System Administration &amp; Cost Monitoring (Admin)
+                {t.admin.title}
               </h2>
               <p className="auth-subtitle">
-                System Administrator Console
+                {t.admin.subtitle}
               </p>
             </div>
           </div>
@@ -57,7 +60,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
         </div>
 
         <div className="auth-body">
-          {loading && <p className="admin-loading-text">Loading system metrics...</p>}
+          {loading && <p className="admin-loading-text">{t.admin.loading}</p>}
           {error && <div className="auth-alert-error no-top-margin">{error}</div>}
 
           {stats && (
@@ -66,23 +69,23 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
               <div className="admin-grid">
                 {/* Card 1: Users */}
                 <div className="admin-metric-card">
-                  <span className="admin-metric-label">User Accounts</span>
+                  <span className="admin-metric-label">{t.admin.userAccounts}</span>
                   <div className="admin-metric-val">
                     {stats.total_users}
                   </div>
                   <div className="admin-metric-sub">
-                    {stats.active_users} active accounts
+                    {t.admin.activeAccounts.replace("{n}", String(stats.active_users))}
                   </div>
                 </div>
 
                 {/* Card 2: Tokens */}
                 <div className="admin-metric-card">
-                  <span className="admin-metric-label">Total Consumed Tokens</span>
+                  <span className="admin-metric-label">{t.admin.consumedTokens}</span>
                   <div className="admin-metric-val tokens">
                     {stats.api_metrics.total_tokens_consumed.toLocaleString()}
                   </div>
                   <div className="admin-metric-sub">
-                    Financial Intelligence Cluster
+                    {t.admin.clusterSub}
                   </div>
                 </div>
               </div>
@@ -91,25 +94,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
               <div className="admin-perf-bar">
                 <div>
                   <div className="admin-perf-status">
-                    Database Cluster: {stats.system_performance.database}
+                    {t.admin.databaseCluster.replace("{status}", stats.system_performance.database)}
                   </div>
                   <div className="admin-perf-latency">
-                    Average Latency: {stats.system_performance.latency_ms ?? "—"} ms
+                    {t.admin.averageLatency.replace("{ms}", String(stats.system_performance.latency_ms ?? "—"))}
                   </div>
                 </div>
                 <span className="admin-badge-active">
-                  ACTIVE
+                  {t.admin.active}
                 </span>
               </div>
 
               {/* Policy Section */}
               <div className="admin-policy-box">
                 <h4 className="admin-policy-title">
-                  Access Control &amp; Resource Policy
+                  {t.admin.policyTitle}
                 </h4>
                 <div className="admin-policy-text">
-                  <div>• <strong>Guest Trial:</strong> Maximum <strong>1 filing</strong> per session, interactive questions enabled.</div>
-                  <div>• <strong>Member Account:</strong> Unlocks up to <strong>5 filings</strong> per notebook for cross-filing analysis.</div>
+                  <div>• <strong>{t.admin.guestLabel}</strong> {t.admin.guestPolicy}</div>
+                  <div>• <strong>{t.admin.memberLabel}</strong> {t.admin.memberPolicy}</div>
                 </div>
               </div>
             </div>

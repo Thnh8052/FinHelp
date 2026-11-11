@@ -11,13 +11,13 @@ export const LanguageToggle: React.FC<LanguageToggleProps> = ({
   className = "",
   size = "md",
 }) => {
-  const { lang, setLang } = useLanguage();
+  const { t, lang, setLang } = useLanguage();
 
   return (
     <div
       className={`lang-toggle-group ${size === "sm" ? "lang-toggle-sm" : ""} ${className}`}
       role="group"
-      aria-label="Language selection"
+      aria-label={t.common.languageSelection}
     >
       <button
         type="button"

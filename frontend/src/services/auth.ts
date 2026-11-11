@@ -75,7 +75,7 @@ export const authService = {
     return apiRequest<{ success: boolean; tiers: Record<string, TierSpec> }>("/auth/tiers");
   },
 
-  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+  async forgotPassword(email: string): Promise<{ success: boolean }> {
     return apiRequest("/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email }),
@@ -86,7 +86,7 @@ export const authService = {
     email: string,
     otp_code: string,
     new_password: string
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{ success: boolean }> {
     return apiRequest("/auth/reset-password", {
       method: "POST",
       body: JSON.stringify({ email, otp_code, new_password }),
@@ -97,7 +97,7 @@ export const authService = {
     return apiRequest<AdminDashboardStats>("/auth/admin/dashboard");
   },
 
-  async adminUpdateTier(user_id: string, tier: string): Promise<{ success: boolean; message: string }> {
+  async adminUpdateTier(user_id: string, tier: string): Promise<{ success: boolean }> {
     return apiRequest("/auth/admin/update-tier", {
       method: "POST",
       body: JSON.stringify({ user_id, tier }),

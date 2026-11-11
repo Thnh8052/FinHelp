@@ -27,7 +27,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
   onDeleteNotebook,
   isGuest = false,
 }) => {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,14 +55,14 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
           type="button"
           onClick={onNewChat}
           className="history-new-btn group"
-          title="Create new analysis session"
+          title={t.sidebar.newSessionTitle}
         >
           <div className="history-new-btn-left">
             <PlusIcon size={16} className="history-plus-icon" />
             <span>{t.sidebar.newAnalysis}</span>
           </div>
           <span className="history-new-tag">
-            {isGuest ? "Login" : "New"}
+            {isGuest ? t.sidebar.badgeLogin : t.sidebar.badgeNew}
           </span>
         </button>
       </div>
@@ -145,9 +145,9 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                       ) : (
                         <p
                           className="history-card-title"
-                          title={session.title || "Financial Session"}
+                          title={session.title || t.sidebar.untitledSession}
                         >
-                          {session.title || "Financial Session"}
+                          {session.title || t.sidebar.untitledSession}
                         </p>
                       )}
                       <p className="history-card-sub">
@@ -160,7 +160,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                           </span>
                         ) : (
                           <span className={isActive ? "status-active" : "status-saved"}>
-                            {isActive ? (lang === "vi" ? "Đang mở" : "Active") : (lang === "vi" ? "Đã lưu" : "Saved")}
+                            {isActive ? t.sidebar.statusActive : t.sidebar.statusSaved}
                           </span>
                         )}
                       </p>
@@ -216,7 +216,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                             e.stopPropagation();
                             setConfirmingId(session.notebook_id);
                           }}
-                          title={(session.processing_count ?? 0) > 0 ? t.hub.deleteBlocked : "Delete this session"}
+                          title={(session.processing_count ?? 0) > 0 ? t.hub.deleteBlocked : t.sidebar.deleteSession}
                           aria-label={`${t.common.delete}: ${session.title}`}
                           className="history-card-del-btn"
                           disabled={(session.processing_count ?? 0) > 0}

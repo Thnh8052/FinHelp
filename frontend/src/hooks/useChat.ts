@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
-import { ApiError } from "../services/api";
+import { ApiError, errorText, signInHelps } from "../services/api";
 import { chatService } from "../services/chat";
 import { ChatMessage } from "../types/chat";
 import { ShowToast } from "./useToast";
@@ -20,11 +20,11 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
   const [isLoading, setIsLoading] = useState(false);
   const { t } = useLanguage();
 
-  const loginWarning = (detail: string) => showToast(detail, "warning", "Sign in now", onLoginRequired);
+  const loginWarning = (detail: string) => showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
 
   const sendMessage = async (queryText: string, mentions?: string[]) => {
     if (selectedDocIds.length === 0) {
-      showToast("Please select at least one filing from the sources drawer before querying.", "warning");
+      showToast(t.toasts.selectFiling, "warning");
       return;
     }
     const assistantNote = (id: string, content: string): ChatMessage => ({
@@ -70,9 +70,9 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       onTitle(notebookId, data.title);
     } catch (err) {
       if (err instanceof ApiError) {
-        const detail = err.status >= 500 || !err.detail ? t.workspace.systemBusy : err.detail;  // lỗi hệ thống không lộ chi tiết cho người dùng
-        // Auth required: 401, or the backend says signing in helps (a 403 alone does not: a read-only notebook stays read-only)
-        if (err.status === 401 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
+        const detail = err.status >= 500 ? t.workspace.systemBusy : errorText(err, t, t.workspace.systemBusy);  // lỗi hệ thống không lộ chi tiết cho người dùng
+        // Signing in helps on 401 or for the refusals that name it (a 403 alone does not: a read-only notebook stays read-only)
+        if (signInHelps(err)) {
           loginWarning(detail);
         } else {
           showToast(detail, "error");

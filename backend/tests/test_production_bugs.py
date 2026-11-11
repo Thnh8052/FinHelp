@@ -78,7 +78,7 @@ def test_each_address_has_its_own_guest_allowance():
     spend_guest_allowance(_guest_at("10.0.0.1"), "question", 1)
     with pytest.raises(HTTPException) as refused:
         spend_guest_allowance(_guest_at("10.0.0.1"), "question", 1)
-    assert refused.value.status_code == 429 and "đăng nhập" in refused.value.detail  # the interface offers the sign-in on this word
+    assert refused.value.status_code == 429 and refused.value.detail["code"] == "guest_allowance_used"  # the interface offers the sign-in for this code
     spend_guest_allowance(_guest_at("10.0.0.2"), "question", 1)
     spend_guest_allowance(_guest_at("10.0.0.1"), "upload", 1)  # one allowance per kind of use
 

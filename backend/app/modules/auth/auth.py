@@ -18,7 +18,7 @@ import secrets
 from typing import Annotated, Any, Optional
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from jose import JWTError, jwt
@@ -31,6 +31,7 @@ from app.core.logging import logger
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.infrastructure.database.mongodb import get_database
 from app.shared.rate_limit import client_ip, enforce, limiter
+from app.core.error_codes import Code, api_error
 from app.modules.auth.user_repo import UserRepository
 from app.modules.auth.user import ADMIN_EMAIL, ADMIN_USERNAME, TIER_SPECS, UserQuota, UserRecord
 from app.services.email_service import email_service
@@ -42,9 +43,9 @@ RATE_WINDOW = 15 * 60
 LOGIN_FAILS_PER_ACCOUNT, LOGIN_FAILS_PER_IP = 10, 30
 FORGOT_PER_EMAIL, FORGOT_PER_IP, RESET_PER_IP = 3, 10, 20
 REGISTER_TAKEN_PER_IP = 10  # refused registrations per address: a taken name is what someone listing the accounts looks for
-ACCOUNT_NOT_AVAILABLE = "This email or username is not available"
+ACCOUNT_NOT_AVAILABLE = Code.ACCOUNT_NOT_AVAILABLE
 MAX_RESET_ATTEMPTS = 5  # wrong codes before an OTP dies; the user must ask for a new one
-INVALID_RESET_CODE = "Invalid or expired verification code"  # one answer whether the account is unknown, the code wrong or expired
+INVALID_RESET_CODE = Code.INVALID_RESET_CODE  # one answer whether the account is unknown, the code wrong or expired
 _NO_ACCOUNT_HASH = get_password_hash(secrets.token_urlsafe(16))  # checked when an account does not exist, so that signing in takes the same time
 PASSWORD_MIN_CHARS = 8  # every way of setting a password; the sign-in form takes any length, so older accounts keep working
 
@@ -149,17 +150,11 @@ async def _authenticate(repo: UserRepository, identifier: str, password: str, ip
     limiter.record(address)
     matches = await asyncio.to_thread(verify_password, password, user.hashed_password if user else _NO_ACCOUNT_HASH)
     if not user or not matches:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Tên đăng nhập / Email hoặc mật khẩu không chính xác",
-        )
+        raise api_error(status_code=status.HTTP_401_UNAUTHORIZED, code=Code.INVALID_CREDENTIALS)
     limiter.clear(account)  # not a wrong guess after all
     limiter.forget_latest(address)
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tài khoản hiện đang bị tạm khóa",
-        )
+        raise api_error(status_code=status.HTTP_403_FORBIDDEN, code=Code.ACCOUNT_LOCKED)
     await repo.update_last_login(user.user_id)
     return _token_response(user)
 
@@ -216,7 +211,7 @@ async def register(request: Request, response: Response, req: RegisterRequest, b
     repo = UserRepository(db)
     reserved = req.username.lower() == ADMIN_USERNAME or req.email.lower() == ADMIN_EMAIL  # the admin's names, even before it exists
     if reserved or await repo.get_by_email(req.email) or await repo.get_by_username(req.username):
-        raise HTTPException(status_code=400, detail=ACCOUNT_NOT_AVAILABLE)
+        raise api_error(status_code=400, code=ACCOUNT_NOT_AVAILABLE)
 
     user_id = f"usr_{uuid.uuid4().hex[:8]}"
     user = UserRecord(
@@ -230,7 +225,7 @@ async def register(request: Request, response: Response, req: RegisterRequest, b
     try:
         await repo.save_user(user)
     except DuplicateKeyError:  # two registrations raced past the checks above; the unique indexes refused the second
-        raise HTTPException(status_code=400, detail=ACCOUNT_NOT_AVAILABLE)
+        raise api_error(status_code=400, code=ACCOUNT_NOT_AVAILABLE)
     limiter.forget_latest(attempts)
     # Sent after the response, in a worker thread: SendGrid's wait must not stop the server for everyone
     background.add_task(email_service.send_account_confirmation, to_email=user.email, username=user.username, full_name=user.full_name)
@@ -324,7 +319,7 @@ async def forgot_password(
     limiter.record(email)
     limiter.record(address)
     background.add_task(_issue_reset_code, db, req.email)
-    return {"success": True, "message": "If the email is registered in the system, a verification code has been sent."}
+    return {"success": True}
 
 
 # ==============================================================================
@@ -350,25 +345,22 @@ async def reset_password(
     repo = UserRepository(db)
     user = await repo.use_reset_attempt(req.email, MAX_RESET_ATTEMPTS)  # None: unknown email, no code pending, or all tries used
     if not user:
-        raise HTTPException(status_code=400, detail=INVALID_RESET_CODE)
+        raise api_error(status_code=400, code=INVALID_RESET_CODE)
 
     if not hmac.compare_digest(user.reset_token or "", _otp_hash(req.email, req.otp_code.strip())):
-        raise HTTPException(status_code=400, detail=INVALID_RESET_CODE)
+        raise api_error(status_code=400, code=INVALID_RESET_CODE)
 
     expires_at = user.reset_token_expires_at
     if hasattr(expires_at, "tzinfo") and expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if not expires_at or datetime.now(timezone.utc) > expires_at:
-        raise HTTPException(status_code=400, detail=INVALID_RESET_CODE)
+        raise api_error(status_code=400, code=INVALID_RESET_CODE)
 
     new_hash = await asyncio.to_thread(get_password_hash, req.new_password)
     await repo.update_password(user.user_id, new_hash)
     background.add_task(email_service.send_password_changed_notification, to_email=user.email, full_name=user.full_name or user.username)
 
-    return {
-        "success": True,
-        "message": "Password reset successfully! You can now sign in with your new password.",
-    }
+    return {"success": True}
 
 
 # ==============================================================================
@@ -385,7 +377,7 @@ async def change_password(
 ):
     """Change password for the authenticated user."""
     if not await asyncio.to_thread(verify_password, req.old_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
+        raise api_error(status_code=400, code=Code.WRONG_CURRENT_PASSWORD)
 
     repo = UserRepository(db)
     new_hash = await asyncio.to_thread(get_password_hash, req.new_password)
@@ -395,7 +387,7 @@ async def change_password(
     # Older tokens have just stopped working: this device gets a new one and stays signed in
     token = create_access_token(current_user.user_id, version=current_user.token_version + 1)
     _set_session_cookie(request, response, token)
-    return {"success": True, "message": "Password changed successfully", "access_token": token}
+    return {"success": True, "access_token": token}
 
 
 # ==============================================================================

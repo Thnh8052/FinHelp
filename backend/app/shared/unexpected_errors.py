@@ -7,6 +7,7 @@ import uuid
 
 from starlette.responses import JSONResponse
 
+from app.core.error_codes import Code
 from app.core.logging import logger
 
 
@@ -33,5 +34,5 @@ class UnexpectedErrors:
             logger.exception(f"Unhandled error [{request_id}] {scope['method']} {scope['path']}")
             if started:  # part of the answer has already left: nothing valid can be sent any more
                 raise
-            body = {"detail": "Hệ thống đang gặp sự cố. Vui lòng thử lại sau.", "request_id": request_id}
+            body = {"detail": {"code": Code.INTERNAL_ERROR, "params": {}}, "request_id": request_id}
             await JSONResponse(body, status_code=500)(scope, receive, send)

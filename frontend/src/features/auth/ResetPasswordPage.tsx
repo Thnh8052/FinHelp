@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { authService } from "../../services/auth";
+import { errorText } from "../../services/api";
 import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
 import { FinHelpLogo } from "../../components/common/FinHelpLogo";
@@ -41,7 +42,7 @@ export const ResetPasswordPage: React.FC = () => {
       setSuccess(t.auth.codeSentSuccess);
       setStep(2);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t.auth.errorInvalidCredentials);
+      setError(errorText(err, t, t.auth.errorInvalidCredentials));
     } finally {
       setLoading(false);
     }
@@ -64,13 +65,13 @@ export const ResetPasswordPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = await authService.resetPassword(email, otpCode.trim(), newPassword);
-      setSuccess(res.message || t.auth.passwordResetSuccess);
+      await authService.resetPassword(email, otpCode.trim(), newPassword);
+      setSuccess(t.auth.passwordResetSuccess);
       setTimeout(() => {
         navigate(`/login?email=${encodeURIComponent(email)}`);
       }, 1800);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t.auth.errorOtpInvalid);
+      setError(errorText(err, t, t.auth.errorOtpInvalid));
     } finally {
       setLoading(false);
     }

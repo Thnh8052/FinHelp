@@ -13,11 +13,12 @@ Chịu trách nhiệm:
 """
 
 from typing import Optional
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.core.config import settings
+from app.core.error_codes import Code, api_error
 from app.infrastructure.database.mongodb import get_database
 from app.modules.notebooks.notebook_repo import NotebookRepository
 from app.modules.auth.user_repo import UserRepository
@@ -38,9 +39,9 @@ async def read_token(request: Request, header_token: Optional[str] = Depends(oau
 async def _account_of(token: str, db: AsyncIOMotorDatabase) -> UserRecord:
     """The account a sent token still speaks for. 401 when it is forged, expired, names nobody or predates a password change; 403 when the account is locked.
     A token issued before token_version existed has no "ver": it counts as 0, so nobody is signed out by the upgrade."""
-    refused = HTTPException(
+    refused = api_error(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Phiên làm việc không hợp lệ hoặc đã hết hạn",
+        code=Code.SESSION_EXPIRED,
         headers={"WWW-Authenticate": "Bearer", "Set-Cookie": _REMOVE_SESSION_COOKIE},  # page scripts cannot remove it: without this the browser could not even continue as a guest
     )
     try:
@@ -51,7 +52,7 @@ async def _account_of(token: str, db: AsyncIOMotorDatabase) -> UserRecord:
     if user is None or claims.get("ver", 0) != user.token_version or claims.get("jti") in user.revoked_token_ids:
         raise refused
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tài khoản hiện đang bị tạm khóa")
+        raise api_error(status_code=status.HTTP_403_FORBIDDEN, code=Code.ACCOUNT_LOCKED)
     return user
 
 
@@ -78,9 +79,9 @@ async def get_current_user(
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> UserRecord:
     if not token:
-        raise HTTPException(
+        raise api_error(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Yêu cầu đăng nhập để sử dụng tính năng này",
+            code=Code.LOGIN_REQUIRED,
             headers={"WWW-Authenticate": "Bearer"},
         )
     return await _account_of(token, db)
@@ -103,10 +104,7 @@ async def require_admin(
     current_user: UserRecord = Depends(get_current_user),
 ) -> UserRecord:
     if current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Chức năng yêu cầu đặc quyền Quản trị viên (Admin)",
-        )
+        raise api_error(status_code=status.HTTP_403_FORBIDDEN, code=Code.ADMIN_REQUIRED)
     return current_user
 
 
@@ -131,9 +129,9 @@ async def require_notebook(db: AsyncIOMotorDatabase, notebook_id: str, user_id: 
     """404 for an unknown notebook, 403 without access. Every route that reads or writes a notebook's data calls this."""
     nb = await NotebookRepository(db).get_by_id(notebook_id)
     if not nb:
-        raise HTTPException(status_code=404, detail="Không tìm thấy Notebook")
+        raise api_error(status_code=404, code=Code.NOTEBOOK_NOT_FOUND)
     if not can_access_notebook(nb, user_id, write):
-        raise HTTPException(status_code=403, detail="Không có quyền truy cập Notebook này")
+        raise api_error(status_code=403, code=Code.NOTEBOOK_FORBIDDEN)
     return nb
 
 
