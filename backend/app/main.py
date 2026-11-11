@@ -11,7 +11,7 @@ from app.api_router import api_v1_router
 from app.core.config import settings
 from app.core.exceptions import DomainException
 from app.core.logging import logger
-from app.modules.admin.init_admin import setup_admin_and_clean_mocks
+from app.modules.admin.init_admin import ensure_admin
 from app.infrastructure.database.mongodb import MongoManager
 from app.infrastructure.database.qdrant import QdrantManager
 from app.modules.ingestion.pipeline import IngestionPipeline
@@ -56,9 +56,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not check interrupted ingestion jobs: {e}")
 
-    # Tự động dọn dẹp tài khoản mock và khởi tạo tài khoản Admin Full Quyền (mật khẩu từ ADMIN_PASSWORD)
+    # Khởi tạo hoặc cập nhật tài khoản Admin Full Quyền (mật khẩu từ ADMIN_PASSWORD)
     try:
-        if (await setup_admin_and_clean_mocks()).get("success"):
+        if (await ensure_admin()).get("success"):
             logger.info("Admin user 'admin' ready with full permissions.")
     except Exception as e:
         logger.warning(f"Could not initialize admin user on startup: {e}")

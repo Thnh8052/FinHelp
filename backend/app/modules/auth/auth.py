@@ -32,7 +32,7 @@ from app.core.security import create_access_token, get_password_hash, verify_pas
 from app.infrastructure.database.mongodb import get_database
 from app.shared.rate_limit import client_ip, enforce, limiter
 from app.modules.auth.user_repo import UserRepository
-from app.modules.auth.user import TIER_SPECS, UserQuota, UserRecord
+from app.modules.auth.user import ADMIN_EMAIL, ADMIN_USERNAME, TIER_SPECS, UserQuota, UserRecord
 from app.services.email_service import email_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -214,7 +214,8 @@ async def register(request: Request, response: Response, req: RegisterRequest, b
     enforce(attempts, REGISTER_TAKEN_PER_IP, RATE_WINDOW)
     limiter.record(attempts)  # counted before the lookups: registrations sent together cannot pass the limit; a success takes it back below
     repo = UserRepository(db)
-    if await repo.get_by_email(req.email) or await repo.get_by_username(req.username):
+    reserved = req.username.lower() == ADMIN_USERNAME or req.email.lower() == ADMIN_EMAIL  # the admin's names, even before it exists
+    if reserved or await repo.get_by_email(req.email) or await repo.get_by_username(req.username):
         raise HTTPException(status_code=400, detail=ACCOUNT_NOT_AVAILABLE)
 
     user_id = f"usr_{uuid.uuid4().hex[:8]}"

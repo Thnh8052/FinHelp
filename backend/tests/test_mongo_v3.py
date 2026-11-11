@@ -6,6 +6,7 @@ import types
 import pytest
 from fastapi import HTTPException
 
+from app.core.config import settings
 from app.modules.auth import user_repo as user_repo_module
 from app.modules.auth.user import UserRecord, today_utc
 from app.modules.auth.user_repo import UserRepository
@@ -47,7 +48,7 @@ async def test_lookups_lowercase_what_the_user_typed(monkeypatch):
 
 def test_quota_view_comes_from_the_role_and_the_counters():
     quota = _user(role="admin", daily_messages_limit=10000, daily_messages_used=3, total_tokens_consumed=7).quota
-    assert (quota.tier, quota.max_upload_documents, quota.max_file_size_mb) == ("admin", 50, 100)
+    assert (quota.tier, quota.max_upload_documents, quota.max_file_size_mb) == ("admin", settings.MAX_SELECTED_DOCS_USER, 100)  # the limit that is enforced
     assert (quota.messages_used_today, quota.total_tokens_consumed) == (3, 7)
     assert "quota" not in _user().model_dump()  # never stored
 

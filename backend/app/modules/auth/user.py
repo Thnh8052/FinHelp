@@ -1,30 +1,37 @@
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
+from app.core.config import settings
 from app.shared.common import BaseSchema, get_utc_now
 
+# The one admin account, created and kept up to date at startup (admin/init_admin.py); nobody may register these names
+ADMIN_USER_ID = "usr_admin_master"
+ADMIN_USERNAME = "admin"
+ADMIN_EMAIL = "admin@finanalyst.ai"
 
-# Bảng cấu hình hạn mức tài nguyên: Chưa đăng nhập (Guest) vs Đã đăng nhập (User)
+GUEST_DOCS, MEMBER_DOCS = settings.MAX_SELECTED_DOCS_GUEST, settings.MAX_SELECTED_DOCS_USER  # documents per notebook = sources per question
+
+# Bảng cấu hình hạn mức tài nguyên: Chưa đăng nhập (Guest) vs Đã đăng nhập (User, Admin). Số tài liệu lấy từ settings, không viết số ở đây.
 TIER_SPECS = {
     "guest": {
         "tier_name": "Chưa đăng nhập (Khách dùng thử)",
-        "max_upload_documents": 1,
+        "max_upload_documents": GUEST_DOCS,
         "max_file_size_mb": 5,
-        "cost_description": "Chế độ dùng thử (Tối đa 1 tài liệu)",
+        "cost_description": f"Chế độ dùng thử (Tối đa {GUEST_DOCS} tài liệu)",
     },
     "user": {
         "tier_name": "Đã đăng nhập (Thành viên)",
         "daily_messages_limit": 100,
-        "max_upload_documents": 5,
+        "max_upload_documents": MEMBER_DOCS,
         "max_file_size_mb": 20,
-        "cost_description": "Không gian phân tích (Tối đa 5 tài liệu / 1 Notebook)",
+        "cost_description": f"Không gian phân tích (Tối đa {MEMBER_DOCS} tài liệu / 1 Notebook)",
     },
     "admin": {
         "tier_name": "Quản Trị Viên (Full Quyền)",
         "daily_messages_limit": 10000,
-        "max_upload_documents": 50,
+        "max_upload_documents": MEMBER_DOCS,
         "max_file_size_mb": 100,
-        "cost_description": "Toàn quyền quản trị, không giới hạn tài liệu & câu hỏi",
+        "cost_description": f"Toàn quyền quản trị (Tối đa {MEMBER_DOCS} tài liệu / 1 Notebook)",
     },
 }
 
@@ -45,7 +52,7 @@ class UserQuota(BaseModel):
     tier: str = "user"
     daily_messages_limit: int = 100
     messages_used_today: int = 0
-    max_upload_documents: int = 5
+    max_upload_documents: int = MEMBER_DOCS
     max_file_size_mb: int = 20
     total_tokens_consumed: int = 0
 

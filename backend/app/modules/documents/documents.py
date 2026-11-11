@@ -170,19 +170,21 @@ async def upload_pdf(
 
     # 1. Kiểm tra hạn mức tài liệu (Quota Gate)
     if user_id is None:
-        # Khách chưa đăng nhập: Tối đa 1 tài liệu
+        # Khách chưa đăng nhập: Tối đa MAX_SELECTED_DOCS_GUEST tài liệu
         if len(existing_docs) >= settings.MAX_SELECTED_DOCS_GUEST:
             raise HTTPException(
                 status_code=403,
-                detail="Chế độ dùng thử (chưa đăng nhập) chỉ hỗ trợ tối đa 1 tài liệu. Vui lòng đăng nhập để phân tích tối đa 5 tài liệu!",
+                detail=f"Chế độ dùng thử (chưa đăng nhập) chỉ hỗ trợ tối đa {settings.MAX_SELECTED_DOCS_GUEST} tài liệu. "
+                       f"Vui lòng đăng nhập để phân tích tối đa {settings.MAX_SELECTED_DOCS_USER} tài liệu!",
             )
         spend_guest_allowance(request, "upload", settings.GUEST_DAILY_UPLOADS)  # only a file that would really be processed counts
     else:
-        # Người dùng đã đăng nhập: Tối đa 5 tài liệu / notebook
+        # Mọi tài khoản đã đăng nhập (kể cả admin): Tối đa MAX_SELECTED_DOCS_USER tài liệu / notebook
         if len(existing_docs) >= settings.MAX_SELECTED_DOCS_USER:
             raise HTTPException(
                 status_code=403,
-                detail="Bạn đã đạt giới hạn tối đa 5 tài liệu trong sổ tay này. Vui lòng tạo sổ tay mới hoặc xóa tài liệu cũ.",
+                detail=f"Bạn đã đạt giới hạn tối đa {settings.MAX_SELECTED_DOCS_USER} tài liệu trong sổ tay này. "
+                       "Vui lòng tạo sổ tay mới hoặc xóa tài liệu cũ.",
             )
 
     storage = StorageService()
