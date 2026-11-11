@@ -295,7 +295,8 @@ export const en: TranslationSchema = {
   sidebar: {
     newAnalysis: "New Analysis",
     historyTitle: "Analysis History",
-    sessionsCount: "sessions",
+    sessionOne: "{n} session",
+    sessionMany: "{n} sessions",
     searchPlaceholder: "Search sessions...",
     guestBannerTitle: "Guest Session",
     guestBannerDesc: "1 session & 1 filing limit. Sign in to save permanent history.",
@@ -330,7 +331,7 @@ export const en: TranslationSchema = {
     statusReady: "Ready",
     viewPdf: "View PDF",
     deletePrompt: "Delete?",
-    securityNote: "🔒 Filings are sandboxed to this session and strictly isolated.",
+    securityNote: "Filings are sandboxed to this session and strictly isolated.",
     closeDrawer: "Close filings drawer",
     excludeFromAnalysis: "Exclude from analysis",
     includeInAnalysis: "Include in analysis",

@@ -50,8 +50,7 @@ export const LoginPage: React.FC = () => {
 
         {/* Brand */}
         <Link to="/" className="auth-page-brand">
-          <FinHelpLogo size="sm" showText={false} />
-          <span className="auth-page-brand-name">FinHelp</span>
+          <FinHelpLogo size="md" />
         </Link>
 
         {/* Header */}
@@ -68,8 +67,10 @@ export const LoginPage: React.FC = () => {
         {/* Form */}
         <form onSubmit={handleSubmit} className="auth-page-form">
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.emailOrUsername}</label>
+            <label className="auth-page-label" htmlFor="login-identifier">{t.auth.emailOrUsername}</label>
             <input
+              id="login-identifier"
+              autoComplete="username"
               type="text"
               required
               value={identifier}
@@ -81,7 +82,7 @@ export const LoginPage: React.FC = () => {
 
           <div className="auth-page-field">
             <div className="auth-page-row">
-              <label className="auth-page-label">{t.auth.password}</label>
+              <label className="auth-page-label" htmlFor="login-password">{t.auth.password}</label>
               <Link
                 to={`/reset-password${identifier ? `?email=${encodeURIComponent(identifier)}` : ""}`}
                 className="auth-page-link auth-page-link-small"
@@ -90,6 +91,8 @@ export const LoginPage: React.FC = () => {
               </Link>
             </div>
             <input
+              id="login-password"
+              autoComplete="current-password"
               type="password"
               required
               value={password}

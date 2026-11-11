@@ -9,6 +9,7 @@ import {
   TrashIcon,
   InfoCircleIcon,
   CheckIcon,
+  IconLock,
 } from "../common/Icons";
 import "./notebook.css";
 
@@ -130,6 +131,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             onClick={onClose}
             className="doc-drawer-close-btn"
             title={t.sourcesDrawer.closeDrawer}
+            aria-label={t.sourcesDrawer.closeDrawer}
           >
             <CloseIcon size={13} />
           </button>
@@ -220,6 +222,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                     onChange={() => onToggleDoc(doc.document_id)}
                     className="doc-checkbox"
                     title={isSelected ? t.sourcesDrawer.excludeFromAnalysis : t.sourcesDrawer.includeInAnalysis}
+                    aria-label={`${isSelected ? t.sourcesDrawer.excludeFromAnalysis : t.sourcesDrawer.includeInAnalysis}: ${doc.file_name}`}
                   />
 
                   <div className="doc-card-details">
@@ -333,6 +336,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
       {/* 5. Footer Panel */}
       <div className="doc-drawer-footer">
+        <IconLock size={12} />
         <span>{t.sourcesDrawer.securityNote}</span>
       </div>
     </div>

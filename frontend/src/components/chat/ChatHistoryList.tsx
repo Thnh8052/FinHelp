@@ -70,7 +70,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
       {/* 2. Section Header */}
       <div className="history-section-header">
         <span className="history-section-title">{t.sidebar.historyTitle}</span>
-        <span className="history-section-count">{notebooks.length} {t.sidebar.sessionsCount}</span>
+        <span className="history-section-count">{(notebooks.length === 1 ? t.sidebar.sessionOne : t.sidebar.sessionMany).replace("{n}", String(notebooks.length))}</span>
       </div>
 
       {/* Search Filter */}

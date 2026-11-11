@@ -134,8 +134,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
             <div>
               <form onSubmit={handleSignIn} className="auth-form">
                 <div className="auth-field">
-                  <label className="auth-label">{t.auth.emailOrUsername}</label>
+                  <label className="auth-label" htmlFor="modal-identifier">{t.auth.emailOrUsername}</label>
                   <input
+                    id="modal-identifier"
+                    autoComplete="username"
                     type="text"
                     required
                     value={identifier}
@@ -147,7 +149,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
 
                 <div className="auth-field">
                   <div className="auth-label-row">
-                    <label className="auth-label">{t.auth.password}</label>
+                    <label className="auth-label" htmlFor="modal-password">{t.auth.password}</label>
                     <button
                       type="button"
                       onClick={() => setTab("forgot")}
@@ -157,6 +159,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     </button>
                   </div>
                   <input
+                    id="modal-password"
+                    autoComplete="current-password"
                     type="password"
                     required
                     value={password}
@@ -214,10 +218,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
             <div>
               <form onSubmit={handleSignUp} className="auth-form-dense">
                 <div className="auth-field">
-                  <label className="auth-label">
+                  <label className="auth-label" htmlFor="modal-reg-email">
                     {t.auth.emailAddress} <span className="auth-required">*</span>
                   </label>
                   <input
+                    id="modal-reg-email"
+                    autoComplete="email"
                     type="email"
                     required
                     value={email}
@@ -228,10 +234,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-label">
+                  <label className="auth-label" htmlFor="modal-reg-username">
                     {t.auth.username} <span className="auth-required">*</span>
                   </label>
                   <input
+                    id="modal-reg-username"
+                    autoComplete="username"
                     type="text"
                     required
                     pattern="[A-Za-z0-9._\-]{3,32}"
@@ -244,10 +252,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-label">
+                  <label className="auth-label" htmlFor="modal-reg-password">
                     {t.auth.passwordMin} <span className="auth-required">*</span>
                   </label>
                   <input
+                    id="modal-reg-password"
+                    autoComplete="new-password"
                     type="password"
                     required
                     minLength={8}
@@ -259,10 +269,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-label">
+                  <label className="auth-label" htmlFor="modal-reg-full-name">
                     {t.auth.fullNameOptional}
                   </label>
                   <input
+                    id="modal-reg-full-name"
+                    autoComplete="name"
                     type="text"
                     maxLength={120}
                     value={fullName}
@@ -308,6 +320,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   <div>
                     <input
                       type="email"
+                      autoComplete="email"
+                      aria-label={t.auth.accountEmail}
                       required
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
@@ -326,10 +340,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
               ) : (
                 <form onSubmit={handleForgotStep2} className="auth-form">
                   <div className="auth-field">
-                    <label className="auth-label">
+                    <label className="auth-label" htmlFor="modal-otp">
                       {t.auth.otpCode}
                     </label>
                     <input
+                      id="modal-otp"
+                      autoComplete="one-time-code"
                       type="text"
                       required
                       maxLength={6}
@@ -341,10 +357,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   </div>
 
                   <div className="auth-field">
-                    <label className="auth-label">
+                    <label className="auth-label" htmlFor="modal-new-password">
                       {t.auth.newPasswordMin}
                     </label>
                     <input
+                      id="modal-new-password"
+                      autoComplete="new-password"
                       type="password"
                       required
                       minLength={8}

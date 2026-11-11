@@ -176,7 +176,7 @@
   background-color: var(--bg-card);
   border: 1px solid var(--border-medium);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: all var(--transition);
 }
@@ -193,7 +193,7 @@
 }
 
 .chat-input-hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   text-align: center;
   margin-top: 4px;
@@ -254,7 +254,7 @@
   align-items: center;
   height: 24px;
   line-height: 1;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-dim, #94a3b8);
   white-space: nowrap !important;
@@ -268,8 +268,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background-color: #111a2a;
   border: 1px solid #1f2d47;
@@ -374,7 +374,7 @@
   background-color: var(--bg-card, #0e1526);
   border: 1px solid var(--border-medium, #1e293b);
   color: var(--text-muted, #94a3b8);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   user-select: none;
   transition: all var(--transition);
@@ -401,7 +401,7 @@
   background: rgba(30, 58, 138, 0.22);
   border: 1px solid rgba(59, 130, 246, 0.35);
   border-radius: 10px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: #93c5fd;
   line-height: 1.4;
   animation: fadeIn 0.2s ease-in-out;
@@ -479,7 +479,7 @@
 }
 
 .chat-input-textarea::placeholder {
-  color: #64748b;
+  color: var(--text-dim);
   font-size: inherit;
   line-height: inherit;
   opacity: 0.85;
@@ -554,7 +554,7 @@
 }
 
 .history-new-tag {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   background-color: rgba(255, 255, 255, 0.05);
   padding: 2px 6px;
@@ -595,7 +595,7 @@
 }
 
 .history-section-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -603,9 +603,9 @@
 }
 
 .history-section-count {
-  font-size: 10px;
+  font-size: 12px;
   font-family: var(--font-mono, monospace);
-  color: #64748b;
+  color: var(--text-dim);
   background: rgba(30, 41, 59, 0.7);
   padding: 1px 7px;
   border-radius: 9999px;
@@ -621,7 +621,7 @@
 }
 
 .history-header-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -725,8 +725,8 @@
 }
 
 .history-card-sub {
-  font-size: 10px;
-  color: #64748b;
+  font-size: 12px;
+  color: var(--text-dim);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -743,7 +743,7 @@
 }
 
 .status-saved {
-  color: #64748b;
+  color: var(--text-dim);
 }
 
 .history-card-del-btn {
@@ -752,7 +752,7 @@
   justify-content: center;
   padding: 4px;
   border-radius: 4px;
-  color: #64748b;
+  color: var(--text-dim);
   background-color: transparent;
   border: none;
   cursor: pointer;
@@ -773,7 +773,7 @@
 }
 
 .history-card-del-btn:disabled:hover {
-  color: #64748b;
+  color: var(--text-dim);
   background-color: transparent;
 }
 
@@ -825,7 +825,7 @@
 }
 
 .history-item-meta {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-dim, #64748b);
   display: flex;
   align-items: center;
@@ -841,7 +841,7 @@
   padding: 10px 14px;
   border-top: 1px solid var(--border-medium, #22304d);
   background-color: #0c121e;
-  font-size: 11px;
+  font-size: 12px;
   color: #94a3b8;
   display: flex;
   align-items: center;
@@ -864,9 +864,9 @@
 }
 
 .history-footer-tag {
-  font-size: 10px;
+  font-size: 12px;
   font-family: var(--font-mono);
-  color: #64748b;
+  color: var(--text-dim);
   background-color: #162034;
   padding: 2px 6px;
   border-radius: 4px;
@@ -902,7 +902,7 @@
   background-color: var(--bg-card);
   border: 1px solid var(--border-medium);
   color: var(--accent-primary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   font-family: var(--font-mono);
   cursor: pointer;
@@ -922,21 +922,21 @@
 
 .citation-badge-page {
   color: #94a3b8;
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 /* Responsive Chat Breakpoints */
 @media (max-width: 960px) {
   .chat-sample-btn {
     height: 22px;
-    font-size: 10.5px;
+    font-size: 12px;
     padding: 0 9px;
     border-radius: 11px;
   }
 
   .chat-prompts-label {
     height: 22px;
-    font-size: 10.5px;
+    font-size: 12px;
   }
 
   .chat-input-form {
@@ -982,7 +982,7 @@
 
   .chat-prompts-label {
     height: 22px;
-    font-size: 10px;
+    font-size: 12px;
     margin-right: 1px;
   }
 
@@ -992,7 +992,7 @@
 
   .chat-sample-btn {
     height: 22px;
-    font-size: 10px;
+    font-size: 12px;
     padding: 0 8px;
     border-radius: 11px;
   }
@@ -1020,7 +1020,7 @@
   }
 
   .chat-input-hint {
-    font-size: 9.5px;
+    font-size: 12px;
   }
 
   .chat-header {
@@ -1053,12 +1053,12 @@
 
   .chat-prompts-label {
     height: 20px;
-    font-size: 9.5px;
+    font-size: 12px;
   }
 
   .chat-sample-btn {
     height: 20px;
-    font-size: 9.5px;
+    font-size: 12px;
     padding: 0 7px;
     border-radius: 10px;
   }
@@ -1071,7 +1071,7 @@
   }
 
   .chat-input-textarea {
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.35;
     min-height: 18px;
     max-height: 100px;
@@ -1083,7 +1083,7 @@
   }
 
   .chat-input-hint {
-    font-size: 9px;
+    font-size: 12px;
   }
 }
 
@@ -1150,7 +1150,7 @@
 }
 
 .chat-sources-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim, #94a3b8);
   white-space: nowrap;
 }
@@ -1164,7 +1164,7 @@
 }
 
 .chat-source-tag {
-  font-size: 11px;
+  font-size: 12px;
   padding: 1px 7px;
   border-radius: 12px;
   background-color: rgba(37, 99, 235, 0.15);
@@ -1184,7 +1184,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #3b82f6;
   background: rgba(59, 130, 246, 0.08);
@@ -1321,7 +1321,7 @@
   padding: 11px 14px;
   color: #94a3b8;
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-right: 1px solid rgba(44, 62, 96, 0.4);
@@ -1383,7 +1383,7 @@
 
 /* Ô trống / không áp dụng (— hoặc N/A) */
 .financial-td.cell-empty {
-  color: #64748b;
+  color: var(--text-dim);
   text-align: center;
   font-weight: 500;
 }
@@ -1418,7 +1418,7 @@
   min-width: 17px;
   padding: 0 5px;
   margin: 0 2px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   font-family: var(--font-mono, monospace);
   color: #38bdf8;
@@ -1555,4 +1555,11 @@
   overflow-x: auto;
   overflow-y: hidden;
   padding: 4px 0;
+}
+
+/* Enter / Shift+Enter shortcuts mean nothing on a touch screen without a keyboard */
+@media (hover: none) and (pointer: coarse) {
+  .chat-input-hint {
+    display: none;
+  }
 }

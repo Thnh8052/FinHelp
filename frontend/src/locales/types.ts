@@ -295,7 +295,8 @@ export interface TranslationSchema {
   sidebar: {
     newAnalysis: string;
     historyTitle: string;
-    sessionsCount: string;
+    sessionOne: string;
+    sessionMany: string;
     searchPlaceholder: string;
     guestBannerTitle: string;
     guestBannerDesc: string;

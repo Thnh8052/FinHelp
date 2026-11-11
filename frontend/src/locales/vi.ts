@@ -295,7 +295,8 @@ export const vi: TranslationSchema = {
   sidebar: {
     newAnalysis: "Phân tích Mới",
     historyTitle: "Lịch sử Phân tích",
-    sessionsCount: "phiên",
+    sessionOne: "{n} phiên",
+    sessionMany: "{n} phiên",
     searchPlaceholder: "Tìm kiếm phiên phân tích...",
     guestBannerTitle: "Phiên Khách",
     guestBannerDesc: "Giới hạn 1 phiên & 1 báo cáo. Đăng nhập để lưu lịch sử vĩnh viễn.",
@@ -330,7 +331,7 @@ export const vi: TranslationSchema = {
     statusReady: "Sẵn sàng",
     viewPdf: "Xem PDF",
     deletePrompt: "Xóa?",
-    securityNote: "🔒 Dữ liệu báo cáo được lưu trong sandbox riêng biệt cho phiên này và hoàn toàn cô lập",
+    securityNote: "Dữ liệu báo cáo được lưu trong sandbox riêng biệt cho phiên này và hoàn toàn cô lập",
     closeDrawer: "Đóng danh sách báo cáo",
     excludeFromAnalysis: "Bỏ khỏi phân tích",
     includeInAnalysis: "Đưa vào phân tích",

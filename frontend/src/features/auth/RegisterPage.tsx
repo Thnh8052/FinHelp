@@ -50,8 +50,7 @@ export const RegisterPage: React.FC = () => {
 
         {/* Brand */}
         <Link to="/" className="auth-page-brand">
-          <FinHelpLogo size="sm" showText={false} />
-          <span className="auth-page-brand-name">FinHelp</span>
+          <FinHelpLogo size="md" />
         </Link>
 
         {/* Header */}
@@ -68,8 +67,10 @@ export const RegisterPage: React.FC = () => {
         {/* Form */}
         <form onSubmit={handleSubmit} className="auth-page-form">
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.emailAddress}</label>
+            <label className="auth-page-label" htmlFor="register-email">{t.auth.emailAddress}</label>
             <input
+              id="register-email"
+              autoComplete="email"
               type="email"
               required
               value={email}
@@ -80,8 +81,10 @@ export const RegisterPage: React.FC = () => {
           </div>
 
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.username}</label>
+            <label className="auth-page-label" htmlFor="register-username">{t.auth.username}</label>
             <input
+              id="register-username"
+              autoComplete="username"
               type="text"
               required
               pattern="[A-Za-z0-9._\-]{3,32}"
@@ -94,8 +97,10 @@ export const RegisterPage: React.FC = () => {
           </div>
 
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.fullNameOptional}</label>
+            <label className="auth-page-label" htmlFor="register-full-name">{t.auth.fullNameOptional}</label>
             <input
+              id="register-full-name"
+              autoComplete="name"
               type="text"
               maxLength={120}
               value={fullName}
@@ -106,8 +111,10 @@ export const RegisterPage: React.FC = () => {
           </div>
 
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.passwordMin}</label>
+            <label className="auth-page-label" htmlFor="register-password">{t.auth.passwordMin}</label>
             <input
+              id="register-password"
+              autoComplete="new-password"
               type="password"
               required
               minLength={8}

@@ -34,12 +34,6 @@
   color: #f8fafc;
 }
 
-.auth-page-brand-name {
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-  color: #f8fafc;
-}
 
 .auth-page-header {
   margin-bottom: 24px;
@@ -98,7 +92,7 @@
 }
 
 .auth-page-input::placeholder {
-  color: #64748b;
+  color: var(--text-dim);
 }
 
 .auth-page-input:disabled {
@@ -138,7 +132,7 @@
 
 .auth-page-btn:disabled {
   background-color: #1e293b;
-  color: #64748b;
+  color: var(--text-dim);
   cursor: not-allowed;
 }
 
@@ -192,12 +186,12 @@
 }
 
 .auth-page-link-muted {
-  color: #6b7280;
+  color: var(--text-dim);
 }
 
 .auth-page-link-small {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-dim);
 }
 
 .auth-page-row {
@@ -209,7 +203,7 @@
 .auth-page-text-btn {
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--text-dim);
   font-size: 13px;
   cursor: pointer;
   text-align: center;
@@ -231,9 +225,6 @@
     padding: 32px 20px;
   }
 
-  .auth-page-brand-name {
-    font-size: 17px;
-  }
 
   .auth-page-title {
     font-size: 18px;
@@ -262,9 +253,6 @@
     padding: 28px 16px;
   }
 
-  .auth-page-brand-name {
-    font-size: 16px;
-  }
 
   .auth-page-title {
     font-size: 17px;

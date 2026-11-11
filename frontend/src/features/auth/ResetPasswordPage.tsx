@@ -87,8 +87,7 @@ export const ResetPasswordPage: React.FC = () => {
 
         {/* Brand */}
         <Link to="/" className="auth-page-brand">
-          <FinHelpLogo size="sm" showText={false} />
-          <span className="auth-page-brand-name">FinHelp</span>
+          <FinHelpLogo size="md" />
         </Link>
 
         {/* Header */}
@@ -111,8 +110,10 @@ export const ResetPasswordPage: React.FC = () => {
         {step === 1 && (
           <form onSubmit={handleSendOtp} className="auth-page-form">
             <div className="auth-page-field">
-              <label className="auth-page-label">{t.auth.accountEmail}</label>
+              <label className="auth-page-label" htmlFor="reset-email">{t.auth.accountEmail}</label>
               <input
+                id="reset-email"
+                autoComplete="email"
                 type="email"
                 required
                 value={email}
@@ -132,8 +133,10 @@ export const ResetPasswordPage: React.FC = () => {
         {step === 2 && (
           <form onSubmit={handleResetPassword} className="auth-page-form">
             <div className="auth-page-field">
-              <label className="auth-page-label">{t.auth.accountEmail}</label>
+              <label className="auth-page-label" htmlFor="reset-email-confirm">{t.auth.accountEmail}</label>
               <input
+                id="reset-email-confirm"
+                autoComplete="email"
                 type="email"
                 disabled
                 value={email}
@@ -142,8 +145,10 @@ export const ResetPasswordPage: React.FC = () => {
             </div>
 
             <div className="auth-page-field">
-              <label className="auth-page-label">{t.auth.otpCode}</label>
+              <label className="auth-page-label" htmlFor="reset-otp">{t.auth.otpCode}</label>
               <input
+                id="reset-otp"
+                autoComplete="one-time-code"
                 type="text"
                 required
                 maxLength={6}
@@ -155,8 +160,10 @@ export const ResetPasswordPage: React.FC = () => {
             </div>
 
             <div className="auth-page-field">
-              <label className="auth-page-label">{t.auth.newPassword}</label>
+              <label className="auth-page-label" htmlFor="reset-new-password">{t.auth.newPassword}</label>
               <input
+                id="reset-new-password"
+                autoComplete="new-password"
                 type="password"
                 required
                 minLength={8}
@@ -168,8 +175,10 @@ export const ResetPasswordPage: React.FC = () => {
             </div>
 
             <div className="auth-page-field">
-              <label className="auth-page-label">{t.auth.confirmNewPassword}</label>
+              <label className="auth-page-label" htmlFor="reset-confirm-password">{t.auth.confirmNewPassword}</label>
               <input
+                id="reset-confirm-password"
+                autoComplete="new-password"
                 type="password"
                 required
                 minLength={8}

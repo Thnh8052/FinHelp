@@ -21,12 +21,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 8px;
+  min-height: 24px; /* smallest web target */
+  padding: 4px 10px;
   border-radius: 9999px;
   border: none;
   background: transparent;
   color: #94a3b8;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -47,8 +48,8 @@
 }
 
 .lang-toggle-group.lang-toggle-sm .lang-toggle-item {
-  padding: 2px 6px;
-  font-size: 10px;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 /* Auth Page specific positioning */
@@ -62,7 +63,7 @@
 @media (max-width: 640px) {
   .lang-toggle-item {
     padding: 2.5px 7px;
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 
