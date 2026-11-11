@@ -925,16 +925,18 @@
 /* Viewport Render PDF Canvas / Iframe */
 .pdf-display-viewport {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
+  scrollbar-gutter: stable; /* a scrollbar appearing does not change the fit-width scale */
   position: relative;
   background-color: #0b0f19;
   padding: 4px;
   display: flex;
 }
 
-.pdf-render-frame {
-  width: 100%;
-  height: 100%;
+.pdf-render-canvas {
+  margin: 0 auto; /* centred, and a page wider than the panel still scrolls to its left edge */
+  align-self: flex-start;
+  flex-shrink: 0;
   border: 1px solid #22304d;
   border-radius: 8px;
   background-color: #ffffff;

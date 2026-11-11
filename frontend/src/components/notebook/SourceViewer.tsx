@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { useLanguage } from "../../context/LanguageContext";
 import { CitationItem } from "../../types/chat";
 import { DocumentRecord } from "../../types/notebook";
@@ -17,6 +18,13 @@ import {
   FitWidthIcon,
 } from "../common/Icons";
 import "./notebook.css";
+
+/** pdf.js is fetched the first time a PDF opens, so the rest of the app does not carry it. */
+async function loadPdfJs() {
+  const [pdfjs, worker] = await Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker.min.mjs?url")]);
+  pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+  return pdfjs;
+}
 
 interface SourceViewerProps {
   documents: DocumentRecord[];
@@ -48,6 +56,10 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   const [isFitWidth, setIsFitWidth] = useState<boolean>(true);
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [pdfFailed, setPdfFailed] = useState(false);
+  const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const handleZoomIn = () => {
     setIsFitWidth(false);
@@ -74,31 +86,82 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
     documents[0] ||
     null;
 
-  const totalPages = currentDoc?.page_count || 1;
+  const totalPages = pdfDoc?.numPages || currentDoc?.page_count || 1;
   const documentId = currentDoc?.document_id;
 
-  // PDF được tải kèm header đăng nhập rồi mở bằng địa chỉ blob: token không bao giờ nằm trong URL của iframe
+  // PDF được tải kèm header đăng nhập (token không bao giờ nằm trong URL), mở một lần bằng pdf.js; lật trang chỉ vẽ lại trang đó
   useEffect(() => {
     if (!documentId) return;
     let replaced = false;
     let objectUrl: string | null = null;
+    let loading: { destroy(): Promise<void> } | null = null;
     setPdfObjectUrl(null);
+    setPdfDoc(null);
     setPdfFailed(false);
-    documentService.getFile(documentId).then(
-      (blob) => {
+    Promise.all([documentService.getFile(documentId), loadPdfJs()])
+      .then(async ([blob, pdfjs]) => {
         if (replaced) return;
-        objectUrl = URL.createObjectURL(blob);
+        objectUrl = URL.createObjectURL(blob); // only for "open in a new tab"
         setPdfObjectUrl(objectUrl);
-      },
-      () => {
+        const task = pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) });
+        loading = task;
+        if (replaced) return void task.destroy();
+        const doc = await task.promise;
+        if (!replaced) setPdfDoc(doc);
+      })
+      .catch(() => {
         if (!replaced) setPdfFailed(true);
-      }
-    );
+      });
     return () => {
       replaced = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
+      loading?.destroy(); // frees the worker and the document
     };
   }, [documentId]);
+
+  // Fit-width follows the panel's width: a resize draws the page again
+  const hasDoc = currentDoc !== null;
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setViewportWidth(entry.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasDoc]);
+
+  // The page is drawn off screen and copied in when done: the old page stays visible meanwhile, so turning a page does not flash
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    // Read here, not from the observer: it reports nothing until the page is painted. 10: the panel's padding and the canvas border
+    const available = (viewportRef.current?.clientWidth ?? 0) - 10;
+    if (!pdfDoc || !canvas || (isFitWidth && available <= 0)) return;
+    let cancelled = false;
+    let task: RenderTask | null = null;
+    (async () => {
+      const page = await pdfDoc.getPage(Math.min(Math.max(currentPage, 1), pdfDoc.numPages));
+      if (cancelled) return;
+      const natural = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: isFitWidth ? available / natural.width : zoomLevel / 100 });
+      const ratio = window.devicePixelRatio || 1;
+      const offscreen = document.createElement("canvas");
+      offscreen.width = Math.floor(viewport.width * ratio);
+      offscreen.height = Math.floor(viewport.height * ratio);
+      task = page.render({ canvas: offscreen, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] });
+      await task.promise;
+      if (cancelled) return;
+      canvas.width = offscreen.width;
+      canvas.height = offscreen.height;
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+      canvas.getContext("2d")?.drawImage(offscreen, 0, 0);
+    })().catch((err) => {
+      if (!cancelled && err?.name !== "RenderingCancelledException") setPdfFailed(true);
+    });
+    return () => {
+      cancelled = true;
+      task?.cancel();
+    };
+  }, [pdfDoc, currentPage, isFitWidth, zoomLevel, viewportWidth]);
 
   // Khi có citation mới: Tự động nhảy sang trang của citation và kích hoạt hiệu ứng highlight
   useEffect(() => {
@@ -298,13 +361,13 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
       )}
 
       {/* 3. Original PDF Page Viewport */}
-      <div className="pdf-display-viewport">
-        {pdfUrl ? (
-          <iframe
-            key={`${currentDoc.document_id}-p${currentPage}`} // the page number stays in the key: Chrome's PDF viewer ignores a changed #page on a frame already open
-            src={pdfUrl}
-            title={t.sourceViewer.reportTitle.replace("{name}", currentDoc.file_name)}
-            className="pdf-render-frame"
+      <div className="pdf-display-viewport scrollbar-slim" ref={viewportRef}>
+        {pdfDoc && !pdfFailed ? (
+          <canvas
+            ref={canvasRef}
+            role="img"
+            aria-label={`${t.sourceViewer.reportTitle.replace("{name}", currentDoc.file_name)}, ${t.sourceViewer.page} ${currentPage}`}
+            className="pdf-render-canvas"
           />
         ) : (
           <div className="pdf-viewer-empty-state">

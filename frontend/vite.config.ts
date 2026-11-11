@@ -11,7 +11,6 @@ const CONTENT_SECURITY_POLICY = [
   "font-src 'self' data: https://fonts.gstatic.com", // data: the build inlines the small KaTeX fonts
   "img-src 'self' data: blob:",
   "connect-src 'self'",
-  "frame-src blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
