@@ -94,7 +94,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ isOpen
                     Database Cluster: {stats.system_performance.database}
                   </div>
                   <div className="admin-perf-latency">
-                    Average Latency: {stats.system_performance.latency_ms} ms
+                    Average Latency: {stats.system_performance.latency_ms ?? "—"} ms
                   </div>
                 </div>
                 <span className="admin-badge-active">

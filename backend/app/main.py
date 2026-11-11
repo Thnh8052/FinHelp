@@ -17,6 +17,9 @@ from app.infrastructure.database.qdrant import QdrantManager
 from app.modules.ingestion.pipeline import IngestionPipeline
 from app.modules.notebooks.purge import purge_expired_guests
 from app.modules.retrieval.warmup import warm_chunk_tokenizer, warm_models
+from app.shared.health import check_services
+from app.shared.security_headers import SecurityHeaders
+from app.shared.unexpected_errors import UnexpectedErrors
 from app.shared.upload_limit import UploadSizeLimit
 
 
@@ -79,8 +82,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Added before CORS so that CORS stays the outermost layer and a refused upload still carries its headers
+# Added before CORS so that CORS stays the outermost layer: a refused upload and an unforeseen error still carry its headers
 app.add_middleware(UploadSizeLimit)
+app.add_middleware(UnexpectedErrors)
+app.add_middleware(SecurityHeaders)
 
 # CORS Middleware
 app.add_middleware(
@@ -107,11 +112,16 @@ app.include_router(api_v1_router, prefix=settings.API_V1_STR)
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    """System health check endpoint."""
-    return {
-        "status": "healthy",
-        "project": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "database": "mongodb_connected" if MongoManager.db is not None else "disconnected",
-        "vector_search": "qdrant_connected" if QdrantManager.client is not None else "disconnected",
-    }
+    """The real state of the services: 503 when one of them does not answer."""
+    services = await check_services()
+    healthy = all(latency is not None for latency in services.values())
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if healthy else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "status": "healthy" if healthy else "unhealthy",
+            "project": settings.PROJECT_NAME,
+            "version": settings.VERSION,
+            "database": "mongodb_connected" if services["mongodb"] is not None else "disconnected",
+            "vector_search": "qdrant_connected" if services["qdrant"] is not None else "disconnected",
+        },
+    )
