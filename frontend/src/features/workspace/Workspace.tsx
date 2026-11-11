@@ -95,7 +95,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         onToggleSplitView={() => setIsSplitViewOpen((prev) => !prev)}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-        onExportReport={() => showToast("Analysis report saved.", "success")}
         onOpenAuthModal={() => setAuthModalOpen(true)}
         onOpenAdminDashboard={() => setAdminDashboardOpen(true)}
         onNavigateHome={onNavigateHome}

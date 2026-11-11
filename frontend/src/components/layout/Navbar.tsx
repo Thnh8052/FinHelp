@@ -16,7 +16,6 @@ interface NavbarProps {
   onToggleSplitView?: () => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
-  onExportReport?: () => void;
   onOpenAuthModal: () => void;
   onOpenAdminDashboard: () => void;
   onNavigateHome?: () => void;
@@ -31,7 +30,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSplitView,
   isSidebarOpen = true,
   onToggleSidebar,
-  onExportReport: _onExportReport,
   onOpenAuthModal,
   onOpenAdminDashboard,
   onNavigateHome,
