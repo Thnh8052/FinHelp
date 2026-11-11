@@ -101,18 +101,23 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
       documents.filter((d) => !isDocFailed(d)).map((d) => d.file_name.toLowerCase())
     );
 
+    // One toast at a time: a file left out is said last, so the "uploaded" message cannot hide it (the list shows what was uploaded)
+    let problem: Parameters<ShowToast> | null = null;
     const filesToUpload: File[] = [];
     for (const f of uniqueFiles) {
       if (existingActiveNames.has(f.name.toLowerCase())) {
-        showToast(t.toasts.duplicateSkipped.replace("{name}", f.name), "warning");
+        problem = [t.toasts.duplicateSkipped.replace("{name}", f.name), "warning"];
       } else if (f.size > maxFileSizeMb * 1024 * 1024) {
-        showToast(t.toasts.tooLarge.replace("{name}", f.name).replace("{mb}", String(maxFileSizeMb)), "warning");
+        problem = [t.toasts.tooLarge.replace("{name}", f.name).replace("{mb}", String(maxFileSizeMb)), "warning"];
       } else {
         filesToUpload.push(f);
       }
     }
 
-    if (filesToUpload.length === 0) return;
+    if (filesToUpload.length === 0) {
+      if (problem) showToast(...problem);
+      return;
+    }
     filesToUpload.sort((a, b) => a.size - b.size);  // tải lần lượt nên file nhẹ vào hàng trước và xong trước
 
     setIsUploading(true);
@@ -137,20 +142,22 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
             const detail = errorText(fileErr, t, t.toasts.uploadFailed.replace("{name}", file.name));
             // Signing in helps only on 401 or for a guest's limit; a signed-in account at its limit gets a plain warning
             if (signInHelps(fileErr)) {
-              showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
+              problem = [detail, "warning", t.toasts.signInNow, onLoginRequired];
               break;
             } else if (fileErr.status === 403) {  // the notebook is full: the next files would be refused the same way
-              showToast(detail, "warning");
+              problem = [detail, "warning"];
               break;
             } else if (fileErr.status === 409) {
-              showToast(detail, "warning");
+              problem = [detail, "warning"];
             } else {
-              showToast(detail, "error");
+              problem = [detail, "error"];
             }
           }
         }
       }
-      if (successCount > 0) {
+      if (problem) {
+        showToast(...problem);
+      } else if (successCount > 0) {
         showToast(t.toasts.uploaded.replace("{n}", String(successCount)), "success");
       }
     } finally {

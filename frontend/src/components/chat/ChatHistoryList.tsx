@@ -172,7 +172,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                     <div className="history-card-confirm" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        aria-label={`${t.common.delete}: ${session.title}`}
+                        aria-label={`${t.common.delete}: ${session.title || t.sidebar.untitledSession}`}
                         title={t.hub.deleteWarning}
                         className="history-card-confirm-yes"
                         onClick={() => {
@@ -205,7 +205,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                             setRenamingId(session.notebook_id);
                           }}
                           title={t.hub.rename}
-                          aria-label={`${t.hub.rename}: ${session.title}`}
+                          aria-label={`${t.hub.rename}: ${session.title || t.sidebar.untitledSession}`}
                           className="history-card-del-btn history-card-rename-btn"
                         >
                           <PencilIcon size={12} />
@@ -217,7 +217,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                             setConfirmingId(session.notebook_id);
                           }}
                           title={(session.processing_count ?? 0) > 0 ? t.hub.deleteBlocked : t.sidebar.deleteSession}
-                          aria-label={`${t.common.delete}: ${session.title}`}
+                          aria-label={`${t.common.delete}: ${session.title || t.sidebar.untitledSession}`}
                           className="history-card-del-btn"
                           disabled={(session.processing_count ?? 0) > 0}
                         >

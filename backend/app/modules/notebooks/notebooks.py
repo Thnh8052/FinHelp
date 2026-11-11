@@ -15,7 +15,7 @@ import uuid
 from typing import Annotated, Any, List, Optional
 from fastapi import APIRouter, Depends, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, StringConstraints, field_validator
 from qdrant_client import AsyncQdrantClient
 
 from app.core.config import settings
@@ -27,7 +27,7 @@ from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.notebooks.notebook_repo import NotebookRepository
-from app.modules.notebooks.notebook import GUEST_TITLE, NotebookRecord
+from app.modules.notebooks.notebook import GUEST_TITLE, NotebookRecord, shown_title
 from app.modules.notebooks.purge import has_active_documents, purge_notebook
 
 router = APIRouter(prefix="/notebooks", tags=["Notebooks"])
@@ -49,6 +49,11 @@ class NotebookOut(BaseModel):
     message_count: int
     created_at: Any
     updated_at: Any
+
+    @field_validator("title")
+    @classmethod
+    def _title_shown(cls, title: str) -> str:
+        return shown_title(title)
 
 
 class NotebookSummary(NotebookOut):

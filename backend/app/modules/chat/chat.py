@@ -29,13 +29,12 @@ from app.modules.documents.document import ACTIVE_STATUSES
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.auth.user_repo import UserRepository
 from app.modules.chat.chat_models import MessageRecord
-from app.modules.notebooks.notebook import GUEST_TITLE, NotebookRecord
+from app.modules.notebooks.notebook import UNTITLED, shown_title, title_from_question
 from app.modules.chat.orchestrator import RAGWorkflowOrchestrator, SourceSelectionError
 
 router = APIRouter(prefix="/chat", tags=["Chat & RAG"])
 
 MAX_QUERY_CHARS = 4000
-UNTITLED = {NotebookRecord.model_fields["title"].default, GUEST_TITLE}  # titles nobody chose
 
 
 def selected_ids(document_ids: Optional[List[str]], document_id: Optional[str]) -> List[str]:
@@ -188,7 +187,7 @@ async def handle_user_query(
     # được tìm trong tài liệu đặt tên cho đoạn chat (câu chào hay câu bị từ chối thì không)
     title = nb.title
     if nb.title in UNTITLED and result.get("charged", True):
-        title = req.query[:40]
+        title = title_from_question(req.query)
         await chat_repo.set_title(req.notebook_id, title)
     await chat_repo.append_message(
         MessageRecord(message_id=f"msg_{uuid.uuid4().hex[:8]}", notebook_id=req.notebook_id, role="user", content=req.query)
@@ -220,7 +219,7 @@ async def handle_user_query(
         await chat_repo.set_focus(req.notebook_id, result["focus"])
 
     return QueryResponse(
-        title=title,
+        title=shown_title(title),
         query=req.query,
         answer=result["answer"],
         citations=result["citations"],

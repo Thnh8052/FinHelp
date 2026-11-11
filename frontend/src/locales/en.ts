@@ -307,7 +307,7 @@ export const en: TranslationSchema = {
     newSessionTitle: "Create new analysis session",
     badgeLogin: "Login",
     badgeNew: "New",
-    untitledSession: "Financial Session",
+    untitledSession: "New chat",
     deleteSession: "Delete this session",
     statusActive: "Active",
     statusSaved: "Saved",
@@ -355,6 +355,7 @@ export const en: TranslationSchema = {
     fitWidth: "Fit width",
     noCitation: "Select a citation badge from the chat to jump directly to verified page evidence.",
     citationFound: "Citation verified on page",
+    citationSourceRemoved: "The report of this excerpt (page {page}) was removed from this chat, so its page cannot be shown.",
     copySnippet: "Copy excerpt",
     noFilingSelected: "No Filing Selected",
     noFilingSubtext: "Upload or select a filing from the sources drawer to inspect original document pages.",
@@ -567,6 +568,15 @@ export const en: TranslationSchema = {
     catalog_year_out_of_range: "The fiscal year must be between {min_year} and {max_year}.",
     catalog_quarter_invalid: "The quarter is 1 to 4, or empty.",
     catalog_period_end_invalid: "The period end date must look like YYYY-MM-DD.",
+  },
+  fieldLabels: {
+    email: "Email",
+    username: "Username",
+    full_name: "Full name",
+    password: "Password",
+    old_password: "Current password",
+    new_password: "New password",
+    otp_code: "Verification code",
   },
 };
 

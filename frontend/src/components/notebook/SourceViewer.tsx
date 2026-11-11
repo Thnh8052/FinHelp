@@ -205,6 +205,8 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   }
 
   const pdfUrl = pdfObjectUrl ? `${pdfObjectUrl}#page=${currentPage}` : null;
+  // An excerpt from a report deleted since the answer: its text is kept with the message, but no open report may claim it
+  const citationGone = !!activeCitation?.document_id && !documents.some((d) => d.document_id === activeCitation.document_id);
 
   return (
     <div className="pdf-split-viewer-container">
@@ -327,8 +329,14 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
         <div className={`pdf-evidence-banner ${highlightPulse ? "highlight-flash" : ""}`}>
           <div className="pdf-evidence-header">
             <div className="pdf-evidence-title">
-              <CheckShieldIcon size={13} color="#2563eb" />
-              <span>{t.sourceViewer.citationFound}: <strong>{t.sourceViewer.page} {activeCitation.page}</strong></span>
+              {citationGone ? (
+                <span role="status">{t.sourceViewer.citationSourceRemoved.replace("{page}", String(activeCitation.page))}</span>
+              ) : (
+                <>
+                  <CheckShieldIcon size={13} color="#2563eb" />
+                  <span>{t.sourceViewer.citationFound}: <strong>{t.sourceViewer.page} {activeCitation.page}</strong></span>
+                </>
+              )}
             </div>
             <div className="pdf-evidence-actions">
               <button onClick={handleCopy} className="pdf-copy-excerpt-btn">

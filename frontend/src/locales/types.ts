@@ -355,6 +355,7 @@ export interface TranslationSchema {
     fitWidth: string;
     noCitation: string;
     citationFound: string;
+    citationSourceRemoved: string;
     copySnippet: string;
     noFilingSelected: string;
     noFilingSubtext: string;
@@ -568,5 +569,7 @@ export interface TranslationSchema {
     catalog_quarter_invalid: string;
     catalog_period_end_invalid: string;
   };
+  /** The name of a refused form field, keyed by the API field name: an error says which field it is about. */
+  fieldLabels: Record<string, string>;
 }
 

@@ -209,7 +209,7 @@ async def test_a_greeting_does_not_name_the_chat_but_the_first_searched_question
 
     order, response = await _ask(monkeypatch, NotebookRecord(notebook_id="nb", owner_id="u"),
                                  {"answer": "Xin chào!", "intent": "static_reply", "citations": [], "charged": False, "trace": {}}, "bạn ổn không ?")
-    assert not any(isinstance(step, tuple) and step[0] == "title" for step in order) and response.title == "Hội thoại mới"
+    assert not any(isinstance(step, tuple) and step[0] == "title" for step in order) and response.title == ""  # untitled: the interface names it in the user's language
     order, response = await _ask(monkeypatch, NotebookRecord(notebook_id="nb", owner_id="u", message_count=2),  # the greeting came first
                                  {"answer": "6,475", "intent": "retrieval_rag", "citations": [], "charged": True, "trace": {}}, "Doanh thu AMD năm 2018?")
     assert ("title", "Doanh thu AMD năm 2018?") in order and response.title == "Doanh thu AMD năm 2018?"

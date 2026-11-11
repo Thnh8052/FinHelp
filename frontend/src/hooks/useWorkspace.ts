@@ -32,7 +32,8 @@ export function useWorkspace(onLoginRequired: () => void) {
   // Documents per notebook = sources per question; the backend's numbers (/auth/me, /auth/guest-quota), never a copy of them
   const maxSources = (isAuthenticated ? user?.quota.max_upload_documents : guestQuota?.max_upload_documents) ?? 1;
 
-  const notebookTitle = notebooks.find((n) => n.notebook_id === notebookId)?.title || "Financial Statement Analysis";
+  // An untitled chat comes back with an empty title: it is named here, in the interface's language
+  const notebookTitle = notebooks.find((n) => n.notebook_id === notebookId)?.title || (isAuthenticated ? t.sidebar.untitledSession : t.workspace.guestTrialSession);
   const maxFileSizeMb = user?.quota.max_file_size_mb ?? guestQuota?.max_file_size_mb ?? 5;
 
   const docs = useDocuments(notebookId, maxSources, maxFileSizeMb, showToast, onLoginRequired);

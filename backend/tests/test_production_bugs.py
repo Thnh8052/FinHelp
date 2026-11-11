@@ -629,3 +629,26 @@ def test_a_service_unavailable_error_reaches_the_browser_as_503_with_its_code():
 
     response = TestClient(app).get("/x")
     assert response.status_code == 503 and response.json() == {"detail": {"code": "system_not_ready", "params": {}}}
+
+
+# ---------------------------------------------------------------- titles shown in the user's language, cut between words
+def test_a_title_nobody_chose_reaches_the_interface_empty():
+    from app.modules.notebooks.notebook import GUEST_TITLE, NotebookRecord
+    from app.modules.notebooks.notebooks import NotebookOut
+
+    for title in (NotebookRecord(notebook_id="nb", owner_id="u").title, GUEST_TITLE):
+        assert NotebookOut(notebook_id="nb", title=title, message_count=0, created_at=None, updated_at=None).title == ""
+    assert NotebookOut(notebook_id="nb", title="Q3 review", message_count=0, created_at=None, updated_at=None).title == "Q3 review"
+
+
+@pytest.mark.parametrize("query, title", [
+    ("Revenue in 2020?", "Revenue in 2020?"),
+    ("What were Amazon's total net sales in 2020 and how much did they grow?", "What were Amazon's total net sales in…"),
+    ("x" * 50, "x" * 40 + "…"),
+    ("  spaced   out  ", "spaced out"),
+])
+def test_a_chat_is_named_after_its_first_question_without_cutting_a_word(query, title):
+    from app.modules.notebooks.notebook import title_from_question
+
+    assert title_from_question(query) == title
+

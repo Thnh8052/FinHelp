@@ -43,10 +43,13 @@ function sentence(t: TranslationSchema, code: string, params: ErrorParams): stri
   return table[code].replace(/\{(\w+)\}/g, (_, key: string) => String(params[key] ?? ""));
 }
 
-/** What to show for an error: the sentence for its code, else `fallback`. Never the code or the server's own text. */
+/** What to show for an error: the sentence for its code, else `fallback`, followed by each refused field it names ("Email: ...").
+ * Never the code or the server's own text. */
 export function errorText(err: unknown, t: TranslationSchema, fallback: string): string {
   if (!(err instanceof ApiError) || !err.code) return fallback;
-  return sentence(t, err.code, err.params) ?? fallback;
+  const text = sentence(t, err.code, err.params) ?? fallback;
+  const fields = err.fields.filter((f) => Object.prototype.hasOwnProperty.call(t.fieldLabels, f.field));
+  return fields.length ? `${text} ${fields.map((f) => `${t.fieldLabels[f.field]}: ${fieldErrorText(f, t)}`).join(" ")}` : text;
 }
 
 /** One refused form field in words; a code without a sentence reads as "not valid". */

@@ -40,11 +40,18 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     () => setAuthModalOpen(true)
   );
 
-  // Trích dẫn và form đang mở thuộc về đoạn chat cũ
+  // Trích dẫn, form và trình đọc PDF đang mở thuộc về đoạn chat cũ
   useEffect(() => {
     setActiveCitation(null);
     setCatalogDocId(null);
+    setIsSplitViewOpen(false);
   }, [notebookId]);
+
+  // Below 1100px the sources drawer and the PDF pane both slide over the chat from the right: opening the PDF closes the drawer
+  const openPdfPane = () => {
+    setIsSplitViewOpen(true);
+    if (window.matchMedia("(max-width: 1100px)").matches) setIsSourcesOpen(false);
+  };
 
   const unconfirmedDocs = docs.documents.filter(needsCatalogConfirmation);
   const notebookList = notebooks.map((n) => (n.notebook_id === notebookId ? { ...n, document_count: docs.documents.length, processing_count: docs.documents.filter(isDocProcessing).length } : n));
@@ -56,7 +63,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     if (citation.document_id) {
       docs.setActiveDocId(citation.document_id);
     }
-    setIsSplitViewOpen(true);
+    openPdfPane();
   };
 
   return (
@@ -157,7 +164,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             onToggleAllDocs={docs.toggleAll}
             onOpenDocPdf={(doc) => {
               docs.setActiveDocId(doc.document_id);
-              setIsSplitViewOpen(true);
+              openPdfPane();
             }}
             onUploadFiles={docs.uploadFiles}
             onDeleteDocument={docs.remove}
