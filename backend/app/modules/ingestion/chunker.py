@@ -27,7 +27,10 @@ def bge_m3_token_counter() -> Callable[[str], int]:
     if _tokenizer is None:
         from transformers import AutoTokenizer
 
-        _tokenizer = AutoTokenizer.from_pretrained(settings.DEFAULT_EMBEDDING_MODEL, use_fast=True)
+        try:  # the cached copy first: asking the hub whether it changed held every server start for about 35 s
+            _tokenizer = AutoTokenizer.from_pretrained(settings.DEFAULT_EMBEDDING_MODEL, use_fast=True, local_files_only=True)
+        except OSError:  # not downloaded yet
+            _tokenizer = AutoTokenizer.from_pretrained(settings.DEFAULT_EMBEDDING_MODEL, use_fast=True)
     tokenizer = _tokenizer
     cache: Dict[str, int] = {}
 
