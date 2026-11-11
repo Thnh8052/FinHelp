@@ -3,8 +3,32 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
+// Only in the built site: the development server injects inline scripts of its own. Limits what a script slipped into the page could load or send.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com", // data: the build inlines the small KaTeX fonts
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "frame-src blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: "content-security-policy",
+      apply: "build",
+      transformIndexHtml: () => [
+        { tag: "meta", attrs: { "http-equiv": "Content-Security-Policy", content: CONTENT_SECURITY_POLICY }, injectTo: "head-prepend" },
+      ],
+    },
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
