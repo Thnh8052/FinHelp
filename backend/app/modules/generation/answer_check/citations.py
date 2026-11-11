@@ -8,9 +8,8 @@ year its document covers. Lenient on purpose: a sentence naming nothing is not c
 import re
 from typing import Any, Dict, List, Sequence
 
-from app.modules.query_router.catalog_route import names, question_years, words
+from app.modules.query_router.catalog_route import company_key, names, question_years, words
 from app.modules.query_router.target_scope import ScopeDoc
-from app.modules.query_router.target_resolver import _key
 
 CITE = re.compile(r"\[(\d+(?:\s*[,;]\s*\d+)*)\]")
 SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
@@ -34,7 +33,7 @@ def check_citations(answer: str, chunks: Sequence[Dict[str, Any]], docs: Sequenc
             segment = sentence[start:m.start()] if sentence[start:m.start()].strip() else segment
             start = m.end()
             said = set(words(segment))
-            named = {_key(by_id[i].filing.company) for i, t in tokens.items() if t & said}
+            named = {company_key(by_id[i].filing.company) for i, t in tokens.items() if t & said}
             years = question_years(segment)
             for n in (int(x) for x in re.split(r"\s*[,;]\s*", m.group(1))):
                 if not 1 <= n <= len(chunks):
@@ -45,7 +44,7 @@ def check_citations(answer: str, chunks: Sequence[Dict[str, Any]], docs: Sequenc
                 if doc is None:
                     continue
                 short = segment.strip()[:160]
-                if named and _key(doc.filing.company) not in named:
+                if named and company_key(doc.filing.company) not in named:
                     out["wrong_company"].append({"n": n, "sentence": short})
                 covered = set(doc.years_covered) | ({doc.filing.fiscal_year} if doc.filing.fiscal_year else set())
                 for y in years:

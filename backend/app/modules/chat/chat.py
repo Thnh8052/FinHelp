@@ -12,7 +12,7 @@ Mỗi notebook là một đoạn chat.
 """
 
 import uuid
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
@@ -40,6 +40,30 @@ UNTITLED = {NotebookRecord.model_fields["title"].default, GUEST_TITLE}  # titles
 def selected_ids(document_ids: Optional[List[str]], document_id: Optional[str]) -> List[str]:
     """The sources chosen by the user: the list, or the single id of older clients."""
     return list(dict.fromkeys(document_ids or ([document_id] if document_id else [])))
+
+
+def validate_question(document_ids: Optional[List[str]], document_id: Optional[str], mentions: Optional[List[str]], query: str,
+                      signed_in: bool) -> Tuple[List[str], List[str]]:
+    """(chosen sources, @-tagged sources) of a question, or 422 before anything is stored or charged. The chat and the admin
+    inspector both check a question here."""
+    chosen = selected_ids(document_ids, document_id)
+    limit = settings.MAX_SELECTED_DOCS_USER if signed_in else settings.MAX_SELECTED_DOCS_GUEST
+    if not chosen:
+        raise HTTPException(status_code=422, detail="Hãy chọn tài liệu nguồn trước khi đặt câu hỏi.")
+    if len(chosen) > limit:
+        raise HTTPException(status_code=422, detail=f"Chỉ được chọn tối đa {limit} tài liệu nguồn cho một câu hỏi.")
+    tagged = list(dict.fromkeys(mentions or []))
+    if any(m not in chosen for m in tagged):
+        raise HTTPException(status_code=422, detail="Chỉ tag (@) được các tài liệu nguồn đã chọn.")
+    if len(query) > MAX_QUERY_CHARS:  # the input policy has the same limit
+        raise HTTPException(status_code=422, detail=f"Câu hỏi quá dài (tối đa {MAX_QUERY_CHARS:,} ký tự). Hãy rút gọn rồi gửi lại.".replace(",", "."))
+    return chosen, tagged
+
+
+async def load_history(db: AsyncIOMotorDatabase, notebook_id: str) -> List[dict]:
+    """The last turns of the conversation, so that a follow-up ("and the net income?") can be understood."""
+    return [{"role": m.role, "content": m.content, "citations": [c.model_dump() for c in m.citations]}
+            for m in await ChatRepository(db).get_messages(notebook_id, limit=6)]
 
 
 async def ensure_documents_ready(db: AsyncIOMotorDatabase, notebook_id: str, document_ids: List[str]) -> None:
@@ -122,19 +146,9 @@ async def handle_user_query(
     """Xử lý câu hỏi tài chính, thực thi luồng RAG và lưu lịch sử vào MongoDB."""
     # 0. Tài liệu phải xử lý xong mới truy vấn được; chặn trước khi trừ hạn mức
     nb = await require_notebook(db, req.notebook_id, user_id)
-    if not can_chat(nb, user_id):
-        raise HTTPException(status_code=403, detail="Hãy đăng nhập để đặt câu hỏi trên notebook này.")
-    chosen = selected_ids(req.document_ids, req.document_id)
-    limit = settings.MAX_SELECTED_DOCS_USER if user_id else settings.MAX_SELECTED_DOCS_GUEST
-    if not chosen:
-        raise HTTPException(status_code=422, detail="Hãy chọn tài liệu nguồn trước khi đặt câu hỏi.")
-    if len(chosen) > limit:
-        raise HTTPException(status_code=422, detail=f"Chỉ được chọn tối đa {limit} tài liệu nguồn cho một câu hỏi.")
-    mentions = list(dict.fromkeys(req.mentions or []))
-    if any(m not in chosen for m in mentions):
-        raise HTTPException(status_code=422, detail="Chỉ tag (@) được các tài liệu nguồn đã chọn.")
-    if len(req.query) > MAX_QUERY_CHARS:  # refused here, before anything is stored (the input policy has the same limit)
-        raise HTTPException(status_code=422, detail=f"Câu hỏi quá dài (tối đa {MAX_QUERY_CHARS:,} ký tự). Hãy rút gọn rồi gửi lại.".replace(",", "."))
+    if not can_chat(nb, user_id):  # past require_notebook, only a read-only sample notebook is refused: signing in does not change that
+        raise HTTPException(status_code=403, detail="Notebook mẫu chỉ để xem, không đặt câu hỏi được.")
+    chosen, mentions = validate_question(req.document_ids, req.document_id, req.mentions, req.query, signed_in=user_id is not None)
     await ensure_documents_ready(db, req.notebook_id, chosen)
     orchestrator = RAGWorkflowOrchestrator(db, qdrant)
     try:  # a question without a usable source choice is refused before it costs quota or writes a message
@@ -145,10 +159,7 @@ async def handle_user_query(
     chat_repo = ChatRepository(db)
 
     # 1. Các lượt trước (để hiểu câu hỏi nối tiếp như "còn lợi nhuận thì sao?")
-    history = [
-        {"role": m.role, "content": m.content, "citations": [c.model_dump() for c in m.citations]}
-        for m in await chat_repo.get_messages(req.notebook_id, limit=6)
-    ]
+    history = await load_history(db, req.notebook_id)
 
     # 2. Giữ chỗ hạn mức ngay trước pipeline, không phải sau: các câu gửi cùng lúc không thể cùng thấy "còn lượt"
     users = UserRepository(db)

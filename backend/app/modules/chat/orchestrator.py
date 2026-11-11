@@ -1,7 +1,8 @@
 import asyncio
 import time
 from collections import Counter
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -13,8 +14,8 @@ from app.modules.documents.document_repo import DocumentRepository
 from app.modules.documents.document import DocumentRecord
 from app.modules.documents.catalog_edit import needs_confirmation
 from app.modules.generation.llm_client import REQUEST_USAGE, LLMUnavailableError
-from app.modules.query_router.input_policy import COMPARE_CUE, MSG, TERMINAL, Decision, decide, detect_language, mentioned_sources, rewrite_followup
-from app.modules.query_router.focus import METRICS, build_focus, fill_from_focus, focus_view
+from app.modules.query_router.input_policy import COMPARE_CUE, MSG, TERMINAL, Decision, SourceInfo, decide, detect_language, mentioned_sources, rewrite_followup
+from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_from_focus, focus_view
 from app.modules.query_router.intent import ROUTES, Intent
 from app.modules.query_router.intent import classify as classify_intent
 from app.modules.query_router.planner import PlanItem, unlisted_companies
@@ -34,6 +35,29 @@ class SourceSelectionError(ValueError):
     """The selected sources are unusable, or none was selected where a choice is needed."""
 
 
+@dataclass
+class QuestionPlan:
+    """What happens to a question before anything is searched. The chat and the admin inspector both get it from plan_question."""
+    scope: List[DocumentRecord]
+    query: str  # the question to search: a follow-up is replaced by its standalone rewrite
+    infos: List[SourceInfo] = field(default_factory=list)
+    ready_count: int = 0
+    decision: Optional[Decision] = None
+    focus: Optional[Focus] = None
+    intent: Optional[Intent] = None
+    followup: Optional[Dict[str, Any]] = None  # {"method": "focus" | "llm", "resolved": the rewrite}
+    prefix: str = ""  # "I understood the question as ...", shown above the answer
+    stop: Optional[Dict[str, Any]] = None  # a reply that ends the question here: nothing is searched
+
+
+@dataclass
+class QuestionRetrieval:
+    """The search for one question the rules let through (retrieve_for_question). With a refusal nothing was searched."""
+    targets: TargetDecision
+    notes: List[str]
+    unlisted: List[str]
+    refusal: Optional[Dict[str, Any]] = None
+    found: Optional[RetrievalResult] = None
 
 
 class RAGWorkflowOrchestrator:
@@ -80,12 +104,11 @@ class RAGWorkflowOrchestrator:
         """Retrieval only, over the selected documents (see retrieval_step.retrieve_for_scope)."""
         return await retrieve_for_scope(self.hybrid_search, query, notebook_id, scope, forced, net_others)
 
-    # ------------------------------------------------------------------ input policy (docs/RESEARCH_NOTES_MULTIDOC.md, table F)
-    async def _answer_one(
-        self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, citation_offset: int = 0,
-        mentions: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
-        """The measured path for one question the input policy let through, with its notes for the answer."""
+    async def retrieve_for_question(
+        self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, mentions: Optional[List[str]] = None,
+    ) -> QuestionRetrieval:
+        """The search for one question the input policy let through: the filings it is forced to (@file, a named company), the notes
+        for the answer, and the excerpts. A question only about companies outside the selected sources is refused, unsearched."""
         notes = list(decision.notes)
         targets: TargetDecision = decide_targets(query, [scope_doc(d) for d in scope], mentions, decision.lang == "vi")
         notes += targets.notes
@@ -113,8 +136,20 @@ class RAGWorkflowOrchestrator:
                              f"that {', '.join(unlisted)} cannot be covered because no source for it was selected, so any comparison with it is impossible.")
             else:
                 search.cancel()
-                return terminal("out_of_scope", unlisted_message(unlisted, scope, decision.lang), {"unlisted_companies": unlisted})
-        found = await search
+                refusal = terminal("out_of_scope", unlisted_message(unlisted, scope, decision.lang), {"unlisted_companies": unlisted})
+                return QuestionRetrieval(targets, notes, unlisted, refusal=refusal)
+        return QuestionRetrieval(targets, notes, unlisted, found=await search)
+
+    # ------------------------------------------------------------------ input policy (docs/RESEARCH_NOTES_MULTIDOC.md, table F)
+    async def _answer_one(
+        self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, citation_offset: int = 0,
+        mentions: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """The measured path for one question the input policy let through, with its notes for the answer."""
+        searched = await self.retrieve_for_question(query, notebook_id, scope, decision, mentions)
+        if searched.refusal:
+            return searched.refusal
+        targets, notes, unlisted, found = searched.targets, searched.notes, searched.unlisted, searched.found
         plan, sub_queries, retrieved, labels = found.plan, found.sub_queries, found.retrieved, found.labels
         flagged = [n for n, c in enumerate(retrieved, 1) if "suspicious_instruction" in (c.get("flags") or [])]
         if flagged:
@@ -180,8 +215,8 @@ class RAGWorkflowOrchestrator:
 
 
 
-    async def _overview(self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision) -> Dict[str, Any]:
-        """"Summarize the files": a fixed set of searches per source (income statement, balance sheet, business and results discussion), one wider answer."""
+    async def _overview_chunks(self, notebook_id: str, scope: List[DocumentRecord]) -> List[Dict[str, Any]]:
+        """The excerpts of "Summarize the files": a fixed set of searches per source (income statement, balance sheet, business and results discussion)."""
         asks = ("consolidated statements of income profit or loss net sales total revenues net income", "consolidated balance sheets statement of financial position total assets total liabilities equity",
                 "management discussion and analysis strategic report directors' report overview results of operations business description")
         plan = [PlanItem(a, [d.document_id]) for d in scope for a in asks]
@@ -189,20 +224,30 @@ class RAGWorkflowOrchestrator:
         labels = {d.document_id: document_label(d) for d in scope}
         for c in chunks:
             c["document_label"] = labels.get(c["document_id"], c["document_id"])
-        notes = ["Write an overview of EACH selected source, labelled with its company, document type and fiscal period: what the business is, the headline figures (revenue, net income, total assets) "
+        return chunks
+
+    async def _overview(self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision) -> Dict[str, Any]:
+        """"Summarize the files": the overview excerpts of every source, one wider answer."""
+        chunks = await self._overview_chunks(notebook_id, scope)
+        notes =["Write an overview of EACH selected source, labelled with its company, document type and fiscal period: what the business is, the headline figures (revenue, net income, total assets) "
                  "when the excerpts show them, and notable points. Use only the excerpts and say which items you could not find."]
         answer = await self._answer(query, chunks, notes, max_tokens=1800)
         return {"answer": answer, "intent": "overview", "citations": [CitationGenerator.from_retrieved_chunk(c, i + 1).model_dump() for i, c in enumerate(chunks)],
                 "retrieved_chunks_count": len(chunks), "charged": True, "trace": {"overview": True, "retrieved_pages": [c["page"] for c in chunks]}}
 
-    async def _from_previous_citations(self, query: str, scope: List[DocumentRecord], history: List[dict]) -> Dict[str, Any]:
-        """"What does that page say?": answer from the excerpts cited in the previous answer."""
+    async def _previous_chunks(self, scope: List[DocumentRecord], history: List[dict]) -> Tuple[List[str], List[Dict[str, Any]]]:
+        """(chunk ids, excerpts) cited by the previous answer, kept to the selected sources."""
         last = next((h for h in reversed(history) if h.get("role") == "assistant" and h.get("citations")), None)
         ids = [c["chunk_id"] for c in (last or {}).get("citations", []) if c.get("chunk_id")]
         labels = {d.document_id: document_label(d) for d in scope}
         chunks = [c for c in await self.hybrid_search._hydrate(ids, {}, scope[0].notebook_id) if c["document_id"] in labels] if ids and scope else []
         for c in chunks:
             c["document_label"] = labels.get(c["document_id"], c["document_id"])
+        return ids, chunks
+
+    async def _from_previous_citations(self, query: str, scope: List[DocumentRecord], history: List[dict]) -> Dict[str, Any]:
+        """"What does that page say?": answer from the excerpts cited in the previous answer."""
+        ids, chunks = await self._previous_chunks(scope, history)
         if not chunks:
             return terminal("ask_clarify", MSG["ask_clarify"][detect_language(query)])
         answer = await self._answer(query, chunks, ["The user refers to the excerpts cited in the previous answer: answer about them."])
@@ -241,6 +286,127 @@ class RAGWorkflowOrchestrator:
             logger.warning(f"Intent router skipped: {type(exc).__name__}: {str(exc)[:120]}")
             return None
 
+    async def plan_question(
+        self, query: str, notebook_id: str, document_id: Optional[str] = None, document_ids: Optional[List[str]] = None,
+        history: Optional[List[dict]] = None, mentions: Optional[List[str]] = None, focus_state: Optional[Dict[str, Any]] = None,
+    ) -> QuestionPlan:
+        """Every step before a search, in order: the sources, the catalog gate, the topic, the rules, the intent router, the follow-up
+        rewrite (an LLM call when the topic cannot fill it). The chat (execute_query) and the admin inspector (inspect_question) both
+        start here, so the inspector shows what the chat really does."""
+        scope = await self.resolve_scope(notebook_id, document_ids, document_id)
+        p = QuestionPlan(scope=scope, query=query)
+        unconfirmed = [d for d in scope if needs_confirmation(d)]
+        if unconfirmed:  # G2: never answer over a document whose identity nobody confirmed (no retrieval, no charge)
+            names = ", ".join(d.file_name for d in unconfirmed)
+            vi = detect_language(query) == "vi"
+            p.stop = terminal("ask_confirm_catalog",
+                              f"Hãy xác nhận thông tin tài liệu trước khi hỏi ({names}): tôi chưa xác minh được công ty hoặc kỳ báo cáo trong tài liệu." if vi else
+                              f"Please confirm the document details before asking ({names}): the company or reporting period could not be verified in the text.",
+                              {"decision": {"action": "ask_confirm_catalog", "documents": [d.document_id for d in unconfirmed]}})
+            return p
+        p.ready_count = len(await self._ready_documents(notebook_id))
+        p.infos = [source_info(d) for d in scope]
+        history = history or []
+        tagged = {**focus_state, "document_ids": mentions} if mentions and focus_state else focus_state  # @file names the company: the topic only gives the item and year
+        p.focus = focus = focus_view(tagged, [d.document_id for d in scope], p.infos)
+        p.decision = decision = decide(query, p.infos, p.ready_count, history, focus)
+        # What the rules let through is still checked for what it is (small talk, an off-topic request, a request for advice...): turned
+        # away here, before a follow-up is rewritten or anything is searched
+        p.intent = intent = await self._intent(query, decision)
+        if intent and intent.blocked:
+            action, key = ROUTES[intent.label]
+            p.stop = terminal(action, MSG[key][decision.lang], {"decision": {"action": action}, "intent": intent.trace()})
+            return p
+        if decision.action == "rewrite_followup":  # "And the net income?" -> a standalone question, shown to the user
+            filled = None if {"correction", "outside_name"} & set(decision.flags) else fill_from_focus(query, focus, p.infos, decision.lang)
+            topic = [{"role": "current topic", "content": f"{', '.join(focus.companies)}; {focus.years}; {METRICS[focus.metric][1] if focus.metric else 'no item yet'}"}] if focus else []
+            rewritten = filled or await rewrite_followup(query, history + topic)
+            if not rewritten:
+                p.stop = terminal("ask_clarify", MSG["ask_clarify"][decision.lang])
+                return p
+            p.followup = {"method": "focus" if filled else "llm", "resolved": rewritten}
+            p.prefix = (f"Tôi hiểu câu hỏi là: “{rewritten}”\n\n" if decision.lang == "vi" else f"I understood the question as: “{rewritten}”\n\n")
+            p.query = rewritten
+            p.decision = decision = decide(rewritten, p.infos, p.ready_count, [])
+            if decision.action == "rewrite_followup":
+                p.stop = terminal("ask_clarify", MSG["ask_clarify"][decision.lang])
+                return p
+        if decision.action in TERMINAL:
+            message = sources_message(scope, decision.lang) if decision.action == "list_sources" else decision.message
+            p.stop = terminal(decision.action, p.prefix + message, {"decision": {"action": decision.action, "available": decision.available}})
+        return p
+
+    async def _split_parts(self, decision: Decision, infos: List[SourceInfo], ready_count: int) -> List[Tuple[str, Decision]]:
+        """Each question of a message that asks several, decided on its own. A part that leans on an earlier one ("How about its total
+        assets?") is rewritten with the earlier parts as the conversation: only their text is needed, never their answers."""
+        parts: List[Tuple[str, Decision]] = []
+        earlier: List[dict] = []
+        for sub in decision.sub_questions:
+            context = earlier + [{"role": "assistant", "content": "(answered above)"}] if earlier else []
+            sub_decision = decide(sub, infos, ready_count, context)
+            if sub_decision.action == "rewrite_followup":
+                rewritten = await rewrite_followup(sub, context)
+                if rewritten:
+                    sub, sub_decision = rewritten, decide(rewritten, infos, ready_count, [])
+                else:
+                    sub_decision = Decision(action="ask_clarify", lang=sub_decision.lang, message=MSG["ask_clarify"][sub_decision.lang])
+            earlier.append({"role": "user", "content": sub})
+            parts.append((sub, sub_decision))
+        return parts
+
+    async def inspect_question(
+        self, query: str, notebook_id: str, document_ids: Optional[List[str]] = None, history: Optional[List[dict]] = None,
+        mentions: Optional[List[str]] = None, focus_state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """The admin inspector: what the chat would search for this question, up to the answer, which is never generated. Same steps as
+        execute_query (plan_question, retrieve_for_question). The paid calls the chat makes before answering (follow-up rewrite,
+        unlisted-company check, planner or decomposition) happen here too; their count is returned under "llm"."""
+        usage: Counter = Counter()
+        token = REQUEST_USAGE.set(usage)
+        try:
+            out = await self._inspect(query, notebook_id, document_ids, history or [], mentions, focus_state)
+        finally:
+            REQUEST_USAGE.reset(token)
+        out["llm"] = dict(usage)
+        return out
+
+    async def _inspect(self, query: str, notebook_id: str, document_ids: Optional[List[str]], history: List[dict],
+                       mentions: Optional[List[str]], focus_state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        p = await self.plan_question(query, notebook_id, document_ids=document_ids, history=history, mentions=mentions, focus_state=focus_state)
+        out: Dict[str, Any] = {
+            "query": query,
+            "scope": [{"document_id": d.document_id, "label": document_label(d), "file_name": d.file_name} for d in p.scope],
+            "searched_query": p.query, "followup": p.followup, "intent": p.intent.trace() if p.intent else None, "parts": [],
+        }
+        if p.stop:  # the chat would answer this without searching
+            out.update(decision=p.stop["intent"], message=p.stop["answer"], stop=p.stop["trace"])
+            return out
+        decision = p.decision
+        out["decision"] = {"action": decision.action, "assumption": decision.assumption, "flags": decision.flags, "sub_questions": decision.sub_questions}
+        if decision.action == "overview":
+            out["parts"].append({"query": p.query, "chunks": _previews(await self._overview_chunks(notebook_id, p.scope))})
+            return out
+        if decision.action == "use_previous_citations":
+            out["parts"].append({"query": p.query, "chunks": _previews((await self._previous_chunks(p.scope, history))[1])})
+            return out
+        questions = await self._split_parts(decision, p.infos, p.ready_count) if decision.action == "split_questions" else [(p.query, decision)]
+        for sub, sub_decision in questions:
+            if sub_decision.action in TERMINAL or sub_decision.action == "rewrite_followup":
+                out["parts"].append({"query": sub, "decision": sub_decision.action, "message": sub_decision.message or MSG["ask_clarify"][sub_decision.lang]})
+                continue
+            searched = await self.retrieve_for_question(sub, notebook_id, p.scope, sub_decision, mentions)
+            part: Dict[str, Any] = {"query": sub, "decision": sub_decision.action, "notes": searched.notes, "unlisted_companies": searched.unlisted,
+                                    "targets": {"rule": searched.targets.rule, "documents": searched.targets.document_ids}}
+            if searched.refusal:
+                part.update(refused=True, message=searched.refusal["answer"])
+            else:
+                found = searched.found
+                part.update(routing=found.routing, missing=found.missing, sub_queries=found.sub_queries, timings=found.timings,
+                            plan=[{"query": item.query, "documents": [found.labels.get(i, i) for i in item.document_ids] or "all selected"} for item in found.plan],
+                            chunks=_previews(found.retrieved))
+            out["parts"].append(part)
+        return out
+
     async def _execute_query(
         self,
         query: str,
@@ -251,61 +417,17 @@ class RAGWorkflowOrchestrator:
         mentions: Optional[List[str]] = None,
         focus_state: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        scope = await self.resolve_scope(notebook_id, document_ids, document_id)
-        unconfirmed = [d for d in scope if needs_confirmation(d)]
-        if unconfirmed:  # G2: never answer over a document whose identity nobody confirmed (no retrieval, no charge)
-            names = ", ".join(d.file_name for d in unconfirmed)
-            vi = detect_language(query) == "vi"
-            return terminal("ask_confirm_catalog",
-                                  f"Hãy xác nhận thông tin tài liệu trước khi hỏi ({names}): tôi chưa xác minh được công ty hoặc kỳ báo cáo trong tài liệu." if vi else
-                                  f"Please confirm the document details before asking ({names}): the company or reporting period could not be verified in the text.",
-                                  {"decision": {"action": "ask_confirm_catalog", "documents": [d.document_id for d in unconfirmed]}})
-        ready = await self._ready_documents(notebook_id)
-        infos = [source_info(d) for d in scope]
-        history = history or []
-        tagged = {**focus_state, "document_ids": mentions} if mentions and focus_state else focus_state  # @file names the company: the topic only gives the item and year
-        focus = focus_view(tagged, [d.document_id for d in scope], infos)
-        decision = decide(query, infos, len(ready), history, focus)
-        # What the rules let through is still checked for what it is (small talk, an off-topic request, a request for advice...): turned
-        # away here, before a follow-up is rewritten or anything is searched
-        intent = await self._intent(query, decision)
-        if intent and intent.blocked:
-            action, key = ROUTES[intent.label]
-            return terminal(action, MSG[key][decision.lang], {"decision": {"action": action}, "intent": intent.trace()})
-        prefix, followup = "", None
-        if decision.action == "rewrite_followup":  # "And the net income?" -> a standalone question, shown to the user
-            filled = None if {"correction", "outside_name"} & set(decision.flags) else fill_from_focus(query, focus, infos, decision.lang)
-            topic = [{"role": "current topic", "content": f"{', '.join(focus.companies)}; {focus.years}; {METRICS[focus.metric][1] if focus.metric else 'no item yet'}"}] if focus else []
-            rewritten = filled or await rewrite_followup(query, history + topic)
-            if not rewritten:
-                return terminal("ask_clarify", MSG["ask_clarify"][decision.lang])
-            followup = {"method": "focus" if filled else "llm", "resolved": rewritten}
-            prefix = (f"Tôi hiểu câu hỏi là: “{rewritten}”\n\n" if decision.lang == "vi" else f"I understood the question as: “{rewritten}”\n\n")
-            query = rewritten
-            decision = decide(rewritten, infos, len(ready), [])
-            if decision.action == "rewrite_followup":
-                return terminal("ask_clarify", MSG["ask_clarify"][decision.lang])
-        if decision.action in TERMINAL:
-            message = sources_message(scope, decision.lang) if decision.action == "list_sources" else decision.message
-            return terminal(decision.action, prefix + message, {"decision": {"action": decision.action, "available": decision.available}})
+        p = await self.plan_question(query, notebook_id, document_id, document_ids, history, mentions, focus_state)
+        if p.stop:
+            return p.stop
+        scope, query, decision, history = p.scope, p.query, p.decision, history or []
         if decision.action == "overview":
             result = await self._overview(query, notebook_id, scope, decision)
         elif decision.action == "use_previous_citations":
             result = await self._from_previous_citations(query, scope, history)
         elif decision.action == "split_questions":
             parts, citations, offset, charged, last_part = [], [], 0, False, {}
-            earlier: List[dict] = []
-            for n, sub in enumerate(decision.sub_questions, 1):
-                # "How about its total assets?" leans on the first question of the same message: treat the earlier ones as the conversation
-                context = earlier + [{"role": "assistant", "content": "(answered above)"}] if earlier else []
-                sub_decision = decide(sub, infos, len(ready), context)
-                if sub_decision.action == "rewrite_followup":
-                    rewritten = await rewrite_followup(sub, context)
-                    if rewritten:
-                        sub, sub_decision = rewritten, decide(rewritten, infos, len(ready), [])
-                    else:
-                        sub_decision = Decision(action="ask_clarify", lang=sub_decision.lang, message=MSG["ask_clarify"][sub_decision.lang])
-                earlier.append({"role": "user", "content": sub})
+            for n, (sub, sub_decision) in enumerate(await self._split_parts(decision, p.infos, p.ready_count), 1):
                 if sub_decision.action in TERMINAL or sub_decision.action == "rewrite_followup":
                     parts.append(f"{n}. {sub}\n{sub_decision.message or MSG['ask_clarify'][sub_decision.lang]}")
                     continue
@@ -323,12 +445,12 @@ class RAGWorkflowOrchestrator:
         if result.get("focus_docs"):  # a searched question moves the focus; refusals, greetings and lists of sources do not
             years = {d.document_id: d.metadata.fiscal_year for d in scope}
             result["focus"] = build_focus(result["focus_query"], result["focus_docs"], years, focus_state)
-        if followup:
-            result.setdefault("trace", {})["followup"] = followup
-        if intent:
-            result.setdefault("trace", {})["intent"] = intent.trace()
-        if prefix:
-            result["answer"] = prefix + result["answer"]
+        if p.followup:
+            result.setdefault("trace", {})["followup"] = p.followup
+        if p.intent:
+            result.setdefault("trace", {})["intent"] = p.intent.trace()
+        if p.prefix:
+            result["answer"] = p.prefix + result["answer"]
         result["answer"], meta = split_answer(result["answer"])  # prompt v3: the machine block goes to the trace, not to the user
         if meta is not None:
             result.setdefault("trace", {})["answer_meta"] = meta
@@ -371,3 +493,9 @@ class RAGWorkflowOrchestrator:
                 return ("Hệ thống chưa tạo được câu trả lời tự động lúc này. Các đoạn liên quan nhất trong báo cáo:\n\n"
                         f"{excerpts}\n\n(Xem chi tiết tại phần trích dẫn nguồn đính kèm.)")
             return f"No answer could be generated right now. The most relevant excerpts of the report:\n\n{excerpts}\n\n(See the attached source citations for details.)"
+
+
+def _previews(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The excerpts as the inspector shows them: rank, source, page and the start of the text."""
+    return [{"rank": n, "document": c.get("document_label") or c["document_id"], "document_id": c["document_id"], "page": c["page"],
+             "chunk_type": c.get("chunk_type"), "score": c.get("score"), "preview": c["content"][:300]} for n, c in enumerate(chunks, 1)]

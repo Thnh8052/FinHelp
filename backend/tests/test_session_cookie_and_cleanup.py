@@ -18,7 +18,7 @@ from app.modules.admin import admin as admin_api
 from app.modules.auth import auth as auth_api
 from app.modules.auth.user import UserRecord
 from app.modules.auth.user_repo import UserRepository
-from app.modules.retrieval import retrieval as retrieval_api
+from app.modules.chat import inspector as retrieval_api
 from app.services.email_service import EmailService
 from app.shared import deps, health
 from app.shared.deps import get_current_user
