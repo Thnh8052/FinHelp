@@ -72,7 +72,7 @@ class EmailService:
         """Send password reset OTP email using the responsive template."""
         subject = f"{otp_code} là mã xác thực khôi phục mật khẩu FinHelp của bạn"
         frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
-        reset_url = f"{frontend_url}/reset-password?email={to_email}&otp={otp_code}"
+        reset_url = f"{frontend_url}/reset-password?email={to_email}"  # the code stays in the email body: an address ends up in histories and logs
         
         try:
             html_content = self._render_template(

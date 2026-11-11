@@ -515,6 +515,12 @@
   gap: 10px;
 }
 
+.auth-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .auth-alert-error.no-top-margin {
   margin: 0 0 14px 0;
 }
@@ -566,6 +572,11 @@
   .auth-body {
     padding: 16px;
     overflow-y: auto;
+  }
+
+  /* 16px stops iOS Safari from zooming into the field on focus */
+  .auth-input {
+    font-size: 16px;
   }
 
   .admin-grid {

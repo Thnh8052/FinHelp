@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
+import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import "./auth-pages.css";
 
 export const LoginPage: React.FC = () => {
@@ -44,7 +45,7 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="auth-page-wrapper">
-      <div className="auth-page-card" style={{ position: "relative" }}>
+      <div className="auth-page-card">
         {/* Language Switcher in top-right */}
         <div className="auth-page-lang-toggle">
           <LanguageToggle size="sm" />
@@ -52,7 +53,7 @@ export const LoginPage: React.FC = () => {
 
         {/* Brand */}
         <Link to="/" className="auth-page-brand">
-          <span style={{ fontSize: "20px" }}>⚡</span>
+          <FinHelpLogo size="sm" showText={false} />
           <span className="auth-page-brand-name">FinHelp</span>
         </Link>
 
@@ -82,12 +83,11 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <div className="auth-page-field">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="auth-page-row">
               <label className="auth-page-label">{t.auth.password}</label>
               <Link
                 to={`/reset-password${identifier ? `?email=${encodeURIComponent(identifier)}` : ""}`}
-                className="auth-page-link"
-                style={{ fontSize: "12px", color: "#6b7280" }}
+                className="auth-page-link auth-page-link-small"
               >
                 {t.auth.forgotPassword}
               </Link>
@@ -116,7 +116,7 @@ export const LoginPage: React.FC = () => {
             </Link>
           </div>
           <div>
-            <Link to="/" className="auth-page-link" style={{ color: "#6b7280" }}>
+            <Link to="/" className="auth-page-link auth-page-link-muted">
               {t.common.backToHome}
             </Link>
           </div>

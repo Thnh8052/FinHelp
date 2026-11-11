@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
+import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import "./auth-pages.css";
 
 export const RegisterPage: React.FC = () => {
@@ -21,7 +22,7 @@ export const RegisterPage: React.FC = () => {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError(t.auth.errorPasswordLength);
       return;
     }
@@ -44,7 +45,7 @@ export const RegisterPage: React.FC = () => {
 
   return (
     <div className="auth-page-wrapper">
-      <div className="auth-page-card" style={{ position: "relative" }}>
+      <div className="auth-page-card">
         {/* Language Switcher in top-right */}
         <div className="auth-page-lang-toggle">
           <LanguageToggle size="sm" />
@@ -52,7 +53,7 @@ export const RegisterPage: React.FC = () => {
 
         {/* Brand */}
         <Link to="/" className="auth-page-brand">
-          <span style={{ fontSize: "20px" }}>⚡</span>
+          <FinHelpLogo size="sm" showText={false} />
           <span className="auth-page-brand-name">FinHelp</span>
         </Link>
 
@@ -86,6 +87,8 @@ export const RegisterPage: React.FC = () => {
             <input
               type="text"
               required
+              pattern="[A-Za-z0-9._\-]{3,32}"
+              title={t.auth.usernameRule}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="e.g. analyst_pro"
@@ -97,6 +100,7 @@ export const RegisterPage: React.FC = () => {
             <label className="auth-page-label">{t.auth.fullNameOptional}</label>
             <input
               type="text"
+              maxLength={120}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="e.g. Alex Morgan"
@@ -105,11 +109,11 @@ export const RegisterPage: React.FC = () => {
           </div>
 
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.passwordMin6}</label>
+            <label className="auth-page-label">{t.auth.passwordMin}</label>
             <input
               type="password"
               required
-              minLength={6}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -131,7 +135,7 @@ export const RegisterPage: React.FC = () => {
             </Link>
           </div>
           <div>
-            <Link to="/" className="auth-page-link" style={{ color: "#6b7280" }}>
+            <Link to="/" className="auth-page-link auth-page-link-muted">
               {t.common.backToHome}
             </Link>
           </div>

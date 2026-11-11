@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { authService } from "../../services/auth";
 import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
+import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import "./auth-pages.css";
 
 export const ResetPasswordPage: React.FC = () => {
@@ -11,12 +12,11 @@ export const ResetPasswordPage: React.FC = () => {
   const { t } = useLanguage();
 
   const urlEmail = searchParams.get("email") || "";
-  const urlOtp = searchParams.get("otp") || "";
 
-  // Step 1: Request OTP (if no email/otp), Step 2: Set New Password
-  const [step, setStep] = useState<1 | 2>(urlEmail && urlOtp ? 2 : 1);
+  // Step 1: Request OTP, Step 2: Set New Password (the link in the email: the code is typed from the email, it is never in the address)
+  const [step, setStep] = useState<1 | 2>(urlEmail ? 2 : 1);
   const [email, setEmail] = useState(urlEmail);
-  const [otpCode, setOtpCode] = useState(urlOtp);
+  const [otpCode, setOtpCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -25,12 +25,11 @@ export const ResetPasswordPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    if (urlEmail) setEmail(urlEmail);
-    if (urlOtp) {
-      setOtpCode(urlOtp);
+    if (urlEmail) {
+      setEmail(urlEmail);
       setStep(2);
     }
-  }, [urlEmail, urlOtp]);
+  }, [urlEmail]);
 
   // Step 1: Send OTP
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -53,7 +52,7 @@ export const ResetPasswordPage: React.FC = () => {
     e.preventDefault();
     setError(null);
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       setError(t.auth.errorPasswordLength);
       return;
     }
@@ -79,7 +78,7 @@ export const ResetPasswordPage: React.FC = () => {
 
   return (
     <div className="auth-page-wrapper">
-      <div className="auth-page-card" style={{ position: "relative" }}>
+      <div className="auth-page-card">
         {/* Language Switcher in top-right */}
         <div className="auth-page-lang-toggle">
           <LanguageToggle size="sm" />
@@ -87,7 +86,7 @@ export const ResetPasswordPage: React.FC = () => {
 
         {/* Brand */}
         <Link to="/" className="auth-page-brand">
-          <span style={{ fontSize: "20px" }}>⚡</span>
+          <FinHelpLogo size="sm" showText={false} />
           <span className="auth-page-brand-name">FinHelp</span>
         </Link>
 
@@ -159,7 +158,7 @@ export const ResetPasswordPage: React.FC = () => {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="••••••••"
@@ -172,7 +171,7 @@ export const ResetPasswordPage: React.FC = () => {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
@@ -190,15 +189,7 @@ export const ResetPasswordPage: React.FC = () => {
                 setStep(1);
                 setError(null);
               }}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#6b7280",
-                fontSize: "13px",
-                cursor: "pointer",
-                textAlign: "center",
-                padding: "4px 0",
-              }}
+              className="auth-page-text-btn"
             >
               {t.auth.resendCode}
             </button>
@@ -214,7 +205,7 @@ export const ResetPasswordPage: React.FC = () => {
             </Link>
           </div>
           <div>
-            <Link to="/" className="auth-page-link" style={{ color: "#6b7280" }}>
+            <Link to="/" className="auth-page-link auth-page-link-muted">
               {t.common.backToHome}
             </Link>
           </div>

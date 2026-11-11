@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.shared.common import BaseSchema, get_utc_now
 
@@ -72,6 +72,8 @@ class UserRecord(BaseSchema):
     total_tokens_consumed: int = 0
 
     is_active: bool = True
+    token_version: int = 0  # moves when the password changes: every token issued before that stops working
+    revoked_token_ids: List[str] = Field(default_factory=list)  # tokens ended one by one (sign-out); the newest few are enough, the others have expired
     created_at: Any = Field(default_factory=get_utc_now)
     updated_at: Optional[Any] = None
     last_login_at: Optional[Any] = None

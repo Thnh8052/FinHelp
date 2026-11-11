@@ -9,7 +9,7 @@ Chỉ chạy khi server khởi động, không có endpoint HTTP nào gọi đư
 
 from app.core.config import settings
 from app.core.logging import logger
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_password
 from app.infrastructure.database.mongodb import MongoManager
 from app.modules.notebooks.notebook_repo import NotebookRepository
 from app.modules.auth.user_repo import UserRepository
@@ -74,7 +74,9 @@ async def setup_admin_and_clean_mocks() -> dict:
                     "full_name": "Vũ Thành (Quản Trị Viên Full Quyền)",
                     "daily_messages_limit": admin_limit,
                     "is_active": True,
-                }
+                },
+                # A new ADMIN_PASSWORD ends the admin's old sessions; a plain restart with the same one does not
+                "$inc": {"token_version": 0 if verify_password(settings.ADMIN_PASSWORD, admin_user.hashed_password) else 1},
             },
         )
         logger.info("Admin user 'admin' updated with full permissions.")

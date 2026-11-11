@@ -12,8 +12,8 @@ import "./App.css";
 
 /** /app: trang Hub cho người dùng đã đăng nhập, workspace dùng thử cho khách. */
 const AppHome: React.FC<{ onNavigateHome: () => void }> = ({ onNavigateHome }) => {
-  const { user, token, isAuthenticated } = useAuth();
-  if (token && !user) return null;  // the saved token is still being checked
+  const { user, hasSession, isAuthenticated } = useAuth();
+  if (hasSession && !user) return null;  // the session is still being checked
   return isAuthenticated ? <NotebookHub onNavigateHome={onNavigateHome} /> : <Workspace onNavigateHome={onNavigateHome} />;
 };
 

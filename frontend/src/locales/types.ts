@@ -309,6 +309,8 @@ export interface TranslationSchema {
     securityNote: string;
   };
   sourceViewer: {
+    pdfLoading: string;
+    pdfFailed: string;
     title: string;
     page: string;
     zoomIn: string;
@@ -346,8 +348,8 @@ export interface TranslationSchema {
     createAccountDesc: string;
     emailAddress: string;
     username: string;
+    usernameRule: string;
     fullNameOptional: string;
-    passwordMin6: string;
     completeRegistration: string;
     creatingAccount: string;
     haveAccount: string;

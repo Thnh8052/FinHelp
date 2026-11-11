@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { authService } from "../../services/auth";
 import { CloseIcon } from "../common/Icons";
 import "../auth/auth.css";
 
@@ -34,11 +33,6 @@ interface CatalogFormProps {
 
 const OTHER = "__other__";
 
-const authHeaders = (): Record<string, string> => {
-  const token = authService.getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 /**
  * Mẫu xác nhận danh tính tài liệu: tên công ty chọn từ các tên tìm được trong tài liệu (kèm trang), chỉ gõ tay khi không có
  * tên đúng; mã CK, tên khác, loại báo cáo, năm / quý, ngày kết thúc kỳ. Backend kiểm lại mọi trường (422 khi sai dạng).
@@ -60,7 +54,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
     if (!documentId) return;
     setError(null);
     setData(null);
-    fetch(`/api/v1/documents/${documentId}/catalog`, { headers: authHeaders() })
+    fetch(`/api/v1/documents/${documentId}/catalog`)
       .then(async (res) => {
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
         return res.json();
@@ -94,7 +88,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
     try {
       const res = await fetch(`/api/v1/documents/${documentId}/catalog`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company_name: choice === OTHER ? typedName : choice,
           ticker: ticker || null,

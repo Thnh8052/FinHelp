@@ -4,15 +4,15 @@ import { GuestQuota, UserProfile } from "../types/auth";
 
 interface AuthContextType {
   user: UserProfile | null;
-  token: string | null;
+  hasSession: boolean;
   isAuthenticated: boolean;
   isGuest: boolean;
   guestQuota: GuestQuota | null;
   isLoading: boolean;
   login: (identifier: string, pass: string) => Promise<void>;
   register: (email: string, username: string, pass: string, fullName?: string) => Promise<void>;
-  continueAsGuest: () => void;
-  logout: () => void;
+  continueAsGuest: () => Promise<void>;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -20,8 +20,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [token, setToken] = useState<string | null>(authService.getAuthToken());
-  const [isGuest, setIsGuest] = useState<boolean>(!authService.getAuthToken());
+  const [hasSession, setHasSession] = useState<boolean>(authService.hasSession());
+  const [isGuest, setIsGuest] = useState<boolean>(!authService.hasSession());
   const [guestQuota, setGuestQuota] = useState<GuestQuota | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -32,8 +32,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsGuest(false);
     } catch {
       // Token expired or invalid
-      authService.removeAuthToken();
-      setToken(null);
+      authService.forgetSession();
+      setHasSession(false);
       setUser(null);
       setIsGuest(true);
     }
@@ -59,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const init = async () => {
       setIsLoading(true);
       await fetchGuestQuota();
-      if (token) {
+      if (hasSession) {
         await fetchProfile();
       } else {
         setIsGuest(true);
@@ -67,13 +67,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     };
     init();
-  }, [token]);
+  }, [hasSession]);
 
   const login = async (identifier: string, pass: string) => {
     setIsLoading(true);
     try {
-      const res = await authService.login(identifier, pass);
-      setToken(res.access_token);
+      await authService.login(identifier, pass);
+      setHasSession(true);
       await fetchProfile();
     } finally {
       setIsLoading(false);
@@ -88,30 +88,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     setIsLoading(true);
     try {
-      const res = await authService.register(email, username, pass, fullName);
-      setToken(res.access_token);
+      await authService.register(email, username, pass, fullName);
+      setHasSession(true);
       await fetchProfile();
     } finally {
       setIsLoading(false);
     }
   };
 
-  const continueAsGuest = () => {
-    authService.removeAuthToken();
-    setToken(null);
+  const logout = async () => {
+    await authService.logout();  // before the page reloads its data as a guest: the cookie must be gone by then
+    setHasSession(false);
     setUser(null);
     setIsGuest(true);
   };
 
-  const logout = () => {
-    authService.logout();
-    setToken(null);
-    setUser(null);
-    setIsGuest(true);
-  };
+  const continueAsGuest = () => logout();
 
   const refreshUser = async () => {
-    if (token) {
+    if (hasSession) {
       await fetchProfile();
     }
   };
@@ -120,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
-        token,
+        hasSession,
         isAuthenticated: !!user && !isGuest,
         isGuest,
         guestQuota,

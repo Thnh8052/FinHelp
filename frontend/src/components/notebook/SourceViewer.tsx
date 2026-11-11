@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { CitationItem } from "../../types/chat";
 import { DocumentRecord } from "../../types/notebook";
-import { authService } from "../../services/auth";
+import { documentService } from "../../services/documents";
 import { MarkdownRenderer } from "../chat/MarkdownRenderer";
 import {
   FileTextIcon,
@@ -46,6 +46,8 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   const [highlightPulse, setHighlightPulse] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [isFitWidth, setIsFitWidth] = useState<boolean>(true);
+  const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
+  const [pdfFailed, setPdfFailed] = useState(false);
 
   const handleZoomIn = () => {
     setIsFitWidth(false);
@@ -73,6 +75,30 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
     null;
 
   const totalPages = currentDoc?.page_count || 1;
+  const documentId = currentDoc?.document_id;
+
+  // PDF được tải kèm header đăng nhập rồi mở bằng địa chỉ blob: token không bao giờ nằm trong URL của iframe
+  useEffect(() => {
+    if (!documentId) return;
+    let replaced = false;
+    let objectUrl: string | null = null;
+    setPdfObjectUrl(null);
+    setPdfFailed(false);
+    documentService.getFile(documentId).then(
+      (blob) => {
+        if (replaced) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPdfObjectUrl(objectUrl);
+      },
+      () => {
+        if (!replaced) setPdfFailed(true);
+      }
+    );
+    return () => {
+      replaced = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [documentId]);
 
   // Khi có citation mới: Tự động nhảy sang trang của citation và kích hoạt hiệu ứng highlight
   useEffect(() => {
@@ -115,12 +141,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
     );
   }
 
-  // URL nạp PDF: Dùng token trong path parameter để Chromium parse #page=X chuẩn 100% không bị xung đột với query param
-  const authToken = authService.getAuthToken();
-  const fileBaseUrl = authToken
-    ? `/api/v1/documents/${currentDoc.document_id}/file/${encodeURIComponent(authToken)}`
-    : `/api/v1/documents/${currentDoc.document_id}/file`;
-  const pdfUrl = `${fileBaseUrl}#page=${currentPage}`;
+  const pdfUrl = pdfObjectUrl ? `${pdfObjectUrl}#page=${currentPage}` : null;
 
   return (
     <div className="pdf-split-viewer-container">
@@ -209,19 +230,21 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
           <div className="pdf-toolbar-sep" />
 
           {/* Open in new tab */}
-          <a
-            href={pdfUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="pdf-page-btn"
-            title={`Open Page ${currentPage} in new tab`}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-              <polyline points="15 3 21 3 21 9" />
-              <line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-          </a>
+          {pdfUrl && (
+            <a
+              href={pdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pdf-page-btn"
+              title={`Open Page ${currentPage} in new tab`}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </a>
+          )}
 
           {onClose && (
             <button
@@ -276,12 +299,18 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
 
       {/* 3. Original PDF Page Viewport */}
       <div className="pdf-display-viewport">
-        <iframe
-          key={`${currentDoc.document_id}-p${currentPage}`}
-          src={pdfUrl}
-          title={`Financial Report: ${currentDoc.file_name}`}
-          className="pdf-render-frame"
-        />
+        {pdfUrl ? (
+          <iframe
+            key={`${currentDoc.document_id}-p${currentPage}`} // the page number stays in the key: Chrome's PDF viewer ignores a changed #page on a frame already open
+            src={pdfUrl}
+            title={`Financial Report: ${currentDoc.file_name}`}
+            className="pdf-render-frame"
+          />
+        ) : (
+          <div className="pdf-viewer-empty-state">
+            <p className="pdf-empty-sub" role="status">{pdfFailed ? t.sourceViewer.pdfFailed : t.sourceViewer.pdfLoading}</p>
+          </div>
+        )}
       </div>
     </div>
   );

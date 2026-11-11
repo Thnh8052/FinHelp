@@ -115,7 +115,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
               {tab === "forgot" && t.auth.forgotStep1Desc}
             </p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div className="auth-header-actions">
             <LanguageToggle size="sm" />
             <button onClick={onClose} className="auth-close-btn" aria-label="Close">
               <CloseIcon size={16} />
@@ -233,6 +233,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   <input
                     type="text"
                     required
+                    pattern="[A-Za-z0-9._\-]{3,32}"
+                    title={t.auth.usernameRule}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="e.g. financial_analyst"
@@ -247,7 +249,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   <input
                     type="password"
                     required
-                    minLength={6}
+                    minLength={8}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
@@ -261,6 +263,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   </label>
                   <input
                     type="text"
+                    maxLength={120}
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="e.g. John Doe"
@@ -343,7 +346,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     <input
                       type="password"
                       required
-                      minLength={6}
+                      minLength={8}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••"

@@ -1,4 +1,4 @@
-import { apiRequest } from "./api";
+import { apiBlob, apiRequest } from "./api";
 import { DocumentRecord } from "../types/notebook";
 
 export const documentService = {
@@ -17,5 +17,5 @@ export const documentService = {
     });
   },
 
-  getFileUrl: (documentId: string) => `/api/v1/documents/${documentId}/file`,
+  getFile: (documentId: string) => apiBlob(`/documents/${documentId}/file`),
 };
