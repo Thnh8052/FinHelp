@@ -34,10 +34,21 @@
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
+/* A flex box, not an inline one: the logo sits on the row's centre line with the menu button and the text */
+.navbar-brand-home {
+  display: flex;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
 .navbar-brand-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  line-height: 1.25;
 }
 
 .navbar-brand-row {
@@ -54,8 +65,9 @@
 }
 
 .navbar-version-badge {
-  font-size: 12px;
+  font-size: 11px; /* a tag, not text to read: kept small so the title row stays the title's height */
   font-weight: 700;
+  line-height: 1.2;
   padding: 1px 5px;
   border-radius: 4px;
   background-color: rgba(37, 99, 235, 0.2);

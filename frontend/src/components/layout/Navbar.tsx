@@ -66,9 +66,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             <MenuIcon size={16} />
           </button>
         )}
-        <div className="cursor-pointer" onClick={onNavigateHome} title={t.nav.returnHome}>
+        <button type="button" className="navbar-brand-home" onClick={onNavigateHome} title={t.nav.returnHome} aria-label={t.nav.returnHome}>
           <FinHelpLogo size="sm" showText={false} />
-        </div>
+        </button>
         <div className="navbar-brand-info">
           <div className="navbar-brand-row">
             <span
