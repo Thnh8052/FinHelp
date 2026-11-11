@@ -71,8 +71,8 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
     } catch (err) {
       if (err instanceof ApiError) {
         const detail = err.status >= 500 || !err.detail ? t.workspace.systemBusy : err.detail;  // lỗi hệ thống không lộ chi tiết cho người dùng
-        // Auth required
-        if (err.status === 401 || err.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
+        // Auth required: 401, or the backend says signing in helps (a 403 alone does not: a read-only notebook stays read-only)
+        if (err.status === 401 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
           loginWarning(detail);
         } else {
           showToast(detail, "error");

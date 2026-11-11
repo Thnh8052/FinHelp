@@ -1,29 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { CloseIcon } from "../common/Icons";
+import { ApiError } from "../../services/api";
+import { documentService } from "../../services/documents";
+import { CatalogPayload } from "../../types/notebook";
 import "../auth/auth.css";
 
-interface NameCandidate {
-  name: string;
-  pages: number[];
-}
-
-interface CatalogPayload {
-  document_id: string;
-  file_name: string;
-  needs_confirmation: boolean;
-  report_types: string[];
-  metadata: {
-    company_name?: string | null;
-    ticker?: string | null;
-    aliases?: string[];
-    report_type?: string | null;
-    fiscal_year?: number | null;
-    fiscal_quarter?: number | null;
-    period_end?: string | null;
-    catalog_unverified?: string[];
-    name_candidates?: NameCandidate[];
-  };
-}
+/** The backend's reason: its form validators (catalog_edit.py) write each refused field for the user. */
+const reason = (err: unknown, fallback: string): string =>
+  err instanceof ApiError ? err.fields.join("; ") || err.detail || fallback : fallback;
 
 interface CatalogFormProps {
   documentId: string | null;
@@ -54,12 +38,9 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
     if (!documentId) return;
     setError(null);
     setData(null);
-    fetch(`/api/v1/documents/${documentId}/catalog`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((d: CatalogPayload) => {
+    documentService
+      .getCatalog(documentId)
+      .then((d) => {
         const m = d.metadata;
         const candidates = m.name_candidates || [];
         const known = candidates.find((c) => c.name === m.company_name);
@@ -73,7 +54,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
         setQuarter(m.fiscal_quarter ? String(m.fiscal_quarter) : "");
         setPeriodEnd(m.period_end || "");
       })
-      .catch((e: Error) => setError(`Failed to load document metadata: ${e.message}`));
+      .catch((err: unknown) => setError(`Failed to load document metadata: ${reason(err, "connection error")}`));
   }, [documentId]);
 
   if (!documentId) return null;
@@ -86,33 +67,22 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
     setError(null);
     setSaving(true);
     try {
-      const res = await fetch(`/api/v1/documents/${documentId}/catalog`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          company_name: choice === OTHER ? typedName : choice,
-          ticker: ticker || null,
-          aliases: aliases
-            .split(",")
-            .map((a) => a.trim())
-            .filter(Boolean),
-          report_type: reportType,
-          fiscal_year: Number(fiscalYear),
-          fiscal_quarter: quarter ? Number(quarter) : null,
-          period_end: periodEnd || null,
-        }),
+      await documentService.updateCatalog(documentId, {
+        company_name: choice === OTHER ? typedName : choice,
+        ticker: ticker || null,
+        aliases: aliases
+          .split(",")
+          .map((a) => a.trim())
+          .filter(Boolean),
+        report_type: reportType,
+        fiscal_year: Number(fiscalYear),
+        fiscal_quarter: quarter ? Number(quarter) : null,
+        period_end: periodEnd || null,
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const detail = Array.isArray(body.detail)
-          ? body.detail.map((d: { msg?: string }) => (d.msg || "").replace(/^Value error, /, "")).join("; ")
-          : body.detail;
-        throw new Error(detail || `HTTP ${res.status}`);
-      }
       onSaved(documentId);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save document metadata.");
+      setError(reason(err, "Failed to save document metadata."));
     } finally {
       setSaving(false);
     }

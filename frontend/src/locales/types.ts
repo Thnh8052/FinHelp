@@ -252,28 +252,14 @@ export interface TranslationSchema {
     confirmBtn: string;
   };
   hub: {
-    title: string;
-    subtitle: string;
-    newNotebook: string;
-    search: string;
-    noMatch: string;
-    emptyTitle: string;
-    emptyText: string;
     fileOne: string;
     fileMany: string;
     processing: string;
+    deleteBlocked: string;
     rename: string;
     renameLabel: string;
-    titleRequired: string;
-    deleteQuestion: string;
     deleteWarning: string;
-    deleteBlocked: string;
-    deleted: string;
-    allNotebooks: string;
-    loadFailed: string;
-    createFailed: string;
     renameFailed: string;
-    deleteFailed: string;
   };
   sidebar: {
     newAnalysis: string;

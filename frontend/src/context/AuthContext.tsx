@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { ApiError } from "../services/api";
 import { authService } from "../services/auth";
 import { GuestQuota, UserProfile } from "../types/auth";
 
@@ -30,12 +31,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const profile = await authService.getMe();
       setUser(profile);
       setIsGuest(false);
-    } catch {
-      // Token expired or invalid
-      authService.forgetSession();
-      setHasSession(false);
+    } catch (err) {
       setUser(null);
       setIsGuest(true);
+      if (err instanceof ApiError && err.status === 401) {  // the session ended: forget it. A network or server error keeps it for the next load
+        authService.forgetSession();
+        setHasSession(false);
+      }
     }
   };
 

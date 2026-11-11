@@ -58,6 +58,42 @@ export const isDocProcessing = (d: DocumentRecord | null | undefined): boolean =
 
 export const isDocFailed = (d: DocumentRecord | null | undefined): boolean => d?.status === "failed";
 
+/** A legal name the document itself prints, with the pages it is on: the catalog form offers these first. */
+export interface NameCandidate {
+  name: string;
+  pages: number[];
+}
+
+/** GET /documents/{id}/catalog */
+export interface CatalogPayload {
+  document_id: string;
+  file_name: string;
+  needs_confirmation: boolean;
+  report_types: string[];
+  metadata: {
+    company_name?: string | null;
+    ticker?: string | null;
+    aliases?: string[];
+    report_type?: string | null;
+    fiscal_year?: number | null;
+    fiscal_quarter?: number | null;
+    period_end?: string | null;
+    catalog_unverified?: string[];
+    name_candidates?: NameCandidate[];
+  };
+}
+
+/** PATCH /documents/{id}/catalog */
+export interface CatalogUpdate {
+  company_name: string;
+  ticker: string | null;
+  aliases: string[];
+  report_type: string;
+  fiscal_year: number;
+  fiscal_quarter: number | null;
+  period_end: string | null;
+}
+
 export interface IngestionJob {
   job_id: string;
   document_id: string;

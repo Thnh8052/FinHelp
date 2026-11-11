@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../../context/LanguageContext";
 import { Navbar } from "../../components/layout/Navbar";
 import { SplitLayout } from "../../components/layout/SplitLayout";
@@ -37,11 +36,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const [catalogDocId, setCatalogDocId] = useState<string | null>(null);
   const { t } = useLanguage();
 
-  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, maxFileSizeMb, docs, chat, notebooks, notebookId, selectNotebook, newChat, deleteNotebook } = useWorkspace(
+  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, maxFileSizeMb, docs, chat, notebooks, notebookId, selectNotebook, newChat, renameNotebook, deleteNotebook } = useWorkspace(
     () => setAuthModalOpen(true)
   );
-
-  const navigate = useNavigate();
 
   // Trích dẫn và form đang mở thuộc về đoạn chat cũ
   useEffect(() => {
@@ -50,7 +47,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   }, [notebookId]);
 
   const unconfirmedDocs = docs.documents.filter(needsCatalogConfirmation);
-  const notebookList = notebooks.map((n) => (n.notebook_id === notebookId ? { ...n, document_count: docs.documents.length } : n));
+  const notebookList = notebooks.map((n) => (n.notebook_id === notebookId ? { ...n, document_count: docs.documents.length, processing_count: docs.documents.filter(isDocProcessing).length } : n));
   const activeSessionTitle = notebookTitle || (isAuthenticated ? t.workspace.financialAnalysisSession : t.workspace.guestTrialSession);
 
   // Khi click vào trích dẫn [1] Trang 12: Tự động mở Split-View, chuyển đúng tài liệu và nhảy tới trang đó
@@ -108,9 +105,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           <ChatHistoryList
             notebooks={notebookList}
             activeNotebookId={notebookId}
-            onOpenHub={isAuthenticated ? () => navigate("/app") : undefined}
             onSelectNotebook={selectNotebook}
             onNewChat={newChat}
+            onRenameNotebook={renameNotebook}
             onDeleteNotebook={deleteNotebook}
             isGuest={!isAuthenticated}
           />

@@ -153,6 +153,14 @@ export const TrashIcon: React.FC<IconProps> = ({ size = 14, color = "currentColo
   </svg>
 );
 
+/** Rename / edit. Paths from Lucide's "pencil" (ISC licence), drawn with this file's stroke. */
+export const PencilIcon: React.FC<IconProps> = ({ size = 14, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    <path d="m15 5 4 4" />
+  </svg>
+);
+
 export const MessageSquareIcon: React.FC<IconProps> = ({ size = 14, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />

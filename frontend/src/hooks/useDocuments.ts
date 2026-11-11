@@ -133,8 +133,12 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
         } catch (fileErr) {
           if (fileErr instanceof ApiError) {
             const detail = fileErr.detail || `Upload of ${file.name} failed.`;
-            if (fileErr.status === 401 || fileErr.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
+            // Signing in helps only on 401 or when the backend says so (a guest's limit); a signed-in account at its limit gets a plain warning
+            if (fileErr.status === 401 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
               showToast(detail, "warning", "Sign in now", onLoginRequired);
+              break;
+            } else if (fileErr.status === 403) {  // the notebook is full: the next files would be refused the same way
+              showToast(detail, "warning");
               break;
             } else if (fileErr.status === 409) {
               showToast(detail, "warning");

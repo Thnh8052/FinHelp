@@ -1,5 +1,5 @@
 import { apiBlob, apiRequest } from "./api";
-import { DocumentRecord } from "../types/notebook";
+import { CatalogPayload, CatalogUpdate, DocumentRecord } from "../types/notebook";
 
 export const documentService = {
   list: (notebookId: string) => apiRequest<DocumentRecord[]>(`/documents/notebook/${notebookId}`),
@@ -18,4 +18,9 @@ export const documentService = {
   },
 
   getFile: (documentId: string) => apiBlob(`/documents/${documentId}/file`),
+
+  getCatalog: (documentId: string) => apiRequest<CatalogPayload>(`/documents/${documentId}/catalog`),
+
+  updateCatalog: (documentId: string, body: CatalogUpdate) =>
+    apiRequest<{ document_id: string }>(`/documents/${documentId}/catalog`, { method: "PATCH", body: JSON.stringify(body) }),
 };
