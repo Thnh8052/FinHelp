@@ -1,8 +1,9 @@
 import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from app.core.config import settings
+from app.modules.chat import events
 from app.modules.generation.llm_client import chat_completion
 from app.modules.query_router.input_policy import detect_language
 
@@ -359,10 +360,36 @@ def build_messages(context: str, question: str, multi_doc: bool = False, notes: 
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def hold_meta(send: Callable[[str], None]) -> Callable[[str], None]:
+    """Pass the answer on piece by piece, never its <answer_meta> block: text that may be the start of the opening tag waits for the
+    next piece, and nothing after the tag is sent (the block ends the answer)."""
+    held, done = [""], [False]
+
+    def feed(piece: str) -> None:
+        if done[0]:
+            return
+        text = held[0] + piece
+        cut = text.find(META_OPEN)
+        if cut >= 0:
+            done[0] = True
+            text, keep = text[:cut], ""
+        else:
+            keep = next((text[-n:] for n in range(min(len(META_OPEN) - 1, len(text)), 0, -1) if META_OPEN.startswith(text[-n:])), "")
+            text = text[:len(text) - len(keep)]
+        held[0] = keep
+        if text:
+            send(text)
+
+    return feed
+
+
 async def generate_answer(question: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]] = None, max_tokens: int = 1500) -> str:
-    """Answer from the retrieved excerpts only. Raises LLMUnavailableError when the model cannot be reached."""
+    """Answer from the retrieved excerpts only. Raises LLMUnavailableError when the model cannot be reached. In a streamed chat the
+    first answer of the request is sent piece by piece as it is written (events.answer_sink); the returned text is still the whole answer."""
     multi_doc = len({c["document_id"] for c in chunks}) > 1
-    answer = await chat_completion(build_messages(build_context(chunks), question, multi_doc, notes), max_tokens=max_tokens)
+    sink = events.answer_sink()
+    answer = await chat_completion(build_messages(build_context(chunks), question, multi_doc, notes), max_tokens=max_tokens,
+                                   on_delta=hold_meta(sink) if sink else None)
     if not answer and settings.GENERATION_PROMPT in STRUCTURED_PROMPTS:
         return refusal(question) + "\n" + META_OPEN + json.dumps({"status": "not_found", "short_answer": refusal(question), "citations": []}) + META_CLOSE
     return answer or refusal(question)

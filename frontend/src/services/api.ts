@@ -62,7 +62,8 @@ export function processingErrorText(code: string, t: TranslationSchema): string 
   return sentence(t, code, {}) ?? sentence(t, "ingestion_unexpected", {}) ?? "";
 }
 
-async function send(endpoint: string, options: RequestInit = {}): Promise<Response> {
+/** The response of a request that succeeded; a refusal throws ApiError (its code names the sentence). */
+export async function send(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const headers: HeadersInit = {
     ...options.headers,
   };

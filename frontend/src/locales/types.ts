@@ -263,7 +263,9 @@ export interface TranslationSchema {
     uploadingNotice: string;
     inputShortcuts: string;
     sourceCitationsTitle: string;
-    loadingSteps: string[];
+    /** What the system is doing now (the streamed chat says so), never which component does it. */
+    loadingStages: { understanding: string; searching: string; writing: string; checking: string };
+    loadingSlow: string;
     systemBusy: string;
     connectionFailed: string;
     youLabel: string;

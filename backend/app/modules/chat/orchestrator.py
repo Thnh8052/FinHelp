@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.error_codes import Code
 from app.core.exceptions import DomainException, ServiceUnavailableError
 from app.core.logging import logger
+from app.modules.chat import events
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.documents.document import DocumentRecord
 from app.modules.documents.catalog_edit import needs_confirmation
@@ -162,12 +163,15 @@ class RAGWorkflowOrchestrator:
                          + ". Say that the figures of these sources could not be found in the documents; do not estimate them.")
         citations = [CitationGenerator.from_retrieved_chunk(chk, citation_offset + idx + 1) for idx, chk in enumerate(retrieved)]
         docs = [scope_doc(d) for d in scope]
+        if citation_offset == 0 and targets.understood:  # shown above the answer while it is being written
+            events.emit("understood", text=targets.understood, alternatives=targets.alternatives)
         t0 = time.perf_counter()
         answer = await self._answer(query, retrieved, notes)
         t1 = time.perf_counter()
         number_check, cite_check, issues = verify(answer, retrieved, docs)
         first_issues, repaired = list(issues), False
         if issues and retrieved and settings.ANSWER_REPAIR_ENABLED:  # A2: one rewrite with the list of problems
+            events.stage("checking")
             again = await self._answer(query, retrieved, notes + [
                 "Your previous answer had these problems: " + "; ".join(issues) + ". Rewrite the answer from the excerpts only: correct or "
                 "remove each of them; when a figure is not in the excerpts, say it was not found instead of giving a number."])
@@ -422,12 +426,14 @@ class RAGWorkflowOrchestrator:
         p = await self.plan_question(query, notebook_id, document_id, document_ids, history, mentions, focus_state)
         if p.stop:
             return p.stop
+        events.stage("searching")
         scope, query, decision, history = p.scope, p.query, p.decision, history or []
         if decision.action == "overview":
             result = await self._overview(query, notebook_id, scope, decision)
         elif decision.action == "use_previous_citations":
             result = await self._from_previous_citations(query, scope, history)
         elif decision.action == "split_questions":
+            events.no_answer_stream()  # numbered parts: the whole text arrives with the final event
             parts, citations, offset, charged, last_part = [], [], 0, False, {}
             for n, (sub, sub_decision) in enumerate(await self._split_parts(decision, p.infos, p.ready_count), 1):
                 if sub_decision.action in TERMINAL or sub_decision.action == "rewrite_followup":
@@ -466,6 +472,7 @@ class RAGWorkflowOrchestrator:
         if not first:
             return answer
         try:
+            events.stage("checking")
             again: Optional[str] = policy.clean(await generate_answer(query, chunks, list(notes or []) + [policy.rewrite_note(first)], max_tokens), chunks)
             second = policy.check(again, chunks, lang)
         except LLMUnavailableError:
@@ -485,6 +492,7 @@ class RAGWorkflowOrchestrator:
         vi = detect_language(query) == "vi"
         if not chunks:
             return NO_DATA_ANSWER["vi" if vi else "en"]
+        events.writing()
         try:
             answer = await generate_answer(query, chunks, notes, max_tokens)
             return await self._within_policy(answer, query, chunks, notes, max_tokens, "vi" if vi else "en") if settings.OUTPUT_POLICY_ENABLED else answer

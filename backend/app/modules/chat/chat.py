@@ -11,9 +11,13 @@ Mỗi notebook là một đoạn chat.
 4. Lấy lịch sử hội thoại của một notebook (GET /api/v1/chat/messages/{notebook_id}).
 """
 
+import asyncio
+import json
 import uuid
+from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient
@@ -22,6 +26,9 @@ from app.shared.deps import can_chat, get_optional_user_id, require_notebook
 from app.shared.rate_limit import spend_guest_allowance
 from app.core.error_codes import Code, api_error
 from app.core.config import settings
+from app.core.exceptions import DomainException
+from app.core.logging import logger
+from app.modules.chat import events
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.chat.chat_repo import ChatRepository
@@ -127,23 +134,20 @@ class MessageOut(BaseModel):
 
 # --- Endpoints ---
 
-# ==============================================================================
-# HÀM: handle_user_query
-# Ý NGHĨA: Điểm đầu vào chính của quy trình hỏi đáp tài chính RAG:
-#          1. Kiểm tra quyền truy cập notebook, nguồn tài liệu đã chọn và hạn mức.
-#          2. Lưu tin nhắn của người dùng vào MongoDB collection `messages`.
-#          3. Kích hoạt Orchestrator điều phối pipeline tìm kiếm ngữ nghĩa và sinh câu trả lời.
-#          4. Ghi nhận hạn mức, lưu câu trả lời kèm trích dẫn và số liệu (token, độ trễ, model).
-# ==============================================================================
-@router.post("/query", response_model=QueryResponse)
-async def handle_user_query(
-    request: Request,
-    req: QueryRequest,
-    user_id: Optional[str] = Depends(get_optional_user_id),
-    db: AsyncIOMotorDatabase = Depends(get_database),
-    qdrant: AsyncQdrantClient = Depends(get_qdrant_client),
-):
-    """Xử lý câu hỏi tài chính, thực thi luồng RAG và lưu lịch sử vào MongoDB."""
+@dataclass
+class _Admitted:
+    """A question past every check, its quota reserved: what answering and recording it need."""
+
+    nb: Any
+    chosen: List[str]
+    mentions: List[str]
+    orchestrator: RAGWorkflowOrchestrator
+    history: List[dict]
+    users: UserRepository
+
+
+async def _admit(request: Request, req: "QueryRequest", user_id: Optional[str], db: AsyncIOMotorDatabase, qdrant: AsyncQdrantClient) -> _Admitted:
+    """Every refusal comes here, before the answer starts (a plain JSON error, nothing charged or written), then the quota is reserved."""
     # 0. Tài liệu phải xử lý xong mới truy vấn được; chặn trước khi trừ hạn mức
     nb = await require_notebook(db, req.notebook_id, user_id)
     if not can_chat(nb, user_id):  # past require_notebook, only a read-only sample notebook is refused: signing in does not change that
@@ -156,8 +160,6 @@ async def handle_user_query(
     except SourceSelectionError as exc:
         raise api_error(status_code=422, code=exc.code, **exc.params)
 
-    chat_repo = ChatRepository(db)
-
     # 1. Các lượt trước (để hiểu câu hỏi nối tiếp như "còn lợi nhuận thì sao?")
     history = await load_history(db, req.notebook_id)
 
@@ -167,22 +169,29 @@ async def handle_user_query(
         spend_guest_allowance(request, "question", settings.GUEST_DAILY_QUESTIONS)
     elif not await users.reserve_quota(user_id):
         raise api_error(status_code=429, code=Code.QUESTION_QUOTA_USED)
+    return _Admitted(nb, chosen, mentions, orchestrator, history, users)
 
-    # 3. Kích hoạt RAG Workflow Orchestrator
+
+async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str]) -> dict:
+    """3. Kích hoạt RAG Workflow Orchestrator; không có câu trả lời thì trả lại lượt đã giữ."""
     try:
-        result = await orchestrator.execute_query(
+        return await adm.orchestrator.execute_query(
             query=req.query,
             notebook_id=req.notebook_id,
-            document_ids=chosen,
-            history=history,
-            mentions=mentions,
-            focus_state=nb.focus_state,
+            document_ids=adm.chosen,
+            history=adm.history,
+            mentions=adm.mentions,
+            focus_state=adm.nb.focus_state,
         )
-    except Exception:
-        if user_id is not None:  # không có câu trả lời thì trả lại lượt đã giữ
-            await users.consume_quota(user_id, messages=-1)
+    except BaseException:  # a cancelled answer too
+        if user_id is not None:
+            await adm.users.consume_quota(user_id, messages=-1)
         raise
 
+
+async def _record(adm: _Admitted, req: "QueryRequest", user_id: Optional[str], db: AsyncIOMotorDatabase, result: dict) -> "QueryResponse":
+    chat_repo = ChatRepository(db)
+    nb, users = adm.nb, adm.users
     # 4. Câu hỏi chỉ được lưu khi đã có câu trả lời: câu hỏi lỗi không kẹt lại trong lịch sử và ngữ cảnh. Câu hỏi đầu tiên
     # được tìm trong tài liệu đặt tên cho đoạn chat (câu chào hay câu bị từ chối thì không)
     title = nb.title
@@ -226,6 +235,81 @@ async def handle_user_query(
         understood=result.get("understood", ""),
         alternatives=result.get("alternatives", []),
     )
+
+
+# ==============================================================================
+# HÀM: handle_user_query
+# Ý NGHĨA: Điểm đầu vào chính của quy trình hỏi đáp tài chính RAG:
+#          1. Kiểm tra quyền truy cập notebook, nguồn tài liệu đã chọn và hạn mức.
+#          2. Kích hoạt Orchestrator điều phối pipeline tìm kiếm ngữ nghĩa và sinh câu trả lời.
+#          3. Ghi nhận hạn mức, lưu câu hỏi, câu trả lời kèm trích dẫn và số liệu (token, độ trễ, model).
+# ==============================================================================
+@router.post("/query", response_model=QueryResponse)
+async def handle_user_query(
+    request: Request,
+    req: QueryRequest,
+    user_id: Optional[str] = Depends(get_optional_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    qdrant: AsyncQdrantClient = Depends(get_qdrant_client),
+):
+    """Xử lý câu hỏi tài chính, thực thi luồng RAG và lưu lịch sử vào MongoDB."""
+    adm = await _admit(request, req, user_id, db, qdrant)
+    result = await _answered(adm, req, user_id)
+    return await _record(adm, req, user_id, db, result)
+
+
+_RUNNING: set = set()  # answers still being written after their page was closed: referenced until they are recorded
+
+
+def _sse(kind: str, data: dict) -> str:
+    return f"event: {kind}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+
+@router.post("/query/stream")
+async def stream_user_query(
+    request: Request,
+    req: QueryRequest,
+    user_id: Optional[str] = Depends(get_optional_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    qdrant: AsyncQdrantClient = Depends(get_qdrant_client),
+):
+    """The question of /query answered as server-sent events (chat/events.py): stage, understood, delta (the answer as it is written),
+    then done (the recorded answer: the body of /query, which replaces the streamed text) or error ({status, code, params}).
+    Refusals before the answer starts stay ordinary JSON errors. An answer whose page was closed is still written and recorded: it is in
+    the history when the chat is opened again."""
+    adm = await _admit(request, req, user_id, db, qdrant)
+    stream = events.ChatStream()
+
+    async def run() -> None:
+        events.attach(stream)
+        try:
+            result = await _answered(adm, req, user_id)
+            stream.emit("done", (await _record(adm, req, user_id, db, result)).model_dump(mode="json"))
+        except DomainException as exc:
+            stream.emit("error", {"status": exc.status_code, "code": exc.code, "params": exc.params})
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            stream.emit("error", {"status": exc.status_code, "code": detail.get("code", Code.INTERNAL_ERROR), "params": detail.get("params", {})})
+        except Exception:
+            logger.exception(f"Streamed question failed in notebook {req.notebook_id}")
+            stream.emit("error", {"status": 500, "code": Code.INTERNAL_ERROR, "params": {}})
+        finally:
+            stream.close()
+
+    task = asyncio.create_task(run())
+    _RUNNING.add(task)
+    task.add_done_callback(_RUNNING.discard)
+
+    async def body():
+        yield _sse("stage", {"name": "understanding"})
+        while True:
+            kind, data = await stream.queue.get()
+            if kind is None:
+                return
+            yield _sse(kind, data)
+
+    # no-cache and X-Accel-Buffering: a proxy in front must pass each event on at once, not hold the answer back until it ends
+    return StreamingResponse(body(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ==============================================================================

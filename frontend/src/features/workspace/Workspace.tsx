@@ -139,6 +139,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               messages={chat.messages}
               onSendMessage={chat.sendMessage}
               isLoading={chat.isLoading}
+              loadingStage={chat.stage}
               onSelectCitation={handleSelectCitation}
               onClearChat={() => chat.setMessages([])}
               sessionTitle={activeSessionTitle}

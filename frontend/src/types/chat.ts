@@ -20,7 +20,11 @@ export interface ChatMessage {
   alternatives?: { document_id: string; label: string }[];
   /** Câu hỏi đã gửi (để hỏi lại với tài liệu khác). */
   query?: string;
+  /** Câu trả lời đang được viết (chat dạng stream): chưa có trích dẫn, chưa sao chép được. */
+  streaming?: boolean;
 }
+
+export type ChatStage = "understanding" | "searching" | "writing" | "checking";
 
 /** Một tài liệu nguồn có thể tag bằng @ trong ô chat. */
 export interface MentionOption {
