@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.config import settings
+from app.core.error_codes import Code
 from app.core.exceptions import IngestionError
 from app.core.logging import logger
 
@@ -56,7 +57,7 @@ def _docling_pages(pdf_path: Path, work_dir: Path) -> List[Dict[str, Any]]:
             return json.loads((work_dir / "pages.json").read_text(encoding="utf-8"))
         except (subprocess.SubprocessError, OSError, ValueError) as exc:
             logger.warning(f"Docling attempt {attempt} failed ({type(exc).__name__}); see {log_file}")
-    raise IngestionError("Docling không xử lý được tài liệu sau các lần thử.")
+    raise IngestionError(Code.PARSE_FAILED)
 
 
 class DoclingSession:
@@ -101,7 +102,7 @@ class DoclingSession:
         reader.join(settings.DOCLING_TIMEOUT_SECONDS)
         if reader.is_alive() or "answer" not in got:
             self.close()
-            raise IngestionError("Docling worker did not answer.")
+            raise IngestionError(Code.PARSE_FAILED)
         return got["answer"]
 
     def parse(self, pdf_path: Path, work_dir: Path) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -123,7 +124,7 @@ class DoclingSession:
             except (OSError, ValueError, IngestionError) as exc:
                 logger.warning(f"Docling attempt {attempt} on {pdf_path.name} failed ({type(exc).__name__}); see {self.log_file}")
             self.close()
-        raise IngestionError("Docling không xử lý được tài liệu sau các lần thử.")
+        raise IngestionError(Code.PARSE_FAILED)
 
     def close(self) -> None:
         """End the worker (its GPU memory goes back to the embedding and reranker models)."""

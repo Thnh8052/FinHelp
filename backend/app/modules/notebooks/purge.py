@@ -3,11 +3,10 @@ from datetime import datetime, timedelta, timezone
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from qdrant_client import AsyncQdrantClient
-from qdrant_client.http import models
 
-from app.core.config import settings
 from app.core.logging import logger
 from app.infrastructure.database import collections
+from app.infrastructure.database.qdrant import delete_document_vectors
 from app.infrastructure.storage.local_fs import StorageService
 from app.modules.documents.document import ACTIVE_STATUSES, DocumentRecord
 from app.modules.documents.document_repo import DocumentRepository
@@ -20,14 +19,7 @@ GUEST_LIFETIME = timedelta(hours=24)
 
 async def purge_document(db: AsyncIOMotorDatabase, qdrant: AsyncQdrantClient, document: DocumentRecord) -> None:
     """Vectors and files first, the document record last: if a step fails the record stays, so the deletion can be retried."""
-    if await qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
-        await qdrant.delete(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            points_selector=models.FilterSelector(
-                filter=models.Filter(must=[models.FieldCondition(key="document_id", match=models.MatchValue(value=document.document_id))])
-            ),
-            wait=True,
-        )
+    await delete_document_vectors(qdrant, document.document_id)
     await StorageService().delete_document_files(document.notebook_id, document.document_id, document.file_path)
     await ChunkRepository(db).delete_by_document(document.document_id)
     await IngestionJobRepository(db).delete_by_document(document.document_id)

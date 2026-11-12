@@ -11,6 +11,9 @@ import re
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, field_validator
+from pydantic_core import PydanticCustomError
+
+from app.core.error_codes import Code
 
 from app.modules.documents.document import DocumentRecord
 from app.modules.ingestion.catalog import DOC_TYPES, _norm
@@ -24,7 +27,7 @@ TICKER = re.compile(r"[A-Z0-9.\-]{1,10}")
 def _name(value: str, max_chars: int, max_words: int) -> str:
     value = re.sub(r" {2,}", " ", value.strip())
     if not value or len(value) > max_chars or len(value.split()) > max_words or not NAME.fullmatch(value):
-        raise ValueError(f"tên chỉ gồm chữ, số, khoảng trắng và & . , ' -, tối đa {max_chars} ký tự / {max_words} từ, một dòng")
+        raise PydanticCustomError(Code.CATALOG_NAME_INVALID, "invalid name", {"max_chars": max_chars, "max_words": max_words})
     return value
 
 
@@ -49,35 +52,35 @@ class CatalogUpdate(BaseModel):
             return None
         v = v.strip().upper()
         if not TICKER.fullmatch(v):
-            raise ValueError("mã chứng khoán chỉ gồm chữ in hoa, số, dấu chấm, gạch ngang (1-10 ký tự)")
+            raise PydanticCustomError(Code.CATALOG_TICKER_INVALID, "invalid ticker")
         return v
 
     @field_validator("aliases")
     @classmethod
     def _aliases(cls, v: List[str]) -> List[str]:
         if len(v) > 5:
-            raise ValueError("tối đa 5 tên khác")
+            raise PydanticCustomError(Code.CATALOG_ALIASES_TOO_MANY, "too many aliases", {"max": 5})
         return list(dict.fromkeys(_name(a, 60, 6) for a in v if a.strip()))
 
     @field_validator("report_type")
     @classmethod
     def _report_type(cls, v: str) -> str:
         if v not in REPORT_TYPES:
-            raise ValueError("loại báo cáo phải chọn trong danh sách")
+            raise PydanticCustomError(Code.CATALOG_REPORT_TYPE_INVALID, "invalid report type")
         return v
 
     @field_validator("fiscal_year")
     @classmethod
     def _year(cls, v: int) -> int:
         if not 1990 <= v <= datetime.date.today().year + 1:
-            raise ValueError("năm tài chính ngoài khoảng 1990 - năm sau")
+            raise PydanticCustomError(Code.CATALOG_YEAR_OUT_OF_RANGE, "year out of range", {"min_year": 1990, "max_year": datetime.date.today().year + 1})
         return v
 
     @field_validator("fiscal_quarter")
     @classmethod
     def _quarter(cls, v: Optional[int]) -> Optional[int]:
         if v is not None and v not in (1, 2, 3, 4):
-            raise ValueError("quý là 1-4 hoặc để trống")
+            raise PydanticCustomError(Code.CATALOG_QUARTER_INVALID, "invalid quarter")
         return v
 
     @field_validator("period_end")
@@ -88,7 +91,7 @@ class CatalogUpdate(BaseModel):
         try:
             return datetime.date.fromisoformat(v.strip()).isoformat()
         except ValueError:
-            raise ValueError("ngày kết thúc kỳ phải có dạng YYYY-MM-DD")
+            raise PydanticCustomError(Code.CATALOG_PERIOD_END_INVALID, "invalid period end")
 
 
 def needs_confirmation(doc: DocumentRecord) -> bool:

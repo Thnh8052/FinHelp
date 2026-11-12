@@ -10,18 +10,21 @@ import datetime
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.modules.query_router.catalog_route import company_words
+
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 MON = "(" + "|".join(MONTHS) + ")"
 DATE = MON + r"\s+(\d{1,2})\s*,?\s*(\d{4})"
 SUFFIX = r"(?:Inc\.?|Incorporated|Corporation|Corp\.|Company|Co\.|plc|PLC|N\.V\.|Ltd\.?|Limited|S\.A\.)"
 LEGAL = re.compile(r"\b((?:The\s+)?[A-Z0-9][\w&.'\-]*(?:\s+(?:[A-Z0-9&][\w&.'\-]*|of|and)){0,4}),?\s+" + SUFFIX + r"(?![\w])")
-STOPKEY = {"the", "inc", "incorporated", "corporation", "corp", "company", "co", "plc", "nv", "ltd", "limited", "sa", "and", "subsidiaries", "its"}
-BAD = re.compile(r"\b(Exchange|Commission|Securities|Trust|Bank of New York|Depository|Investors Service|Ratings|Standard|Moody|Fitch|Ernst|Deloitte|KPMG|Pricewaterhouse|Nasdaq|Stock Market|Federal|Reserve|Act|Item|Form|Notes?|Exhibit|Consolidated|Balance|Statements?|Period|Parent)\b", re.I)
+BAD =re.compile(r"\b(Exchange|Commission|Securities|Trust|Bank of New York|Depository|Investors Service|Ratings|Standard|Moody|Fitch|Ernst|Deloitte|KPMG|Pricewaterhouse|Nasdaq|Stock Market|Federal|Reserve|Act|Item|Form|Notes?|Exhibit|Consolidated|Balance|Statements?|Period|Parent)\b", re.I)
 QW = ["first", "second", "third", "fourth"]
 
 
 def _key(name: str) -> str:
-    return " ".join(w for w in re.findall(r"[a-z0-9&]+", name.lower()) if w not in STOPKEY)
+    """The shared company words (catalog_route.company_words), kept apart by spaces: the key is also searched for inside the
+    words of a whole page (company_candidates), where written-together words would let "ford" match inside "stanford"."""
+    return " ".join(company_words(name))
 
 
 def _company(full: str) -> Tuple[Optional[str], Dict[str, int], Dict[str, str]]:

@@ -1,11 +1,13 @@
 import asyncio
+import json
 from collections import Counter
 from contextvars import ContextVar
-from typing import Dict, List
+from typing import Callable, Dict, List, Optional, Tuple
 
 import httpx
 
 from app.core.config import settings
+from app.core.error_codes import Code
 from app.core.exceptions import DomainException
 from app.core.logging import logger
 
@@ -21,6 +23,43 @@ class LLMUnavailableError(DomainException):
     """The language-model service has no key, rejected the call, or stayed unreachable after retries."""
 
 
+def _record_usage(usage: Optional[Dict]) -> None:
+    counts = {k: v for k, v in (usage or {}).items() if isinstance(v, int)} | {"calls": 1}
+    reasoning = ((usage or {}).get("completion_tokens_details") or {}).get("reasoning_tokens")  # the API nests it; it is already inside completion_tokens
+    if isinstance(reasoning, int):
+        counts["reasoning_tokens"] = reasoning
+    USAGE.update(counts)
+    if REQUEST_USAGE.get() is not None:
+        REQUEST_USAGE.get().update(counts)
+
+
+async def _streamed(client: httpx.AsyncClient, url: str, headers: Dict, payload: Dict, on_delta: Callable[[str], None]) -> Tuple[int, str, Optional[str]]:
+    """(status, content, finish_reason) of a streamed call; every piece of content goes to `on_delta` as it arrives. The reasoning
+    of a thinking model (reasoning_content) is not passed on."""
+    parts: List[str] = []
+    finish: Optional[str] = None
+    async with client.stream("POST", url, headers=headers, json={**payload, "stream": True, "stream_options": {"include_usage": True}}) as resp:
+        if resp.status_code != 200:
+            await resp.aread()
+            return resp.status_code, "", None
+        async for line in resp.aiter_lines():
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            chunk = json.loads(data)
+            if chunk.get("usage"):
+                _record_usage(chunk["usage"])
+            for choice in chunk.get("choices") or []:
+                piece = (choice.get("delta") or {}).get("content")
+                if piece:
+                    parts.append(piece)
+                    on_delta(piece)
+                finish = choice.get("finish_reason") or finish
+    return 200, "".join(parts).strip(), finish
+
+
 async def chat_completion(
     messages: List[Dict[str, str]],
     *,
@@ -28,12 +67,15 @@ async def chat_completion(
     json_mode: bool = False,
     timeout: float = 80.0,
     retries: int = 4,
+    on_delta: Optional[Callable[[str], None]] = None,
 ) -> str:
     """Call the DeepSeek chat-completions API (temperature 0) with timeout and exponential backoff.
     `max_tokens` is raised to LLM_MIN_MAX_TOKENS: the reasoning of deepseek-flash counts against it, and a small budget made the
-    planner come back empty on ambiguous questions (finish_reason 'length', no content). A cut reply is retried with twice the budget."""
+    planner come back empty on ambiguous questions (finish_reason 'length', no content). A cut reply is retried with twice the budget.
+    With `on_delta` the reply is streamed and each piece is passed to it as it arrives; a retry after pieces were sent is not streamed
+    (the caller receives the whole text as the return value and shows that)."""
     if not settings.DEEPSEEK_API_KEY:
-        raise LLMUnavailableError("Chưa cấu hình khóa dịch vụ ngôn ngữ (DEEPSEEK_API_KEY).")
+        raise LLMUnavailableError(Code.LLM_NOT_CONFIGURED)
 
     payload: Dict = {
         "model": settings.DEFAULT_LLM_MODEL,
@@ -45,31 +87,35 @@ async def chat_completion(
         payload["response_format"] = {"type": "json_object"}
     headers = {"Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
+    url = f"{settings.LLM_BASE_URL}/chat/completions"
     delay = 2.0
     async with httpx.AsyncClient(timeout=timeout) as client:
         for attempt in range(1, retries + 1):
+            sink, on_delta = on_delta, None  # at most one streamed attempt: pieces of a second one would repeat the first
             try:
-                resp = await client.post(f"{settings.LLM_BASE_URL}/chat/completions", headers=headers, json=payload)
-                if resp.status_code == 200:
-                    body = resp.json()
-                    counts = {k: v for k, v in (body.get("usage") or {}).items() if isinstance(v, int)} | {"calls": 1}
-                    USAGE.update(counts)
-                    if REQUEST_USAGE.get() is not None:
-                        REQUEST_USAGE.get().update(counts)
-                    choice = body["choices"][0]
-                    content = (choice["message"].get("content") or "").strip()
-                    if choice.get("finish_reason") == "length" and payload["max_tokens"] < settings.LLM_MAX_TOKENS_CEILING:
+                if sink is not None:
+                    status, content, finish = await _streamed(client, url, headers, payload, sink)
+                else:
+                    resp = await client.post(url, headers=headers, json=payload)
+                    status, content, finish = resp.status_code, "", None
+                    if status == 200:
+                        body = resp.json()
+                        _record_usage(body.get("usage"))
+                        choice = body["choices"][0]
+                        content, finish = (choice["message"].get("content") or "").strip(), choice.get("finish_reason")
+                if status == 200:
+                    if finish == "length" and payload["max_tokens"] < settings.LLM_MAX_TOKENS_CEILING:
                         logger.warning(f"LLM reply cut at max_tokens={payload['max_tokens']}; retrying with a larger budget")
                         payload["max_tokens"] = min(payload["max_tokens"] * 2, settings.LLM_MAX_TOKENS_CEILING)
                         continue
                     return content
-                if resp.status_code < 500 and resp.status_code not in RETRYABLE_STATUS:
+                if status < 500 and status not in RETRYABLE_STATUS:
                     # Auth / bad-request errors do not heal by retrying.
-                    raise LLMUnavailableError(f"Dịch vụ ngôn ngữ từ chối yêu cầu (HTTP {resp.status_code}).")
-                logger.warning(f"LLM call attempt {attempt}/{retries}: HTTP {resp.status_code}")
-            except httpx.HTTPError as exc:
+                    raise LLMUnavailableError(Code.LLM_REJECTED, status=status)
+                logger.warning(f"LLM call attempt {attempt}/{retries}: HTTP {status}")
+            except (httpx.HTTPError, json.JSONDecodeError) as exc:
                 logger.warning(f"LLM call attempt {attempt}/{retries} failed: {type(exc).__name__}")
             if attempt < retries:
                 await asyncio.sleep(delay)
                 delay = min(delay * 1.6, 20.0)
-    raise LLMUnavailableError("Dịch vụ tạo câu trả lời tạm thời chưa sẵn sàng.")
+    raise LLMUnavailableError(Code.LLM_UNAVAILABLE)

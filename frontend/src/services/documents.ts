@@ -1,10 +1,10 @@
-import { apiRequest } from "./api";
-import { DocumentRecord } from "../types/notebook";
+import { apiBlob, apiRequest } from "./api";
+import { CatalogPayload, CatalogUpdate, DocumentRecord } from "../types/notebook";
 
 export const documentService = {
   list: (notebookId: string) => apiRequest<DocumentRecord[]>(`/documents/notebook/${notebookId}`),
 
-  remove: (documentId: string) => apiRequest<{ document_id: string; message: string }>(`/documents/${documentId}`, {
+  remove: (documentId: string) => apiRequest<{ document_id: string }>(`/documents/${documentId}`, {
     method: "DELETE",
   }),
 
@@ -17,5 +17,10 @@ export const documentService = {
     });
   },
 
-  getFileUrl: (documentId: string) => `/api/v1/documents/${documentId}/file`,
+  getFile: (documentId: string) => apiBlob(`/documents/${documentId}/file`),
+
+  getCatalog: (documentId: string) => apiRequest<CatalogPayload>(`/documents/${documentId}/catalog`),
+
+  updateCatalog: (documentId: string, body: CatalogUpdate) =>
+    apiRequest<{ document_id: string }>(`/documents/${documentId}/catalog`, { method: "PATCH", body: JSON.stringify(body) }),
 };

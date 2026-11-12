@@ -16,7 +16,6 @@ interface NavbarProps {
   onToggleSplitView?: () => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
-  onExportReport?: () => void;
   onOpenAuthModal: () => void;
   onOpenAdminDashboard: () => void;
   onNavigateHome?: () => void;
@@ -31,7 +30,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSplitView,
   isSidebarOpen = true,
   onToggleSidebar,
-  onExportReport: _onExportReport,
   onOpenAuthModal,
   onOpenAdminDashboard,
   onNavigateHome,
@@ -62,21 +60,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             id="btn-toggle-sidebar"
             onClick={onToggleSidebar}
             className={`navbar-sidebar-btn ${isSidebarOpen ? "active" : ""}`}
-            title="Toggle sidebar (Ctrl+B)"
-            aria-label="Toggle sidebar"
+            title={t.nav.toggleSidebar}
+            aria-label={t.nav.toggleSidebar}
           >
             <MenuIcon size={16} />
           </button>
         )}
-        <div className="cursor-pointer" onClick={onNavigateHome} title="Return to FinHelp Home">
+        <button type="button" className="navbar-brand-home" onClick={onNavigateHome} title={t.nav.returnHome} aria-label={t.nav.returnHome}>
           <FinHelpLogo size="sm" showText={false} />
-        </div>
+        </button>
         <div className="navbar-brand-info">
           <div className="navbar-brand-row">
             <span
               className="navbar-brand-title cursor-pointer hover:text-blue-400 transition-colors"
               onClick={onNavigateHome}
-              title="Return to FinHelp Home"
+              title={t.nav.returnHome}
             >
               FinHelp
             </span>
@@ -85,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="navbar-brand-subtitle">
             <span className="navbar-status-dot" />
             <span className="navbar-notebook-title" title={notebookTitle}>
-              {notebookTitle || "Financial Statement Analysis"}
+              {notebookTitle || t.nav.defaultTitle}
             </span>
           </div>
         </div>
@@ -100,7 +98,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             id="btn-toggle-sources"
             onClick={onToggleSources}
             className={`navbar-action-btn ${isSourcesOpen ? "active" : ""}`}
-            title="Toggle filing sources for this session"
+            title={t.nav.toggleFilings}
           >
             <FileTextIcon size={14} color="var(--accent-primary)" />
             <span className="navbar-btn-text">{t.nav.filings}: <strong>{sourcesCount}</strong></span>
@@ -115,8 +113,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             id="btn-toggle-splitview"
             onClick={onToggleSplitView}
             className={`navbar-action-btn split-toggle ${isSplitViewOpen ? "active" : ""}`}
-            title={isSplitViewOpen ? "Close document reader" : "Open document reader"}
-            aria-label="Toggle document reader"
+            title={isSplitViewOpen ? t.nav.closeReader : t.nav.openReader}
+            aria-label={t.nav.toggleReader}
           >
             <TableIcon size={14} />
             <span className="navbar-btn-text">{t.nav.splitView} [{isSplitViewOpen ? t.nav.splitViewOn : t.nav.splitViewOff}]</span>
@@ -146,7 +144,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {user.full_name ? user.full_name.split(" - ")[0] : user.username}
             </span>
             <span className={`navbar-role-badge ${isAdmin ? "admin" : ""}`}>
-              {isAdmin ? "ADMIN" : "USER"}
+              {isAdmin ? t.nav.roleAdmin : t.nav.roleUser}
             </span>
           </div>
         ) : (

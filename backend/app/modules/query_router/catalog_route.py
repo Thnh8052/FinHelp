@@ -39,6 +39,30 @@ one two third fifth new york ball news processing machines automatic storage boo
 PREFIX_MIN_LEN, PREFIX_MIN_COVER = 4, 0.7  # "Pepsi" covers 71 % of "pepsico", "Intel" only 62 % of "intelsat"
 TYPO_MIN_LEN = 5  # one wrong letter, never the first (Meilisearch's rule for one typo)
 
+# Company identity: the one rule for "are these two names the same company?", used by every step that asks it (grouping the
+# selected filings, picking the filing of a named company, checking a citation's company, voting for the name of a new upload).
+SUBSIDIARIES = re.compile(r"\b(?:(?:and|&)\s+)?(?:its\s+)?(?:consolidated\s+)?subsidiar(?:y|ies)(?:\s+companies)?\b", re.I)
+LEGAL_WORDS = frozenset("the and of inc incorporated corp corporation company co ltd limited plc llc lp sa nv ag se holdings holding group international".split())
+
+
+def company_words(name):
+    """The words of a company name without its legal form: "NIKE, Inc. and Subsidiaries" -> ["nike"], "Intelsat S.A." -> ["intelsat"].
+    "&" separates words like "and" does ("Johnson & Johnson" = "Johnson and Johnson")."""
+    s = SUBSIDIARIES.sub(" ", (name or "").lower().replace("’", "'"))
+    s = re.sub(r"\b([a-z])\.(?=[a-z]\b)", r"\1", s)  # dotted abbreviations become one word: s.a. -> sa., n.v. -> nv.
+    return [w for w in re.findall(r"[^\W_]+", s) if w not in LEGAL_WORDS]
+
+
+def company_key(name):
+    """Same key = same company: the words written together, so "Wal-Mart" and "Walmart" agree. Exact equality only: "Coca-Cola"
+    and "Coca-Cola Consolidated" are two companies. A renamed company (Wal-Mart Stores -> Walmart) needs its aliases."""
+    return "".join(company_words(name))
+
+
+def _bare(name):
+    """A catalog name without its "and Subsidiaries" tail: those words name no company ("UBS" is not Ulta Beauty ... Subsidiaries)."""
+    return SUBSIDIARIES.sub(" ", name or "")
+
 
 def plain_words(s):
     s = re.sub(r"['’]s\b", "", (s or "").lower())  # possessive: "A.R.G.C.'s" -> "A.R.G.C."
@@ -58,14 +82,15 @@ def joined(ws):
 
 
 def name_tokens(entity):
-    return {w for w in joined(words(entity)) if w not in STOP and len(w) >= 3}
+    return {w for w in joined(words(_bare(entity))) if w not in STOP and len(w) >= 3}
 
 
 def names(card):
     """Name tokens of a catalog line: entity + aliases (+ joined neighbours) + the initials of a multi-word entity (amd) + the ticker
-    the user confirmed. The one place a company name is normalised for matching (questions go through words())."""
+    the user confirmed. The one place a company name is normalised for matching a question (questions go through words());
+    company_key compares two names."""
     toks = name_tokens(card.get("entity")).union(*[name_tokens(a) for a in card.get("aliases") or []])
-    initials = "".join(w[0] for w in words(card.get("entity")) if w not in STOP and len(w) >= 3)
+    initials = "".join(w[0] for w in words(_bare(card.get("entity"))) if w not in STOP and len(w) >= 3)
     ticker = (card.get("ticker") or "").lower()
     return toks | ({initials} if len(initials) >= 3 else set()) | ({ticker} if len(ticker) >= 2 else set())
 
@@ -91,8 +116,8 @@ def _capitalised(toks, question):
 
 def _level(question, plain, grams, card):
     """How the question names this company: 1 full name, ticker or initials; 2 a distinctive word of the name; 3 a beginning of one; 4 one letter off; 0 no."""
-    names_ = [n for n in [card.get("entity")] + list(card.get("aliases") or []) if n]
-    initials = "".join(w[0] for w in words(card.get("entity")) if w not in STOP and len(w) >= 3)
+    names_ = [_bare(n) for n in [card.get("entity")] + list(card.get("aliases") or []) if n]
+    initials = "".join(w[0] for w in words(_bare(card.get("entity"))) if w not in STOP and len(w) >= 3)
     ticker = (card.get("ticker") or "").lower()
     if len(ticker) >= 2 and _written(ticker, question, plain) or len(initials) >= 3 and _written(initials, question, plain):
         return 1
@@ -208,10 +233,3 @@ def year_rule(question, ws, cards):
         if not has and all(c.get("fiscal_year") for c in cs):
             missing.append(f"Q{QNUM[qn]} FY{y}")
     return missing
-
-
-def company_rule(question, ws, texts):
-    """Capitalised question words (not the first word) that appear nowhere in the text of the selected filings."""
-    caps = re.findall(r"[A-Za-z&]*[A-Z][A-Za-z&]*", question)[1:]
-    qwords = {w.lower() for w in caps if len(w) >= 3 and w.lower() not in COMMON}
-    return sorted(w for w in qwords if not any(w in texts.get(d, ()) for d in ws))

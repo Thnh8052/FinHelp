@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
-import { ApiError } from "../services/api";
+import { ApiError, errorText, signInHelps } from "../services/api";
 import { chatService } from "../services/chat";
-import { ChatMessage } from "../types/chat";
+import { ChatMessage, ChatStage } from "../types/chat";
 import { ShowToast } from "./useToast";
 
 interface ChatOptions {
@@ -18,13 +18,15 @@ interface ChatOptions {
 export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onLoginRequired, onTitle }: ChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [stage, setStage] = useState<ChatStage | null>(null);
+  const pending = useRef("");  // pieces not drawn yet: drawn once per frame, not once per piece
   const { t } = useLanguage();
 
-  const loginWarning = (detail: string) => showToast(detail, "warning", "Sign in now", onLoginRequired);
+  const loginWarning = (detail: string) => showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
 
   const sendMessage = async (queryText: string, mentions?: string[]) => {
     if (selectedDocIds.length === 0) {
-      showToast("Please select at least one filing from the sources drawer before querying.", "warning");
+      showToast(t.toasts.selectFiling, "warning");
       return;
     }
     const assistantNote = (id: string, content: string): ChatMessage => ({
@@ -45,34 +47,65 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       },
     ]);
     setIsLoading(true);
+    setStage("understanding");
+
+    // The answer being written: one message, created by the first piece (or by "understood"), finished by the recorded answer
+    const streamId = `msg_asst_${Date.now()}`;
+    const upsert = (patch: Partial<ChatMessage>) =>
+      setMessages((prev) =>
+        prev.some((m) => m.message_id === streamId)
+          ? prev.map((m) => (m.message_id === streamId ? { ...m, ...patch } : m))
+          : [...prev, { message_id: streamId, notebook_id: notebookId, role: "assistant", content: "", created_at: new Date().toISOString(), streaming: true, ...patch }]
+      );
+    let frame = 0;
+    const draw = () => {
+      frame = 0;
+      const text = pending.current;
+      pending.current = "";
+      setMessages((prev) =>
+        prev.some((m) => m.message_id === streamId)
+          ? prev.map((m) => (m.message_id === streamId ? { ...m, content: m.content + text } : m))
+          : [...prev, { message_id: streamId, notebook_id: notebookId, role: "assistant", content: text, created_at: new Date().toISOString(), streaming: true }]
+      );
+    };
+    pending.current = "";
 
     try {
-      const data = await chatService.query({
-        notebook_id: notebookId,
-        query: queryText,
-        document_ids: Array.from(new Set([...(mentions || []), ...selectedDocIds])).slice(0, maxSources),
-        mentions,
-      });
-      setMessages((prev) => [
-        ...prev,
+      const data = await chatService.queryStream(
         {
-          message_id: `msg_asst_${Date.now()}`,
           notebook_id: notebookId,
-          role: "assistant",
-          content: data.answer,
-          citations: data.citations || [],
-          created_at: new Date().toISOString(),
-          understood: data.understood || "",
-          alternatives: data.alternatives || [],
           query: queryText,
+          document_ids: Array.from(new Set([...(mentions || []), ...selectedDocIds])).slice(0, maxSources),
+          mentions,
         },
-      ]);
+        {
+          onStage: setStage,
+          onUnderstood: (understood, alternatives) => upsert({ understood, alternatives: alternatives || [] }),
+          onDelta: (text) => {
+            pending.current += text;
+            if (!frame) frame = requestAnimationFrame(draw);
+          },
+        }
+      );
+      if (frame) cancelAnimationFrame(frame);
+      pending.current = "";
+      upsert({
+        content: data.answer,  // the checked answer replaces what was streamed
+        citations: data.citations || [],
+        understood: data.understood || "",
+        alternatives: data.alternatives || [],
+        query: queryText,
+        streaming: false,
+      });
       onTitle(notebookId, data.title);
     } catch (err) {
+      if (frame) cancelAnimationFrame(frame);
+      pending.current = "";
+      setMessages((prev) => prev.filter((m) => m.message_id !== streamId));  // a half-written answer is not left behind
       if (err instanceof ApiError) {
-        const detail = err.status >= 500 || !err.detail ? t.workspace.systemBusy : err.detail;  // lỗi hệ thống không lộ chi tiết cho người dùng
-        // Auth required
-        if (err.status === 403 || detail.toLowerCase().includes("login") || detail.toLowerCase().includes("sign in") || detail.toLowerCase().includes("đăng nhập")) {
+        const detail = err.status >= 500 ? t.workspace.systemBusy : errorText(err, t, t.workspace.systemBusy);  // lỗi hệ thống không lộ chi tiết cho người dùng
+        // Signing in helps on 401 or for the refusals that name it (a 403 alone does not: a read-only notebook stays read-only)
+        if (signInHelps(err)) {
           loginWarning(detail);
         } else {
           showToast(detail, "error");
@@ -84,8 +117,9 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       }
     } finally {
       setIsLoading(false);
+      setStage(null);
     }
   };
 
-  return { messages, setMessages, isLoading, sendMessage };
+  return { messages, setMessages, isLoading, stage, sendMessage };
 }

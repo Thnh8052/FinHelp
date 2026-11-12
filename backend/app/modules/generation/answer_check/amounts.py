@@ -30,13 +30,7 @@ CURRENCY_SYMBOLS = "$₫€£¥"
 SCALE_SUFFIXES = ("bn", "mn", "M", "B", "K", "m", "k")
 MINUS_SIGNS = "-−"
 EN = "en"
-VI = "vi"
 GROUP_SPACES = "    "  # space, no-break space, thin space, narrow no-break space: how financial statements group thousands ("89 913")
-
-
-def locale_for_language(language: Optional[str]) -> str:
-    """Number locale for a page language code ("vi" -> VAS separators, anything else -> en)."""
-    return VI if (language or "").lower() == VI else EN
 
 
 def _is_digit(ch: str) -> bool:
@@ -247,13 +241,3 @@ def find_amounts(text: str, locale: str = EN, space_groups: bool = False) -> Lis
             is_percent=is_percent, currency=currency, is_reference=is_reference,
         ))
     return amounts
-
-
-def parse_amount(token: str, locale: str = EN) -> Optional[Amount]:
-    """The single number that makes up the whole of `token` (ignoring outer spaces), else None."""
-    text = token.strip()
-    found = find_amounts(text, locale)
-    if len(found) != 1:
-        return None
-    amount = found[0]
-    return amount if amount.start == 0 and amount.end == len(text) else None

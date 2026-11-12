@@ -12,33 +12,51 @@ Một notebook là một đoạn chat: danh sách lịch sử chat chính là da
 """
 
 import uuid
-from typing import Annotated, List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated, Any, List, Optional
+from fastapi import APIRouter, Depends, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, StringConstraints, field_validator
 from qdrant_client import AsyncQdrantClient
 
+from app.core.config import settings
+from app.core.error_codes import Code, api_error
 from app.core.logging import logger
 from app.shared.deps import GUEST_PREFIX, get_current_user_id, get_optional_user_id, require_notebook
+from app.shared.rate_limit import spend_guest_allowance
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.notebooks.notebook_repo import NotebookRepository
-from app.modules.notebooks.notebook import GUEST_TITLE, NotebookRecord
+from app.modules.notebooks.notebook import GUEST_TITLE, NotebookRecord, shown_title
 from app.modules.notebooks.purge import has_active_documents, purge_notebook
 
 router = APIRouter(prefix="/notebooks", tags=["Notebooks"])
 
 
 class CreateNotebookRequest(BaseModel):
-    title: Optional[str] = None
+    title: Optional[Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)]] = None
 
 
 class UpdateNotebookRequest(BaseModel):
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 
 
-class NotebookSummary(NotebookRecord):
+class NotebookOut(BaseModel):
+    """A notebook as the interface shows it: no owner key or conversation focus."""
+
+    notebook_id: str
+    title: str
+    message_count: int
+    created_at: Any
+    updated_at: Any
+
+    @field_validator("title")
+    @classmethod
+    def _title_shown(cls, title: str) -> str:
+        return shown_title(title)
+
+
+class NotebookSummary(NotebookOut):
     """A notebook as shown in the notebook list."""
 
     document_count: int = 0
@@ -61,7 +79,7 @@ async def list_notebooks(
     return [NotebookSummary(**n.model_dump(), **counts.get(n.notebook_id, {})) for n in notebooks]
 
 
-@router.post("", response_model=NotebookRecord)
+@router.post("", response_model=NotebookOut)
 async def create_notebook(
     req: CreateNotebookRequest,
     user_id: str = Depends(get_current_user_id),
@@ -74,7 +92,7 @@ async def create_notebook(
 
 
 # Khách có thể xem notebook của mình (mã notebook là chìa khóa) và mọi người có thể xem notebook mẫu (owner_type = system).
-@router.get("/{notebook_id}", response_model=NotebookRecord)
+@router.get("/{notebook_id}", response_model=NotebookOut)
 async def get_notebook(
     notebook_id: str,
     user_id: Optional[str] = Depends(get_optional_user_id),
@@ -84,8 +102,9 @@ async def get_notebook(
 
 
 # Mỗi khách chưa đăng nhập có một notebook riêng (nb_guest_ + 32 ký tự hex ngẫu nhiên), tự xóa sau 24 giờ không dùng.
-@router.post("/guest", response_model=NotebookRecord)
-async def create_guest_notebook(db: AsyncIOMotorDatabase = Depends(get_database)):
+@router.post("/guest", response_model=NotebookOut)
+async def create_guest_notebook(request: Request, db: AsyncIOMotorDatabase = Depends(get_database)):
+    spend_guest_allowance(request, "notebook", settings.GUEST_DAILY_NOTEBOOKS)  # each new guest notebook allows one more upload
     key = uuid.uuid4().hex
     record = NotebookRecord(
         notebook_id=f"{GUEST_PREFIX}{key}",
@@ -100,7 +119,7 @@ async def create_guest_notebook(db: AsyncIOMotorDatabase = Depends(get_database)
 async def _own_notebook(db: AsyncIOMotorDatabase, notebook_id: str, user_id: str) -> NotebookRecord:
     notebook = await NotebookRepository(db).get_by_id(notebook_id)
     if not notebook or notebook.owner_type != "user" or notebook.owner_id != user_id:
-        raise HTTPException(status_code=404, detail="Không tìm thấy Notebook hoặc không có quyền thao tác")
+        raise api_error(status_code=404, code=Code.NOTEBOOK_NOT_FOUND)
     return notebook
 
 
@@ -114,7 +133,7 @@ async def update_notebook(
     """Đổi tiêu đề đoạn chat."""
     await _own_notebook(db, notebook_id, user_id)
     success = await NotebookRepository(db).rename(notebook_id, req.title)
-    return {"success": success, "message": "Cập nhật Notebook thành công"}
+    return {"success": success}
 
 
 @router.delete("/{notebook_id}")
@@ -127,10 +146,10 @@ async def delete_notebook(
     """Xóa đoạn chat cùng toàn bộ tài liệu, vector, tệp PDF và tin nhắn của nó."""
     await _own_notebook(db, notebook_id, user_id)
     if await has_active_documents(db, notebook_id):
-        raise HTTPException(status_code=409, detail="Tài liệu trong đoạn chat này đang được xử lý. Vui lòng đợi xử lý xong rồi mới xóa.")
+        raise api_error(status_code=409, code=Code.NOTEBOOK_BUSY_DELETE)
     try:
         await purge_notebook(db, qdrant, notebook_id)
     except Exception as exc:
         logger.error(f"Could not purge notebook {notebook_id}: {type(exc).__name__}: {exc}")
-        raise HTTPException(status_code=503, detail="Không thể xóa đầy đủ dữ liệu của đoạn chat. Vui lòng thử lại.") from exc
-    return {"success": True, "message": "Xóa Notebook thành công"}
+        raise api_error(status_code=503, code=Code.NOTEBOOK_DELETE_FAILED) from exc
+    return {"success": True}

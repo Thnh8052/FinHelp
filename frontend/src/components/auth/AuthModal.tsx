@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { authService } from "../../services/auth";
+import { errorText } from "../../services/api";
 import { LanguageToggle } from "../common/LanguageToggle";
 import { CloseIcon, SparklesIcon } from "../common/Icons";
 import "./auth.css";
@@ -14,7 +15,7 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTab = "signin" }) => {
   const { login, register, continueAsGuest } = useAuth();
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const [tab, setTab] = useState<"signin" | "signup" | "forgot">(initialTab);
 
   // Form states
@@ -44,7 +45,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
       await login(identifier, password);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Sign in failed. Please verify your credentials.");
+      setError(errorText(err, t, t.auth.errorSignInFallback));
     } finally {
       setLoading(false);
     }
@@ -58,7 +59,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
       await register(email, username, password, fullName);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Registration failed. Email or username may already exist.");
+      setError(errorText(err, t, t.auth.errorRegisterFallback));
     } finally {
       setLoading(false);
     }
@@ -70,10 +71,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
     setLoading(true);
     try {
       await authService.forgotPassword(forgotEmail);
-      setSuccessMsg("If the email is registered, a verification code has been sent. Enter it with your new password below.");
+      setSuccessMsg(t.auth.codeSentGeneric);
       setForgotStep(2);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unable to send OTP code.");
+      setError(errorText(err, t, t.auth.errorSendOtpFallback));
     } finally {
       setLoading(false);
     }
@@ -84,15 +85,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
     setError(null);
     setLoading(true);
     try {
-      const res = await authService.resetPassword(forgotEmail, otpCode, newPassword);
-      setSuccessMsg(res.message);
+      await authService.resetPassword(forgotEmail, otpCode, newPassword);
+      setSuccessMsg(t.auth.passwordResetSuccess);
       setTimeout(() => {
         setTab("signin");
         setForgotStep(1);
         setSuccessMsg(null);
       }, 1500);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "OTP verification failed.");
+      setError(errorText(err, t, t.auth.errorOtpFallback));
     } finally {
       setLoading(false);
     }
@@ -115,9 +116,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
               {tab === "forgot" && t.auth.forgotStep1Desc}
             </p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div className="auth-header-actions">
             <LanguageToggle size="sm" />
-            <button onClick={onClose} className="auth-close-btn" aria-label="Close">
+            <button onClick={onClose} className="auth-close-btn" aria-label={t.common.close}>
               <CloseIcon size={16} />
             </button>
           </div>
@@ -133,8 +134,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
             <div>
               <form onSubmit={handleSignIn} className="auth-form">
                 <div className="auth-field">
-                  <label className="auth-label">{t.auth.emailOrUsername}</label>
+                  <label className="auth-label" htmlFor="modal-identifier">{t.auth.emailOrUsername}</label>
                   <input
+                    id="modal-identifier"
+                    autoComplete="username"
                     type="text"
                     required
                     value={identifier}
@@ -146,7 +149,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
 
                 <div className="auth-field">
                   <div className="auth-label-row">
-                    <label className="auth-label">{t.auth.password}</label>
+                    <label className="auth-label" htmlFor="modal-password">{t.auth.password}</label>
                     <button
                       type="button"
                       onClick={() => setTab("forgot")}
@@ -156,6 +159,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     </button>
                   </div>
                   <input
+                    id="modal-password"
+                    autoComplete="current-password"
                     type="password"
                     required
                     value={password}
@@ -213,10 +218,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
             <div>
               <form onSubmit={handleSignUp} className="auth-form-dense">
                 <div className="auth-field">
-                  <label className="auth-label">
-                    Email <span className="auth-required">*</span>
+                  <label className="auth-label" htmlFor="modal-reg-email">
+                    {t.auth.emailAddress} <span className="auth-required">*</span>
                   </label>
                   <input
+                    id="modal-reg-email"
+                    autoComplete="email"
                     type="email"
                     required
                     value={email}
@@ -227,27 +234,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-label">
-                    Username <span className="auth-required">*</span>
+                  <label className="auth-label" htmlFor="modal-reg-username">
+                    {t.auth.username} <span className="auth-required">*</span>
                   </label>
                   <input
+                    id="modal-reg-username"
+                    autoComplete="username"
                     type="text"
                     required
+                    pattern="[A-Za-z0-9._\-]{3,32}"
+                    title={t.auth.usernameRule}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="e.g. financial_analyst"
+                    placeholder={t.auth.exampleUsername}
                     className="auth-input"
                   />
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-label">
+                  <label className="auth-label" htmlFor="modal-reg-password">
                     {t.auth.passwordMin} <span className="auth-required">*</span>
                   </label>
                   <input
+                    id="modal-reg-password"
+                    autoComplete="new-password"
                     type="password"
                     required
-                    minLength={6}
+                    minLength={8}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
@@ -256,14 +269,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                 </div>
 
                 <div className="auth-field">
-                  <label className="auth-label">
+                  <label className="auth-label" htmlFor="modal-reg-full-name">
                     {t.auth.fullNameOptional}
                   </label>
                   <input
+                    id="modal-reg-full-name"
+                    autoComplete="name"
                     type="text"
+                    maxLength={120}
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g. John Doe"
+                    placeholder={t.auth.exampleName}
                     className="auth-input"
                   />
                 </div>
@@ -299,11 +315,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
               {forgotStep === 1 ? (
                 <form onSubmit={handleForgotStep1} className="auth-form">
                   <p className="auth-hint-text">
-                    Enter your registered email address to receive a 6-digit OTP verification code (valid for 15 minutes):
+                    {t.auth.forgotHint}
                   </p>
                   <div>
                     <input
                       type="email"
+                      autoComplete="email"
+                      aria-label={t.auth.accountEmail}
                       required
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
@@ -316,16 +334,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                     disabled={loading}
                     className="auth-submit-btn"
                   >
-                    {loading ? "Sending..." : "Send OTP Code"}
+                    {loading ? t.auth.sendingCode : t.auth.sendCodeBtn}
                   </button>
                 </form>
               ) : (
                 <form onSubmit={handleForgotStep2} className="auth-form">
                   <div className="auth-field">
-                    <label className="auth-label">
-                      OTP Code (6 digits)
+                    <label className="auth-label" htmlFor="modal-otp">
+                      {t.auth.otpCode}
                     </label>
                     <input
+                      id="modal-otp"
+                      autoComplete="one-time-code"
                       type="text"
                       required
                       maxLength={6}
@@ -337,13 +357,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   </div>
 
                   <div className="auth-field">
-                    <label className="auth-label">
+                    <label className="auth-label" htmlFor="modal-new-password">
                       {t.auth.newPasswordMin}
                     </label>
                     <input
+                      id="modal-new-password"
+                      autoComplete="new-password"
                       type="password"
                       required
-                      minLength={6}
+                      minLength={8}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••"
@@ -371,7 +393,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
                   }}
                   className="auth-link-btn secondary"
                 >
-                  {lang === "vi" ? "← Quay lại Đăng nhập" : "← Back to Sign In"}
+                  {t.auth.backToSignIn}
                 </button>
               </div>
             </div>

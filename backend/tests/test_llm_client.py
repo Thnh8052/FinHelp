@@ -47,3 +47,28 @@ async def test_retry_stops_at_the_ceiling(monkeypatch):
     seen = patch(monkeypatch, [("length", "")] * 4)
     assert await llm_client.chat_completion([{"role": "user", "content": "q"}]) == ""
     assert seen[-1] == settings.LLM_MAX_TOKENS_CEILING and len(seen) == 3
+
+
+def test_reasoning_tokens_nested_in_usage_are_counted_for_the_request():
+    counts = llm_client.Counter()
+    token = llm_client.REQUEST_USAGE.set(counts)
+    try:
+        llm_client._record_usage({"prompt_tokens": 10, "completion_tokens": 50, "completion_tokens_details": {"reasoning_tokens": 40}})
+        llm_client._record_usage({"prompt_tokens": 5, "completion_tokens": 8})  # a reply without the detail
+    finally:
+        llm_client.REQUEST_USAGE.reset(token)
+    assert counts["reasoning_tokens"] == 40 and counts["completion_tokens"] == 58 and counts["calls"] == 2
+
+
+def test_search_parts_add_up_per_name_and_do_nothing_outside_a_request():
+    from app.modules.retrieval.hybrid_search import SEARCH_PARTS, part_done
+    import time
+    part_done("embed", time.perf_counter())  # no collector set: no error
+    parts = {}
+    token = SEARCH_PARTS.set(parts)
+    try:
+        part_done("net", time.perf_counter() - 0.5)
+        part_done("net", time.perf_counter() - 0.25)
+    finally:
+        SEARCH_PARTS.reset(token)
+    assert 0.7 <= parts["net"] <= 0.9

@@ -1,4 +1,5 @@
 """Auth hardening and the guest / user / admin rules (no database, no network: repositories are faked)."""
+from datetime import datetime, timedelta, timezone
 import types
 
 import pytest
@@ -18,7 +19,7 @@ from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.documents.document import DocumentRecord
 from app.modules.notebooks.notebook import NotebookRecord
-from app.modules.auth.user import UserRecord
+from app.modules.auth.user import ADMIN_EMAIL, ADMIN_USER_ID, UserRecord
 
 REAL_PASSWORD = "a-long-real-password"
 ADMIN = UserRecord(user_id="usr_admin", email="admin@example.com", username="admin", hashed_password=get_password_hash(REAL_PASSWORD), role="admin")
@@ -133,6 +134,23 @@ def test_reset_code_is_never_in_the_response(reset_flow, monkeypatch, environmen
     assert _forgot(client, "nobody@example.com").json().keys() == response.json().keys()  # unknown emails look the same
 
 
+def test_forgot_password_gives_every_email_the_same_answer(reset_flow):
+    client, _ = reset_flow
+    assert _forgot(client).json() == _forgot(client, "nobody@example.com").json()
+
+
+def test_a_refused_reset_does_not_tell_whether_the_account_exists(reset_flow):
+    client, codes = reset_flow
+    _forgot(client)
+    wrong = "000000" if codes[0] != "000000" else "111111"
+    known_wrong_code = _reset(client, wrong)
+    unknown_email = client.post("/api/v1/auth/reset-password", json={"email": "nobody@example.com", "otp_code": wrong, "new_password": "brand-new-password"})
+    ResetUsers.user.reset_token_expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    expired = _reset(client, codes[0])
+    assert {r.status_code for r in (known_wrong_code, unknown_email, expired)} == {400}
+    assert known_wrong_code.json() == unknown_email.json() == expired.json()
+
+
 def test_environment_defaults_to_production():
     assert Settings.model_fields["ENVIRONMENT"].default == "production"
 
@@ -189,11 +207,13 @@ def test_admin_routes_are_closed_to_users_and_guests(app_client):
 
 
 class _Collection:
-    async def delete_many(self, *args, **kwargs):
-        return type("Result", (), {"deleted_count": 0})()
+    updates: list = []
 
-    async def update_one(self, *args, **kwargs):
-        return None
+    async def delete_many(self, *args, **kwargs):
+        raise AssertionError("the startup must never delete accounts or notebooks")
+
+    async def update_one(self, query, update):
+        _Collection.updates.append((query, update))
 
 
 class FakeRepo:
@@ -202,28 +222,19 @@ class FakeRepo:
     def __init__(self, db):
         self.collection = _Collection()
 
-    async def get_by_username(self, name):
-        return None
-
     async def save_user(self, user):
         FakeRepo.saved.append(user)
 
     async def get_by_id(self, _id):
         return None
 
-    async def get_session(self, _id):
-        return None
-
     async def save_notebook(self, nb):
-        return None
-
-    async def save_session(self, s):
         return None
 
 
 @pytest.fixture
 def admin_init(monkeypatch):
-    FakeRepo.saved = []
+    FakeRepo.saved, _Collection.updates = [], []
     for name in ("UserRepository", "NotebookRepository"):
         monkeypatch.setattr(init_admin, name, FakeRepo)
     monkeypatch.setattr(init_admin.MongoManager, "db", object())
@@ -232,12 +243,47 @@ def admin_init(monkeypatch):
 
 async def test_admin_account_needs_an_explicit_password(admin_init, monkeypatch):
     monkeypatch.setattr(settings, "ADMIN_PASSWORD", None)
-    result = await init_admin.setup_admin_and_clean_mocks()
+    result = await init_admin.ensure_admin()
     assert result["success"] is False and admin_init.saved == []
     monkeypatch.setattr(settings, "ADMIN_PASSWORD", REAL_PASSWORD)
-    result = await init_admin.setup_admin_and_clean_mocks()
+    result = await init_admin.ensure_admin()
     assert result["success"] is True and "password" not in str(result).lower().replace("admin_password", "")
     assert admin_init.saved[0].role == "admin" and verify_password(REAL_PASSWORD, admin_init.saved[0].hashed_password)
+    assert admin_init.saved[0].user_id == ADMIN_USER_ID  # delete_many raises: nothing was deleted on the way
+
+
+@pytest.mark.parametrize("password, moved", [(REAL_PASSWORD, 0), ("a-different-admin-password", 1)])
+async def test_only_a_new_admin_password_ends_the_admins_sessions(admin_init, monkeypatch, password, moved):
+    class Existing(FakeRepo):
+        async def get_by_id(self, user_id):
+            return ADMIN if user_id == ADMIN_USER_ID else None
+
+    monkeypatch.setattr(init_admin, "UserRepository", Existing)
+    monkeypatch.setattr(settings, "ADMIN_PASSWORD", password)
+    await init_admin.ensure_admin()
+    query, update = _Collection.updates[0]
+    assert query == {"user_id": ADMIN_USER_ID} and update["$inc"] == {"token_version": moved}
+    assert ("hashed_password" in update["$set"]) == bool(moved)  # the hash is rewritten only when the password changed
+
+
+async def test_a_user_who_registered_as_admin_is_never_promoted(admin_init, monkeypatch):
+    """The admin is looked up by its own id: a normal account holding the name 'admin' makes the creation fail, it is not taken over."""
+    from pymongo.errors import DuplicateKeyError
+
+    class NameTaken(FakeRepo):
+        async def save_user(self, user):
+            raise DuplicateKeyError("username")
+
+    monkeypatch.setattr(init_admin, "UserRepository", NameTaken)
+    monkeypatch.setattr(settings, "ADMIN_PASSWORD", REAL_PASSWORD)
+    result = await init_admin.ensure_admin()
+    assert result["success"] is False and _Collection.updates == []
+
+
+@pytest.mark.parametrize("username, email", [("Admin", "new@example.com"), ("someone", ADMIN_EMAIL.upper())])
+def test_nobody_can_register_the_admins_names(app_client, username, email):
+    response = app_client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": REAL_PASSWORD})
+    assert response.status_code == 400 and response.json()["detail"]["code"] == auth_api.ACCOUNT_NOT_AVAILABLE
 
 
 # ---------------------------------------------------------------- settings
@@ -321,13 +367,28 @@ def test_guest_may_upload_one_document_only(upload):
     assert post(GUEST_NOTEBOOK) == 500  # a failed document does not count: the guest can retry
 
 
-def test_signed_in_user_may_upload_five_documents(upload):
+def test_guest_uploads_stop_at_the_daily_allowance(upload, monkeypatch):
+    monkeypatch.setattr(settings, "GUEST_DAILY_UPLOADS", 2)
+    _, post = upload
+    assert post(GUEST_NOTEBOOK, b"this is only named .pdf") == 400  # a refused file does not use the allowance
+    assert [post(GUEST_NOTEBOOK) for _ in range(3)] == [500, 500, 429]  # 500: Stop, the file reached the storage
+
+
+@pytest.mark.parametrize("role", ["user", "admin"])
+def test_every_signed_in_account_may_upload_five_documents(upload, role):
     state, post = upload
-    state["user"], state["notebook"] = "alice", NotebookRecord(notebook_id="nb", owner_id="alice", title="a")
+    state["user"], state["role"], state["notebook"] = "alice", role, NotebookRecord(notebook_id="nb", owner_id="alice", title="a")
     state["docs"] = [_doc(n) for n in range(4)]
     assert post("nb") == 500
     state["docs"] = [_doc(n) for n in range(5)]
     assert post("nb") == 403
+
+
+def test_the_document_limit_shown_is_the_one_enforced():
+    from app.modules.auth.user import TIER_SPECS
+
+    assert TIER_SPECS["guest"]["max_upload_documents"] == settings.MAX_SELECTED_DOCS_GUEST
+    assert TIER_SPECS["user"]["max_upload_documents"] == TIER_SPECS["admin"]["max_upload_documents"] == settings.MAX_SELECTED_DOCS_USER
 
 
 MB = 1024 * 1024

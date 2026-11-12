@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Sequence, Set
 
 from app.core.logging import logger
 from app.modules.generation.llm_client import LLMUnavailableError, chat_completion
-from app.modules.query_router.catalog_route import company_matches
+from app.modules.query_router.catalog_route import company_key, company_matches
 from app.modules.query_router.focus import METRICS, Focus, metric_in
 
 TERMINAL = frozenset({
@@ -82,16 +82,13 @@ def _words(text: str) -> List[str]:
     return re.findall(r"[^\W_]+(?:&[^\W_]+)*", text.lower().replace("’", "'"))
 
 
-_SUFFIX = frozenset("inc incorporated corp corporation company co ltd plc llc holdings holding group the international and of sa nv ag limited".split())
-
-
 def mentioned_sources(question: str, sources: Sequence[SourceInfo]) -> Set[int]:
     """Indexes of the sources whose company the question names (also by a prefix of the name: "Pepsi" for "PepsiCo")."""
     return set(company_matches(question, [{"entity": s.company or s.file_name, "aliases": s.aliases, "ticker": s.ticker} for s in sources]))
 
 
 def _company_key(s: SourceInfo) -> str:
-    return "".join(t for t in _words((s.company or s.file_name).replace("-", " ")) if t not in _SUFFIX)
+    return company_key(s.company or s.file_name)
 
 
 _YEAR = re.compile(r"(?<![\d.,$])(?:fy\s?)?((?:19|20)\d{2})(?![\d,]|\.\d)", re.I)

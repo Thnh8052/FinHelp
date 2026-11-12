@@ -1,11 +1,8 @@
 export interface CitationItem {
   citation_id: string;
-  chunk_id: string;
   document_id: string;
   page: number;
-  table_id?: string;
   snippet: string;
-  score?: number;
   /** Câu trả lời có dùng đoạn này ([n]) hay không; không có thì hiện như đã được dùng. */
   cited?: boolean | null;
 }
@@ -23,7 +20,11 @@ export interface ChatMessage {
   alternatives?: { document_id: string; label: string }[];
   /** Câu hỏi đã gửi (để hỏi lại với tài liệu khác). */
   query?: string;
+  /** Câu trả lời đang được viết (chat dạng stream): chưa có trích dẫn, chưa sao chép được. */
+  streaming?: boolean;
 }
+
+export type ChatStage = "understanding" | "searching" | "writing" | "checking";
 
 /** Một tài liệu nguồn có thể tag bằng @ trong ô chat. */
 export interface MentionOption {

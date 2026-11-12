@@ -12,8 +12,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
-from app.modules.query_router.catalog_route import QNUM, QPAIR, company_matches, names, question_years, words
-from app.modules.query_router.target_resolver import Filing, Target, _key, alignment_note, resolve
+from app.modules.query_router.catalog_route import QNUM, QPAIR, company_key, company_matches, names, question_years, words
+from app.modules.query_router.target_resolver import Filing, Target, alignment_note, resolve
 
 FISCAL = re.compile(r"\bfy\s?\d{2,4}\b|\bfiscal\b|năm tài chính", re.I)
 CALENDAR = re.compile(r"\bcalendar\b|năm dương lịch", re.I)
@@ -63,8 +63,8 @@ def _hint(vi: bool) -> str:
 
 def from_mentions(question: str, docs: Sequence[ScopeDoc], mentions: Sequence[str], vi: bool) -> TargetDecision:
     tagged = [d for d in docs if d.document_id in set(mentions)]
-    tagged_keys = {_key(d.filing.company) for d in tagged}
-    others = sorted({d.card.get("entity") or d.label for d in _named(question, docs) if _key(d.filing.company) not in tagged_keys})
+    tagged_keys = {company_key(d.filing.company) for d in tagged}
+    others = sorted({d.card.get("entity") or d.label for d in _named(question, docs) if company_key(d.filing.company) not in tagged_keys})
     covered = {y for d in tagged for y in ([d.filing.fiscal_year] if d.filing.fiscal_year else []) + d.years_covered}
     missing_years = sorted(y for y in question_years(question) if covered and y not in covered)
     gaps = others + [f"FY{y}" for y in missing_years]
@@ -115,13 +115,13 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
     companies = list(dict.fromkeys(d.filing.company for d in named))
     targets = [Target(c, y, basis, q) for c in companies for y, q in pairs] + [Target(c, y, basis) for c in companies for y in annual]
     forms = [f for f, rx in FORMS.items() if rx.search(question)]
-    has_form = {_key(d.filing.company) for d in docs if d.filing.form in forms}
-    filings = [d.filing for d in docs if not forms or _key(d.filing.company) not in has_form or d.filing.form in forms]
+    has_form = {company_key(d.filing.company) for d in docs if d.filing.form in forms}
+    filings = [d.filing for d in docs if not forms or company_key(d.filing.company) not in has_form or d.filing.form in forms]
     chosen, alternatives, assumptions = [], [], []
     for r in resolve(targets, filings):
         ids = [i for i in r.document_ids if i in by_id]
         if not ids and r.target.year and r.target.quarter is None:  # no report of that year: the earliest later report of the company that shows it (comparative column)
-            later = sorted((d for d in docs if _key(d.filing.company) == _key(r.target.company) and r.target.year in d.years_covered),
+            later = sorted((d for d in docs if company_key(d.filing.company) == company_key(r.target.company) and r.target.year in d.years_covered),
                            key=lambda d: d.filing.fiscal_year or 0)
             if later:
                 ids = [later[0].document_id]
@@ -132,9 +132,9 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
             ids.sort(key=lambda i: (by_id[i].filing.fiscal_year or 0, by_id[i].filing.period_end or ""), reverse=True)
             alternatives += [i for i in ids[1:] if i not in alternatives]
             assumptions.append(f"{by_id[ids[0]].label} " + ("(mới nhất trong các file khớp)" if vi else "(the latest of the matching files)"))
-        elif r.rule == "no year: latest filing" and sum(1 for d in docs if _key(d.filing.company) == _key(r.target.company)) > 1:
+        elif r.rule == "no year: latest filing" and sum(1 for d in docs if company_key(d.filing.company) == company_key(r.target.company)) > 1:
             assumptions.append(f"{by_id[ids[0]].label} " + ("(câu hỏi không nêu năm: lấy kỳ mới nhất)" if vi else "(no year asked: the latest period)"))
-            alternatives += [d.document_id for d in docs if _key(d.filing.company) == _key(r.target.company) and d.document_id != ids[0]]
+            alternatives += [d.document_id for d in docs if company_key(d.filing.company) == company_key(r.target.company) and d.document_id != ids[0]]
         if ids[0] not in chosen:
             chosen.append(ids[0])
     if not chosen:

@@ -17,7 +17,7 @@
   --text-primary: #f8fafc;
   --text-secondary: #cbd5e1;
   --text-muted: #94a3b8;
-  --text-dim: #64748b;
+  --text-dim: #8291a8; /* 4.5:1 or more on every surface (was #64748b, 3.1-4.2:1) */
 
   --accent-primary: #2563eb;
   --accent-hover: #1d4ed8;
@@ -99,3 +99,18 @@ input, textarea {
   }
 }
 
+/* Keyboard focus: one visible ring on every control (a mouse click does not show it) */
+:where(button, a, [role="button"], input[type="checkbox"], select, summary):focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Users who ask the system for less motion get state changes without the movement */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

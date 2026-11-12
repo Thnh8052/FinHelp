@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLanguage } from "../../context/LanguageContext";
-import { ChatMessage, CitationItem, MentionOption } from "../../types/chat";
+import { ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, FileTextIcon, SendIcon } from "../common/Icons";
@@ -10,6 +10,8 @@ interface ChatContainerProps {
   messages: ChatMessage[];
   onSendMessage: (query: string, mentions?: string[]) => void;
   isLoading: boolean;
+  /** What the system is doing for the question being answered (streamed chat). */
+  loadingStage?: ChatStage | null;
   onSelectCitation: (citation: CitationItem) => void;
   onClearChat?: () => void;
   sessionTitle?: string;
@@ -29,6 +31,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   messages,
   onSendMessage,
   isLoading,
+  loadingStage,
   onSelectCitation,
   sessionTitle,
   onNewChat: _onNewChat,
@@ -44,14 +47,18 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const [mentions, setMentions] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Câu trả lời đến một lần sau 10-25 giây: đổi dòng chữ theo thời gian chờ để người dùng biết hệ thống vẫn đang chạy
-  const [loadingStep, setLoadingStep] = useState(0);
+  // The real stage of the answer; a stage that lasts long says so, so the user knows nothing hung
+  const stageName = loadingStage ?? "understanding";
+  const [isSlow, setIsSlow] = useState(false);
   useEffect(() => {
+    setIsSlow(false);
     if (!isLoading) return;
-    setLoadingStep(0);
-    const timers = [3, 10, 25].map((seconds, i) => setTimeout(() => setLoadingStep(i + 1), seconds * 1000));
-    return () => timers.forEach(clearTimeout);
-  }, [isLoading]);
+    const timer = setTimeout(() => setIsSlow(true), 20000);
+    return () => clearTimeout(timer);
+  }, [isLoading, stageName]);
+  // Once the answer shows up the waiting line goes away, unless the system checks it again (the text may then be replaced)
+  const isWriting = messages.some((m) => m.streaming && m.content);
+  const showWaiting = isLoading && (!isWriting || stageName === "checking");
 
   // "@" vừa gõ ở cuối ô nhập: hiện danh sách tài liệu nguồn để chọn
   const mentionQuery = /(?:^|\s)@([^\s@]*)$/.exec(input)?.[1];
@@ -215,7 +222,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       <div className="chat-header">
         <div className="chat-header-title-box">
           <span className="chat-header-title">
-            {sessionTitle || "Current Session"}
+            {sessionTitle || t.workspace.currentSession}
           </span>
         </div>
 
@@ -305,7 +312,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                           disabled={isLoading}
                           onClick={() => onSendMessage(msg.query!, [a.document_id])}
                         >
-                          Query with {a.label}
+                          {t.workspace.queryWith.replace("{label}", a.label)}
                         </button>
                       ))}
                     </div>
@@ -337,7 +344,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   })()}
 
                   {/* Actions: Copy */}
-                  {!isUser && (
+                  {!isUser && !msg.streaming && (
                     <div className="chat-message-actions">
                       <button
                         onClick={() => handleCopy(msg.content, msg.message_id)}
@@ -364,12 +371,12 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           })}
 
           {/* Assistant Typing / Streaming Skeleton */}
-          {isLoading && (
+          {showWaiting && (
             <div className="chat-loading-row">
               <span className="chat-sender-label">{t.workspace.aiLabel}</span>
               <div className="chat-loading-bubble">
                 <div className="chat-loading-spinner" />
-                <span role="status">{t.workspace.loadingSteps[loadingStep]}</span>
+                <span role="status">{isSlow ? t.workspace.loadingSlow : t.workspace.loadingStages[stageName]}</span>
               </div>
             </div>
           )}
@@ -391,8 +398,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   type="button"
                   className="chat-prompts-nav-btn prev"
                   onClick={() => scrollPrompts("left")}
-                  aria-label="Previous suggestions"
-                  title="Scroll left"
+                  aria-label={t.workspace.prevSuggestions}
+                  title={t.workspace.scrollLeft}
                 >
                   <ChevronLeftIcon size={12} />
                 </button>
@@ -415,7 +422,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     }}
                     disabled={isLoading || !hasSources || isProcessing}
                     className="chat-sample-btn"
-                    title="Insert sample query into prompt input"
+                    title={t.workspace.insertSample}
                   >
                     {p}
                   </button>
@@ -427,8 +434,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   type="button"
                   className="chat-prompts-nav-btn next"
                   onClick={() => scrollPrompts("right")}
-                  aria-label="More suggestions"
-                  title="Scroll right"
+                  aria-label={t.workspace.moreSuggestions}
+                  title={t.workspace.scrollRight}
                 >
                   <ChevronRightIcon size={12} />
                 </button>
@@ -450,7 +457,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               {mentions.map((id) => (
                 <span key={id} className="chat-mention-chip">
                   @{labelOf(id)}
-                  <button type="button" aria-label="Remove tag" onClick={() => setMentions(mentions.filter((m) => m !== id))}>
+                  <button type="button" aria-label={t.workspace.removeTag} onClick={() => setMentions(mentions.filter((m) => m !== id))}>
                     ×
                   </button>
                 </span>
@@ -486,7 +493,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             <button
               type="submit"
               disabled={!canSubmit}
-              aria-label="Send"
+              aria-label={t.workspace.sendBtn}
               className={`chat-send-btn ${canSubmit ? "active" : "inactive"}`}
             >
               <SendIcon size={14} />

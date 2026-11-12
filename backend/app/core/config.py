@@ -149,9 +149,14 @@ class Settings(BaseSettings):
     # own (at most V1_RETRY_CHUNKS chunks); still none -> the answer is told the source showed nothing.
     V1_RETRY_CHUNKS: int = 3
     MULTIDOC_CATALOG_LIMIT: int = 80  # more filings than this: skip the planner and search the whole notebook as before
-    # Sources a question may use (the upload limit per notebook is the same): a guest 1, a signed-in user 5
+    # Sources a question may use, and documents a notebook may hold: a guest 1, every signed-in account (admin too) 5.
+    # The one place these numbers live: TIER_SPECS, the error messages and the web app (through /auth/me) all read them from here.
     MAX_SELECTED_DOCS_GUEST: int = 1
     MAX_SELECTED_DOCS_USER: int = 5
+    # What guests may spend per day, counted per IP address (raise them for a demo where everyone shares one network)
+    GUEST_DAILY_NOTEBOOKS: int = 10
+    GUEST_DAILY_UPLOADS: int = 10
+    GUEST_DAILY_QUESTIONS: int = 30
     # Remote GPU Worker (e.g. Google Colab / Kaggle T4 GPU via Cloudflare Tunnel)
     REMOTE_GPU_URL: Optional[str] = None
 

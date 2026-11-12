@@ -8,12 +8,15 @@ Mọi endpoint ở đây yêu cầu role == 'admin' (require_admin). Đường d
 """
 
 from datetime import datetime, timezone
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field
 
+from app.core.error_codes import Code, api_error
 from app.shared.deps import require_admin
+from app.shared.health import check_services
 from app.infrastructure.database.mongodb import get_database
 from app.modules.auth.user_repo import UserRepository
 from app.modules.auth.user import UserRecord
@@ -38,10 +41,11 @@ async def get_admin_dashboard(
     """Dashboard độc quyền cho Quản trị viên (Admin): theo dõi hiệu năng hệ thống, tài khoản và chi phí API."""
     repo = UserRepository(db)
     stats = await repo.get_admin_dashboard_stats()
+    services = await check_services()
     stats["system_performance"] = {
-        "status": "healthy",
-        "database": "MongoDB 7.x Connected",
-        "latency_ms": 11.8,
+        "status": "healthy" if all(latency is not None for latency in services.values()) else "unhealthy",
+        "database": "MongoDB Connected" if services["mongodb"] is not None else "MongoDB Unreachable",
+        "latency_ms": services["mongodb"],
         "server_time": datetime.now(timezone.utc).isoformat(),
     }
     return stats
@@ -49,7 +53,7 @@ async def get_admin_dashboard(
 
 class UpdateTierRequest(BaseModel):
     user_id: str
-    tier: str = Field(default="user", description="'guest' hoặc 'user'")
+    tier: Literal["guest", "user", "admin"] = Field(default="user", description="Tên một gói có trong TIER_SPECS")
 
 
 # ==============================================================================
@@ -72,5 +76,5 @@ async def admin_update_tier(
     repo = UserRepository(db)
     success = await repo.update_user_tier(req.user_id, req.tier)
     if not success:
-        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
-    return {"success": True, "message": f"Đã cập nhật gói thành công sang '{req.tier}'"}
+        raise api_error(status_code=404, code=Code.USER_NOT_FOUND)
+    return {"success": True, "tier": req.tier}

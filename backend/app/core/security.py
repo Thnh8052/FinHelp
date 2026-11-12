@@ -8,6 +8,7 @@ Chịu trách nhiệm:
 3. Sinh mã JSON Web Token (JWT) có thời hạn (Access Token) phục vụ xác thực người dùng không trạng thái (stateless auth).
 """
 
+import uuid
 import bcrypt
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -57,10 +58,10 @@ def get_password_hash(password: str) -> str:
 # ĐẦU RA:
 #   - str: Chuỗi JWT đã ký điện tử bằng khóa bí mật bí mật (SECRET_KEY) và thuật toán mã hóa (ALGORITHM).
 # ==============================================================================
-def create_access_token(subject: str | Any, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(subject: str | Any, expires_delta: Optional[timedelta] = None, version: int = 0) -> str:
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode = {"exp": expire, "sub": str(subject)}
+    to_encode = {"exp": expire, "sub": str(subject), "ver": version, "jti": uuid.uuid4().hex}  # ver: the account's token_version, compared at every request (deps.py)
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)

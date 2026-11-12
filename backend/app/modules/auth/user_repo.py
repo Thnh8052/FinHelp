@@ -22,6 +22,8 @@ from app.modules.auth.user import TIER_SPECS, UserRecord, today_utc
 class UserRepository(BaseRepository):
     """Lớp xử lý dữ liệu người dùng (User Repository) kết nối MongoDB collection `users`."""
 
+    REVOKED_TOKENS_KEPT = 50  # a token lives 24 hours: nobody signs out more often than this while an older one is still valid
+
     def __init__(self, db: AsyncIOMotorDatabase):
         super().__init__(db, collections.USERS_COLLECTION)
 
@@ -77,22 +79,32 @@ class UserRepository(BaseRepository):
 
     # ==============================================================================
     # HÀM: update_password
-    # Ý NGHĨA: Cập nhật mật khẩu băm mới cho tài khoản và tự động xóa mã reset_token tạm thời.
+    # Ý NGHĨA: Cập nhật mật khẩu băm mới, xóa mã reset_token tạm thời và kết thúc mọi phiên đăng nhập cũ (tăng token_version).
     # ĐẦU VÀO: user_id (str), new_hashed_password (str)
     # ĐẦU RA: bool (True nếu cập nhật thành công)
     # ==============================================================================
     async def update_password(self, user_id: str, new_hashed_password: str) -> bool:
-        updated = await self.update_one(
+        updated = await self.collection.update_one(
             {"user_id": user_id},
             {
-                "hashed_password": new_hashed_password,
-                "reset_token": None,
-                "reset_token_expires_at": None,
-                "reset_attempts": 0,
-                "updated_at": get_utc_now(),
+                "$set": {
+                    "hashed_password": new_hashed_password,
+                    "reset_token": None,
+                    "reset_token_expires_at": None,
+                    "reset_attempts": 0,
+                    "updated_at": get_utc_now(),
+                },
+                "$inc": {"token_version": 1},
             },
         )
-        return updated > 0
+        return updated.modified_count > 0
+
+    async def revoke_token(self, user_id: str, token_id: str) -> bool:
+        """End one session (sign-out) and leave the account's other devices signed in."""
+        updated = await self.collection.update_one(
+            {"user_id": user_id}, {"$push": {"revoked_token_ids": {"$each": [token_id], "$slice": -self.REVOKED_TOKENS_KEPT}}}
+        )
+        return updated.modified_count > 0
 
     # ==============================================================================
     # HÀM: update_last_login
@@ -166,24 +178,37 @@ class UserRepository(BaseRepository):
         return [UserRecord(**d) for d in docs]
 
     # ==============================================================================
-    # HÀM: check_quota / consume_quota
-    # Ý NGHĨA: Hai điểm duy nhất của hạn mức: kiểm tra trước khi trả lời và ghi nhận sau khi trả lời.
+    # HÀM: reserve_quota / consume_quota
+    # Ý NGHĨA: Hai điểm duy nhất của hạn mức: giữ chỗ một câu hỏi trước khi trả lời và chốt số liệu sau khi trả lời.
     #          Khi đổi sang hạn mức theo token chỉ cần sửa ở đây.
     # ==============================================================================
-    async def check_quota(self, user_id: str) -> bool:
-        """True while the account may still ask today."""
-        user = await self.get_by_id(user_id)
-        return user is not None and user.messages_used_today() < user.daily_messages_limit
+    async def reserve_quota(self, user_id: str) -> bool:
+        """Count one question if the account still has one today. One atomic update: of the requests sent together, only those within the limit pass."""
+        today = today_utc()
+        new_day = {"$lt": ["$daily_window_start", today]}
+        limit = {"$ifNull": ["$daily_messages_limit", TIER_SPECS["user"]["daily_messages_limit"]]}  # same default as UserRecord
+        updated = await self.collection.update_one(
+            {"user_id": user_id, "$expr": {"$lt": [{"$cond": [new_day, 0, "$daily_messages_used"]}, limit]}},
+            [{
+                "$set": {
+                    "daily_messages_used": {"$cond": [new_day, 1, {"$add": ["$daily_messages_used", 1]}]},
+                    "daily_window_start": {"$cond": [new_day, today, "$daily_window_start"]},
+                    "updated_at": get_utc_now(),
+                }
+            }],
+        )
+        return updated.matched_count > 0
 
     async def consume_quota(self, user_id: str, messages: int = 1, tokens: int = 0) -> bool:
-        """Count one request in a single atomic update; the first request of a new UTC day restarts the daily counter."""
+        """Add to the counters in a single atomic update (messages=-1 gives a reserved question back); the first request of a new UTC day restarts the daily counter."""
         today = today_utc()
         new_day = {"$lt": ["$daily_window_start", today]}
         updated = await self.collection.update_one(
             {"user_id": user_id},
             [{
                 "$set": {
-                    "daily_messages_used": {"$cond": [new_day, messages, {"$add": ["$daily_messages_used", messages]}]},
+                    # never below zero: a question reserved before midnight may be given back after it
+                    "daily_messages_used": {"$max": [0, {"$cond": [new_day, messages, {"$add": ["$daily_messages_used", messages]}]}]},
                     "daily_window_start": {"$cond": [new_day, today, "$daily_window_start"]},
                     "total_tokens_consumed": {"$add": ["$total_tokens_consumed", tokens]},
                     "updated_at": get_utc_now(),

@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { Notebook } from "../../types/notebook";
-import { CheckIcon, ChevronLeftIcon, CloseIcon, MessageSquareIcon, PlusIcon, TrashIcon } from "../common/Icons";
+import { CheckIcon, CloseIcon, MessageSquareIcon, PencilIcon, PlusIcon, TrashIcon } from "../common/Icons";
 import "./chat.css";
 
 interface ChatHistoryListProps {
@@ -9,8 +9,8 @@ interface ChatHistoryListProps {
   activeNotebookId: string | null;
   onSelectNotebook: (notebookId: string) => void;
   onNewChat: () => void;
+  onRenameNotebook: (notebookId: string, title: string) => Promise<boolean>;
   onDeleteNotebook: (notebookId: string) => void;
-  onOpenHub?: () => void;
   isGuest?: boolean;
 }
 
@@ -23,14 +23,25 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
   activeNotebookId,
   onSelectNotebook,
   onNewChat,
+  onRenameNotebook,
   onDeleteNotebook,
-  onOpenHub,
   isGuest = false,
 }) => {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const cancelled = useRef(false);  // Escape unmounts the input, which some browsers report as a blur: that must not save
+
+  const saveRename = async (session: Notebook) => {
+    const title = draft.trim();
+    const id = session.notebook_id;
+    setRenamingId(null);  // an empty or unchanged name keeps the old one
+    if (cancelled.current) return;
+    if (title && title !== session.title) await onRenameNotebook(id, title);
+  };
 
   const filteredNotebooks = notebooks.filter((s) =>
     (s.title || "").toLowerCase().includes(searchTerm.toLowerCase())
@@ -40,24 +51,18 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
     <div className="history-container">
       {/* 1. New Chat Action */}
       <div className="history-top-section">
-        {onOpenHub && (
-          <button type="button" onClick={onOpenHub} className="history-hub-link">
-            <ChevronLeftIcon size={14} />
-            <span>{t.hub.allNotebooks}</span>
-          </button>
-        )}
         <button
           type="button"
           onClick={onNewChat}
           className="history-new-btn group"
-          title="Create new analysis session"
+          title={t.sidebar.newSessionTitle}
         >
           <div className="history-new-btn-left">
             <PlusIcon size={16} className="history-plus-icon" />
             <span>{t.sidebar.newAnalysis}</span>
           </div>
           <span className="history-new-tag">
-            {isGuest ? "Login" : "New"}
+            {isGuest ? t.sidebar.badgeLogin : t.sidebar.badgeNew}
           </span>
         </button>
       </div>
@@ -65,7 +70,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
       {/* 2. Section Header */}
       <div className="history-section-header">
         <span className="history-section-title">{t.sidebar.historyTitle}</span>
-        <span className="history-section-count">{notebooks.length} {t.sidebar.sessionsCount}</span>
+        <span className="history-section-count">{(notebooks.length === 1 ? t.sidebar.sessionOne : t.sidebar.sessionMany).replace("{n}", String(notebooks.length))}</span>
       </div>
 
       {/* Search Filter */}
@@ -118,18 +123,46 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                       className="history-card-icon"
                     />
                     <div className="history-card-info">
-                      <p
-                        className="history-card-title"
-                        title={session.title || "Financial Session"}
-                      >
-                        {session.title || "Financial Session"}
-                      </p>
+                      {renamingId === session.notebook_id ? (
+                        <input
+                          className="history-rename-input"
+                          value={draft}
+                          maxLength={120}
+                          autoFocus
+                          aria-label={t.hub.renameLabel}
+                          onClick={(e) => e.stopPropagation()}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onBlur={() => void saveRename(session)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                            if (e.key === "Escape") {
+                              cancelled.current = true;
+                              setRenamingId(null);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <p
+                          className="history-card-title"
+                          title={session.title || t.sidebar.untitledSession}
+                        >
+                          {session.title || t.sidebar.untitledSession}
+                        </p>
+                      )}
                       <p className="history-card-sub">
                         <span>{((session.document_count ?? 0) === 1 ? t.hub.fileOne : t.hub.fileMany).replace("{n}", String(session.document_count ?? 0))}</span>
                         <span>•</span>
-                        <span className={isActive ? "status-active" : "status-saved"}>
-                          {isActive ? (lang === "vi" ? "Đang mở" : "Active") : (lang === "vi" ? "Đã lưu" : "Saved")}
-                        </span>
+                        {(session.processing_count ?? 0) > 0 ? (
+                          <span className="history-card-processing">
+                            <span className="chat-processing-spinner" aria-hidden="true" />
+                            {t.hub.processing}
+                          </span>
+                        ) : (
+                          <span className={isActive ? "status-active" : "status-saved"}>
+                            {isActive ? t.sidebar.statusActive : t.sidebar.statusSaved}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -139,7 +172,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                     <div className="history-card-confirm" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        aria-label={`${t.common.delete}: ${session.title}`}
+                        aria-label={`${t.common.delete}: ${session.title || t.sidebar.untitledSession}`}
                         title={t.hub.deleteWarning}
                         className="history-card-confirm-yes"
                         onClick={() => {
@@ -161,19 +194,36 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                       </button>
                     </div>
                   ) : (
-                    (isHovered || isActive) && !isGuest && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setConfirmingId(session.notebook_id);
-                        }}
-                        title="Delete this session"
-                        aria-label={`${t.common.delete}: ${session.title}`}
-                        className="history-card-del-btn"
-                      >
-                        <TrashIcon size={12} />
-                      </button>
+                    (isHovered || isActive) && !isGuest && renamingId !== session.notebook_id && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelled.current = false;
+                            setDraft(session.title);
+                            setRenamingId(session.notebook_id);
+                          }}
+                          title={t.hub.rename}
+                          aria-label={`${t.hub.rename}: ${session.title || t.sidebar.untitledSession}`}
+                          className="history-card-del-btn history-card-rename-btn"
+                        >
+                          <PencilIcon size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmingId(session.notebook_id);
+                          }}
+                          title={(session.processing_count ?? 0) > 0 ? t.hub.deleteBlocked : t.sidebar.deleteSession}
+                          aria-label={`${t.common.delete}: ${session.title || t.sidebar.untitledSession}`}
+                          className="history-card-del-btn"
+                          disabled={(session.processing_count ?? 0) > 0}
+                        >
+                          <TrashIcon size={12} />
+                        </button>
+                      </>
                     )
                   )}
                 </div>

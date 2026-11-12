@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -46,7 +47,10 @@ class StorageService:
         return self._s3_client
 
     async def save_pdf(self, notebook_id: str, document_id: str, file: UploadFile) -> Path:
-        """Save an uploaded PDF to local disk and sync to Cloudflare R2 if enabled."""
+        """Save an uploaded PDF to local disk and sync to Cloudflare R2 if enabled. In a worker thread: the server keeps answering everyone else meanwhile."""
+        return await asyncio.to_thread(self._save_pdf, notebook_id, document_id, file)
+
+    def _save_pdf(self, notebook_id: str, document_id: str, file: UploadFile) -> Path:
         dest_folder = self.pdf_dir / notebook_id
         dest_folder.mkdir(parents=True, exist_ok=True)
         dest_path = dest_folder / f"{document_id}_{Path(file.filename).name}"
@@ -73,7 +77,7 @@ class StorageService:
         return dest_path
 
     def get_pdf_path(self, notebook_id: str, document_id: str, filename: str) -> Path:
-        """Return the local path to the PDF. If missing locally, pull from R2 on demand."""
+        """Return the local path to the PDF. If missing locally, pull from R2 on demand (blocking: call it through asyncio.to_thread)."""
         dest_path = self.pdf_dir / notebook_id / f"{document_id}_{Path(filename).name}"
 
         # If file is not present locally and R2 is enabled, pull from R2
@@ -127,7 +131,10 @@ class StorageService:
             logger.warning(f"Failed to sync artifacts to R2 for document {document_id}: {e}")
 
     async def delete_document_files(self, notebook_id: str, document_id: str, file_path: str) -> None:
-        """Remove PDF and parser artifacts from both local disk and Cloudflare R2."""
+        """Remove PDF and parser artifacts from both local disk and Cloudflare R2, in a worker thread."""
+        await asyncio.to_thread(self._delete_document_files, notebook_id, document_id, file_path)
+
+    def _delete_document_files(self, notebook_id: str, document_id: str, file_path: str) -> None:
         notebook_dir = (self.pdf_dir / notebook_id).resolve()
         stored_path = (settings.STORAGE_LOCAL_DIR / file_path).resolve()
 

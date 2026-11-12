@@ -5,18 +5,23 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api_router import api_v1_router
 from app.core.config import settings
+from app.core.error_codes import FIELD_CODES, Code
 from app.core.exceptions import DomainException
 from app.core.logging import logger
-from app.modules.admin.init_admin import setup_admin_and_clean_mocks
+from app.modules.admin.init_admin import ensure_admin
 from app.infrastructure.database.mongodb import MongoManager
 from app.infrastructure.database.qdrant import QdrantManager
 from app.modules.ingestion.pipeline import IngestionPipeline
 from app.modules.notebooks.purge import purge_expired_guests
 from app.modules.retrieval.warmup import warm_chunk_tokenizer, warm_models
+from app.shared.health import check_services
+from app.shared.security_headers import SecurityHeaders
+from app.shared.unexpected_errors import UnexpectedErrors
 from app.shared.upload_limit import UploadSizeLimit
 
 
@@ -53,9 +58,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not check interrupted ingestion jobs: {e}")
 
-    # Tự động dọn dẹp tài khoản mock và khởi tạo tài khoản Admin Full Quyền (mật khẩu từ ADMIN_PASSWORD)
+    # Khởi tạo hoặc cập nhật tài khoản Admin Full Quyền (mật khẩu từ ADMIN_PASSWORD)
     try:
-        if (await setup_admin_and_clean_mocks()).get("success"):
+        if (await ensure_admin()).get("success"):
             logger.info("Admin user 'admin' ready with full permissions.")
     except Exception as e:
         logger.warning(f"Could not initialize admin user on startup: {e}")
@@ -79,8 +84,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Added before CORS so that CORS stays the outermost layer and a refused upload still carries its headers
+# Added before CORS so that CORS stays the outermost layer: a refused upload and an unforeseen error still carry its headers
 app.add_middleware(UploadSizeLimit)
+app.add_middleware(UnexpectedErrors)
+app.add_middleware(SecurityHeaders)
 
 # CORS Middleware
 app.add_middleware(
@@ -94,11 +101,23 @@ app.add_middleware(
 # Domain Exception Handler
 @app.exception_handler(DomainException)
 async def domain_exception_handler(request: Request, exc: DomainException):
-    logger.warning(f"Domain exception occurred: {exc.message}")
+    logger.warning(f"Domain exception occurred: {exc.code} {exc.params}")
     return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        content={"detail": exc.message},
+        status_code=exc.status_code,
+        content={"detail": {"code": exc.code, "params": exc.params}},
     )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """A refused body or form. The field validators of the catalog form name their own code and params; any other field gets
+    'invalid_field' (no pydantic English reaches the interface)."""
+    fields = []
+    for err in exc.errors():
+        known = err["type"] in FIELD_CODES
+        params = {k: v for k, v in (err.get("ctx") or {}).items() if isinstance(v, (int, float, str))} if known else {}
+        fields.append({"field": str(err["loc"][-1]) if err.get("loc") else "", "code": err["type"] if known else Code.INVALID_FIELD, "params": params})
+    return JSONResponse(status_code=422, content={"detail": {"code": Code.VALIDATION_FAILED, "fields": fields}})
 
 
 # Include API v1
@@ -107,11 +126,16 @@ app.include_router(api_v1_router, prefix=settings.API_V1_STR)
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    """System health check endpoint."""
-    return {
-        "status": "healthy",
-        "project": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "database": "mongodb_connected" if MongoManager.db is not None else "disconnected",
-        "vector_search": "qdrant_connected" if QdrantManager.client is not None else "disconnected",
-    }
+    """The real state of the services: 503 when one of them does not answer."""
+    services = await check_services()
+    healthy = all(latency is not None for latency in services.values())
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if healthy else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "status": "healthy" if healthy else "unhealthy",
+            "project": settings.PROJECT_NAME,
+            "version": settings.VERSION,
+            "database": "mongodb_connected" if services["mongodb"] is not None else "disconnected",
+            "vector_search": "qdrant_connected" if services["qdrant"] is not None else "disconnected",
+        },
+    )

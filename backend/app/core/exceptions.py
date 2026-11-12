@@ -1,19 +1,18 @@
 class DomainException(Exception):
-    """Base domain exception."""
+    """A failure the interface must explain. `code` names the sentence (see app/core/error_codes.py), `params` fill its blanks."""
 
-    def __init__(self, message: str):
-        super().__init__(message)
-        self.message = message
+    status_code = 400
 
-
-class EntityNotFoundException(DomainException):
-    """Raised when a requested resource does not exist."""
-    pass
+    def __init__(self, code: str, **params):
+        super().__init__(code)
+        self.code = code
+        self.params = params
 
 
-class PermissionDeniedException(DomainException):
-    """Raised when a user lacks access rights to a resource."""
-    pass
+class ServiceUnavailableError(DomainException):
+    """A service the request depends on did not answer (the remote GPU worker): 503, and the interface asks to try again later."""
+
+    status_code = 503
 
 
 class IngestionError(DomainException):

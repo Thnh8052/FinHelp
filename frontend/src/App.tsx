@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import { LandingPage } from "./features/landing/LandingPage";
 import { Workspace } from "./features/workspace/Workspace";
-import { NotebookHub } from "./features/hub/NotebookHub";
 import { LoginPage } from "./features/auth/LoginPage";
 import { RegisterPage } from "./features/auth/RegisterPage";
 import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
@@ -10,11 +9,13 @@ import { AuthModal } from "./components/auth/AuthModal";
 import { useAuth } from "./context/AuthContext";
 import "./App.css";
 
-/** /app: trang Hub cho người dùng đã đăng nhập, workspace dùng thử cho khách. */
+/** /app và /app/:notebookId: một giao diện chat cho cả thành viên (nhiều đoạn chat) lẫn khách (một đoạn chat dùng thử). */
 const AppHome: React.FC<{ onNavigateHome: () => void }> = ({ onNavigateHome }) => {
-  const { user, token, isAuthenticated } = useAuth();
-  if (token && !user) return null;  // the saved token is still being checked
-  return isAuthenticated ? <NotebookHub onNavigateHome={onNavigateHome} /> : <Workspace onNavigateHome={onNavigateHome} />;
+  const { user, hasSession, isLoading } = useAuth();
+  // The session is still being checked. Not while a sign-in runs (hasSession is set only once it succeeded: the sign-in box stays to
+  // show a wrong password), and not after a check that failed on the network (the session is kept for the next load: guest view now)
+  if (hasSession && !user && isLoading) return null;
+  return <Workspace onNavigateHome={onNavigateHome} />;
 };
 
 const AppRoutes: React.FC = () => {
@@ -51,8 +52,7 @@ const AppRoutes: React.FC = () => {
         />
 
         {/* Workspace 4-Zone Workstation (Financial Report Intelligence) */}
-        <Route path="/app" element={<AppHome onNavigateHome={handleNavigateHome} />} />
-        <Route path="/app/:notebookId" element={<Workspace onNavigateHome={handleNavigateHome} />} />
+        <Route path="/app/:notebookId?" element={<AppHome onNavigateHome={handleNavigateHome} />} />
 
         {/* Dedicated Standalone Auth Pages (Email verification / Direct URL) */}
         <Route path="/login" element={<LoginPage />} />

@@ -3,7 +3,9 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
+import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import "./auth-pages.css";
+import { errorText } from "../../services/api";
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,7 +23,7 @@ export const RegisterPage: React.FC = () => {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError(t.auth.errorPasswordLength);
       return;
     }
@@ -32,11 +34,7 @@ export const RegisterPage: React.FC = () => {
       await register(email, username, password, fullName || undefined);
       navigate("/app");
     } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t.auth.errorInvalidCredentials
-      );
+      setError(errorText(err, t, t.auth.errorInvalidCredentials));
     } finally {
       setLoading(false);
     }
@@ -44,7 +42,7 @@ export const RegisterPage: React.FC = () => {
 
   return (
     <div className="auth-page-wrapper">
-      <div className="auth-page-card" style={{ position: "relative" }}>
+      <div className="auth-page-card">
         {/* Language Switcher in top-right */}
         <div className="auth-page-lang-toggle">
           <LanguageToggle size="sm" />
@@ -52,8 +50,7 @@ export const RegisterPage: React.FC = () => {
 
         {/* Brand */}
         <Link to="/" className="auth-page-brand">
-          <span style={{ fontSize: "20px" }}>⚡</span>
-          <span className="auth-page-brand-name">FinHelp</span>
+          <FinHelpLogo size="md" />
         </Link>
 
         {/* Header */}
@@ -70,8 +67,10 @@ export const RegisterPage: React.FC = () => {
         {/* Form */}
         <form onSubmit={handleSubmit} className="auth-page-form">
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.emailAddress}</label>
+            <label className="auth-page-label" htmlFor="register-email">{t.auth.emailAddress}</label>
             <input
+              id="register-email"
+              autoComplete="email"
               type="email"
               required
               value={email}
@@ -82,34 +81,43 @@ export const RegisterPage: React.FC = () => {
           </div>
 
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.username}</label>
+            <label className="auth-page-label" htmlFor="register-username">{t.auth.username}</label>
             <input
+              id="register-username"
+              autoComplete="username"
               type="text"
               required
+              pattern="[A-Za-z0-9._\-]{3,32}"
+              title={t.auth.usernameRule}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. analyst_pro"
+              placeholder={t.auth.exampleUsername}
               className="auth-page-input"
             />
           </div>
 
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.fullNameOptional}</label>
+            <label className="auth-page-label" htmlFor="register-full-name">{t.auth.fullNameOptional}</label>
             <input
+              id="register-full-name"
+              autoComplete="name"
               type="text"
+              maxLength={120}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. Alex Morgan"
+              placeholder={t.auth.exampleName}
               className="auth-page-input"
             />
           </div>
 
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.passwordMin6}</label>
+            <label className="auth-page-label" htmlFor="register-password">{t.auth.passwordMin}</label>
             <input
+              id="register-password"
+              autoComplete="new-password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -131,7 +139,7 @@ export const RegisterPage: React.FC = () => {
             </Link>
           </div>
           <div>
-            <Link to="/" className="auth-page-link" style={{ color: "#6b7280" }}>
+            <Link to="/" className="auth-page-link auth-page-link-muted">
               {t.common.backToHome}
             </Link>
           </div>

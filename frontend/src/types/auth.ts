@@ -60,7 +60,7 @@ export interface AdminDashboardStats {
   system_performance: {
     status: string;
     database: string;
-    latency_ms: number;
+    latency_ms: number | null;
     server_time: string;
   };
 }

@@ -28,7 +28,10 @@
     "bạn có thích tôi không", "bây giờ mấy giờ nhỉ", "không còn gì nữa đâu", "thôi thế nhé", "còn bạn thì sao", "xong rồi cảm ơn",
     "how's it going", "how are you doing today", "hey there", "good evening", "good morning", "thank you so much", "thanks, that helps", "great job", "awesome", "cool",
     "okay got it", "I see", "really?", "haha that's funny", "lmao", "bye, see you later", "have a nice day", "nice weather today", "it's so hot today", "I'm bored",
-    "I'm tired", "what are you up to", "are you there", "you're great", "well done", "sweet dreams", "are you alright", "sup", "hello"
+    "I'm tired", "what are you up to", "are you there", "you're great", "well done", "sweet dreams", "are you alright", "sup", "hello",
+    "tôi bị sốt", "tôi bị đau bụng", "tôi thấy trong người không khỏe", "mình đang bị ốm nằm nhà", "hôm nay tôi không đi học", "tôi vừa đi chợ về",
+    "tối nay tôi nấu cơm", "mình đang ngồi uống trà", "tôi bị ho mấy ngày rồi", "i have a fever", "i am not feeling well", "i stayed home today",
+    "my head hurts", "i'm having dinner"
   ],
   "assistant_meta": [
     "bạn là trợ lý gì", "giới thiệu về bản thân bạn đi", "bạn hoạt động như thế nào", "bạn được huấn luyện bằng dữ liệu gì", "bạn có phải người thật không",

@@ -12,9 +12,10 @@ A fiscal-year name the company never used falls back to the year the period ends
 'fiscal 2022'; FinanceBench and the file name call it FY2023), with the rule saying so.
 No year: the latest annual filing. Annual questions prefer the 10-K over 8-Ks / earnings releases of the same year.
 An aligned comparison is disclosed with the answer (alignment_note): which fiscal year of each company stands for the year asked."""
-import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
+
+from app.modules.query_router.catalog_route import company_key
 
 ANNUAL_FORMS = ("10-K",)
 
@@ -46,14 +47,9 @@ class Resolution:
     problem: str = ""  # 'company not in sources' | 'period not in sources' | 'several filings match'
 
 
-def _key(name: str) -> str:
-    stop = {"the", "inc", "incorporated", "corporation", "corp", "company", "co", "plc", "ltd", "limited", "and"}
-    return " ".join(w for w in re.findall(r"[a-z0-9&]+", name.lower()) if w not in stop)
-
-
 def _same_company(a: str, b: str) -> bool:
-    ka, kb = _key(a), _key(b)
-    return bool(ka and kb) and (ka == kb or ka.startswith(kb + " ") or kb.startswith(ka + " "))
+    ka = company_key(a)
+    return bool(ka) and ka == company_key(b)
 
 
 def _offset(f: Filing) -> bool:
@@ -65,7 +61,7 @@ def resolve(targets: Sequence[Target], filings: Sequence[Filing]) -> List[Resolu
     mine = [[f for f in filings if _same_company(t.company, f.company)] for t in targets]
     annual = [[f for f in fs if f.form in ANNUAL_FORMS] for fs in mine]
     # a comparison across companies whose fiscal calendars differ is aligned on the calendar year
-    companies = {_key(f.company) for fs in annual for f in fs}
+    companies = {company_key(f.company) for fs in annual for f in fs}
     align = len(companies) > 1 and len({_offset(f) for fs in annual for f in fs}) > 1
     out = []
     for t, fs, an in zip(targets, mine, annual):

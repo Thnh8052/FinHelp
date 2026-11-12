@@ -14,6 +14,7 @@
 }
 
 .auth-page-card {
+  position: relative;
   width: 100%;
   max-width: 440px;
   background-color: #0e1526;
@@ -33,12 +34,6 @@
   color: #f8fafc;
 }
 
-.auth-page-brand-name {
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-  color: #f8fafc;
-}
 
 .auth-page-header {
   margin-bottom: 24px;
@@ -97,7 +92,7 @@
 }
 
 .auth-page-input::placeholder {
-  color: #64748b;
+  color: var(--text-dim);
 }
 
 .auth-page-input:disabled {
@@ -137,7 +132,7 @@
 
 .auth-page-btn:disabled {
   background-color: #1e293b;
-  color: #64748b;
+  color: var(--text-dim);
   cursor: not-allowed;
 }
 
@@ -190,6 +185,31 @@
   color: #93c5fd;
 }
 
+.auth-page-link-muted {
+  color: var(--text-dim);
+}
+
+.auth-page-link-small {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.auth-page-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.auth-page-text-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+  padding: 4px 0;
+}
+
 /* Mobile responsive */
 @media (max-width: 480px) {
   .auth-page-wrapper {
@@ -203,5 +223,38 @@
     box-shadow: none;
     border-radius: 0;
     padding: 32px 20px;
+  }
+
+
+  .auth-page-title {
+    font-size: 18px;
+  }
+
+  .auth-page-desc,
+  .auth-page-label,
+  .auth-page-alert,
+  .auth-page-footer,
+  .auth-page-text-btn {
+    font-size: 12.5px;
+  }
+
+  .auth-page-btn {
+    font-size: 13.5px;
+  }
+
+  /* 16px stops iOS Safari from zooming into the field on focus */
+  .auth-page-input {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 380px) {
+  .auth-page-card {
+    padding: 28px 16px;
+  }
+
+
+  .auth-page-title {
+    font-size: 17px;
   }
 }

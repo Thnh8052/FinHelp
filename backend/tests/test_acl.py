@@ -3,6 +3,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.modules.chat import chat as chat_api
 from app.shared import deps
 from app.shared.deps import can_access_notebook, can_chat, get_optional_user_id
@@ -78,9 +79,11 @@ class FakeUsers:
         pass
 
     allowed = True
+    reserved = []
     consumed = []
 
-    async def check_quota(self, user_id):
+    async def reserve_quota(self, user_id):
+        self.reserved.append(user_id)
         return self.allowed
 
     async def consume_quota(self, user_id, messages=1, tokens=0):
@@ -173,7 +176,46 @@ def test_the_first_searched_question_names_the_chat(client, monkeypatch):
 def test_a_user_over_the_daily_limit_is_refused(client, monkeypatch):
     monkeypatch.setattr(FakeUsers, "allowed", False)
     assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"]).status_code == 429
-    assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1"]).status_code == 500  # guests have no daily limit: Stop
+    assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1"]).status_code == 500  # guests are counted per address, not on an account: Stop
+
+
+def test_a_question_without_a_usable_source_reserves_nothing(client, monkeypatch):
+    async def refuse(self, notebook_id, ids, document_id=None):
+        raise chat_api.SourceSelectionError("no_source_selected")
+
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "resolve_scope", refuse)
+    FakeUsers.reserved.clear()
+    assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"]).status_code == 422
+    assert FakeUsers.reserved == []
+
+
+def test_a_failed_question_gives_its_reservation_back(client):
+    FakeUsers.consumed.clear()
+    assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"]).status_code == 500  # Stop
+    assert FakeUsers.consumed == [("alice", -1, 0)]
+
+
+def test_a_searched_question_keeps_its_reservation(client, monkeypatch):
+    async def searched(self, **kw):
+        return {**await _answered(self), "charged": True}
+
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", searched)
+    FakeUsers.consumed.clear()
+    assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"]).status_code == 200
+    assert FakeUsers.consumed == [("alice", 0, 100)]
+
+
+def test_guests_are_stopped_at_their_daily_questions(client, monkeypatch):
+    monkeypatch.setattr(settings, "GUEST_DAILY_QUESTIONS", 2)
+    guest = dict(notebook_id=GUEST_ID, document_ids=["d1"])
+    assert [ask(client, None, **guest).status_code for _ in range(3)] == [500, 500, 429]  # 500: Stop, past every gate
+    assert ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"]).status_code == 500  # an account has its own limit
+
+
+def test_a_refused_guest_question_does_not_use_the_allowance(client, monkeypatch):
+    monkeypatch.setattr(settings, "GUEST_DAILY_QUESTIONS", 1)
+    assert ask(client, None, notebook_id=GUEST_ID).status_code == 422  # no source selected
+    assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1"]).status_code == 500
 
 
 def test_an_answer_is_stored_with_its_cost_and_counted(client, monkeypatch):
@@ -184,11 +226,33 @@ def test_an_answer_is_stored_with_its_cost_and_counted(client, monkeypatch):
     response = ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])
 
     assert response.status_code == 200 and response.json()["title"] == "A"
-    assert FakeUsers.consumed == [("alice", 0, 100)]  # not charged as a question, its tokens still count
+    assert FakeUsers.consumed == [("alice", -1, 100)]  # not charged as a question: the reservation goes back, its tokens still count
     assert [m.role for m in FakeChats.saved] == ["user", "assistant"]
     stored = FakeChats.saved[-1]
     assert stored.role == "assistant" and stored.token_usage == {"prompt_tokens": 90, "completion_tokens": 10, "total_tokens": 100}
     assert stored.latency_ms == 1500 and stored.model_used
+
+
+def test_an_answer_carries_no_internal_details(client, monkeypatch):
+    async def answered(self, **kw):
+        citation = {"citation_id": "c", "chunk_id": "internal-chunk", "document_id": "d", "page": 1, "snippet": "s", "score": 0.9, "cited": True}
+        return {"answer": "ok", "intent": "internal-route", "citations": [citation], "verification": {"unverified_figures": ["internal-figure"]}, "trace": {}}
+
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
+    response = ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])
+    assert set(response.json()) == {"title", "query", "answer", "citations", "understood", "alternatives"}
+    assert set(response.json()["citations"][0]) == {"citation_id", "document_id", "page", "snippet", "cited"} and "internal-" not in response.text
+
+
+def test_the_stored_trace_keeps_both_kinds_of_verdict(client, monkeypatch):
+    async def answered(self, **kw):
+        return {"answer": "ok", "intent": "retrieval_rag", "citations": [], "trace": {"intent": {"label": "report_question"}}}
+
+    monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
+    FakeChats.saved.clear()
+    ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])
+    stored = FakeChats.saved[-1].trace_info
+    assert stored["intent"] == "retrieval_rag" and stored["router"] == {"label": "report_question"}
 
 
 def test_messages_are_the_notebook_owners(client):
@@ -220,7 +284,7 @@ def test_mentions_must_be_selected_sources(client):
     assert r.status_code == 422
 
 
-def test_guest_questions_are_not_capped(client, monkeypatch):
+def test_earlier_guest_messages_do_not_use_up_the_allowance(client, monkeypatch):
     async def five_questions_so_far(self, notebook_id, limit=500):
         return [MessageRecord(message_id=f"m{i}", notebook_id=notebook_id, role="user", content="q") for i in range(5)]
 

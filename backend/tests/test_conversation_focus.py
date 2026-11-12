@@ -188,11 +188,11 @@ async def _ask(monkeypatch, nb, result, query="q"):
     monkeypatch.setattr(chat_api, "require_notebook", lambda *a, **k: _value(nb))
     monkeypatch.setattr(chat_api, "can_chat", lambda *a: True)
     monkeypatch.setattr(chat_api, "ensure_documents_ready", none)
-    monkeypatch.setattr(chat_api, "UserRepository", lambda db: types.SimpleNamespace(check_quota=_true, consume_quota=none))
+    monkeypatch.setattr(chat_api, "UserRepository", lambda db: types.SimpleNamespace(reserve_quota=_true, consume_quota=none))
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "__init__", lambda self, db, qdrant: None)
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "resolve_scope", none)
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
-    response = await chat_api.handle_user_query(chat_api.QueryRequest(notebook_id="nb", query=query, document_ids=["d1"]), "u", None, None)
+    response = await chat_api.handle_user_query(None, chat_api.QueryRequest(notebook_id="nb", query=query, document_ids=["d1"]), "u", None, None)
     return order, response
 
 
@@ -209,7 +209,7 @@ async def test_a_greeting_does_not_name_the_chat_but_the_first_searched_question
 
     order, response = await _ask(monkeypatch, NotebookRecord(notebook_id="nb", owner_id="u"),
                                  {"answer": "Xin chào!", "intent": "static_reply", "citations": [], "charged": False, "trace": {}}, "bạn ổn không ?")
-    assert not any(isinstance(step, tuple) and step[0] == "title" for step in order) and response.title == "Hội thoại mới"
+    assert not any(isinstance(step, tuple) and step[0] == "title" for step in order) and response.title == ""  # untitled: the interface names it in the user's language
     order, response = await _ask(monkeypatch, NotebookRecord(notebook_id="nb", owner_id="u", message_count=2),  # the greeting came first
                                  {"answer": "6,475", "intent": "retrieval_rag", "citations": [], "charged": True, "trace": {}}, "Doanh thu AMD năm 2018?")
     assert ("title", "Doanh thu AMD năm 2018?") in order and response.title == "Doanh thu AMD năm 2018?"
@@ -225,7 +225,7 @@ async def test_a_question_that_is_too_long_is_refused_before_anything_is_stored(
 
     with pytest.raises(HTTPException) as refused:
         await _ask(monkeypatch, NotebookRecord(notebook_id="nb", owner_id="u"), {}, "x" * 4001)
-    assert refused.value.status_code == 422 and isinstance(refused.value.detail, str) and "4.000" in refused.value.detail
+    assert refused.value.status_code == 422 and refused.value.detail == {"code": "question_too_long", "params": {"max": 4000}}
 
 
 async def _value(v):

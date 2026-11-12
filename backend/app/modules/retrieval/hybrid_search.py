@@ -2,6 +2,7 @@ import re
 import sys
 import time
 from collections import Counter
+from contextvars import ContextVar
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -16,6 +17,19 @@ from app.modules.retrieval.fusion import fuse_with_rerank, round_robin_merge, rr
 from app.modules.retrieval.gpu import memory_report
 from app.modules.retrieval.qdrant_retriever import QdrantRetriever
 from app.modules.retrieval.reranker import QwenRerankerService
+
+
+# Seconds spent in each part of the search of the question being served (set by the retrieval step, None elsewhere): they go into its trace.
+SEARCH_PARTS: ContextVar = ContextVar("search_parts", default=None)
+
+
+def part_done(name: str, since: float) -> float:
+    """Add the time since `since` to part `name` of this question's search; returns the new clock reading."""
+    now = time.perf_counter()
+    parts = SEARCH_PARTS.get()
+    if parts is not None:
+        parts[name] = round(parts.get(name, 0.0) + now - since, 2)
+    return now
 
 
 def _z(x: np.ndarray) -> np.ndarray:
@@ -196,10 +210,13 @@ class HybridSearchService:
         documents = list(dict.fromkeys(d for s in searches for d in s.document_ids))
         items = searches + [PlanItem(question, documents)]
         vectors = await self.embedder.embed_queries([item.query for item in items])
+        t = part_done("embed", t0)
         ranked = await self.retriever.search_vectors(
             vectors, notebook_id, scope_document_ids, settings.MULTIDOC_CANDIDATE_LIMIT, per_vector_documents=[item.document_ids for item in items]
         )
+        t = part_done("vector", t)
         source = await self.chunk_repo.get_text_and_tokens(documents)
+        t = part_done("mongo_text", t)
         counts = {cid: Counter(_TERM.findall(text.lower())) for cid, (text, _) in source.items()}
         scores: Dict[str, float] = {}
         for hits in ranked:
@@ -207,11 +224,15 @@ class HybridSearchService:
                 scores[h["chunk_id"]] = max(h["score"], scores.get(h["chunk_id"], float("-inf")))
         rankings = [dense_bm25_order(hits, s.query, counts)[: settings.MULTIDOC_PER_ITEM_LIMIT] for hits, s in zip(ranked, searches)]
         rankings.append([h["chunk_id"] for h in ranked[-1] if h.get("chunk_id")][: settings.MULTIDOC_QUESTION_POOL])
+        t = part_done("bm25", t)
         lanes = await self._qwen_lanes(items, rankings, scores)
+        t = part_done("rerank", t)
         max_chunks, max_tokens = planned_ceilings(len(items), len(documents))
         chosen = allocate_planned(lanes, {cid: tok for cid, (_, tok) in source.items()}, max_chunks, max_tokens)
         logger.info(f"Planned search, {len(items)} searches, {len(documents)} documents: {len(chosen)} chunks (ceiling {max_chunks} / {max_tokens} tokens) in {time.perf_counter() - t0:.2f}s")
-        return await self._hydrate(chosen, scores)
+        hydrated = await self._hydrate(chosen, scores)
+        part_done("hydrate", t)
+        return hydrated
 
     async def retrieve_by_content(
         self, question: str, notebook_id: str, document_ids: List[str], year_document_ids: Optional[List[str]] = None

@@ -6,17 +6,19 @@ Chịu trách nhiệm:
 1. Trích xuất và giải mã JWT Bearer Token từ Header của HTTP Request.
 2. Xác thực danh tính người dùng và kiểm tra tính toàn vẹn của phiên làm việc.
 3. Hỗ trợ 2 chế độ:
-   - get_optional_current_user: Cho phép cả khách chưa đăng nhập (Guest) và người dùng đăng nhập truy cập.
+   - get_optional_user_id: Cho phép cả khách chưa đăng nhập (Guest) và người dùng đăng nhập truy cập.
    - get_current_user_id / get_current_user: Bắt buộc đăng nhập tài khoản.
+   Cả hai đều so token với tài khoản trong database (_account_of): đổi mật khẩu hoặc khóa tài khoản có hiệu lực ngay.
 4. Kiểm soát phân quyền dựa trên vai trò (Role-Based Access Control - RBAC) với đặc quyền require_admin.
 """
 
 from typing import Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.core.config import settings
+from app.core.error_codes import Code, api_error
 from app.infrastructure.database.mongodb import get_database
 from app.modules.notebooks.notebook_repo import NotebookRepository
 from app.modules.auth.user_repo import UserRepository
@@ -24,109 +26,69 @@ from app.modules.notebooks.notebook import NotebookRecord
 from app.modules.auth.user import UserRecord
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+SESSION_COOKIE = "finhelp_session"
+SESSION_COOKIE_PATH = "/api"
+_REMOVE_SESSION_COOKIE = f"{SESSION_COOKIE}=; Max-Age=0; Path={SESSION_COOKIE_PATH}; HttpOnly; SameSite=strict"
 
 
-# ==============================================================================
-# HÀM: get_optional_current_user
-# Ý NGHĨA: Phân loại truy cập linh hoạt: Nếu có Token hợp lệ thì trả về thông tin UserRecord;
-#          nếu không có Token hoặc Token hết hạn thì trả về None (coi là Khách vãng lai - Guest).
-# ĐẦU VÀO:
-#   - token: Chuỗi Bearer JWT Token từ Authorization Header (nếu có).
-#   - db: Kết nối Async Motor Database MongoDB.
-# ĐẦU RA:
-#   - Optional[UserRecord]: Bản ghi người dùng trong MongoDB hoặc None.
-# ==============================================================================
-async def get_optional_current_user(
-    token: Optional[str] = Depends(oauth2_scheme),
-    db: AsyncIOMotorDatabase = Depends(get_database),
-) -> Optional[UserRecord]:
-    if not token:
-        return None
+async def read_token(request: Request, header_token: Optional[str] = Depends(oauth2_scheme)) -> Optional[str]:
+    """API clients send the token in a header; a browser keeps it in a cookie that page scripts cannot read."""
+    return header_token or request.cookies.get(SESSION_COOKIE)
+
+
+async def _account_of(token: str, db: AsyncIOMotorDatabase) -> UserRecord:
+    """The account a sent token still speaks for. 401 when it is forged, expired, names nobody or predates a password change; 403 when the account is locked.
+    A token issued before token_version existed has no "ver": it counts as 0, so nobody is signed out by the upgrade."""
+    refused = api_error(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        code=Code.SESSION_EXPIRED,
+        headers={"WWW-Authenticate": "Bearer", "Set-Cookie": _REMOVE_SESSION_COOKIE},  # page scripts cannot remove it: without this the browser could not even continue as a guest
+    )
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: str = payload.get("sub")
-        if not user_id:
-            return None
-        repo = UserRepository(db)
-        return await repo.get_by_id(user_id)
+        claims = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except JWTError:
-        return None
+        raise refused
+    user = await UserRepository(db).get_by_id(claims["sub"]) if claims.get("sub") else None
+    if user is None or claims.get("ver", 0) != user.token_version or claims.get("jti") in user.revoked_token_ids:
+        raise refused
+    if not user.is_active:
+        raise api_error(status_code=status.HTTP_403_FORBIDDEN, code=Code.ACCOUNT_LOCKED)
+    return user
 
 
 # ==============================================================================
 # HÀM: get_optional_user_id
-# Ý NGHĨA: Trích xuất mã user_id nếu có token JWT hợp lệ, hoặc trả về None nếu là
-#          Khách dùng thử chưa đăng nhập (Guest). Không gây lỗi 401.
-# ĐẦU VÀO:
-#   - token: Chuỗi Bearer JWT Token từ Authorization Header (nếu có).
-# ĐẦU RA:
-#   - Optional[str]: Mã user_id hoặc None.
+# Ý NGHĨA: Trích xuất mã user_id nếu có token JWT, hoặc trả về None nếu là Khách dùng thử chưa đăng nhập (Guest).
+#          Có gửi token nhưng token không còn hiệu lực thì bị từ chối, để người dùng được yêu cầu đăng nhập lại.
 # ==============================================================================
-async def get_optional_user_id(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[str]:
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload.get("sub")
-    except JWTError:
-        return None
-
-
-
-# ==============================================================================
-# HÀM: get_current_user_id
-# Ý NGHĨA: Xác thực BẮT BUỘC mã JWT. Nếu không có token hoặc token không hợp lệ,
-#          hàm sẽ trả về lỗi HTTP 401 Unauthorized ngay lập tức. Nếu hợp lệ, trả về user_id.
-# ĐẦU VÀO:
-#   - token: Chuỗi Bearer JWT Token từ Header.
-# ĐẦU RA:
-#   - str: Mã user_id của người dùng đang đăng nhập.
-# ==============================================================================
-async def get_current_user_id(token: Optional[str] = Depends(oauth2_scheme)) -> str:
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Yêu cầu đăng nhập để sử dụng tính năng này",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Phiên làm việc không hợp lệ hoặc đã hết hạn",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-        return user_id
-    except JWTError:
-        raise credentials_exception
+async def get_optional_user_id(
+    token: Optional[str] = Depends(read_token),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> Optional[str]:
+    return (await _account_of(token, db)).user_id if token else None
 
 
 # ==============================================================================
 # HÀM: get_current_user
-# Ý NGHĨA: Lấy toàn bộ thực thể tài khoản người dùng (UserRecord) từ MongoDB thông qua user_id.
-#          Đồng thời đảm bảo tài khoản vẫn tồn tại và hợp lệ trong cơ sở dữ liệu.
-# ĐẦU VÀO:
-#   - user_id: Mã định danh người dùng (tiêm từ hàm get_current_user_id).
-#   - db: Kết nối Async Motor Database MongoDB.
+# Ý NGHĨA: Xác thực BẮT BUỘC: không có token hoặc token không còn hiệu lực thì bị từ chối ngay.
 # ĐẦU RA:
 #   - UserRecord: Thực thể người dùng đầy đủ bao gồm thông tin Quota, Role, Trạng thái.
 # ==============================================================================
 async def get_current_user(
-    user_id: str = Depends(get_current_user_id),
+    token: Optional[str] = Depends(read_token),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> UserRecord:
-    repo = UserRepository(db)
-    user = await repo.get_by_id(user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tài khoản không tồn tại trong hệ thống",
+    if not token:
+        raise api_error(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code=Code.LOGIN_REQUIRED,
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    return user
+    return await _account_of(token, db)
+
+
+async def get_current_user_id(current_user: UserRecord = Depends(get_current_user)) -> str:
+    return current_user.user_id
 
 
 # ==============================================================================
@@ -142,10 +104,7 @@ async def require_admin(
     current_user: UserRecord = Depends(get_current_user),
 ) -> UserRecord:
     if current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Chức năng yêu cầu đặc quyền Quản trị viên (Admin)",
-        )
+        raise api_error(status_code=status.HTTP_403_FORBIDDEN, code=Code.ADMIN_REQUIRED)
     return current_user
 
 
@@ -170,9 +129,9 @@ async def require_notebook(db: AsyncIOMotorDatabase, notebook_id: str, user_id: 
     """404 for an unknown notebook, 403 without access. Every route that reads or writes a notebook's data calls this."""
     nb = await NotebookRepository(db).get_by_id(notebook_id)
     if not nb:
-        raise HTTPException(status_code=404, detail="Không tìm thấy Notebook")
+        raise api_error(status_code=404, code=Code.NOTEBOOK_NOT_FOUND)
     if not can_access_notebook(nb, user_id, write):
-        raise HTTPException(status_code=403, detail="Không có quyền truy cập Notebook này")
+        raise api_error(status_code=403, code=Code.NOTEBOOK_FORBIDDEN)
     return nb
 
 

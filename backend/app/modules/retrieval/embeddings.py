@@ -5,6 +5,8 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 from app.core.config import settings
+from app.core.error_codes import Code
+from app.core.exceptions import ServiceUnavailableError
 from app.core.logging import logger
 from app.modules.retrieval.gpu import free_gpu_memory, register_unloader, resolve_device, run_on_gpu
 
@@ -62,21 +64,23 @@ class DenseEmbeddingService:
         import httpx
 
         url = f"{settings.REMOTE_GPU_URL.rstrip('/')}/embed"
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            resp = await client.post(
-                url,
-                json={
-                    "texts": texts,
-                    "max_length": max_length,
-                    "batch_size": batch_size,
-                    "return_sparse": sparse,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            if not sparse:
-                return data["dense"]
-            return data["dense"], data["sparse"]
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                resp = await client.post(
+                    url,
+                    json={
+                        "texts": texts,
+                        "max_length": max_length,
+                        "batch_size": batch_size,
+                        "return_sparse": sparse,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data["dense"] if not sparse else (data["dense"], data["sparse"])
+        except (httpx.HTTPError, ValueError, KeyError) as exc:  # down, timed out, or a tunnel page instead of JSON: no search can run without the vectors
+            logger.warning(f"Remote embedding unavailable: {type(exc).__name__}: {str(exc)[:120]}")
+            raise ServiceUnavailableError(Code.SYSTEM_NOT_READY) from exc
 
     async def embed_documents(self, texts: List[str]) -> List[List[float]]:
         if not texts:

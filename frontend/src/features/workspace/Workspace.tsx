@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../../context/LanguageContext";
 import { Navbar } from "../../components/layout/Navbar";
 import { SplitLayout } from "../../components/layout/SplitLayout";
@@ -37,20 +36,25 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const [catalogDocId, setCatalogDocId] = useState<string | null>(null);
   const { t } = useLanguage();
 
-  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, maxFileSizeMb, docs, chat, notebooks, notebookId, selectNotebook, newChat, deleteNotebook } = useWorkspace(
+  const { toast, showToast, closeToast, notebookTitle, isAuthenticated, maxSources, maxFileSizeMb, docs, chat, notebooks, notebookId, selectNotebook, newChat, renameNotebook, deleteNotebook } = useWorkspace(
     () => setAuthModalOpen(true)
   );
 
-  const navigate = useNavigate();
-
-  // Trích dẫn và form đang mở thuộc về đoạn chat cũ
+  // Trích dẫn, form và trình đọc PDF đang mở thuộc về đoạn chat cũ
   useEffect(() => {
     setActiveCitation(null);
     setCatalogDocId(null);
+    setIsSplitViewOpen(false);
   }, [notebookId]);
 
+  // Below 1100px the sources drawer and the PDF pane both slide over the chat from the right: opening the PDF closes the drawer
+  const openPdfPane = () => {
+    setIsSplitViewOpen(true);
+    if (window.matchMedia("(max-width: 1100px)").matches) setIsSourcesOpen(false);
+  };
+
   const unconfirmedDocs = docs.documents.filter(needsCatalogConfirmation);
-  const notebookList = notebooks.map((n) => (n.notebook_id === notebookId ? { ...n, document_count: docs.documents.length } : n));
+  const notebookList = notebooks.map((n) => (n.notebook_id === notebookId ? { ...n, document_count: docs.documents.length, processing_count: docs.documents.filter(isDocProcessing).length } : n));
   const activeSessionTitle = notebookTitle || (isAuthenticated ? t.workspace.financialAnalysisSession : t.workspace.guestTrialSession);
 
   // Khi click vào trích dẫn [1] Trang 12: Tự động mở Split-View, chuyển đúng tài liệu và nhảy tới trang đó
@@ -59,7 +63,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     if (citation.document_id) {
       docs.setActiveDocId(citation.document_id);
     }
-    setIsSplitViewOpen(true);
+    openPdfPane();
   };
 
   return (
@@ -69,7 +73,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         documentId={catalogDocId}
         onClose={() => setCatalogDocId(null)}
         onSaved={() => {
-          showToast("Document metadata saved.", "success");
+          showToast(t.toasts.catalogSaved, "success");
           docs.reload();
         }}
       />
@@ -95,7 +99,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         onToggleSplitView={() => setIsSplitViewOpen((prev) => !prev)}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-        onExportReport={() => showToast("Analysis report saved.", "success")}
         onOpenAuthModal={() => setAuthModalOpen(true)}
         onOpenAdminDashboard={() => setAdminDashboardOpen(true)}
         onNavigateHome={onNavigateHome}
@@ -109,9 +112,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           <ChatHistoryList
             notebooks={notebookList}
             activeNotebookId={notebookId}
-            onOpenHub={isAuthenticated ? () => navigate("/app") : undefined}
             onSelectNotebook={selectNotebook}
             onNewChat={newChat}
+            onRenameNotebook={renameNotebook}
             onDeleteNotebook={deleteNotebook}
             isGuest={!isAuthenticated}
           />
@@ -136,6 +139,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               messages={chat.messages}
               onSendMessage={chat.sendMessage}
               isLoading={chat.isLoading}
+              loadingStage={chat.stage}
               onSelectCitation={handleSelectCitation}
               onClearChat={() => chat.setMessages([])}
               sessionTitle={activeSessionTitle}
@@ -161,7 +165,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             onToggleAllDocs={docs.toggleAll}
             onOpenDocPdf={(doc) => {
               docs.setActiveDocId(doc.document_id);
-              setIsSplitViewOpen(true);
+              openPdfPane();
             }}
             onUploadFiles={docs.uploadFiles}
             onDeleteDocument={docs.remove}

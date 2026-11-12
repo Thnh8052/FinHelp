@@ -1,30 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { authService } from "../../services/auth";
 import { CloseIcon } from "../common/Icons";
+import { useLanguage } from "../../context/LanguageContext";
+import type { TranslationSchema } from "../../locales/types";
+import { ApiError, errorText, fieldErrorText } from "../../services/api";
+import { documentService } from "../../services/documents";
+import { CatalogPayload } from "../../types/notebook";
 import "../auth/auth.css";
 
-interface NameCandidate {
-  name: string;
-  pages: number[];
-}
-
-interface CatalogPayload {
-  document_id: string;
-  file_name: string;
-  needs_confirmation: boolean;
-  report_types: string[];
-  metadata: {
-    company_name?: string | null;
-    ticker?: string | null;
-    aliases?: string[];
-    report_type?: string | null;
-    fiscal_year?: number | null;
-    fiscal_quarter?: number | null;
-    period_end?: string | null;
-    catalog_unverified?: string[];
-    name_candidates?: NameCandidate[];
-  };
-}
+/** The reason in words: each refused field of the form (named by its code), else the sentence for the error. */
+const reason = (err: unknown, t: TranslationSchema, fallback: string): string =>
+  err instanceof ApiError && err.fields.length ? err.fields.map((f) => fieldErrorText(f, t)).join("; ") : errorText(err, t, fallback);
 
 interface CatalogFormProps {
   documentId: string | null;
@@ -34,16 +19,12 @@ interface CatalogFormProps {
 
 const OTHER = "__other__";
 
-const authHeaders = (): Record<string, string> => {
-  const token = authService.getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 /**
  * Mẫu xác nhận danh tính tài liệu: tên công ty chọn từ các tên tìm được trong tài liệu (kèm trang), chỉ gõ tay khi không có
  * tên đúng; mã CK, tên khác, loại báo cáo, năm / quý, ngày kết thúc kỳ. Backend kiểm lại mọi trường (422 khi sai dạng).
  */
 export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, onSaved }) => {
+  const { t } = useLanguage();
   const [data, setData] = useState<CatalogPayload | null>(null);
   const [choice, setChoice] = useState<string>(OTHER);
   const [typedName, setTypedName] = useState("");
@@ -60,12 +41,9 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
     if (!documentId) return;
     setError(null);
     setData(null);
-    fetch(`/api/v1/documents/${documentId}/catalog`, { headers: authHeaders() })
-      .then(async (res) => {
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((d: CatalogPayload) => {
+    documentService
+      .getCatalog(documentId)
+      .then((d) => {
         const m = d.metadata;
         const candidates = m.name_candidates || [];
         const known = candidates.find((c) => c.name === m.company_name);
@@ -79,7 +57,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
         setQuarter(m.fiscal_quarter ? String(m.fiscal_quarter) : "");
         setPeriodEnd(m.period_end || "");
       })
-      .catch((e: Error) => setError(`Failed to load document metadata: ${e.message}`));
+      .catch((err: unknown) => setError(t.catalog.loadFailed.replace("{reason}", reason(err, t, t.catalog.connectionError))));
   }, [documentId]);
 
   if (!documentId) return null;
@@ -92,33 +70,22 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
     setError(null);
     setSaving(true);
     try {
-      const res = await fetch(`/api/v1/documents/${documentId}/catalog`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({
-          company_name: choice === OTHER ? typedName : choice,
-          ticker: ticker || null,
-          aliases: aliases
-            .split(",")
-            .map((a) => a.trim())
-            .filter(Boolean),
-          report_type: reportType,
-          fiscal_year: Number(fiscalYear),
-          fiscal_quarter: quarter ? Number(quarter) : null,
-          period_end: periodEnd || null,
-        }),
+      await documentService.updateCatalog(documentId, {
+        company_name: choice === OTHER ? typedName : choice,
+        ticker: ticker || null,
+        aliases: aliases
+          .split(",")
+          .map((a) => a.trim())
+          .filter(Boolean),
+        report_type: reportType,
+        fiscal_year: Number(fiscalYear),
+        fiscal_quarter: quarter ? Number(quarter) : null,
+        period_end: periodEnd || null,
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const detail = Array.isArray(body.detail)
-          ? body.detail.map((d: { msg?: string }) => (d.msg || "").replace(/^Value error, /, "")).join("; ")
-          : body.detail;
-        throw new Error(detail || `HTTP ${res.status}`);
-      }
       onSaved(documentId);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save document metadata.");
+      setError(reason(err, t, t.catalog.saveFailed));
     } finally {
       setSaving(false);
     }
@@ -131,10 +98,10 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
       <div className="auth-card" onClick={(e) => e.stopPropagation()}>
         <div className="auth-header">
           <div>
-            <h2 className="auth-title">Document Metadata</h2>
+            <h2 className="auth-title">{t.catalog.title}</h2>
             <p className="auth-subtitle">{data ? data.file_name : "Loading..."}</p>
           </div>
-          <button onClick={onClose} className="auth-close-btn" aria-label="Close">
+          <button onClick={onClose} className="auth-close-btn" aria-label={t.common.close}>
             <CloseIcon size={16} />
           </button>
         </div>
@@ -142,7 +109,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
         {error && <div className="auth-alert-error">{error}</div>}
         {data?.needs_confirmation && (
           <div className="auth-alert-warning">
-            Company entity or reporting period could not be automatically confirmed. Please verify before analyzing.
+            {t.catalog.confirmNotice}
           </div>
         )}
 
@@ -150,15 +117,15 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
           <div className="auth-body">
             <form onSubmit={handleSubmit} className="auth-form">
               <div className="auth-field">
-                <label className="auth-label">Company Entity Name</label>
+                <label className="auth-label">{t.catalog.companyName}</label>
                 <select className="auth-input" value={choice} onChange={(e) => setChoice(e.target.value)} style={flag("entity")}>
                   {candidates.map((c) => (
                     <option key={c.name} value={c.name}>
                       {c.name}
-                      {c.pages.length ? ` (page ${c.pages.join(", ")})` : ""}
+                      {c.pages.length ? ` ${t.catalog.pageRef.replace("{pages}", c.pages.join(", "))}` : ""}
                     </option>
                   ))}
-                  <option value={OTHER}>Other (custom name)</option>
+                  <option value={OTHER}>{t.catalog.otherCompany}</option>
                 </select>
                 {choice === OTHER && (
                   <input
@@ -166,37 +133,37 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
                     value={typedName}
                     onChange={(e) => setTypedName(e.target.value)}
                     maxLength={120}
-                    placeholder="e.g. Advanced Micro Devices, Inc."
+                    placeholder={t.catalog.exampleCompany}
                     required
                   />
                 )}
               </div>
 
               <div className="auth-field">
-                <label className="auth-label">Ticker Symbol</label>
+                <label className="auth-label">{t.catalog.ticker}</label>
                 <input
                   className="auth-input"
                   value={ticker}
                   onChange={(e) => setTicker(e.target.value.toUpperCase())}
                   maxLength={10}
                   pattern="[A-Z0-9.\-]{1,10}"
-                  placeholder="e.g. AMD"
+                  placeholder={t.catalog.exampleTicker}
                 />
               </div>
 
               <div className="auth-field">
-                <label className="auth-label">Aliases / Prior Names (comma-separated, max 5)</label>
+                <label className="auth-label">{t.catalog.aliases}</label>
                 <input
                   className="auth-input"
                   value={aliases}
                   onChange={(e) => setAliases(e.target.value)}
                   maxLength={320}
-                  placeholder="e.g. Facebook"
+                  placeholder={t.catalog.exampleAlias}
                 />
               </div>
 
               <div className="auth-field">
-                <label className="auth-label">Report Type</label>
+                <label className="auth-label">{t.catalog.reportType}</label>
                 <select className="auth-input" value={reportType} onChange={(e) => setReportType(e.target.value)}>
                   {data.report_types.map((t) => (
                     <option key={t} value={t}>
@@ -208,7 +175,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
 
               <div className="auth-field auth-field-row">
                 <div className="auth-field-col">
-                  <label className="auth-label">Fiscal Year</label>
+                  <label className="auth-label">{t.catalog.fiscalYear}</label>
                   <input
                     className="auth-input"
                     type="number"
@@ -221,9 +188,9 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
                   />
                 </div>
                 <div className="auth-field-col">
-                  <label className="auth-label">Quarter</label>
+                  <label className="auth-label">{t.catalog.quarter}</label>
                   <select className="auth-input" value={quarter} onChange={(e) => setQuarter(e.target.value)}>
-                    <option value="">Full Year</option>
+                    <option value="">{t.catalog.fullYear}</option>
                     {[1, 2, 3, 4].map((q) => (
                       <option key={q} value={q}>
                         Q{q}
@@ -234,7 +201,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
               </div>
 
               <div className="auth-field">
-                <label className="auth-label">Period End Date</label>
+                <label className="auth-label">{t.catalog.periodEnd}</label>
                 <input
                   className="auth-input"
                   type="date"
@@ -245,7 +212,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
               </div>
 
               <button type="submit" className="auth-submit-btn" disabled={saving}>
-                {saving ? "Saving..." : "Confirm Metadata"}
+                {saving ? t.catalog.saving : t.catalog.confirm}
               </button>
             </form>
           </div>

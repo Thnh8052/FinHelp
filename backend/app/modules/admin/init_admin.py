@@ -1,102 +1,76 @@
 """
-Module khởi tạo & quản trị tài khoản Admin hệ thống (FinAnalyst-AI)
-Xóa sạch dữ liệu tài khoản mock cũ và khởi tạo tài khoản admin full quyền duy nhất:
-- Username: admin
+Tài khoản Admin duy nhất của hệ thống (FinAnalyst-AI), tạo hoặc cập nhật mỗi lần server khởi động:
+- user_id ADMIN_USER_ID, username ADMIN_USERNAME, email ADMIN_EMAIL (auth/user.py; không ai đăng ký được hai tên này)
 - Mật khẩu: settings.ADMIN_PASSWORD (biến môi trường; không đặt thì không tạo / không đổi tài khoản admin)
-- Role: admin (Full quyền quản trị, upload tới 50 documents, 10,000 queries/ngày)
-Chỉ chạy khi server khởi động, không có endpoint HTTP nào gọi được.
+- Role: admin (Full quyền quản trị, cùng giới hạn tài liệu với người dùng, 10,000 câu hỏi/ngày)
+Chỉ chạy khi server khởi động, không có endpoint HTTP nào gọi được. Không xoá tài khoản hay notebook nào.
 """
+
+from pymongo.errors import DuplicateKeyError
 
 from app.core.config import settings
 from app.core.logging import logger
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_password
 from app.infrastructure.database.mongodb import MongoManager
 from app.modules.notebooks.notebook_repo import NotebookRepository
 from app.modules.auth.user_repo import UserRepository
 from app.modules.notebooks.notebook import NotebookRecord
-from app.modules.auth.user import TIER_SPECS, UserRecord
+from app.modules.auth.user import ADMIN_EMAIL, ADMIN_USER_ID, ADMIN_USERNAME, TIER_SPECS, UserRecord
+
+ADMIN_FULL_NAME = "Vũ Thành (Quản Trị Viên Full Quyền)"
+ADMIN_NOTEBOOK_ID = "nb_admin_sec_10k"
 
 
-async def setup_admin_and_clean_mocks() -> dict:
-    """Xóa bỏ tài khoản mock cũ và đảm bảo tài khoản Admin tồn tại với đầy đủ quyền hạn."""
+async def ensure_admin() -> dict:
+    """Đảm bảo tài khoản Admin tồn tại với đầy đủ quyền hạn. Tìm theo user_id cố định, không theo username: một người dùng thường
+    tên "admin" (đăng ký khi server chạy thiếu ADMIN_PASSWORD) không bao giờ bị nâng thành admin."""
     if MongoManager.db is None:
         logger.warning("MongoDB chưa kết nối, không thể khởi tạo Admin.")
         return {"success": False, "detail": "MongoDB disconnected"}
-
-    db = MongoManager.db
-    user_repo = UserRepository(db)
-    notebook_repo = NotebookRepository(db)
-
-    # 1. Dọn dẹp các tài khoản Mock cũ trong collection `users`
-    mock_usernames = ["analyst_demo", "user_free", "usr_demo_001", "usr_free_01"]
-    delete_result = await user_repo.collection.delete_many({
-        "$or": [
-            {"username": {"$in": mock_usernames}},
-            {"email": {"$in": ["member@finanalyst.ai"]}},
-        ]
-    })
-    logger.info(f"Purged {delete_result.deleted_count} mock users from database.")
-
-    # 2. Xóa các notebook mock cũ không thuộc về admin mới
-    await notebook_repo.collection.delete_many({
-        "notebook_id": {"$in": ["nb_demo_001", "nb_vuthanh_01"]}
-    })
-
-    # 3. Tạo hoặc cập nhật tài khoản Admin Full Quyền (cần ADMIN_PASSWORD: không có mật khẩu mặc định)
     if not settings.ADMIN_PASSWORD:
         logger.warning("ADMIN_PASSWORD is not set: the admin account was not created or changed.")
         return {"success": False, "detail": "ADMIN_PASSWORD is not set"}
-    admin_user = await user_repo.get_by_username("admin")
-    admin_limit = TIER_SPECS["admin"]["daily_messages_limit"]
 
-    admin_record = UserRecord(
-        user_id="usr_admin_master",
-        email="admin@finanalyst.ai",
-        username="admin",
-        hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
-        full_name="Vũ Thành (Quản Trị Viên Full Quyền)",
-        role="admin",
-        daily_messages_limit=admin_limit,
-        is_active=True,
-    )
+    db = MongoManager.db
+    user_repo = UserRepository(db)
+    admin_limit = TIER_SPECS["admin"]["daily_messages_limit"]
+    admin_user = await user_repo.get_by_id(ADMIN_USER_ID)
 
     if not admin_user:
-        await user_repo.save_user(admin_record)
+        try:
+            await user_repo.save_user(UserRecord(
+                user_id=ADMIN_USER_ID,
+                email=ADMIN_EMAIL,
+                username=ADMIN_USERNAME,
+                hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
+                full_name=ADMIN_FULL_NAME,
+                role="admin",
+                daily_messages_limit=admin_limit,
+                is_active=True,
+            ))
+        except DuplicateKeyError:
+            logger.error(f"The username '{ADMIN_USERNAME}' or the email {ADMIN_EMAIL} belongs to another account: the admin account "
+                         "was not created and nobody was given admin rights. Rename or remove that account, then restart.")
+            return {"success": False, "detail": "admin username or email taken by another account"}
         logger.info("Admin user 'admin' created with full permissions.")
     else:
-        # Cập nhật thông tin và đảm bảo mật khẩu & quyền admin
+        password_changed = not verify_password(settings.ADMIN_PASSWORD, admin_user.hashed_password)
+        changes = {"role": "admin", "full_name": ADMIN_FULL_NAME, "daily_messages_limit": admin_limit, "is_active": True}
+        if password_changed:
+            changes["hashed_password"] = get_password_hash(settings.ADMIN_PASSWORD)
+        # A new ADMIN_PASSWORD ends the admin's old sessions; a plain restart with the same one does not
         await user_repo.collection.update_one(
-            {"user_id": admin_user.user_id},
-            {
-                "$set": {
-                    "hashed_password": get_password_hash(settings.ADMIN_PASSWORD),
-                    "role": "admin",
-                    "full_name": "Vũ Thành (Quản Trị Viên Full Quyền)",
-                    "daily_messages_limit": admin_limit,
-                    "is_active": True,
-                }
-            },
+            {"user_id": ADMIN_USER_ID}, {"$set": changes, "$inc": {"token_version": 1 if password_changed else 0}}
         )
         logger.info("Admin user 'admin' updated with full permissions.")
 
-    # 4. Đảm bảo có Workspace Notebook chính thức cho Admin
-    admin_nb_id = "nb_admin_sec_10k"
-    existing_nb = await notebook_repo.get_by_id(admin_nb_id)
-    if not existing_nb:
-        admin_notebook = NotebookRecord(
-            notebook_id=admin_nb_id,
-            owner_id="usr_admin_master",
-            title="Phân Tích Báo Cáo Tài Chính",
-        )
-        await notebook_repo.save_notebook(admin_notebook)
+    # Workspace Notebook chính thức của Admin
+    notebook_repo = NotebookRepository(db)
+    if not await notebook_repo.get_by_id(ADMIN_NOTEBOOK_ID):
+        await notebook_repo.save_notebook(NotebookRecord(notebook_id=ADMIN_NOTEBOOK_ID, owner_id=ADMIN_USER_ID, title="Phân Tích Báo Cáo Tài Chính"))
 
     return {
         "success": True,
-        "message": "Admin account initialized with full permissions. Mock accounts deleted.",
-        "admin": {
-            "username": "admin",
-            "role": "admin",
-            "tier": "admin",
-            "notebook_id": admin_nb_id,
-        },
+        "message": "Admin account initialized with full permissions.",
+        "admin": {"username": ADMIN_USERNAME, "role": "admin", "tier": "admin", "notebook_id": ADMIN_NOTEBOOK_ID},
     }

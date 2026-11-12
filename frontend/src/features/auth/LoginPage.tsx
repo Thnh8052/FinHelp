@@ -3,7 +3,9 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
+import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import "./auth-pages.css";
+import { errorText } from "../../services/api";
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,11 +34,7 @@ export const LoginPage: React.FC = () => {
       await login(identifier, password);
       navigate("/app");
     } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t.auth.errorInvalidCredentials
-      );
+      setError(errorText(err, t, t.auth.errorInvalidCredentials));
     } finally {
       setLoading(false);
     }
@@ -44,7 +42,7 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="auth-page-wrapper">
-      <div className="auth-page-card" style={{ position: "relative" }}>
+      <div className="auth-page-card">
         {/* Language Switcher in top-right */}
         <div className="auth-page-lang-toggle">
           <LanguageToggle size="sm" />
@@ -52,8 +50,7 @@ export const LoginPage: React.FC = () => {
 
         {/* Brand */}
         <Link to="/" className="auth-page-brand">
-          <span style={{ fontSize: "20px" }}>⚡</span>
-          <span className="auth-page-brand-name">FinHelp</span>
+          <FinHelpLogo size="md" />
         </Link>
 
         {/* Header */}
@@ -70,8 +67,10 @@ export const LoginPage: React.FC = () => {
         {/* Form */}
         <form onSubmit={handleSubmit} className="auth-page-form">
           <div className="auth-page-field">
-            <label className="auth-page-label">{t.auth.emailOrUsername}</label>
+            <label className="auth-page-label" htmlFor="login-identifier">{t.auth.emailOrUsername}</label>
             <input
+              id="login-identifier"
+              autoComplete="username"
               type="text"
               required
               value={identifier}
@@ -82,17 +81,18 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <div className="auth-page-field">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label className="auth-page-label">{t.auth.password}</label>
+            <div className="auth-page-row">
+              <label className="auth-page-label" htmlFor="login-password">{t.auth.password}</label>
               <Link
                 to={`/reset-password${identifier ? `?email=${encodeURIComponent(identifier)}` : ""}`}
-                className="auth-page-link"
-                style={{ fontSize: "12px", color: "#6b7280" }}
+                className="auth-page-link auth-page-link-small"
               >
                 {t.auth.forgotPassword}
               </Link>
             </div>
             <input
+              id="login-password"
+              autoComplete="current-password"
               type="password"
               required
               value={password}
@@ -116,7 +116,7 @@ export const LoginPage: React.FC = () => {
             </Link>
           </div>
           <div>
-            <Link to="/" className="auth-page-link" style={{ color: "#6b7280" }}>
+            <Link to="/" className="auth-page-link auth-page-link-muted">
               {t.common.backToHome}
             </Link>
           </div>
