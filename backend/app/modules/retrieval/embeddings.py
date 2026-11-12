@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.error_codes import Code
 from app.core.exceptions import ServiceUnavailableError
 from app.core.logging import logger
+from app.modules.retrieval import gpu_client
 from app.modules.retrieval.gpu import free_gpu_memory, register_unloader, resolve_device, run_on_gpu
 
 # Measured on the T4 worker with 159 real chunks: 16 takes 5.9-7.2 s against 11-11.7 s for 128, with the same vectors.
@@ -63,21 +64,9 @@ class DenseEmbeddingService:
     async def _encode_remote(cls, texts: List[str], max_length: int, batch_size: int, sparse: bool = False):
         import httpx
 
-        url = f"{settings.REMOTE_GPU_URL.rstrip('/')}/embed"
         try:
-            async with httpx.AsyncClient(timeout=180.0) as client:
-                resp = await client.post(
-                    url,
-                    json={
-                        "texts": texts,
-                        "max_length": max_length,
-                        "batch_size": batch_size,
-                        "return_sparse": sparse,
-                    },
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                return data["dense"] if not sparse else (data["dense"], data["sparse"])
+            data = await gpu_client.post_json("embed", {"texts": texts, "max_length": max_length, "batch_size": batch_size, "return_sparse": sparse})
+            return data["dense"] if not sparse else (data["dense"], data["sparse"])
         except (httpx.HTTPError, ValueError, KeyError) as exc:  # down, timed out, or a tunnel page instead of JSON: no search can run without the vectors
             logger.warning(f"Remote embedding unavailable: {type(exc).__name__}: {str(exc)[:120]}")
             raise ServiceUnavailableError(Code.SYSTEM_NOT_READY) from exc

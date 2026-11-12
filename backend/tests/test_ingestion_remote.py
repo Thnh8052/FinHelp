@@ -9,7 +9,7 @@ import pytest
 from app.core.config import settings
 from app.modules.ingestion import pipeline as ingestion
 from app.modules.ingestion.pipeline import IngestionPipeline, _Job
-from app.modules.retrieval import warmup
+from app.modules.retrieval import gpu_client, warmup
 from app.modules.retrieval.embeddings import REMOTE_DOCUMENT_BATCH, DenseEmbeddingService
 from app.modules.retrieval.reranker import QwenRerankerService
 
@@ -18,20 +18,10 @@ def test_an_unreachable_remote_reranker_is_a_runtime_error(monkeypatch):
     """RuntimeError is what every reranker caller already answers from the search order (the user never sees the failure)."""
     monkeypatch.setattr(settings, "REMOTE_GPU_URL", "http://gpu")
 
-    class Down:
-        def __init__(self, timeout):
-            pass
+    async def down(path, payload):
+        raise httpx.ConnectError("refused")
 
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
-
-        async def post(self, *args, **kwargs):
-            raise httpx.ConnectError("refused")
-
-    monkeypatch.setattr(httpx, "AsyncClient", Down)
+    monkeypatch.setattr(gpu_client, "post_json", down)
     with pytest.raises(RuntimeError):
         asyncio.run(QwenRerankerService().score_pairs([("question", "passage")]))
 

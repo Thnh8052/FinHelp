@@ -283,11 +283,12 @@ class _PlannedRetriever:
 
 
 class _PlannedChunks:
-    def __init__(self, text):
-        self.text = text
+    def __init__(self, text, by_document):
+        self.text, self.by_document, self.reads = text, by_document, []
 
-    async def get_text_and_tokens(self, document_ids):
-        return {c: (t, 100) for c, t in self.text.items()}
+    async def get_text_by_document(self, document_ids):
+        self.reads.append(list(document_ids))
+        return {d: {c: (self.text[c], 100) for c, _ in self.by_document[d]} for d in document_ids if d in self.by_document}
 
     async def get_chunks_by_ids(self, ids):
         import types
@@ -308,7 +309,10 @@ def _planned(monkeypatch, by_document, text, score):
 
     monkeypatch.setattr(settings, "RERANK_ENABLED", True)
     svc = HybridSearchService.__new__(HybridSearchService)
-    svc.embedder, svc.retriever, svc.chunk_repo, svc.reranker = _FakeEmbedder(), _PlannedRetriever(by_document), _PlannedChunks(text), _PlannedReranker(score)
+    svc.embedder, svc.retriever, svc.chunk_repo, svc.reranker = _FakeEmbedder(), _PlannedRetriever(by_document), _PlannedChunks(text, by_document), _PlannedReranker(score)
+    from app.modules.retrieval.term_cache import TERMS
+
+    TERMS.clear()  # the word counts are kept between questions: each test starts without them
     return svc
 
 
@@ -395,10 +399,11 @@ async def test_retrieve_planned_has_no_cap_of_8_but_a_guard_and_survives_the_rer
 def test_safety_net_keeps_its_room_above_a_large_first_stream():
     big = [{"content": "x" * 40000}]  # 10,000 tokens: more than the 8,192 of the older stream 1
     chunk = {"chunk_id": "n"}
-    assert retrieval_step.extra_slots(big, [(chunk, 9000)]) == [chunk]
-    assert retrieval_step.extra_slots(big, [(chunk, 11000)]) == []
-    assert retrieval_step.extra_slots([{"content": "x"}], [(chunk, 18000)]) == [chunk]  # the older room is unchanged
-    assert retrieval_step.extra_slots([{"content": "x"}], [(chunk, 19000)]) == []
+    assert retrieval_step.extra_slots(big, [(chunk, 14000)]) == [chunk]  # 10,000 used, room 8,192 + 14,336 on top of the larger of the two
+    assert retrieval_step.extra_slots(big, [(chunk, 15000)]) == []
+    room = 8192 + 1024 * 14  # NET_EXTRA_SLOTS is 14 since the net of 12/11/2026 (it was 10: 18,432)
+    assert retrieval_step.extra_slots([{"content": "x"}], [(chunk, room - 500)]) == [chunk]  # the room above a small first stream
+    assert retrieval_step.extra_slots([{"content": "x"}], [(chunk, room + 500)]) == []
 
 
 # ---------------------------------------------------------------- source selection (user chooses the files, the system never guesses)
@@ -538,10 +543,10 @@ async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_with
             seen["plan"] = [(p.query, p.document_ids) for p in plan]
             return [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x" * 400, "chunk_type": "table", "score": 1.0}]
 
-        async def safety_net(self, question, plan_queries, notebook_id, document_ids, exclude):
+        async def safety_net(self, question, plan_queries, notebook_id, document_ids, exclude, kept_document_ids=None):
             seen["net"] = (plan_queries, document_ids, list(exclude))
             big = {"chunk_id": "n2", "document_id": "d2", "page": 5, "content": "pepsi", "chunk_type": "table", "score": 0.9}
-            return [(big, 900), ({**big, "chunk_id": "n3", "document_id": "d3"}, 20000)]  # the second does not fit the token cap
+            return [(big, 900), ({**big, "chunk_id": "n3", "document_id": "d3"}, 30000)]  # the second does not fit the token cap (8,192 + 14 x 1,024)
 
     async def plan_missing_pepsi(query, catalog):
         return [PlanItem("net revenues", ["d1"])]
@@ -556,7 +561,7 @@ async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_with
     monkeypatch.setattr(orch_mod.settings, "NET_ENABLED", True)
     found = await orch.retrieve(q, "nb", docs)
     assert seen["plan"] == [("net revenues", ["d1"])]  # the safety net replaces FB3
-    assert seen["net"] == (["net revenues"], ["d2", "d3"], ["c1"]) and found.routing == "planner+net"
+    assert seen["net"] == (["net revenues"], ["d2", "d3"], []) and found.routing == "planner+net"  # L2: the net runs beside the main search, so it is not told what that found
     assert [c["chunk_id"] for c in found.retrieved] == ["c1", "n2"]
 
     async def plan_without_documents(query, catalog):
@@ -749,7 +754,7 @@ async def test_targeted_question_with_an_unknown_name_nets_the_other_documents(m
             seen["single"] = document_id
             return [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x", "chunk_type": "table", "score": 1.0}]
 
-        async def safety_net(self, question, plan_queries, notebook_id, document_ids, exclude):
+        async def safety_net(self, question, plan_queries, notebook_id, document_ids, exclude, kept_document_ids=None):
             seen["net"] = document_ids
             return [({"chunk_id": "t1", "document_id": "d2", "page": 9, "content": "td net income", "chunk_type": "table", "score": 0.8}, 100)]
 
