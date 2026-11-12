@@ -10,7 +10,10 @@ import { CitationItem } from "../../types/chat";
 const REMARK_PLUGINS = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as React.ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
 const REHYPE_PLUGINS = [[rehypeKatex, { strict: "ignore" }]] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 
-const LOOKS_LIKE_MATH = /\\[a-zA-Z]|[=^]/;
+// A table cell that holds only a figure and its citations: "177,866 [5]", "+30.9%", "(1,204) [2][3]"
+const NUMERIC_CELL = /^[+\-−–$€£(]*\d[\d.,\s]*[%)xX]?(\s*\[\d+\])*$/;
+
+const LOOKS_LIKE_MATH =/\\[a-zA-Z]|[=^]/;
 const inlineMath = (body: string) => `$$${body.trim()}$$`;
 const blockMath = (body: string) => `\n\n$$\n${body.trim()}\n$$\n\n`;
 
@@ -154,6 +157,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 !plainText.toLowerCase().includes("giảm"));
 
             let cellClass = "financial-td";
+            if (NUMERIC_CELL.test(plainText)) cellClass += " cell-num"; // figures stay on one line with their citation; names and sentences wrap
             if (isDashOrNA) cellClass += " cell-empty";
             else if (isDeltaNegative) cellClass += " delta-negative";
             else if (isDeltaPositive) cellClass += " delta-positive";
