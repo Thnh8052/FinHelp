@@ -1,7 +1,9 @@
 """Checks of a written answer against its excerpts (A4 numbers, citations) and the note for what stays unverified."""
 from typing import Any, Dict, List
 
+from app.core.config import settings
 from app.modules.generation.answer_check.citations import check_citations, problems
+from app.modules.generation.answer_check.inputs import check_inputs
 from app.modules.generation.answer_check.numbers import check_numbers
 from app.modules.query_router.target_scope import ScopeDoc
 from app.modules.generation.generator import META_OPEN, split_answer
@@ -10,8 +12,14 @@ from app.modules.generation.generator import META_OPEN, split_answer
 def verify(answer: str, chunks: List[Dict[str, Any]], docs: List[ScopeDoc]):
     """(A4 number check, citation check, problems as repair instructions)."""
     numbers = check_numbers(answer, chunks)
-    cites = check_citations(split_answer(answer)[0], chunks, docs)
-    return numbers, cites, problems(numbers, cites)
+    text, meta = split_answer(answer)
+    cites = check_citations(text, chunks, docs)
+    # H4: the figures the answer says it took, checked against the excerpt each names; in the trace (numbers["inputs"]), a rewrite only when enabled
+    numbers["inputs"] = check_inputs((meta or {}).get("inputs") or [], chunks)
+    issues = problems(numbers, cites)
+    if settings.ANSWER_INPUTS_REPAIR:
+        issues += [p["problem"] for p in numbers["inputs"]]
+    return numbers, cites, issues
 
 
 def flag_unverified(answer: str, numbers: Dict[str, Any], cites: Dict[str, Any], lang: str) -> str:
