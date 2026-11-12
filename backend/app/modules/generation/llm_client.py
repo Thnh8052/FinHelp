@@ -68,6 +68,7 @@ async def chat_completion(
     timeout: float = 80.0,
     retries: int = 4,
     on_delta: Optional[Callable[[str], None]] = None,
+    thinking: bool = True,
 ) -> str:
     """Call the DeepSeek chat-completions API (temperature 0) with timeout and exponential backoff.
     `max_tokens` is raised to LLM_MIN_MAX_TOKENS: the reasoning of deepseek-flash counts against it, and a small budget made the
@@ -85,6 +86,8 @@ async def chat_completion(
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
+    if not thinking:  # a short classification: no reasoning (DeepSeek: temperature 0 then holds, replies are repeatable)
+        payload["thinking"] = {"type": "disabled"}
     headers = {"Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
     url = f"{settings.LLM_BASE_URL}/chat/completions"
