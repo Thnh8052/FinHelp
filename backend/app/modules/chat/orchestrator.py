@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from collections import Counter
 from dataclasses import dataclass, field
@@ -474,19 +475,24 @@ class RAGWorkflowOrchestrator:
             result = await self._from_previous_citations(query, scope, history)
         elif decision.action == "split_questions":
             events.no_answer_stream()  # numbered parts: the whole text arrives with the final event
-            parts, citations, offset, charged, last_part = [], [], 0, False, {}
+            parts, citations, offset, charged, last_part, traced = [], [], 0, False, {}, []
+            used = REQUEST_USAGE.get()
             for n, (sub, sub_decision) in enumerate(await self._split_parts(decision, p.infos, p.ready_count), 1):
                 if sub_decision.action in TERMINAL or sub_decision.action == "rewrite_followup":
                     parts.append(f"{n}. {sub}\n{sub_decision.message or MSG['ask_clarify'][sub_decision.lang]}")
                     continue
+                before = dict(used or {})
                 one = await self._answer_one(sub, notebook_id, scope, sub_decision, offset, mentions)
-                parts.append(f"{n}. {sub}\n{one['answer']}")
+                traced.append({"query": sub, "timings": one["trace"].get("timings"), "llm": {k: v - before.get(k, 0) for k, v in (used or {}).items() if v - before.get(k, 0)}})
+                # the part's [n] count from 1, but the UI opens citations[n - 1] of the whole list: continue after the earlier parts
+                text = re.sub(r"\[(\d+)\]", lambda m: f"[{int(m.group(1)) + offset}]", one["answer"]) if offset else one["answer"]
+                parts.append(f"{n}. {sub}\n{text}")
                 citations += one["citations"]
                 offset += len(one["citations"])
                 charged = charged or one.get("charged", False)
                 last_part = one if one.get("focus_docs") else last_part
             result = {"answer": "\n\n".join(parts), "intent": "multi_question", "citations": citations, "retrieved_chunks_count": len(citations),
-                      "charged": charged, "trace": {"decision": {"action": "split_questions", "sub_questions": decision.sub_questions}},
+                      "charged": charged, "trace": {"decision": {"action": "split_questions", "sub_questions": decision.sub_questions}, "parts": traced},
                       "focus_docs": last_part.get("focus_docs"), "focus_query": last_part.get("focus_query")}
         else:  # proceed, answer_per_source_and_ask
             result = await self._answer_one(query, notebook_id, scope, decision, mentions=mentions)

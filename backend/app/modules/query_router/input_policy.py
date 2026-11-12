@@ -241,9 +241,16 @@ def _names_unknown(question: str, sources: Sequence[SourceInfo]) -> bool:
     return bool(name_candidates(question, catalog))
 
 
+# "What might this indicate...?", "Is it higher...?": a later question that points back at the first cannot be answered on its own
+# ("this company", "that year" name a document or a period and are fine). English only for now.
+_BACK_REF = re.compile(r"\b(this|that|these|those|it)\b(?!\s+(company|firm|report|filing|document|source|file|year|quarter|period)\b)", re.I)
+
+
 def _split(question: str) -> List[str]:
     parts = [p.strip() for p in re.split(r"(?<=[?？])\s+", question.strip()) if p.strip()]
     if len(parts) < 2 or len(question) > 400 or any(not p.endswith(("?", "？")) or len(p.split()) < 3 for p in parts):
+        return []
+    if any(_BACK_REF.search(p) for p in parts[1:]):  # one pass keeps the context; split, the later part would search without it
         return []
     return parts[:3]
 

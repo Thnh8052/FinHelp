@@ -203,6 +203,21 @@ def test_several_questions_and_sequential_questions():
     assert d.action == "not_supported_yet"
 
 
+@pytest.mark.parametrize("question", [
+    "Compute Nike's gross margin for fiscal 2023 and 2022. Despite higher sales, did the margin increase or decrease? What might this indicate about its pricing power?",
+    "What was Nike's revenue in FY2023? Why did that change from the year before?",
+    "What is Nike's net income? Is it higher than its revenue growth suggests?",
+])
+def test_a_later_question_that_points_back_is_not_split_from_the_first(question):
+    assert policy._split(question) == []
+    assert act(question, [NIKE23]).action != "split_questions"
+
+
+def test_a_later_question_about_this_company_or_year_is_still_split():
+    assert len(policy._split("What is Nike's revenue? What is this company's net income?")) == 2
+    assert len(policy._split("What was Nike's revenue in FY2023? What was Nike's cost of sales for that year?")) == 2
+
+
 def test_language_is_detected_for_the_messages():
     assert act("Doanh thu là bao nhiêu?", [KO22, PEP22]).lang == "vi"
     assert act("???", [NIKE23]).lang == "en"
@@ -343,6 +358,25 @@ async def test_several_questions_are_answered_one_by_one_with_distinct_citations
     r = await orch.execute_query("What is Nike's revenue? How about its total assets? And its net income?", "nb", document_ids=["d2"])
     assert r["answer"].count("ANSWER to") == 3 and r["answer"].startswith("1. What is Nike's revenue?")
     assert len({c["citation_id"] for c in r["citations"]}) == 3 and r["charged"] is True
+
+
+async def test_citation_numbers_of_later_parts_continue_after_the_earlier_parts_and_each_part_is_traced(monkeypatch):
+    from app.modules.chat import orchestrator as orch_mod
+
+    async def rewrite(q, history):
+        return "What is Nike's " + ("total assets?" if "assets" in q else "net income?")
+
+    async def cited_answer(query, chunks, notes=None, max_tokens=1200):
+        return "ANSWER to " + query + " [1]"
+
+    orch, _ = _orchestrator(NIKE_DOCS[1:], monkeypatch)
+    monkeypatch.setattr(orch_mod, "rewrite_followup", rewrite)
+    monkeypatch.setattr(orch_mod, "generate_answer", cited_answer)
+    r = await orch.execute_query("What is Nike's revenue? How about its total assets? And its net income?", "nb", document_ids=["d2"])
+    first, second, third = r["answer"].split("\n\n")
+    assert first.endswith("[1]") and second.endswith("[2]") and third.endswith("[3]")  # the UI opens citations[n - 1] of the whole list
+    parts = r["trace"]["parts"]
+    assert len(parts) == 3 and all("query" in p and "timings" in p and "llm" in p for p in parts)
 
 
 async def test_overview_searches_each_source_and_widens_the_context(monkeypatch):
