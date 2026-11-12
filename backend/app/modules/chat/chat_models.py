@@ -32,5 +32,6 @@ class MessageRecord(BaseSchema):
     token_usage: Dict[str, int] = Field(default_factory=dict)  # {prompt_tokens, completion_tokens, total_tokens} of the whole request
     latency_ms: Optional[int] = None
     model_used: Optional[str] = None
-    user_rating: Optional[int] = None  # +1 / -1
+    user_rating: Optional[int] = None  # -1: the user reported wrong figures (PUT /chat/messages/{nb}/{id}/flag)
+    rated_at: Optional[Any] = None  # when user_rating last changed: the admin review list shows the newest reports first
     created_at: Any = Field(default_factory=get_utc_now)

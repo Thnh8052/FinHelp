@@ -73,6 +73,12 @@ class FakeChats:
     async def append_message(self, message):
         self.saved.append(message)
 
+    ratings = []
+
+    async def set_rating(self, notebook_id, message_id, rating):
+        self.ratings.append((notebook_id, message_id, rating))
+        return message_id != "msg_missing"
+
 
 class FakeUsers:
     def __init__(self, db):
@@ -240,7 +246,7 @@ def test_an_answer_carries_no_internal_details(client, monkeypatch):
 
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
     response = ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])
-    assert set(response.json()) == {"title", "query", "answer", "citations", "understood", "alternatives"}
+    assert set(response.json()) == {"title", "query", "answer", "citations", "understood", "alternatives", "message_id"}  # message_id: the stored answer, as GET /messages shows it
     assert set(response.json()["citations"][0]) == {"citation_id", "document_id", "page", "snippet", "cited"} and "internal-" not in response.text
 
 
@@ -290,3 +296,34 @@ def test_earlier_guest_messages_do_not_use_up_the_allowance(client, monkeypatch)
 
     monkeypatch.setattr(FakeChats, "get_messages", five_questions_so_far)
     assert ask(client, None, notebook_id=GUEST_ID, document_ids=["d1"]).status_code == 500  # Stop: past every gate
+
+
+# ---------------------------------------------------------------- reporting wrong figures
+def flag(client, user, notebook_id, message_id="msg_1", flagged=True):
+    client.caller["id"] = user
+    return client.put(f"/chat/messages/{notebook_id}/{message_id}/flag", json={"flagged": flagged})
+
+
+def test_the_owner_reports_and_withdraws_wrong_figures(client):
+    FakeChats.ratings.clear()
+    assert flag(client, "alice", "nb_alice").json() == {"flagged": True}
+    assert flag(client, "alice", "nb_alice", flagged=False).status_code == 200
+    assert FakeChats.ratings == [("nb_alice", "msg_1", -1), ("nb_alice", "msg_1", None)]
+
+
+def test_a_guest_reports_in_their_own_guest_notebook(client):
+    assert flag(client, None, GUEST_ID).status_code == 200
+
+
+def test_reports_are_refused_outside_ones_own_conversation(client):
+    FakeChats.ratings.clear()
+    assert flag(client, "bob", "nb_alice").status_code == 403
+    assert flag(client, None, "nb_alice").status_code == 403
+    assert flag(client, "bob", "nb_sample").status_code == 403  # read-only sample: nobody asks there, nobody reports
+    assert flag(client, "bob", "nb_missing").status_code == 404
+    assert FakeChats.ratings == []
+
+
+def test_an_unknown_answer_is_not_found(client):
+    response = flag(client, "alice", "nb_alice", message_id="msg_missing")
+    assert response.status_code == 404 and response.json()["detail"]["code"] == "message_not_found"

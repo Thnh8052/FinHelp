@@ -323,3 +323,21 @@ def test_an_administrator_can_search(inspection):
 def test_the_number_of_results_is_bounded(inspection, top_k, status):
     _as_admin(inspection)
     assert inspection.post("/retrieval/search", json={"notebook_id": "n", "query": "q", "top_k": top_k}).status_code == status
+
+
+def test_the_admin_overview_adds_service_latency_and_bounds_its_window(admin_client, monkeypatch):
+    seen = []
+
+    async def build(db, days):
+        seen.append(days)
+        return {"window_days": days}
+
+    async def services():
+        return {"mongodb": 3, "qdrant": None}
+
+    monkeypatch.setattr(admin_api, "build_overview", build)
+    monkeypatch.setattr(admin_api, "check_services", services)
+    assert admin_client.get("/auth/admin/overview").json() == {"window_days": 14, "services": {"mongodb": 3, "qdrant": None}}
+    assert admin_client.get("/auth/admin/overview?days=90").status_code == 200
+    assert [admin_client.get(f"/auth/admin/overview?days={d}").status_code for d in (6, 91)] == [422, 422]
+    assert seen == [14, 90]

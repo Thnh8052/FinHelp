@@ -533,7 +533,7 @@ def test_messages_carry_no_internal_details(read_api, monkeypatch):
     response = read_api.get("/chat/messages/nb")
 
     body = response.json()[0]
-    assert set(body) == {"message_id", "notebook_id", "role", "content", "citations", "understood", "alternatives", "created_at"}
+    assert set(body) == {"message_id", "notebook_id", "role", "content", "citations", "understood", "alternatives", "created_at", "user_rating"}  # user_rating: the reader's own report of wrong figures
     assert set(body["citations"][0]) == {"citation_id", "document_id", "page", "snippet", "cited"}
     assert body["understood"] == "AMD 2023" and body["alternatives"] == [{"document_id": "d2", "label": "Intel"}]
     assert not any(word in response.text for word in ("internal-chunk", "internal-plan", "internal-model", "prompt_version"))

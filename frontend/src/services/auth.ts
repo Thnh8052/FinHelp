@@ -1,6 +1,5 @@
 import { apiRequest } from "./api";
 import {
-  AdminDashboardStats,
   GuestQuota,
   TierSpec,
   TokenResponse,
@@ -91,10 +90,6 @@ export const authService = {
       method: "POST",
       body: JSON.stringify({ email, otp_code, new_password }),
     });
-  },
-
-  async getAdminDashboard(): Promise<AdminDashboardStats> {
-    return apiRequest<AdminDashboardStats>("/auth/admin/dashboard");
   },
 
   async adminUpdateTier(user_id: string, tier: string): Promise<{ success: boolean }> {

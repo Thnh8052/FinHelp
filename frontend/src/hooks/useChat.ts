@@ -96,6 +96,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
         alternatives: data.alternatives || [],
         query: queryText,
         streaming: false,
+        ...(data.message_id ? { message_id: data.message_id, user_rating: null } : {}),  // the stored answer: it can be reported
       });
       onTitle(notebookId, data.title);
     } catch (err) {
@@ -121,5 +122,19 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
     }
   };
 
-  return { messages, setMessages, isLoading, stage, sendMessage };
+  /** Shown at once; put back if the server refuses. */
+  const flagAnswer = async (messageId: string, flagged: boolean) => {
+    const rate = (rating: number | null) =>
+      setMessages((prev) => prev.map((m) => (m.message_id === messageId ? { ...m, user_rating: rating } : m)));
+    rate(flagged ? -1 : null);
+    try {
+      await chatService.flag(notebookId, messageId, flagged);
+      if (flagged) showToast(t.workspace.reportSent, "success");
+    } catch (err) {
+      rate(flagged ? null : -1);
+      showToast(err instanceof ApiError && err.status < 500 ? errorText(err, t, t.workspace.systemBusy) : t.workspace.systemBusy, "error");
+    }
+  };
+
+  return { messages, setMessages, isLoading, stage, sendMessage, flagAnswer };
 }

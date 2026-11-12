@@ -4,13 +4,14 @@ Tác giả: Vũ Thành - FinAnalyst AI
 
 Mọi endpoint ở đây yêu cầu role == 'admin' (require_admin). Đường dẫn giữ nguyên tiền tố /auth/admin cho Frontend.
 1. Dashboard giám sát hệ thống (GET /api/v1/auth/admin/dashboard).
-2. Điều chỉnh gói hạn mức của người dùng (POST /api/v1/auth/admin/update-tier).
+2. Số liệu cho trang /admin: lượt hỏi, token, trạng thái xử lý PDF, câu trả lời bị đánh dấu sai (GET /api/v1/auth/admin/overview).
+3. Điều chỉnh gói hạn mức của người dùng (POST /api/v1/auth/admin/update-tier).
 """
 
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field
 
@@ -20,6 +21,7 @@ from app.shared.health import check_services
 from app.infrastructure.database.mongodb import get_database
 from app.modules.auth.user_repo import UserRepository
 from app.modules.auth.user import UserRecord
+from app.modules.admin.overview import build_overview
 
 router = APIRouter(prefix="/auth/admin", tags=["Admin"])
 
@@ -49,6 +51,19 @@ async def get_admin_dashboard(
         "server_time": datetime.now(timezone.utc).isoformat(),
     }
     return stats
+
+
+@router.get("/overview")
+async def get_admin_overview(
+    days: int = Query(14, ge=7, le=90),
+    current_user: UserRecord = Depends(require_admin),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """Every number of the admin dashboard in one read-only request; `days` is the window of the charts and the audit list."""
+    overview = await build_overview(db, days)
+    services = await check_services()
+    overview["services"] = services  # latency in ms per service, None when it did not answer
+    return overview
 
 
 class UpdateTierRequest(BaseModel):

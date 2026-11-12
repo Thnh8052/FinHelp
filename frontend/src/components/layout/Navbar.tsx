@@ -17,7 +17,6 @@ interface NavbarProps {
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   onOpenAuthModal: () => void;
-  onOpenAdminDashboard: () => void;
   onNavigateHome?: () => void;
 }
 
@@ -31,7 +30,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   isSidebarOpen = true,
   onToggleSidebar,
   onOpenAuthModal,
-  onOpenAdminDashboard,
   onNavigateHome,
 }) => {
   const { user } = useAuth();
@@ -164,7 +162,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           isOpen={dropdownOpen}
           onClose={() => setDropdownOpen(false)}
           onOpenAuthModal={onOpenAuthModal}
-          onOpenAdminDashboard={onOpenAdminDashboard}
         />
       </div>
     </header>

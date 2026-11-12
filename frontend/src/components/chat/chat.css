@@ -187,6 +187,12 @@
   border-color: var(--border-focus);
 }
 
+.chat-action-btn.flagged {
+  color: #fda4af;
+  border-color: rgba(244, 63, 94, 0.45);
+  background-color: var(--negative-bg);
+}
+
 .chat-action-btn.copied {
   color: #10b981;
   border-color: rgba(16, 185, 129, 0.4);
