@@ -295,6 +295,42 @@ NIKE_DOCS = [_doc("d1", "nike19.pdf", company_name="NIKE, Inc", fiscal_year=2019
              _doc("d2", "nike23.pdf", company_name="NIKE, Inc", fiscal_year=2023, report_type="10-K")]
 
 
+async def test_the_understanding_is_shown_before_the_search_and_its_time_and_the_first_text_go_into_the_trace(monkeypatch):
+    from app.modules.chat import events
+    from app.modules.chat import orchestrator as orch_mod
+
+    stream = events.ChatStream()
+    events.attach(stream)
+    orch, _ = _orchestrator(NIKE_DOCS, monkeypatch)
+    search = orch.hybrid_search.retrieve_research
+    seen_at_search = []
+
+    async def research(*a):
+        seen_at_search.append("understood" in stream.first)
+        return await search(*a)
+
+    async def streamed_answer(query, chunks, notes=None, max_tokens=1200):
+        events.answer_sink()("Revenue was ")
+        return "Revenue was 51,217."
+
+    orch.hybrid_search.retrieve_research = research
+    monkeypatch.setattr(orch_mod, "generate_answer", streamed_answer)
+    r = await orch.execute_query("What was Nike's revenue?", "nb", document_ids=["d1", "d2"])  # no year: the latest file, said at once
+    assert seen_at_search == [True]
+    kinds = []
+    while not stream.queue.empty():
+        kinds.append(stream.queue.get_nowait()[0])
+    assert kinds.count("understood") == 1 and kinds.index("understood") < kinds.index("delta")
+    timings = r["trace"]["timings"]
+    assert 0 <= timings["understood"] <= timings["first_text"] <= timings["total"]
+
+
+async def test_outside_a_streamed_chat_the_trace_has_no_screen_times(monkeypatch):
+    orch, _ = _orchestrator(NIKE_DOCS, monkeypatch)
+    r = await orch.execute_query("What was Nike's revenue?", "nb", document_ids=["d1", "d2"])
+    assert "understood" not in r["trace"]["timings"] and "first_text" not in r["trace"]["timings"]
+
+
 async def test_terminal_replies_are_not_charged_and_need_no_retrieval(monkeypatch):
     orch, seen = _orchestrator(NIKE_DOCS, monkeypatch)
     for q, intent in (("Hello", "static_reply"), ("What is ROE?", "refuse_concept"), ("Should I buy Nike stock?", "refuse_advice"), ("Which files do I have?", "list_sources")):

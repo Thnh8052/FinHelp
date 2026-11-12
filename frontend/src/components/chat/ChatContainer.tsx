@@ -310,7 +310,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                           type="button"
                           className="chat-sample-btn"
                           disabled={isLoading}
-                          onClick={() => onSendMessage(msg.query!, [a.document_id])}
+                          onClick={() => onSendMessage(msg.query!, a.document_ids?.length ? a.document_ids : [a.document_id])}
                         >
                           {t.workspace.queryWith.replace("{label}", a.label)}
                         </button>

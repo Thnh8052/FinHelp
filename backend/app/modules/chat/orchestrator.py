@@ -110,11 +110,16 @@ class RAGWorkflowOrchestrator:
 
     async def retrieve_for_question(
         self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, mentions: Optional[List[str]] = None,
+        announce: bool = False,
     ) -> QuestionRetrieval:
         """The search for one question the input policy let through: the filings it is forced to (@file, a named company), the notes
-        for the answer, and the excerpts. A question only about companies outside the selected sources is refused, unsearched."""
+        for the answer, and the excerpts. A question only about companies outside the selected sources is refused, unsearched.
+        `announce`: the streamed chat shows how the question was understood as soon as code has chosen the filings, before the search
+        (a refusal that follows replaces it: its final event carries no understanding)."""
         notes = list(decision.notes)
         targets: TargetDecision = decide_targets(query, [scope_doc(d) for d in scope], mentions, decision.lang == "vi")
+        if announce and targets.understood:
+            events.emit("understood", text=targets.understood, alternatives=targets.alternatives)
         notes += targets.notes
         typed = [document_label(d) for d in scope if d.metadata.user_override_unverified]
         if typed:
@@ -150,7 +155,7 @@ class RAGWorkflowOrchestrator:
         mentions: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """The measured path for one question the input policy let through, with its notes for the answer."""
-        searched = await self.retrieve_for_question(query, notebook_id, scope, decision, mentions)
+        searched = await self.retrieve_for_question(query, notebook_id, scope, decision, mentions, announce=citation_offset == 0)
         if searched.refusal:
             return searched.refusal
         targets, notes, unlisted, found = searched.targets, searched.notes, searched.unlisted, searched.found
@@ -163,8 +168,6 @@ class RAGWorkflowOrchestrator:
             notes.append("No excerpt was found in: " + "; ".join(labels.get(d, d) for d in found.missing)
                          + ". Say that the figures of these sources could not be found in the documents; do not estimate them.")
         docs = [scope_doc(d) for d in scope]
-        if citation_offset == 0 and targets.understood:  # shown above the answer while it is being written
-            events.emit("understood", text=targets.understood, alternatives=targets.alternatives)
         t0 = time.perf_counter()
         answer = await self._answer(query, retrieved, notes)
         t1 = time.perf_counter()
@@ -318,6 +321,7 @@ class RAGWorkflowOrchestrator:
         if checks:
             trace["output_policy"] = checks  # what the answer broke and what was done about it
         trace.setdefault("timings", {})["total"] = round(time.perf_counter() - t0, 2)
+        trace["timings"].update(events.first_seen(t0))  # streamed chat: when the user first saw the understanding and the answer text
         if result.get("understood"):
             trace["understood"], trace["alternatives"] = result["understood"], result.get("alternatives", [])
         return result

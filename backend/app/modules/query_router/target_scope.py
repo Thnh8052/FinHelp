@@ -118,6 +118,7 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
     has_form = {company_key(d.filing.company) for d in docs if d.filing.form in forms}
     filings = [d.filing for d in docs if not forms or company_key(d.filing.company) not in has_form or d.filing.form in forms]
     chosen, alternatives, assumptions = [], [], []
+    replaces: Dict[str, str] = {}  # alternative -> the chosen document it would replace (same company, other period or report)
     for r in resolve(targets, filings):
         ids = [i for i in r.document_ids if i in by_id]
         if not ids and r.target.year and r.target.quarter is None:  # no report of that year: the earliest later report of the company that shows it (comparative column)
@@ -131,17 +132,23 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
         if len(ids) > 1:
             ids.sort(key=lambda i: (by_id[i].filing.fiscal_year or 0, by_id[i].filing.period_end or ""), reverse=True)
             alternatives += [i for i in ids[1:] if i not in alternatives]
+            replaces.update({i: ids[0] for i in ids[1:] if i not in replaces})
             assumptions.append(f"{by_id[ids[0]].label} " + ("(mới nhất trong các file khớp)" if vi else "(the latest of the matching files)"))
         elif r.rule == "no year: latest filing" and sum(1 for d in docs if company_key(d.filing.company) == company_key(r.target.company)) > 1:
             assumptions.append(f"{by_id[ids[0]].label} " + ("(câu hỏi không nêu năm: lấy kỳ mới nhất)" if vi else "(no year asked: the latest period)"))
-            alternatives += [d.document_id for d in docs if company_key(d.filing.company) == company_key(r.target.company) and d.document_id != ids[0]]
+            others = [d.document_id for d in docs if company_key(d.filing.company) == company_key(r.target.company) and d.document_id != ids[0]]
+            alternatives += others
+            replaces.update({i: ids[0] for i in others if i not in replaces})
         if ids[0] not in chosen:
             chosen.append(ids[0])
     if not chosen:
         return TargetDecision()
     typo = 4 in company_matches(question, [d.card for d in docs]).values()  # one letter off: the other documents keep the safety net
+    # each alternative carries the whole set to ask with: the chosen documents with only the one it replaces swapped, so asking again keeps the other companies
     out = TargetDecision(chosen, rule="resolved", uncertain=typo or _unknown_names(question, docs),
-                         alternatives=[{"document_id": i, "label": by_id[i].label} for i in alternatives if i not in chosen])
+                         alternatives=[{"document_id": i, "label": by_id[i].label,
+                                        "document_ids": list(dict.fromkeys(i if c == replaces.get(i) else c for c in chosen))}
+                                       for i in alternatives if i not in chosen])
     note = alignment_note(resolve(targets, filings), filings, vi)
     extra = " ".join(x for x in (("Giả định: " if vi else "Assumed: ") + "; ".join(assumptions) + "." if assumptions else "", note) if x)
     out.understood = _understood([by_id[i] for i in chosen], vi, extra)

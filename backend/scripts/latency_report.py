@@ -22,7 +22,8 @@ if hasattr(sys.stdout, "reconfigure"):
 from app.infrastructure.database.collections import MESSAGES_COLLECTION  # noqa: E402
 from app.infrastructure.database.mongodb import MongoManager  # noqa: E402
 
-STAGES = ("plan", "search", "generate", "verify_repair", "total")
+# understood / first_text: when the streamed chat first showed the understanding line and the answer text (seconds from the start)
+STAGES = ("understood", "first_text", "plan", "search", "generate", "verify_repair", "total")
 
 
 def pct(values, q):
@@ -40,10 +41,15 @@ async def main(last: int):
     print(f"{len(traces)} answered questions (most recent {last})\n")
     if not traces:
         return
-    print("| stage | p50 s | p95 s | n |\n|---|---|---|---|")
+    print("| stage | p50 s | p90 s | p95 s | n |\n|---|---|---|---|---|")
     for stage in STAGES:
         vals = [t["timings"][stage] for t in traces if isinstance(t.get("timings", {}).get(stage), (int, float))]
-        print(f"| {stage} | {pct(vals, 50)} | {pct(vals, 95)} | {len(vals)} |")
+        print(f"| {stage} | {pct(vals, 50)} | {pct(vals, 90)} | {pct(vals, 95)} | {len(vals)} |")
+    print("\n| routing | n | first_text p50 / p95 s | total p50 / p95 s |\n|---|---|---|---|")
+    for route in sorted({t.get("routing") for t in traces if t.get("routing")}):
+        group = [t["timings"] for t in traces if t.get("routing") == route]
+        first, total = [g["first_text"] for g in group if "first_text" in g], [g["total"] for g in group]
+        print(f"| {route} | {len(group)} | {pct(first, 50)} / {pct(first, 95)} | {pct(total, 50)} / {pct(total, 95)} |")
     calls = [t.get("llm", {}).get("calls", 0) for t in traces]
     toks = [t.get("llm", {}).get("prompt_tokens", 0) + t.get("llm", {}).get("completion_tokens", 0) for t in traces]
     print(f"\nLLM calls / question: mean {np.mean(calls):.2f}, p95 {pct(calls, 95)}, max {max(calls)}")

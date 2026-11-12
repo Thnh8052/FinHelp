@@ -8,6 +8,7 @@ The streamed route attaches a ChatStream to its request; everywhere else emit() 
   done / error                                                                    sent by the route once the answer is recorded or failed
 """
 import asyncio
+import time
 from contextvars import ContextVar
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -19,8 +20,10 @@ class ChatStream:
         self.queue: "asyncio.Queue[Event]" = asyncio.Queue()
         self.answer_streamed = False  # only the first answer written for the request streams: a rewrite or a second part does not
         self.answer_stream_off = False
+        self.first: Dict[str, float] = {}  # kind -> time.perf_counter() of its first event (what the user waited for, into the trace)
 
     def emit(self, kind: str, data: Dict[str, Any]) -> None:
+        self.first.setdefault(kind, time.perf_counter())
         self.queue.put_nowait((kind, data))
 
     def close(self) -> None:
@@ -57,6 +60,15 @@ def no_answer_stream() -> None:
     stream = _STREAM.get()
     if stream is not None:
         stream.answer_stream_off = True
+
+
+def first_seen(since: float) -> Dict[str, float]:
+    """Seconds from `since` (time.perf_counter()) to the first understanding line and the first piece of answer text the user was sent:
+    {"understood", "first_text"}, only those that happened; {} outside a streamed chat."""
+    stream = _STREAM.get()
+    if stream is None:
+        return {}
+    return {key: round(stream.first[kind] - since, 2) for kind, key in (("understood", "understood"), ("delta", "first_text")) if kind in stream.first}
 
 
 def answer_sink() -> Optional[Callable[[str], None]]:
