@@ -50,6 +50,28 @@ def test_instructions_internal_names_and_foul_language_are_caught(answer, kind):
     assert kinds(answer) == [kind] and policy.check(answer, CHUNKS, "en")[0].hard
 
 
+@pytest.mark.parametrize("answer, lang, kind", [
+    ("Given these margins [1], Costco looks like a compelling investment.", "en", "advice"),
+    ("Investors may want to consider adding Costco shares [1].", "en", "advice"),
+    ("The stock appears undervalued at this level [1].", "en", "advice"),
+    ("Nhà đầu tư có thể cân nhắc mua cổ phiếu này [1].", "vi", "advice"),
+    ("According to my instructions I can only use the excerpts [1].", "en", "instructions"),
+    ("Tôi được lập trình để chỉ dùng các đoạn trích [1].", "vi", "instructions"),
+    ("The vector search found three matching passages [1].", "en", "internal"),
+    ("Excerpt chunk 3 shows revenue of $51,217 million [1].", "en", "internal"),
+])
+def test_softer_wordings_of_advice_instructions_and_internal_names_are_caught(answer, lang, kind):
+    assert kinds(answer, lang) == [kind]
+
+
+def test_an_answer_in_chinese_japanese_korean_or_cyrillic_letters_is_a_soft_wrong_language_problem():
+    for answer, lang in (("2023财年收入为512.17亿美元 [1]。", "en"), ("Doanh thu là 51.217 triệu USD, 収益 [1].", "vi"), ("Выручка 51 217 млн долларов [1].", "en")):
+        found = policy.check(answer, CHUNKS, lang)
+        assert [p.kind for p in found] == ["wrong_language"] and not found[0].hard
+    chinese_report = [{"chunk_id": "c1", "document_id": "d2", "page": 3, "content": "Alibaba Group (阿里巴巴集团) reported revenue of $51,217 million."}]
+    assert kinds("Alibaba (阿里巴巴集团) reported revenue of $51,217 million [1].", "en", chinese_report) == []
+
+
 def test_the_wrong_language_and_an_answer_with_no_source_are_soft_problems(monkeypatch):
     found = policy.check("Revenues were $51,217 million in fiscal 2023, as the report shows [1].", CHUNKS, "vi")
     assert [p.kind for p in found] == ["wrong_language"] and not found[0].hard

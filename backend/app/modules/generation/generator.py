@@ -108,6 +108,10 @@ LANGUAGE_VI = (
 )
 
 
+# On the question line of an English question (v4), the mirror of the Vietnamese marker below. Measured (docs/Version_3/plan_guardrails_h4.md 7.3): with the table templates in
+# English, this line is what keeps the answer in English (0 of 14 and 0 of 8 answers with Vietnamese or Chinese text; without it 1 of 12 came out in Chinese).
+QUESTION_EN = "Question (English: answer entirely in English from the first word, including the opening sentence, table headers, notes and short_answer): "
+
 # Appended for a Vietnamese question in v3/v4 to prevent English opening sentences when notes or excerpt headers are in English.
 LANGUAGE_VI_STRUCTURED = (
     "LANGUAGE REQUIREMENT (VIETNAMESE):\n"
@@ -209,16 +213,16 @@ Writing the answer
      - STRICT RULES FOR TABLE STRUCTURE AND CLEANLINESS:
        * COMPLETE DATA CONSISTENCY (NO "GHOST" NUMBERS): Every input figure that appears in your calculation steps (including prior-year base figures like FY2024 used to compute % change) MUST be explicitly present in the table. Never output a '% change' column while omitting the prior-year base figures from the table.
        * Multi-company YoY layout: When comparing 2 or more companies across 2 periods (e.g. FY2024 vs FY2025 with YoY change), use a clear multi-row structure:
-         `| Chỉ tiêu | Doanh nghiệp | FY2024 (đơn vị) [n] | FY2025 (đơn vị) [n] | Thay đổi YoY (%) |`
-         Each company has its own clean row per metric. NEVER combine multiple companies into a single cell (FORBIDDEN: `Suncor: −4,6%; Barrick: +31,2%`).
+         `| Metric | Company | FY2024 (unit) [n] | FY2025 (unit) [n] | YoY change (%) |`
+         Each company has its own clean row per metric. NEVER combine multiple companies into a single cell (FORBIDDEN: `Company A: −4.6%; Company B: +31.2%`).
        * Single-period cross-company comparison (no YoY needed): Use entity columns:
-         `| Chỉ tiêu | Suncor FY2025 (triệu CAD) [1] | Barrick FY2025 (triệu USD) [2] | Chênh lệch |`
-       * Concise headers: Header cells must state ONLY metric/entity name, period, unit and citation `[n]`. NEVER write conversational phrases in headers (e.g. do NOT write "(triệu $, như in trong báo cáo)").
+         `| Metric | Company A FY2025 (CAD million) [1] | Company B FY2025 (USD million) [2] | Difference |`
+       * Concise headers: Header cells must state ONLY metric/entity name, period, unit and citation `[n]`. NEVER write conversational phrases in headers (e.g. do NOT write "(million $, as printed in the report)").
        * Clean data cells (NO NARRATIVE PROSE): Every data cell must contain ONLY the core number or concise entity name and its citation `[n]` (e.g. `52 377 [1]`, `16 956 [2]`, `PwC [4]`).
-       * FORBIDDEN IN CELLS: NEVER write sentences or conversational remarks inside table cells (strictly forbidden examples: "không trình bày dòng tương đương; Revenue = ...", "toàn bộ, không có lợi ích...", "không nêu tên công ty kiểm toán trong đoạn trích...").
+       * FORBIDDEN IN CELLS: NEVER write sentences or conversational remarks inside table cells (strictly forbidden examples: "no equivalent line is presented; Revenue = ...", "in full, no non-controlling interest...", "the auditor is not named in the excerpts...").
        * Missing or non-comparable items: If an entity lacks an equivalent line item or does not disclose it, write ONLY a dash `—` (or `— [n]`, `N/A`). Do NOT repeat figures from other rows and do NOT write narrative explanations in the cell.
-       * Standardized metrics only: Compare standardized core metrics (e.g. Revenue, Net Income). Do NOT invent redundant extra rows for single-entity line variants that force other entities to say "không tương đương".
-       * Footnotes below the table: Put breakdowns, accounting presentation differences (e.g. gross vs net revenues, non-controlling interest split) and currency caveats as bullet points under a `*Ghi chú:*` list immediately below the table, NEVER inside table cells.
+       * Standardized metrics only: Compare standardized core metrics (e.g. Revenue, Net Income). Do NOT invent redundant extra rows for single-entity line variants that force other entities to say "not comparable".
+       * Footnotes below the table: Put breakdowns, accounting presentation differences (e.g. gross vs net revenues, non-controlling interest split) and currency caveats as bullet points under a `*Notes:*` list (translate this label and the table headers into the question's language) immediately below the table, NEVER inside table cells.
      - Below the table and footnotes, show the calculation formula and exact inputs as concise bullet points (rounded to one decimal place for percentages and ratios unless asked otherwise).
      - Finally, write the conclusion in one clear sentence checked against the table and calculation above, highlighting the key result or direction in **bold**.
   3. Metric derivation from components (single period):
@@ -227,9 +231,6 @@ Writing the answer
      - Show the calculation and state the final derived result in **bold** (one decimal for percentages and ratios unless asked otherwise).
 - Attribute every figure to its company, period, and unit, followed by the excerpt number in square brackets `[n]`.
 - Keep the prose concise and analytical. Do not restate these instructions or describe your search process.
-- Answer what was asked. Add another figure only when it is needed to read the answer correctly (for example, the amount attributable
-  to the company next to the consolidated amount); leave out background the question does not ask for.
-- Write only your final statements: never correct yourself inside the answer.
 
 When the excerpts are not enough
 - A finding that something is absent, zero or not applicable is an answer.
@@ -243,8 +244,7 @@ When the excerpts are not enough
 
 Answer metadata
 After the answer, on a new line, write exactly one valid JSON block (with `short_answer` written in the language of the question). The app removes it before showing the answer.
-In `inputs`, list every figure your answer takes from the excerpts (stated or used in a calculation): its value exactly as printed in the excerpt, its line item exactly as the excerpt labels it, its period as the excerpt labels it, and the number of that excerpt. Leave the list empty when the answer takes no figure from the excerpts. The app checks each entry against the excerpt it names.
-<answer_meta>{"status": "answered" | "partial" | "not_found" | "clarify", "short_answer": "<plain-text one-line summary in the question's language without markdown or unescaped quotes>", "citations": [<numbers of the excerpts you used>], "inputs": [{"value": "<as printed>", "item": "<line item as printed>", "period": "<period as printed>", "excerpt": <number>}]}</answer_meta>"""
+<answer_meta>{"status": "answered" | "partial" | "not_found" | "clarify", "short_answer": "<plain-text one-line summary in the question's language without markdown or unescaped quotes>", "citations": [<numbers of the excerpts you used>]}</answer_meta>"""
 
 META_OPEN, META_CLOSE = "<answer_meta>", "</answer_meta>"
 STATUSES = ("answered", "partial", "not_found", "clarify")
@@ -343,6 +343,8 @@ def build_messages(context: str, question: str, multi_doc: bool = False, notes: 
                 f"Excerpts from the selected reports:\n{context}\n\n"
                 f"Question (Vietnamese — trả lời hoàn toàn bằng tiếng Việt ngay từ câu đầu tiên): {question}"
             )
+        elif settings.GENERATION_PROMPT == "v4":
+            user_content = f"Excerpts from the selected reports:\n{context}\n\n{QUESTION_EN}{question}"
         else:
             user_content = f"Excerpts from the selected reports:\n{context}\n\nQuestion: {question}"
         return [{"role": "system", "content": system}, {"role": "user", "content": user_content}]
