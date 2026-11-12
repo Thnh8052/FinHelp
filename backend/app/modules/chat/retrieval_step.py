@@ -12,7 +12,7 @@ from app.modules.query_router.decomposer import decompose_query
 from app.modules.query_router.input_policy import detect_language
 from app.modules.query_router.planner import PlanItem, plan_multi_doc
 from app.modules.chat.scope import catalog_card, catalog_entry, document_label, text_years
-from app.modules.retrieval.hybrid_search import HybridSearchService
+from app.modules.retrieval.hybrid_search import SEARCH_PARTS, HybridSearchService, part_done
 
 
 @dataclass
@@ -44,6 +44,8 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
     routing = ("targets_" if targeted else "") + ("single" if len(scope) == 1 else "planner")
     multi = 2 <= len(scope) <= settings.MULTIDOC_CATALOG_LIMIT and settings.MULTIDOC_ENABLED
     t0 = time.perf_counter()
+    parts: Dict[str, float] = {}  # seconds in each part of the search (hybrid_search.part_done), kept in the trace as search_<part>
+    SEARCH_PARTS.set(parts)
     if multi:
         plan = await plan_multi_doc(query, [catalog_entry(d) for d in scope])
     t_plan = time.perf_counter() - t0
@@ -61,8 +63,10 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
         retrieved = await hybrid_search.retrieve_planned(query, plan, notebook_id, ids)
         skipped = [d for d in ids if d not in searched]
         if net_on and skipped:
+            t_net = time.perf_counter()
             retrieved += extra_slots(retrieved, await hybrid_search.safety_net(
                 query, [p.query for p in plan], notebook_id, skipped, [c["chunk_id"] for c in retrieved]))
+            part_done("net", t_net)
             routing = "planner+net"
     elif multi:
         # no plan (model down or no valid JSON): the routing without a language model, R5 on the catalog, then R5 on the text, then R4
@@ -86,8 +90,10 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
         t_plan = time.perf_counter() - t0
         retrieved = await hybrid_search.retrieve_research(search_query, sub_queries, notebook_id, doc_filter)
     if others and settings.NET_ENABLED:
+        t_net = time.perf_counter()
         retrieved += extra_slots(retrieved, await hybrid_search.safety_net(
             query, sub_queries or [query], notebook_id, others, [c["chunk_id"] for c in retrieved]))
+        part_done("net", t_net)
         routing += "+net"
         labels.update({d.document_id: document_label(d) for d in targets_scope if d.document_id in others})
     missing: List[str] = []
@@ -101,7 +107,7 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
     for chunk in retrieved:
         if chunk["document_id"] in labels:
             chunk["document_label"] = labels[chunk["document_id"]]
-    timings = {"plan": round(t_plan, 2), "search": round(time.perf_counter() - t0 - t_plan, 2)}
+    timings = {"plan": round(t_plan, 2), "search": round(time.perf_counter() - t0 - t_plan, 2)} | {f"search_{k}": v for k, v in parts.items()}
     return RetrievalResult(scope, labels, plan, sub_queries, retrieved, routing, timings, missing)
 
 

@@ -25,6 +25,9 @@ class LLMUnavailableError(DomainException):
 
 def _record_usage(usage: Optional[Dict]) -> None:
     counts = {k: v for k, v in (usage or {}).items() if isinstance(v, int)} | {"calls": 1}
+    reasoning = ((usage or {}).get("completion_tokens_details") or {}).get("reasoning_tokens")  # the API nests it; it is already inside completion_tokens
+    if isinstance(reasoning, int):
+        counts["reasoning_tokens"] = reasoning
     USAGE.update(counts)
     if REQUEST_USAGE.get() is not None:
         REQUEST_USAGE.get().update(counts)
