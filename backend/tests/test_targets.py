@@ -25,8 +25,22 @@ def test_clear_comparison_targets_one_file_per_company():
 
 def test_no_year_takes_the_latest_and_says_so_without_blocking():
     t = decide_targets("What was AMD's gross margin?", FIVE, None, vi=True)
-    assert t.document_ids == ["amd25"] and t.alternatives == [{"document_id": "amd24", "label": AMD24.label}]
+    assert t.document_ids == ["amd25"] and t.alternatives == [{"document_id": "amd24", "label": AMD24.label, "document_ids": ["amd24"]}]
     assert "Giả định" in t.understood and any("tag the right file" in n for n in t.notes)
+
+
+def test_an_alternative_swaps_only_its_own_company_and_asking_with_it_keeps_the_others():
+    # "total operating expenses of costco, pepsi and coca": the latest Costco is chosen, the older one is offered; asking with it must keep Pepsi and Coca-Cola
+    costco15, costco19 = doc("c15", "Costco Wholesale Corporation", 2015, "COST"), doc("c19", "Costco Wholesale Corporation", 2019, "COST")
+    pep17, ko19 = doc("p17", "PepsiCo, Inc.", 2017, "PEP"), doc("k19", "The Coca-Cola Company", 2019, "KO")
+    docs = [ko19, pep17, costco15, costco19]
+    question = "total operating expenses of costco, pepsi and coca-cola"
+    t = decide_targets(question, docs, None, vi=False)
+    assert sorted(t.document_ids) == ["c19", "k19", "p17"]
+    (alt,) = t.alternatives
+    assert alt["document_id"] == "c15" and sorted(alt["document_ids"]) == ["c15", "k19", "p17"]
+    again = decide_targets(question, docs, alt["document_ids"], vi=False)
+    assert sorted(again.document_ids) == ["c15", "k19", "p17"] and "do not cover" not in again.understood
 
 
 def test_two_years_of_one_company_take_both_files():

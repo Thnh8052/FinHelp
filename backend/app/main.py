@@ -18,6 +18,7 @@ from app.infrastructure.database.mongodb import MongoManager
 from app.infrastructure.database.qdrant import QdrantManager
 from app.modules.ingestion.pipeline import IngestionPipeline
 from app.modules.notebooks.purge import purge_expired_guests
+from app.modules.retrieval import gpu_client
 from app.modules.retrieval.warmup import warm_chunk_tokenizer, warm_models
 from app.shared.health import check_services
 from app.shared.security_headers import SecurityHeaders
@@ -73,6 +74,7 @@ async def lifespan(app: FastAPI):
     housekeeping.cancel()
 
     logger.info("Shutting down DATN Finance backend application...")
+    await gpu_client.close()
     await MongoManager.close_database_connection()
     await QdrantManager.close_qdrant_connection()
 

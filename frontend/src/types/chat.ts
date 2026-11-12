@@ -16,8 +16,9 @@ export interface ChatMessage {
   created_at: string;
   /** Cách hệ thống hiểu câu hỏi (tài liệu, giả định), hiện phía trên câu trả lời. */
   understood?: string;
-  /** Tài liệu khác cũng khớp: bấm để hỏi lại với tài liệu đó. */
-  alternatives?: { document_id: string; label: string }[];
+  /** Tài liệu khác cũng khớp: bấm để hỏi lại với tài liệu đó. `document_ids`: cả bộ tài liệu để hỏi lại (chỉ đổi tài liệu này, giữ các công ty khác);
+   * tin nhắn cũ không có trường này thì hỏi lại với riêng tài liệu đó. */
+  alternatives?: { document_id: string; label: string; document_ids?: string[] }[];
   /** Câu hỏi đã gửi (để hỏi lại với tài liệu khác). */
   query?: string;
   /** Câu trả lời đang được viết (chat dạng stream): chưa có trích dẫn, chưa sao chép được. */

@@ -60,14 +60,23 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
         if not net_on:
             plan += [PlanItem(query, [d]) for d in named if d not in searched]
         sub_queries = [p.query for p in plan]
-        retrieved = await hybrid_search.retrieve_planned(query, plan, notebook_id, ids)
         skipped = [d for d in ids if d not in searched]
         if net_on and skipped:
-            t_net = time.perf_counter()
-            retrieved += extra_slots(retrieved, await hybrid_search.safety_net(
-                query, [p.query for p in plan], notebook_id, skipped, [c["chunk_id"] for c in retrieved]))
-            part_done("net", t_net)
+            # The net searches only the documents the plan skipped, so it needs nothing from the main search: both run at once (L2) and the net's chunks that the main search
+            # also holds, none by construction, are dropped afterwards. `net` in the trace is the net's own time, which overlaps with the main search.
+            async def net_search():
+                t_net = time.perf_counter()
+                try:
+                    return await hybrid_search.safety_net(query, [p.query for p in plan], notebook_id, skipped, [], [d for d in ids if d in searched])
+                finally:
+                    part_done("net", t_net)
+
+            retrieved, net = await asyncio.gather(hybrid_search.retrieve_planned(query, plan, notebook_id, ids), net_search())
+            held = {c["chunk_id"] for c in retrieved}
+            retrieved += extra_slots(retrieved, [(c, tokens) for c, tokens in net if c["chunk_id"] not in held])
             routing = "planner+net"
+        else:
+            retrieved = await hybrid_search.retrieve_planned(query, plan, notebook_id, ids)
     elif multi:
         # no plan (model down or no valid JSON): the routing without a language model, R5 on the catalog, then R5 on the text, then R4
         routed, routing = r5(query, ids, {d.document_id: catalog_card(d) for d in scope}), "r5"

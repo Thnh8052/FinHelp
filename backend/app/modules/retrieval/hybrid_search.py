@@ -17,6 +17,7 @@ from app.modules.retrieval.fusion import fuse_with_rerank, round_robin_merge, rr
 from app.modules.retrieval.gpu import memory_report
 from app.modules.retrieval.qdrant_retriever import QdrantRetriever
 from app.modules.retrieval.reranker import QwenRerankerService
+from app.modules.retrieval.term_cache import TERMS
 
 
 # Seconds spent in each part of the search of the question being served (set by the retrieval step, None elsewhere): they go into its trace.
@@ -30,6 +31,13 @@ def part_done(name: str, since: float) -> float:
     if parts is not None:
         parts[name] = round(parts.get(name, 0.0) + now - since, 2)
     return now
+
+
+def note_part(name: str, value: float) -> None:
+    """Record a number (not a duration) of this question's search, as `search_<name>` in its trace."""
+    parts = SEARCH_PARTS.get()
+    if parts is not None:
+        parts[name] = round(float(value), 3)
 
 
 def _z(x: np.ndarray) -> np.ndarray:
@@ -215,9 +223,8 @@ class HybridSearchService:
             vectors, notebook_id, scope_document_ids, settings.MULTIDOC_CANDIDATE_LIMIT, per_vector_documents=[item.document_ids for item in items]
         )
         t = part_done("vector", t)
-        source = await self.chunk_repo.get_text_and_tokens(documents)
+        counts, tokens = await self._term_counts(documents)
         t = part_done("mongo_text", t)
-        counts = {cid: Counter(_TERM.findall(text.lower())) for cid, (text, _) in source.items()}
         scores: Dict[str, float] = {}
         for hits in ranked:
             for h in hits:
@@ -228,11 +235,24 @@ class HybridSearchService:
         lanes = await self._qwen_lanes(items, rankings, scores)
         t = part_done("rerank", t)
         max_chunks, max_tokens = planned_ceilings(len(items), len(documents))
-        chosen = allocate_planned(lanes, {cid: tok for cid, (_, tok) in source.items()}, max_chunks, max_tokens)
+        chosen = allocate_planned(lanes, tokens, max_chunks, max_tokens)
         logger.info(f"Planned search, {len(items)} searches, {len(documents)} documents: {len(chosen)} chunks (ceiling {max_chunks} / {max_tokens} tokens) in {time.perf_counter() - t0:.2f}s")
         hydrated = await self._hydrate(chosen, scores)
         part_done("hydrate", t)
         return hydrated
+
+    async def _term_counts(self, documents: Sequence[str]) -> Tuple[Dict[str, Counter], Dict[str, int]]:
+        """({chunk_id: word counts}, {chunk_id: token count}) of every chunk of the documents, counted once per document (term_cache.py)."""
+        missing = [d for d in documents if TERMS.get(d) is None]
+        if missing:
+            for doc_id, chunks in (await self.chunk_repo.get_text_by_document(missing)).items():
+                TERMS.put(doc_id, {cid: (Counter(_TERM.findall(text.lower())), tok) for cid, (text, tok) in chunks.items()})
+        counts: Dict[str, Counter] = {}
+        tokens: Dict[str, int] = {}
+        for doc_id in documents:
+            for cid, (words, tok) in (TERMS.get(doc_id) or {}).items():
+                counts[cid], tokens[cid] = words, tok
+        return counts, tokens
 
     async def retrieve_by_content(
         self, question: str, notebook_id: str, document_ids: List[str], year_document_ids: Optional[List[str]] = None
@@ -300,33 +320,63 @@ class HybridSearchService:
         return out
 
     async def safety_net(
-        self, question: str, plan_queries: List[str], notebook_id: str, document_ids: List[str], exclude: Sequence[str]
+        self, question: str, plan_queries: List[str], notebook_id: str, document_ids: List[str], exclude: Sequence[str],
+        kept_document_ids: Optional[Sequence[str]] = None,
     ) -> List[Tuple[Dict[str, Any], int]]:
-        """Stream 2: the documents the plan does not search, each with the single-document lane (dense RRF [question x2, plan queries
-        x1], first NET_FIRST_STAGE each, pool NET_POOL), Qwen3 by the question, best first. Returns (chunk, tokens) for the chunks
-        scoring >= NET_GATE; the caller gives them the extra slots. Any reranker failure returns [] (the plan's chunks still answer)."""
+        """Stream 2, for a planner that chose the wrong documents: the documents the plan does not search (`document_ids`) each get a lane. First stage: dense + BM25 for
+        [question x2, <= NET_FUSION_QUERIES other plan queries x1], RRF, pool NET_POOL per document. Qwen3 scores every pool chunk by the question and by each plan query;
+        the score is (1 - NET_FUSION_ALPHA) x the question's + NET_FUSION_ALPHA x the best plan query's. Returns (chunk, tokens) for the chunks scoring >= NET_GATE, best first;
+        the caller gives them the extra slots. With `kept_document_ids` (the documents the plan searched) the net opens only when the question looks more like a skipped document
+        than like the kept ones (NET_OPEN_MIN_DENSE_GAP); without it, it always opens. A reranker failure returns [] (the plan's chunks still answer)."""
         if not document_ids:
             return []
-        queries = [question] + [q for q in dict.fromkeys(plan_queries) if q != question][:3]
+        queries = [question] + [q for q in dict.fromkeys(plan_queries) if q != question][: settings.NET_FUSION_QUERIES]
         vectors = await self.embedder.embed_queries(queries)
+        if kept_document_ids is not None and settings.NET_OPEN_MIN_DENSE_GAP is not None:
+            gap = await self._dense_gap(vectors[0], notebook_id, document_ids, kept_document_ids)
+            note_part("net_gap", gap)
+            note_part("net_open", float(gap >= settings.NET_OPEN_MIN_DENSE_GAP))
+            if gap < settings.NET_OPEN_MIN_DENSE_GAP:
+                return []
+        counts, _ = await self._term_counts(document_ids)
+        weights = [2.0] + [1.0] * (len(queries) - 1)
         pool: List[str] = []
         for doc_id in document_ids:
-            ranked = await self.retriever.search_vectors(vectors, notebook_id, doc_id, settings.NET_FIRST_STAGE)
-            pool += rrf_merge([[h["chunk_id"] for h in hits] for hits in ranked], [2.0] + [1.0] * (len(queries) - 1))[: settings.NET_POOL]
+            ranked = await self.retriever.search_vectors(vectors, notebook_id, doc_id, settings.MULTIDOC_CANDIDATE_LIMIT)
+            orders = [dense_bm25_order(hits, q, counts)[: settings.NET_FIRST_STAGE] for hits, q in zip(ranked, queries)]
+            pool += rrf_merge(orders, weights)[: settings.NET_POOL]
         skip = set(exclude)
         chunks = await self._hydrate(list(dict.fromkeys(c for c in pool if c not in skip)), {})
         if not chunks:
             return []
+        subs = queries[1:] if settings.NET_FUSION_ALPHA > 0 else []
         try:
-            qwen = await self._score_cached(question, chunks)
+            scores = await self._score_many([question] + subs, chunks)
         except RuntimeError as exc:
             logger.warning(f"Safety net skipped: {type(exc).__name__}: {str(exc)[:120]}")
             return []
+        alpha = settings.NET_FUSION_ALPHA
+        fused = [(1 - alpha) * scores[question][k] + alpha * max((scores[t][k] for t in subs), default=scores[question][k]) if subs else scores[question][k] for k in range(len(chunks))]
         tokens = {cid: tok for cid, (_, tok) in (await self.chunk_repo.get_sparse_weights([c["chunk_id"] for c in chunks])).items()}
-        passed = sorted(((s, c) for s, c in zip(qwen, chunks) if s >= settings.NET_GATE), key=lambda x: -x[0])
+        passed = sorted(((s, c) for s, c in zip(fused, chunks) if s >= settings.NET_GATE), key=lambda x: -x[0])
         for s, c in passed:
             c["score"], c["via"] = float(s), "safety_net"
         return [(c, tokens.get(c["chunk_id"], 0)) for _, c in passed]
+
+    async def _dense_gap(self, question_vector: List[float], notebook_id: str, skipped: Sequence[str], kept: Sequence[str]) -> float:
+        """The question's best dense similarity in the skipped documents minus its best in the kept ones (one batched vector search with one request per document)."""
+        docs = list(dict.fromkeys(list(skipped) + list(kept)))
+        tops = await self.retriever.search_vectors([question_vector] * len(docs), notebook_id, None, 1, per_vector_documents=[[d] for d in docs])
+        best = {d: (hits[0]["score"] if hits else -1.0) for d, hits in zip(docs, tops)}
+        return max(best[d] for d in skipped) - max((best[d] for d in kept), default=-1.0)
+
+    async def _score_many(self, queries: List[str], chunks: List[Dict[str, Any]]) -> Dict[str, List[float]]:
+        """{query: Qwen3 P(yes) of each chunk}, the pairs not scored earlier in this request in one reranker call."""
+        todo = [(q, c) for q in queries for c in chunks if (q, c["chunk_id"]) not in self._qwen]
+        if todo:
+            for (q, c), s in zip(todo, await self.reranker.score_pairs([(q, c["content"]) for q, c in todo])):
+                self._qwen[(q, c["chunk_id"])] = s
+        return {q: [self._qwen[(q, c["chunk_id"])] for c in chunks] for q in queries}
 
     async def retrieve_research(
         self,

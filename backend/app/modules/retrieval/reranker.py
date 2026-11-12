@@ -6,6 +6,7 @@ import numpy as np
 
 from app.core.config import settings
 from app.core.logging import logger
+from app.modules.retrieval import gpu_client
 from app.modules.retrieval.gpu import free_gpu_memory, register_unloader, resolve_device, run_on_gpu
 
 # Instruction, prompt wrapper and scoring are the ones measured in the research (qwen_m3.py).
@@ -127,15 +128,8 @@ class QwenRerankerService:
     async def _score_pairs_remote(cls, pairs: Sequence[Tuple[str, str]]) -> List[float]:
         import httpx
 
-        url = f"{settings.REMOTE_GPU_URL.rstrip('/')}/rerank"
         try:
-            async with httpx.AsyncClient(timeout=180.0) as client:
-                resp = await client.post(
-                    url,
-                    json={"pairs": list(pairs)},
-                )
-                resp.raise_for_status()
-                return resp.json()["scores"]
+            return (await gpu_client.post_json("rerank", {"pairs": list(pairs)}))["scores"]
         except httpx.HTTPError as exc:  # as a RuntimeError, every caller answers from the first-stage order instead of failing the question
             raise RuntimeError(f"Remote reranker unavailable: {type(exc).__name__}") from exc
 

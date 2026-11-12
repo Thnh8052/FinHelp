@@ -135,16 +135,28 @@ class Settings(BaseSettings):
     # Paid fallback: the language model reads images of pages 1-2 when the local catalog is missing or its name / period is
     # unverified (a name only in a logo, no GPU / Ollama). One call per such document.
     CATALOG_VLM_ENABLED: bool = True
-    # Safety net (stream 2) when the planner chooses the documents (the question names no company): every selected document the
-    # plan does not search gets the single-document lane with the planner's own queries (dense RRF [question x2, plan queries x1],
-    # first NET_FIRST_STAGE of each, pool NET_POOL, Qwen3 by the question); chunks with P(yes) >= NET_GATE take up to
-    # NET_EXTRA_SLOTS extra slots (token cap + 1,024 a slot). Measured (version_control 218, "C1-S planner Ga30 +10"): no change when
-    # the plan is right (92.4 / 83.9), one filing missed 91.4 / 73.8, every filing wrong 87.3 / 66.9 (gold / SEC dev).
+    # Safety net (stream 2), for a planner that chose the wrong documents: every selected document the plan does not search gets its own lane.
+    # First stage per skipped document: dense + BM25 (as the main search) for [question x2, <= 3 plan queries x1], RRF, first NET_FIRST_STAGE of each query,
+    # pool NET_POOL. Qwen3 scores each pool chunk by the question and by each plan query; a chunk's score is (1 - NET_FUSION_ALPHA) x the question's
+    # + NET_FUSION_ALPHA x the highest of the plan queries' (the plan queries have no company name: they pull the statement tables up and the cover page down).
+    # Chunks scoring >= NET_GATE, best first, take up to NET_EXTRA_SLOTS extra slots (token cap + 1,024 a slot).
+    # The net only opens when dense_skip >= NET_OPEN_MIN_DENSE_GAP, dense_skip = the question's best dense similarity in the skipped documents minus its best in the documents
+    # the plan kept (None: always open). Measured 12/11/2026 on the dev split and the four hard sets (docs/Version_3/plan_rag_improvements.md 8.8-8.13), compl when the planner
+    # is wrong (dev k3 / k4 / k5, hard sets k3 / k4 / k5): this net 88.6 / 91.1 / 87.5 and 73.6 / 78.1 / 74.0; the net of 28/10 (gate 0.3, dense, the question only, 10 slots)
+    # 75.7 / 78.6 / 64.3 and 49.9 / 56.2 / 35.6; plan right: no change on dev, 81.2 against 80.0 on the hard sets; it opens in about half of the right-plan questions.
     NET_ENABLED: bool = True
-    NET_GATE: float = 0.3
-    NET_EXTRA_SLOTS: int = 10
+    NET_GATE: float = 0.15
+    NET_EXTRA_SLOTS: int = 14
     NET_POOL: int = 20
     NET_FIRST_STAGE: int = 200
+    NET_FUSION_ALPHA: float = 0.4
+    NET_FUSION_QUERIES: int = 3
+    NET_OPEN_MIN_DENSE_GAP: Optional[float] = -0.06  # -0.10 opens the net in 51 % of right-plan dev questions, -0.06 in 30 % with the same end-to-end correctness (34 of 35 answers, plan 8.18); -0.03 loses answers
+    # Net called after the answer (docs/Version_3/plan_rag_improvements.md 8.16): when the first answer says it is only partial or that the excerpts do not hold the answer and the
+    # planner left documents out, the net searches them (no dense-gap gate) and the answer is written once more with the new excerpts (the better of the two is kept).
+    # Measured on 40 answers with no net: it flags 20 of 29 contexts that miss evidence (all 10 with every file wrong) and 0 of 11 complete ones; it cannot flag a question
+    # that names no company and has lost the other company's file, which the dense-gap gate before the answer is for.
+    LAZY_NET_ENABLED: bool = True
     # Evidence check (V1) on targeted documents: a document the question targets with no retrieved chunk gets one more search of its
     # own (at most V1_RETRY_CHUNKS chunks); still none -> the answer is told the source showed nothing.
     V1_RETRY_CHUNKS: int = 3
