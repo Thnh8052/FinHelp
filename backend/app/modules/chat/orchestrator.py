@@ -31,6 +31,7 @@ from app.modules.generation.replies import NO_DATA_ANSWER, sources_message, term
 from app.modules.chat.retrieval_step import RetrievalResult, extra_slots, retrieve_for_scope
 from app.modules.chat.scope import catalog_entry, document_label, scope_doc, source_info
 from app.modules.generation.answer_check.citations import cited_numbers
+from app.modules.generation.answer_check.numbers import correct_calculations
 from app.modules.generation.verification import flag_unverified, verify
 from app.modules.retrieval.hybrid_search import HybridSearchService
 
@@ -176,6 +177,8 @@ class RAGWorkflowOrchestrator:
             flagged = [n for n, c in enumerate(retrieved, 1) if "suspicious_instruction" in (c.get("flags") or [])]
         citations = [CitationGenerator.from_retrieved_chunk(chk, citation_offset + idx + 1) for idx, chk in enumerate(retrieved)]
         t2 = time.perf_counter()
+        # H1: the wrong result of a calculation the answer writes out is corrected by code first (no model call), so it never costs a rewrite
+        answer, calculated = correct_calculations(answer, retrieved)
         number_check, cite_check, issues = verify(answer, retrieved, docs)
         first_issues, repaired = list(issues), False
         if issues and retrieved and settings.ANSWER_REPAIR_ENABLED:  # A2: one rewrite with the list of problems
@@ -183,13 +186,14 @@ class RAGWorkflowOrchestrator:
             again = await self._answer(query, retrieved, notes + [
                 "Your previous answer had these problems: " + "; ".join(issues) + ". Rewrite the answer from the excerpts only: correct or "
                 "remove each of them; when a figure is not in the excerpts, say it was not found instead of giving a number."])
+            again, calculated_again = correct_calculations(again, retrieved)
             n2, c2, i2 = verify(again, retrieved, docs)
             if len(i2) <= len(issues):
-                answer, number_check, cite_check, issues, repaired = again, n2, c2, i2, True
+                answer, number_check, cite_check, issues, repaired, calculated = again, n2, c2, i2, True, calculated_again
         if issues:
             answer = flag_unverified(answer, number_check, cite_check, decision.lang)
         verification = {"passed": not issues, "repaired": repaired, "unverified_figures": number_check["unverified"], "citations": cite_check,
-                        "first_issues": first_issues}  # what the first answer got wrong (why a repair was tried), kept for the trace
+                        "first_issues": first_issues, "calculator": calculated}  # what the first answer got wrong (why a repair was tried), kept for the trace
         text, meta = split_answer(answer)
         cited = cited_numbers(text)
         timings = {**found.timings, "generate": round(t1 - t0, 2), "verify_repair": round(time.perf_counter() - t2, 2), **({"lazy_net": round(t2 - t1, 2)} if lazy else {})}
