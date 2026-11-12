@@ -1349,10 +1349,25 @@
   min-width: 148px;
 }
 
+/* The unit of a header ("(USD million)") sits on its own small line under the title */
+.financial-th .th-unit {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #64748b;
+}
+
 /* Citation pills in a header stay beside the title instead of stacking one under another */
 .financial-th .inline-citation-pill {
   margin: 0 1px;
   vertical-align: 1px;
+}
+
+.financial-th .th-title + .inline-citation-pill {
+  margin-left: 5px;
 }
 
 .financial-th:last-child {
