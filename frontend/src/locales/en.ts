@@ -699,6 +699,7 @@ export const en: TranslationSchema = {
     llm_not_configured: "The answer service is not configured.",
     llm_rejected: "The answer service rejected the request. Please try again.",
     llm_unavailable: "The answer service is temporarily unavailable.",
+    search_unavailable: "The system is busy. Please try again in a few minutes.",
     internal_error: "The system is having trouble. Please try again later.",
     validation_failed: "Some information is not valid.",
     invalid_field: "This value is not valid.",

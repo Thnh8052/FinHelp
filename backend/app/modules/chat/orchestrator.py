@@ -30,7 +30,7 @@ from app.modules.generation.citation_generator import CitationGenerator
 from app.modules.generation.answer_check import policy
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
 from app.modules.generation.replies import NO_DATA_ANSWER, sources_message, terminal, unlisted_message
-from app.modules.chat.retrieval_step import RetrievalResult, extra_slots, retrieve_for_scope
+from app.modules.chat.retrieval_step import RetrievalResult, extra_slots, retrieve_for_scope, search_with_retry
 from app.modules.chat.scope import catalog_entry, document_label, scope_doc, source_info
 from app.modules.generation.answer_check.citations import cited_numbers
 from app.modules.generation.answer_check.numbers import correct_calculations
@@ -279,7 +279,11 @@ class RAGWorkflowOrchestrator:
             return answer, retrieved, None
         events.stage("checking")
         t0 = time.perf_counter()
-        net = await self.hybrid_search.safety_net(query, [p.query for p in found.plan] or found.sub_queries, notebook_id, skipped, [c["chunk_id"] for c in retrieved], None)
+        held = [c["chunk_id"] for c in retrieved]
+        try:
+            net = await search_with_retry(lambda: self.hybrid_search.safety_net(query, [p.query for p in found.plan] or found.sub_queries, notebook_id, skipped, held, None))
+        except ServiceUnavailableError:  # the check is an extra: an answer already written is not thrown away because the store dropped
+            return answer, retrieved, {"status_before": meta["status"], "skipped_documents": len(skipped), "added": 0, "kept": "first", "search_failed": True}
         extra = extra_slots(retrieved, net)
         info = {"status_before": meta["status"], "skipped_documents": len(skipped), "added": len(extra)}
         if not extra:
@@ -301,7 +305,7 @@ class RAGWorkflowOrchestrator:
         asks = ("consolidated statements of income profit or loss net sales total revenues net income", "consolidated balance sheets statement of financial position total assets total liabilities equity",
                 "management discussion and analysis strategic report directors' report overview results of operations business description")
         plan = [PlanItem(a, [d.document_id]) for d in scope for a in asks]
-        chunks = await self.hybrid_search.retrieve_multi_doc(plan, notebook_id, [d.document_id for d in scope], limit=min(len(plan), 18))
+        chunks = await search_with_retry(lambda: self.hybrid_search.retrieve_multi_doc(plan, notebook_id, [d.document_id for d in scope], limit=min(len(plan), 18)))
         labels = {d.document_id: document_label(d) for d in scope}
         for c in chunks:
             c["document_label"] = labels.get(c["document_id"], c["document_id"])

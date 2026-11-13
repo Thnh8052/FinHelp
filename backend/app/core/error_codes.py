@@ -72,6 +72,8 @@ class Code:
     LLM_NOT_CONFIGURED = "llm_not_configured"
     LLM_REJECTED = "llm_rejected"
     LLM_UNAVAILABLE = "llm_unavailable"
+    # the search itself (the vector store or the network to it timed out or dropped, even after one more try)
+    SEARCH_UNAVAILABLE = "search_unavailable"
     # generic
     INTERNAL_ERROR = "internal_error"
     VALIDATION_FAILED = "validation_failed"

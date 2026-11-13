@@ -700,6 +700,7 @@ export interface TranslationSchema {
     llm_not_configured: string;
     llm_rejected: string;
     llm_unavailable: string;
+    search_unavailable: string;
     internal_error: string;
     validation_failed: string;
     invalid_field: string;

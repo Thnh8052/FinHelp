@@ -699,6 +699,7 @@ export const vi: TranslationSchema = {
     llm_not_configured: "Dịch vụ tạo câu trả lời chưa được cấu hình.",
     llm_rejected: "Dịch vụ tạo câu trả lời từ chối yêu cầu. Vui lòng thử lại.",
     llm_unavailable: "Dịch vụ tạo câu trả lời tạm thời chưa sẵn sàng.",
+    search_unavailable: "Hệ thống đang bận, vui lòng thử lại sau ít phút.",
     internal_error: "Hệ thống đang gặp sự cố. Vui lòng thử lại sau.",
     validation_failed: "Có thông tin chưa hợp lệ.",
     invalid_field: "Giá trị này chưa hợp lệ.",

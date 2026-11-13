@@ -160,6 +160,10 @@ class Settings(BaseSettings):
     # Evidence check (V1) on targeted documents: a document the question targets with no retrieved chunk gets one more search of its
     # own (at most V1_RETRY_CHUNKS chunks); still none -> the answer is told the source showed nothing.
     V1_RETRY_CHUNKS: int = 3
+    # A search that times out or loses its connection to the vector store is sent again this many times after the first try, with this pause
+    # between tries (chat/retrieval_step.py); still failing -> the SEARCH_UNAVAILABLE error (503) instead of INTERNAL_ERROR. 0 = no retry.
+    SEARCH_RETRIES: int = 1
+    SEARCH_RETRY_DELAY_SECONDS: float = 1.0
     MULTIDOC_CATALOG_LIMIT: int = 80  # more filings than this: skip the planner and search the whole notebook as before
     # Sources a question may use, and documents a notebook may hold: a guest 1, every signed-in account (admin too) 5.
     # The one place these numbers live: TIER_SPECS, the error messages and the web app (through /auth/me) all read them from here.

@@ -3,9 +3,15 @@ import asyncio
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar
+
+import httpx
+from qdrant_client.http.exceptions import ResponseHandlingException
 
 from app.core.config import settings
+from app.core.error_codes import Code
+from app.core.exceptions import ServiceUnavailableError
+from app.core.logging import logger
 from app.modules.documents.document import DocumentRecord
 from app.modules.query_router.catalog_route import joined, question_years, r5, r5_text
 from app.modules.query_router.decomposer import decompose_query
@@ -13,6 +19,27 @@ from app.modules.query_router.input_policy import detect_language
 from app.modules.query_router.planner import PlanItem, plan_multi_doc
 from app.modules.chat.scope import catalog_card, catalog_entry, document_label, text_years
 from app.modules.retrieval.hybrid_search import SEARCH_PARTS, HybridSearchService, part_done
+
+
+T = TypeVar("T")
+# What a dropped or slow vector store looks like: a timeout, a refused or reset connection, an httpx transport error, the client's own wrapper of those.
+# The remote GPU worker is not here: its client already resends once and reports ServiceUnavailableError, which passes through unchanged.
+SEARCH_FAILURES = (asyncio.TimeoutError, ConnectionError, httpx.TransportError, ResponseHandlingException)
+
+
+async def search_with_retry(call: Callable[[], Awaitable[T]]) -> T:
+    """Run one search (a function returning the awaitable, so every try is a new one); a transient failure is tried again SEARCH_RETRIES times,
+    then the user gets SEARCH_UNAVAILABLE. A search only reads, so sending it again changes nothing."""
+    tries = settings.SEARCH_RETRIES + 1
+    for attempt in range(1, tries + 1):
+        try:
+            return await call()
+        except SEARCH_FAILURES as exc:
+            logger.warning(f"Search failed (try {attempt} of {tries}): {type(exc).__name__}: {str(exc)[:120]}")
+            if attempt == tries:
+                raise ServiceUnavailableError(Code.SEARCH_UNAVAILABLE) from exc
+            await asyncio.sleep(settings.SEARCH_RETRY_DELAY_SECONDS)
+    raise AssertionError("unreachable")  # the loop returns or raises
 
 
 @dataclass
@@ -67,16 +94,16 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
             async def net_search():
                 t_net = time.perf_counter()
                 try:
-                    return await hybrid_search.safety_net(query, [p.query for p in plan], notebook_id, skipped, [], [d for d in ids if d in searched])
+                    return await search_with_retry(lambda: hybrid_search.safety_net(query, [p.query for p in plan], notebook_id, skipped, [], [d for d in ids if d in searched]))
                 finally:
                     part_done("net", t_net)
 
-            retrieved, net = await asyncio.gather(hybrid_search.retrieve_planned(query, plan, notebook_id, ids), net_search())
+            retrieved, net = await asyncio.gather(search_with_retry(lambda: hybrid_search.retrieve_planned(query, plan, notebook_id, ids)), net_search())
             held = {c["chunk_id"] for c in retrieved}
             retrieved += extra_slots(retrieved, [(c, tokens) for c, tokens in net if c["chunk_id"] not in held])
             routing = "planner+net"
         else:
-            retrieved = await hybrid_search.retrieve_planned(query, plan, notebook_id, ids)
+            retrieved = await search_with_retry(lambda: hybrid_search.retrieve_planned(query, plan, notebook_id, ids))
     elif multi:
         # no plan (model down or no valid JSON): the routing without a language model, R5 on the catalog, then R5 on the text, then R4
         routed, routing = r5(query, ids, {d.document_id: catalog_card(d) for d in scope}), "r5"
@@ -84,11 +111,11 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
             routed, routing = r5_text(query, ids, await first_words(hybrid_search, scope), text_years(scope)), "r5_text"
         sub_queries = [query]
         if routed:
-            retrieved = await hybrid_search.retrieve_multi_doc([PlanItem(query, [d]) for d in routed], notebook_id, ids)
+            retrieved = await search_with_retry(lambda: hybrid_search.retrieve_multi_doc([PlanItem(query, [d]) for d in routed], notebook_id, ids))
         else:
             routing = "r4"
             years = question_years(query)
-            retrieved = await hybrid_search.retrieve_by_content(query, notebook_id, ids, [d for d, y in text_years(scope).items() if y in years])
+            retrieved = await search_with_retry(lambda: hybrid_search.retrieve_by_content(query, notebook_id, ids, [d for d, y in text_years(scope).items() if y in years]))
     else:
         doc_filter = ids[0] if len(ids) == 1 else (ids or None)
         if len(ids) == 1 and detect_language(query) == "en":  # Qwen scores the question's pool while the LLM writes the sub-queries
@@ -97,19 +124,19 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
         else:  # a Vietnamese question is searched in English: its pool is only known after the call
             search_query, sub_queries = await decompose_query(query)  # English for a Vietnamese question; the answer keeps `query`
         t_plan = time.perf_counter() - t0
-        retrieved = await hybrid_search.retrieve_research(search_query, sub_queries, notebook_id, doc_filter)
+        retrieved = await search_with_retry(lambda: hybrid_search.retrieve_research(search_query, sub_queries, notebook_id, doc_filter))
     if others and settings.NET_ENABLED:
         t_net = time.perf_counter()
-        retrieved += extra_slots(retrieved, await hybrid_search.safety_net(
-            query, sub_queries or [query], notebook_id, others, [c["chunk_id"] for c in retrieved]))
+        held = [c["chunk_id"] for c in retrieved]
+        retrieved += extra_slots(retrieved, await search_with_retry(lambda: hybrid_search.safety_net(query, sub_queries or [query], notebook_id, others, held)))
         part_done("net", t_net)
         routing += "+net"
         labels.update({d.document_id: document_label(d) for d in targets_scope if d.document_id in others})
     missing: List[str] = []
     if targeted and len(ids) > 1:  # V1: every targeted document must show up; one more search of its own, then say what is missing
         for doc_id in [d for d in ids if not any(c["document_id"] == d for c in retrieved)]:
-            more = await hybrid_search.retrieve_multi_doc([PlanItem(q, [doc_id]) for q in dict.fromkeys(sub_queries or [query])],
-                                                               notebook_id, [doc_id], limit=settings.V1_RETRY_CHUNKS)
+            more = await search_with_retry(lambda: hybrid_search.retrieve_multi_doc([PlanItem(q, [doc_id]) for q in dict.fromkeys(sub_queries or [query])],
+                                                                                    notebook_id, [doc_id], limit=settings.V1_RETRY_CHUNKS))
             retrieved += more
             if not more:
                 missing.append(doc_id)

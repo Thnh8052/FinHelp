@@ -136,3 +136,19 @@ async def test_the_stream_of_a_lazy_net_keeps_the_first_text_then_checks_and_end
     last_delta = len(kinds) - 1 - kinds[::-1].index("delta")
     assert kinds.index("delta") > 0 and last_delta < kinds.index("stage", 1)  # the text first, then the "checking" stage, and nothing streamed after it
     assert "".join(d["text"] for k, d in got if k == "delta").strip() == "AMD revenue was $25,785 million [1]."  # only the first answer was streamed
+
+
+async def test_a_net_that_cannot_reach_the_store_keeps_the_first_answer(monkeypatch):
+    """The check after the answer is an extra: the store timing out there must not turn a written answer into an error."""
+    import asyncio
+
+    monkeypatch.setattr(settings, "SEARCH_RETRY_DELAY_SECONDS", 0)
+    orch, seen = orchestrator(monkeypatch, [answer_with("partial")])
+
+    async def down(*args, **kwargs):
+        raise asyncio.TimeoutError("vector search timed out")
+
+    orch.hybrid_search.safety_net = down
+    r = await orch._answer_one(QUESTION, "nb", _scope(), Decision(lang="en"))
+    assert "AMD revenue was" in r["answer"] and len(seen["answers"]) == 1  # the first answer stands, no second one was written
+    assert r["trace"]["lazy_net"]["search_failed"] is True and r["trace"]["lazy_net"]["kept"] == "first"
