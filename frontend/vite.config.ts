@@ -16,6 +16,9 @@ const CONTENT_SECURITY_POLICY = [
   "form-action 'self'",
 ].join("; ");
 
+// The backend the development server forwards /api to; another one (a second backend on another port) via VITE_API_TARGET
+const API_TARGET = process.env.VITE_API_TARGET ?? "http://127.0.0.1:8000";
+
 export default defineConfig({
   plugins: [
     react(),
@@ -37,11 +40,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: API_TARGET,
         changeOrigin: true,
       },
       "/health": {
-        target: "http://127.0.0.1:8000",
+        target: API_TARGET,
         changeOrigin: true,
       },
     },

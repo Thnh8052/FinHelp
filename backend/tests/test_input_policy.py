@@ -415,6 +415,23 @@ async def test_citation_numbers_of_later_parts_continue_after_the_earlier_parts_
     assert len(parts) == 3 and all("query" in p and "timings" in p and "llm" in p for p in parts)
 
 
+async def test_a_wrong_written_result_is_corrected_by_code_without_a_rewrite(monkeypatch):
+    from app.modules.chat import orchestrator as orch_mod
+
+    calls = []
+
+    async def slip(query, chunks, notes=None, max_tokens=1200):
+        calls.append(notes)
+        return "A quarter of revenue: 51,217 ÷ 4 = 13,000 [1]."
+
+    orch, _ = _orchestrator(NIKE_DOCS[1:], monkeypatch)
+    monkeypatch.setattr(orch_mod, "generate_answer", slip)
+    r = await orch.execute_query("What is a quarter of Nike's revenue in FY2023?", "nb", document_ids=["d2"])
+    assert "51,217 ÷ 4 = 12,804" in r["answer"] and "13,000" not in r["answer"]
+    assert len(calls) == 1  # the checked result costs no rewrite
+    assert r["verification"]["calculator"] == [{"written": "51,217 ÷ 4 = 13,000", "was": "13,000", "now": "12,804", "only_here": False}]
+
+
 async def test_overview_searches_each_source_and_widens_the_context(monkeypatch):
     orch, seen = _orchestrator(NIKE_DOCS, monkeypatch)
     r = await orch.execute_query("Summarize all the files", "nb", document_ids=["d1", "d2"])

@@ -2,6 +2,7 @@ import asyncio
 import re
 import time
 from collections import Counter
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,6 +21,7 @@ from app.modules.documents.catalog_edit import needs_confirmation
 from app.modules.generation.llm_client import REQUEST_USAGE, LLMUnavailableError
 from app.modules.query_router.input_policy import COMPARE_CUE, MSG, TERMINAL, Decision, SourceInfo, decide, detect_language, mentioned_sources, rewrite_followup
 from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_from_focus, focus_view
+from app.modules.query_router import guard
 from app.modules.query_router.intent import ROUTES, Intent
 from app.modules.query_router.intent import classify as classify_intent
 from app.modules.query_router.planner import PlanItem, unlisted_companies
@@ -31,6 +33,7 @@ from app.modules.generation.replies import NO_DATA_ANSWER, sources_message, term
 from app.modules.chat.retrieval_step import RetrievalResult, extra_slots, retrieve_for_scope
 from app.modules.chat.scope import catalog_entry, document_label, scope_doc, source_info
 from app.modules.generation.answer_check.citations import cited_numbers
+from app.modules.generation.answer_check.numbers import correct_calculations
 from app.modules.generation.verification import flag_unverified, verify
 from app.modules.retrieval.hybrid_search import HybridSearchService
 
@@ -62,6 +65,30 @@ class QuestionRetrieval:
     unlisted: List[str]
     refusal: Optional[Dict[str, Any]] = None
     found: Optional[RetrievalResult] = None
+
+
+@dataclass
+class _GuardState:
+    """The guard's call for the message being served (query_router/guard.py), read at the one place before any answer is written."""
+    task: "asyncio.Future[guard.Verdict]"
+    evidence: List[str] = field(default_factory=list)  # what the rules found tying the message to the reports (set once they ran): the second key of off_topic
+    cleared: bool = False  # the label was read and the message may be answered
+
+
+class GuardBlocked(Exception):
+    """The guard's label turns the message away; raised where an answer was about to be written."""
+
+    def __init__(self, verdict: "guard.Verdict"):
+        super().__init__(verdict.label)
+        self.verdict = verdict
+
+
+GUARD: ContextVar = ContextVar("guard", default=None)
+# Fixed replies of the rules or the router, which the guard's label may overrule: for chat and off-topic replies any safety label ("I want to disappear
+# forever" is not small talk), for a refusal only a crisis ("I cannot help with that request" is the wrong reply to a person in distress; two refusals that
+# only differ in kind stay as the rules or the router gave them)
+_CHAT_STOPS = frozenset({"static_reply", "refuse_concept", "refuse_out_of_domain"})
+_REFUSAL_STOPS = frozenset({"refuse_advice", "refuse_sensitive", "refuse_instruction"})
 
 
 class RAGWorkflowOrchestrator:
@@ -118,8 +145,6 @@ class RAGWorkflowOrchestrator:
         (a refusal that follows replaces it: its final event carries no understanding)."""
         notes = list(decision.notes)
         targets: TargetDecision = decide_targets(query, [scope_doc(d) for d in scope], mentions, decision.lang == "vi")
-        if announce and targets.understood:
-            events.emit("understood", text=targets.understood, alternatives=targets.alternatives)
         notes += targets.notes
         typed = [document_label(d) for d in scope if d.metadata.user_override_unverified]
         if typed:
@@ -134,6 +159,9 @@ class RAGWorkflowOrchestrator:
         search = asyncio.create_task(self.retrieve(query, notebook_id, scope, targets.document_ids, targets.uncertain))
         search.add_done_callback(lambda t: t.cancelled() or t.exception())  # a cancelled or failed search is never left unread
         try:
+            if announce and targets.understood:
+                await self._cleared()  # the understanding is shown only for a message the guard lets through (a refusal must not follow it on the screen); the search is already running
+                events.emit("understood", text=targets.understood, alternatives=targets.alternatives)
             unlisted = await self.find_unlisted(query, scope)
         except BaseException:
             search.cancel()
@@ -176,6 +204,8 @@ class RAGWorkflowOrchestrator:
             flagged = [n for n, c in enumerate(retrieved, 1) if "suspicious_instruction" in (c.get("flags") or [])]
         citations = [CitationGenerator.from_retrieved_chunk(chk, citation_offset + idx + 1) for idx, chk in enumerate(retrieved)]
         t2 = time.perf_counter()
+        # H1: the wrong result of a calculation the answer writes out is corrected by code first (no model call), so it never costs a rewrite
+        answer, calculated = correct_calculations(answer, retrieved)
         number_check, cite_check, issues = verify(answer, retrieved, docs)
         first_issues, repaired = list(issues), False
         if issues and retrieved and settings.ANSWER_REPAIR_ENABLED:  # A2: one rewrite with the list of problems
@@ -183,13 +213,14 @@ class RAGWorkflowOrchestrator:
             again = await self._answer(query, retrieved, notes + [
                 "Your previous answer had these problems: " + "; ".join(issues) + ". Rewrite the answer from the excerpts only: correct or "
                 "remove each of them; when a figure is not in the excerpts, say it was not found instead of giving a number."])
+            again, calculated_again = correct_calculations(again, retrieved)
             n2, c2, i2 = verify(again, retrieved, docs)
             if len(i2) <= len(issues):
-                answer, number_check, cite_check, issues, repaired = again, n2, c2, i2, True
+                answer, number_check, cite_check, issues, repaired, calculated = again, n2, c2, i2, True, calculated_again
         if issues:
             answer = flag_unverified(answer, number_check, cite_check, decision.lang)
         verification = {"passed": not issues, "repaired": repaired, "unverified_figures": number_check["unverified"], "citations": cite_check,
-                        "first_issues": first_issues}  # what the first answer got wrong (why a repair was tried), kept for the trace
+                        "first_issues": first_issues, "calculator": calculated, "inputs": number_check.get("inputs", [])}  # what the first answer got wrong (why a repair was tried), kept for the trace
         text, meta = split_answer(answer)
         cited = cited_numbers(text)
         timings = {**found.timings, "generate": round(t1 - t0, 2), "verify_repair": round(time.perf_counter() - t2, 2), **({"lazy_net": round(t2 - t1, 2)} if lazy else {})}
@@ -312,7 +343,7 @@ class RAGWorkflowOrchestrator:
         token, checks_token = REQUEST_USAGE.set(usage), policy.EVENTS.set(checks)
         t0 = time.perf_counter()
         try:
-            result = await self._execute_query(query, notebook_id, **kwargs)
+            result = await self._guarded(query, notebook_id, **kwargs)
         finally:
             REQUEST_USAGE.reset(token)
             policy.EVENTS.reset(checks_token)
@@ -325,6 +356,74 @@ class RAGWorkflowOrchestrator:
         if result.get("understood"):
             trace["understood"], trace["alternatives"] = result["understood"], result.get("alternatives", [])
         return result
+
+    async def _screen(self, query: str, notebook_id: str, document_id: Optional[str], document_ids: Optional[List[str]]) -> "guard.Verdict":
+        """The guard's label for the message, with the labels of the selected reports (no selection or an unreadable one: the plain label)."""
+        try:
+            labels = [source_info(d).label for d in await self.resolve_scope(notebook_id, document_ids, document_id)]
+        except Exception:  # the question fails on its own with the right error; the guard only needs the list for context
+            labels = []
+        return await guard.classify(query, labels)
+
+    @staticmethod
+    def _guard_reply(verdict: "guard.Verdict", lang: str, where: str) -> Dict[str, Any]:
+        action, key = guard.REPLIES[verdict.label]
+        logger.warning(f"Guard turned a message away: {verdict.label} ({where})")
+        return terminal(action, MSG[key][lang], {"decision": {"action": action}, "guard": {**verdict.trace("blocked"), "where": where}})
+
+    async def _cleared(self) -> None:
+        """No answer is written before the guard's label is known (a message the guard turns away never reaches the answer call)."""
+        state = GUARD.get()
+        if state is None or state.cleared:
+            return
+        verdict = await state.task
+        state.cleared = True
+        if verdict.blocks(state.evidence):
+            raise GuardBlocked(verdict)
+
+    async def _guarded(self, query: str, notebook_id: str, **kwargs) -> Dict[str, Any]:
+        """_execute_query with the guard beside it. The guard's call starts with the question and takes about a second, as long as the plan and
+        the first search steps: a label that turns the message away stops the search at once; otherwise the label is read just before the answer
+        is written (_cleared), so a question that passes waits for nothing. A fixed reply of the rules or the router to chat or an off-topic
+        request gives way to a safety label. GUARD_ENABLED False: no call, as before the guard."""
+        if not settings.GUARD_ENABLED:
+            return await self._execute_query(query, notebook_id, **kwargs)
+        lang = detect_language(query)
+        state = _GuardState(asyncio.ensure_future(self._screen(query, notebook_id, kwargs.get("document_id"), kwargs.get("document_ids"))))
+        token = GUARD.set(state)
+        work = asyncio.ensure_future(self._execute_query(query, notebook_id, **kwargs))
+        try:
+            await asyncio.wait({work, state.task}, return_when=asyncio.FIRST_COMPLETED)
+            if state.task.done() and not work.done() and state.task.result().label in guard.SAFETY:
+                state.cleared = True
+                work.cancel()
+                await asyncio.gather(work, return_exceptions=True)
+                return self._guard_reply(state.task.result(), lang, "search_cancelled")
+            try:
+                result = await work
+            except GuardBlocked:
+                raise
+            except Exception:  # the search failed (a worker down...): a message the guard turns away still gets its refusal, not the error
+                verdict = await state.task
+                if verdict.label in guard.SAFETY:
+                    return self._guard_reply(verdict, lang, "search_failed")
+                raise
+            intent = result.get("intent")
+            if intent in _CHAT_STOPS | _REFUSAL_STOPS:
+                verdict = await state.task
+                if (verdict.label in guard.SAFETY if intent in _CHAT_STOPS else verdict.label == "crisis") and guard.REPLIES[verdict.label][0] != intent:
+                    return self._guard_reply(verdict, lang, "replaced_reply")
+            verdict = state.task.result() if state.task.done() else None
+            outcome = "not_waited" if verdict is None else "unchecked" if not verdict.label else "passed" if verdict.label == "ok" else "kept"
+            result.setdefault("trace", {})["guard"] = verdict.trace(outcome) if verdict else {"outcome": outcome}
+            return result
+        except GuardBlocked as blocked:
+            return self._guard_reply(blocked.verdict, lang, "before_answer")
+        finally:
+            GUARD.reset(token)
+            for task in (state.task, work):
+                if not task.done():
+                    task.cancel()
 
     async def _intent(self, query: str, decision: Decision) -> Optional[Intent]:
         """The intent of a question the rules did not settle (None: nothing to ask the router). The router failing changes nothing: the
@@ -469,6 +568,8 @@ class RAGWorkflowOrchestrator:
         focus_state: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         p = await self.plan_question(query, notebook_id, document_id, document_ids, history, mentions, focus_state)
+        if GUARD.get() is not None and p.decision:
+            GUARD.get().evidence = list(p.decision.evidence)  # the second key of the guard's off_topic label
         if p.stop:
             return p.stop
         events.stage("searching")
@@ -539,6 +640,7 @@ class RAGWorkflowOrchestrator:
         return shown
 
     async def _answer(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]] = None, max_tokens: int = 1200) -> str:
+        await self._cleared()
         vi = detect_language(query) == "vi"
         if not chunks:
             return NO_DATA_ANSWER["vi" if vi else "en"]

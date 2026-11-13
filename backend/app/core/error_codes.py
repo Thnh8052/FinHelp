@@ -33,6 +33,7 @@ class Code:
     SAMPLE_NOTEBOOK_READ_ONLY = "sample_notebook_read_only"
     NOTEBOOK_BUSY_DELETE = "notebook_busy_delete"
     NOTEBOOK_DELETE_FAILED = "notebook_delete_failed"
+    MESSAGE_NOT_FOUND = "message_not_found"
     GUEST_ALLOWANCE_USED = "guest_allowance_used"
     QUESTION_QUOTA_USED = "question_quota_used"
     # documents

@@ -188,11 +188,19 @@ class Settings(BaseSettings):
     # A2: an answer with a figure the excerpts do not show, a citation to no excerpt or to another company / period is rewritten once
     # with the list of problems; what is still wrong after that is flagged in the answer ("chưa kiểm chứng"), never silently kept.
     ANSWER_REPAIR_ENABLED: bool = True
+    ANSWER_INPUTS_REPAIR: bool = False  # H4: a wrong entry of the answer's `inputs` (value, line, period, excerpt) also triggers the one rewrite; off until measured on real answers
     # Guardrails. The intent router turns away small talk, off-topic requests, requests for advice... that the rules let through
     # (query_router/intent.py: one short encode on the embedding model, no language-model call). False = the rules alone, as measured before.
     INTENT_ROUTER_ENABLED: bool = True
     # The answer is checked before it is shown (generation/answer_check/policy.py): advice, leaked instructions, internal names, foul language.
     OUTPUT_POLICY_ENABLED: bool = True
+    # The guard (query_router/guard.py): one short language-model call per message, beside the search, gives the message one label; a message
+    # with a safety label (crisis, harmful, personal data, attack on the instructions, politics, personal advice) is turned away before any
+    # answer is written. Measured in experiments/guardrail_eval/llm_guard_v2.py (docs/Version_3/plan_guardrails_h4.md section 6.1).
+    GUARD_ENABLED: bool = True
+    # The label off_topic also turns a message away, only when the rules found nothing that ties it to a report ("two keys": 0 of 234 wrongly turned away).
+    GUARD_OFF_TOPIC_ENABLED: bool = True
+    GUARD_TIMEOUT_SECONDS: float = 3.0  # the guard failing or taking longer lets the message through (recorded in the trace)
 
     model_config = SettingsConfigDict(
         env_file=".env",

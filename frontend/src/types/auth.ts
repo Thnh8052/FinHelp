@@ -44,23 +44,3 @@ export interface TierSpec {
   max_file_size_mb: number;
   cost_description: string;
 }
-
-export interface AdminDashboardStats {
-  total_users: number;
-  active_users: number;
-  tier_breakdown?: {
-    user?: number;
-    admin?: number;
-    free?: number;
-    pro?: number;
-  };
-  api_metrics: {
-    total_tokens_consumed: number;
-  };
-  system_performance: {
-    status: string;
-    database: string;
-    latency_ms: number | null;
-    server_time: string;
-  };
-}

@@ -3,12 +3,15 @@ import { useLanguage } from "../../context/LanguageContext";
 import { ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { Flag } from "lucide-react";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, FileTextIcon, SendIcon } from "../common/Icons";
 import "./chat.css";
 
 interface ChatContainerProps {
   messages: ChatMessage[];
   onSendMessage: (query: string, mentions?: string[]) => void;
+  /** Report (or withdraw) wrong figures in a stored answer. */
+  onFlagAnswer?: (messageId: string, flagged: boolean) => void;
   isLoading: boolean;
   /** What the system is doing for the question being answered (streamed chat). */
   loadingStage?: ChatStage | null;
@@ -30,6 +33,7 @@ interface ChatContainerProps {
 export const ChatContainer: React.FC<ChatContainerProps> = ({
   messages,
   onSendMessage,
+  onFlagAnswer,
   isLoading,
   loadingStage,
   onSelectCitation,
@@ -347,8 +351,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   {!isUser && !msg.streaming && (
                     <div className="chat-message-actions">
                       <button
+                        type="button"
                         onClick={() => handleCopy(msg.content, msg.message_id)}
-                        className="chat-copy-btn"
+                        className={`chat-action-btn chat-copy-btn ${copiedMsgId === msg.message_id ? "copied" : ""}`}
                         title={t.common.copy}
                       >
                         {copiedMsgId === msg.message_id ? (
@@ -363,6 +368,18 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                           </>
                         )}
                       </button>
+                      {onFlagAnswer && msg.user_rating !== undefined && (
+                        <button
+                          type="button"
+                          onClick={() => onFlagAnswer(msg.message_id, msg.user_rating !== -1)}
+                          aria-pressed={msg.user_rating === -1}
+                          className={`chat-action-btn chat-flag-btn ${msg.user_rating === -1 ? "flagged" : ""}`}
+                          title={t.workspace.reportWrongHint}
+                        >
+                          <Flag size={12} aria-hidden />
+                          <span>{msg.user_rating === -1 ? t.workspace.reportedWrong : t.workspace.reportWrong}</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

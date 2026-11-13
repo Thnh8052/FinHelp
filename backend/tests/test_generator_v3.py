@@ -7,7 +7,7 @@ ANSWER = ("Air Canada had the higher revenue in 2024 [3].\n"
 def test_split_answer_removes_the_block_and_reads_it():
     text, meta = split_answer(ANSWER)
     assert text == "Air Canada had the higher revenue in 2024 [3]."
-    assert meta == {"status": "answered", "short_answer": "Air Canada, by CAD 1,651 million", "citations": [1, 3], "valid": True}
+    assert meta == {"status": "answered", "short_answer": "Air Canada, by CAD 1,651 million", "citations": [1, 3], "inputs": [], "valid": True}
     assert final_answer(ANSWER) == "Air Canada, by CAD 1,651 million" and not is_refusal(ANSWER)
 
 

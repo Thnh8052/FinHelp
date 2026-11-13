@@ -15,6 +15,8 @@ export interface QueryResponse {
   citations: CitationItem[];
   understood?: string;
   alternatives?: ChatMessage["alternatives"];
+  /** the stored answer */
+  message_id?: string;
 }
 
 export interface StreamHandlers {
@@ -57,4 +59,8 @@ export const chatService = {
   query: (body: QueryRequest) => apiRequest<QueryResponse>("/chat/query", { method: "POST", body: JSON.stringify(body) }),
 
   queryStream,
+
+  /** Report (or withdraw the report) that an answer has wrong figures. */
+  flag: (notebookId: string, messageId: string, flagged: boolean) =>
+    apiRequest<{ flagged: boolean }>(`/chat/messages/${notebookId}/${messageId}/flag`, { method: "PUT", body: JSON.stringify({ flagged }) }),
 };

@@ -21,6 +21,8 @@ export interface ChatMessage {
   alternatives?: { document_id: string; label: string; document_ids?: string[] }[];
   /** Câu hỏi đã gửi (để hỏi lại với tài liệu khác). */
   query?: string;
+  /** Có trường này (kể cả null) = câu trả lời đã lưu, báo sai được; -1 = người dùng đã báo sai số liệu. */
+  user_rating?: number | null;
   /** Câu trả lời đang được viết (chat dạng stream): chưa có trích dẫn, chưa sao chép được. */
   streaming?: boolean;
 }

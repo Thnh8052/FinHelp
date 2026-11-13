@@ -14,11 +14,6 @@
   padding: 16px;
 }
 
-.modal-backdrop.admin {
-  z-index: 110;
-  background-color: rgba(0, 0, 0, 0.7);
-}
-
 .auth-card {
   width: 100%;
   max-width: 460px;
@@ -393,87 +388,6 @@
 }
 
 /* AdminDashboardModal */
-.admin-card {
-  width: 100%;
-  max-width: 680px;
-  background-color: var(--bg-card);
-  border-radius: 12px;
-  border: 1px solid var(--border-medium);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-  overflow: hidden;
-}
-
-.admin-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.admin-metric-card {
-  padding: 14px;
-  background-color: var(--bg-app);
-  border-radius: 8px;
-  border: 1px solid var(--border-medium);
-}
-
-.admin-metric-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-.admin-metric-val {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 6px 0 4px 0;
-}
-
-.admin-metric-val.tokens {
-  color: #3b82f6;
-}
-
-.admin-metric-val.cost {
-  color: #10b981;
-}
-
-.admin-metric-sub {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.admin-perf-bar {
-  padding: 12px 16px;
-  background-color: var(--bg-sidebar);
-  border-radius: 8px;
-  border: 1px solid var(--border-medium);
-  margin-bottom: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.admin-policy-box {
-  padding: 16px;
-  background-color: var(--bg-app);
-  border-radius: 8px;
-  border: 1px solid var(--border-medium);
-}
-
-.admin-policy-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 8px 0;
-}
-
-.admin-policy-text {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
 
 .auth-label-row {
   display: flex;
@@ -521,36 +435,6 @@
   gap: 10px;
 }
 
-.auth-alert-error.no-top-margin {
-  margin: 0 0 14px 0;
-}
-
-.admin-loading-text {
-  font-size: 13px;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.admin-perf-status {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.admin-perf-latency {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.admin-badge-active {
-  font-size: 12px;
-  padding: 3px 8px;
-  background-color: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border-radius: 12px;
-  font-weight: 600;
-}
-
 /* Responsive Modals */
 @media (max-width: 640px) {
   .modal-backdrop {
@@ -559,15 +443,6 @@
   }
 
   .auth-card,
-  .admin-card {
-    max-width: 100%;
-    width: 100%;
-    max-height: 90vh;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    display: flex;
-    flex-direction: column;
-  }
 
   .auth-body {
     padding: 16px;
@@ -579,16 +454,5 @@
     font-size: 16px;
   }
 
-  .admin-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .admin-perf-bar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
 }
-
 

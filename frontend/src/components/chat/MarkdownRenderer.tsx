@@ -10,7 +10,13 @@ import { CitationItem } from "../../types/chat";
 const REMARK_PLUGINS = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as React.ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
 const REHYPE_PLUGINS = [[rehypeKatex, { strict: "ignore" }]] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 
-const LOOKS_LIKE_MATH = /\\[a-zA-Z]|[=^]/;
+// A table cell that holds only a figure and its citations: "177,866 [5]", "+30.9%", "(1,204) [2][3]"
+const NUMERIC_CELL = /^[+\-−–$€£(]*\d[\d.,\s]*[%)xX]?(\s*\[\d+\])*$/;
+
+// A table header: title, an optional unit in brackets, then citations: "Prior fiscal year (USD million) [2][5]"
+const HEADER_TEXT = /^(.*?)\s*(\([^)]*\))?\s*((?:\[\d+\]\s*)*)$/;
+
+const LOOKS_LIKE_MATH =/\\[a-zA-Z]|[=^]/;
 const inlineMath = (body: string) => `$$${body.trim()}$$`;
 const blockMath = (body: string) => `\n\n$$\n${body.trim()}\n$$\n\n`;
 
@@ -90,6 +96,22 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     });
   };
 
+  // A header "Prior fiscal year (USD million) [2][5]" is shown as the title with its citations, and the unit on a small line below,
+  // so a long header does not break into four lines of capitals with the citation badges stacked
+  const renderHeader = (children: React.ReactNode): React.ReactNode => {
+    const parts = React.Children.toArray(children);
+    if (!parts.every((p) => typeof p === "string")) return processChildren(children);
+    const m = HEADER_TEXT.exec((parts as string[]).join("").trim());
+    if (!m || !m[1]) return processChildren(children);
+    return (
+      <>
+        <span className="th-title">{m[1]}</span>
+        {m[3] && processChildren(m[3].trim())}
+        {m[2] && <span className="th-unit">{m[2]}</span>}
+      </>
+    );
+  };
+
   // Helper to extract plain text string from React children for content classification
   const getPlainText = (node: React.ReactNode): string => {
     if (!node) return "";
@@ -128,7 +150,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           tr: ({ children }) => <tr className="financial-tr">{children}</tr>,
           th: ({ children, style }) => (
             <th className="financial-th" style={style}>
-              {processChildren(children)}
+              {renderHeader(children)}
             </th>
           ),
           td: ({ children, style }) => {
@@ -154,6 +176,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 !plainText.toLowerCase().includes("giảm"));
 
             let cellClass = "financial-td";
+            if (NUMERIC_CELL.test(plainText)) cellClass += " cell-num"; // figures stay on one line with their citation; names and sentences wrap
             if (isDashOrNA) cellClass += " cell-empty";
             else if (isDeltaNegative) cellClass += " delta-negative";
             else if (isDeltaPositive) cellClass += " delta-positive";

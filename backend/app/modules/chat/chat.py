@@ -112,6 +112,7 @@ class QueryResponse(BaseModel):
     citations: List[CitationOut]
     understood: str = ""  # G3: how the question was understood (documents, assumptions), shown above the answer
     alternatives: List[dict] = []  # other selected documents that also match: [{"document_id", "label"}]
+    message_id: str = ""  # the stored answer: what a report of wrong figures points to
 
 
 class MessageOut(BaseModel):
@@ -125,6 +126,7 @@ class MessageOut(BaseModel):
     understood: str
     alternatives: List[dict]
     created_at: Any
+    user_rating: Optional[int] = None  # -1: the user reported wrong figures
 
     @classmethod
     def of(cls, message: MessageRecord) -> "MessageOut":
@@ -211,9 +213,10 @@ async def _record(adm: _Admitted, req: "QueryRequest", user_id: Optional[str], d
         await users.consume_quota(user_id, messages=0 if result.get("charged", True) else -1, tokens=prompt_tokens + completion_tokens)
 
     # 5. Lưu câu trả lời của AI kèm trích dẫn và số liệu thực nghiệm vào MongoDB
+    answer_id = f"msg_{uuid.uuid4().hex[:8]}"
     await chat_repo.append_message(
         MessageRecord(
-            message_id=f"msg_{uuid.uuid4().hex[:8]}",
+            message_id=answer_id,
             notebook_id=req.notebook_id,
             role="assistant",
             content=result["answer"],
@@ -234,6 +237,7 @@ async def _record(adm: _Admitted, req: "QueryRequest", user_id: Optional[str], d
         citations=result["citations"],
         understood=result.get("understood", ""),
         alternatives=result.get("alternatives", []),
+        message_id=answer_id,
     )
 
 
@@ -325,3 +329,28 @@ async def get_messages(
     """Lấy các tin nhắn mới nhất của một notebook, theo đúng thứ tự hội thoại."""
     await require_notebook(db, notebook_id, user_id)
     return [MessageOut.of(m) for m in await ChatRepository(db).get_messages(notebook_id)]
+
+
+class FlagRequest(BaseModel):
+    flagged: bool  # True: the answer has wrong figures; False: the report is withdrawn
+
+
+# ==============================================================================
+# HÀM: flag_answer
+# Ý NGHĨA: Người dùng báo một câu trả lời sai số liệu (hoặc rút lại); Admin xem các câu bị báo ở /admin để kiểm duyệt.
+# ==============================================================================
+@router.put("/messages/{notebook_id}/{message_id}/flag")
+async def flag_answer(
+    notebook_id: str,
+    message_id: str,
+    req: FlagRequest,
+    user_id: Optional[str] = Depends(get_optional_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """Whoever may ask in the notebook may report its answers: the owner, or the guest of a guest notebook."""
+    nb = await require_notebook(db, notebook_id, user_id)
+    if not can_chat(nb, user_id):
+        raise api_error(status_code=403, code=Code.SAMPLE_NOTEBOOK_READ_ONLY)
+    if not await ChatRepository(db).set_rating(notebook_id, message_id, -1 if req.flagged else None):
+        raise api_error(status_code=404, code=Code.MESSAGE_NOT_FOUND)
+    return {"flagged": req.flagged}

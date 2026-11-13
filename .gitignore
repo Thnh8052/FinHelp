@@ -16,6 +16,7 @@ experiments/
 templates/
 scratch/
 example/
+.claude/
 # Các file cụ thể (Specific files)
 run.md
 version_control.md
@@ -40,3 +41,6 @@ env
 colab_gpu_worker.ipynb
 kaggle_full_backend.ipynb
 kaggle_gpu_worker.ipynb
+
+# Kết quả từng câu cho buổi báo cáo (tuần 12), không đẩy lên repo
+report_w12/

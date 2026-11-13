@@ -187,6 +187,12 @@
   border-color: var(--border-focus);
 }
 
+.chat-action-btn.flagged {
+  color: #fda4af;
+  border-color: rgba(244, 63, 94, 0.45);
+  background-color: var(--negative-bg);
+}
+
 .chat-action-btn.copied {
   color: #10b981;
   border-color: rgba(16, 185, 129, 0.4);
@@ -1306,7 +1312,7 @@
 
 .financial-markdown-table {
   width: 100%;
-  min-width: 580px;
+  min-width: 480px;
   border-collapse: collapse;
   font-size: 13px;
   text-align: left;
@@ -1330,12 +1336,38 @@
 }
 
 .financial-th:first-child {
-  min-width: 160px;
+  min-width: 130px;
   white-space: normal;
 }
 
 .financial-th:not(:first-child) {
-  min-width: 115px;
+  min-width: 104px;
+}
+
+/* The second column usually names the company or the period: room for "Costco Wholesale Corporation" on two lines */
+.financial-th:nth-child(2) {
+  min-width: 148px;
+}
+
+/* The unit of a header ("(USD million)") sits on its own small line under the title */
+.financial-th .th-unit {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #64748b;
+}
+
+/* Citation pills in a header stay beside the title instead of stacking one under another */
+.financial-th .inline-citation-pill {
+  margin: 0 1px;
+  vertical-align: 1px;
+}
+
+.financial-th .th-title + .inline-citation-pill {
+  margin-left: 5px;
 }
 
 .financial-th:last-child {
@@ -1367,14 +1399,21 @@
 .financial-td:first-child {
   font-weight: 500;
   color: #f1f5f9;
-  min-width: 160px;
+  min-width: 130px;
   white-space: normal;
 }
 
 .financial-td:not(:first-child) {
-  min-width: 115px;
+  min-width: 104px;
+}
+
+.financial-td:nth-child(2) {
+  min-width: 148px;
+}
+
+/* Giữ số liệu và citation pill luôn gọn gàng cùng hàng; tên công ty và chữ khác được xuống dòng để bảng không tràn */
+.financial-td.cell-num {
   white-space: nowrap;
-  /* Giữ số liệu và citation pill luôn gọn gàng cùng hàng */
 }
 
 .financial-td:last-child {

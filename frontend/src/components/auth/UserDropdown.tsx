@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { LogOutIcon, ShieldIcon, UserIcon } from "../common/Icons";
@@ -8,18 +9,17 @@ interface UserDropdownProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenAuthModal: () => void;
-  onOpenAdminDashboard: () => void;
 }
 
 export const UserDropdown: React.FC<UserDropdownProps> = ({
   isOpen,
   onClose,
   onOpenAuthModal,
-  onOpenAdminDashboard,
 }) => {
   const { user, isGuest, guestQuota, logout } = useAuth();
   const { t } = useLanguage();
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -114,7 +114,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
           <button
             onClick={() => {
               onClose();
-              onOpenAdminDashboard();
+              navigate("/admin");
             }}
             className="dropdown-action-item"
           >

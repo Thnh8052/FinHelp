@@ -7,7 +7,6 @@ import { SourceViewer } from "../../components/notebook/SourceViewer";
 import { ChatContainer } from "../../components/chat/ChatContainer";
 import { ChatHistoryList } from "../../components/chat/ChatHistoryList";
 import { AuthModal } from "../../components/auth/AuthModal";
-import { AdminDashboardModal } from "../../components/auth/AdminDashboardModal";
 import { Toast } from "../../components/common/Toast";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { CitationItem } from "../../types/chat";
@@ -24,7 +23,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   initialAuthModalOpen = false,
 }) => {
   const [authModalOpen, setAuthModalOpen] = useState(initialAuthModalOpen);
-  const [adminDashboardOpen, setAdminDashboardOpen] = useState(false);
 
   // Panel control states (Desktop: open by default, Mobile: closed drawer)
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== "undefined" && window.innerWidth > 768);
@@ -100,7 +98,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         onOpenAuthModal={() => setAuthModalOpen(true)}
-        onOpenAdminDashboard={() => setAdminDashboardOpen(true)}
         onNavigateHome={onNavigateHome}
       />
 
@@ -138,6 +135,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             <ChatContainer
               messages={chat.messages}
               onSendMessage={chat.sendMessage}
+              onFlagAnswer={chat.flagAnswer}
               isLoading={chat.isLoading}
               loadingStage={chat.stage}
               onSelectCitation={handleSelectCitation}
@@ -193,9 +191,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
 
       {/* Auth Modal (Đăng nhập / Đăng ký / Quên mật khẩu) */}
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
-
-      {/* Admin Dashboard Modal */}
-      <AdminDashboardModal isOpen={adminDashboardOpen} onClose={() => setAdminDashboardOpen(false)} />
     </div>
   );
 };

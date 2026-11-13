@@ -1,7 +1,10 @@
 """A4 number check: every figure an answer states must be printed in its excerpts (any scale: "$20.6 billion" for "20,604"
 millions), or follow from two figures the answer itself states and that check (sum, difference, average, ratio, percent,
-growth, a percent of an amount). Code only, no model. Derivations from any two excerpt numbers are not accepted: a table holds hundreds of numbers whose
-sums and ratios cover almost any value (that version caught 18-20% of planted wrong figures).
+growth, a percent of an amount), or come out of a calculation the answer writes out whose numbers all check (rule B, plan v2 H1:
+"1,185 + 0 + 454 + 33 = 1,672", "365 × 43,762.5 ÷ 374,133 = 42.69", with the standard constants 365, 360, 100, 52, 53). Code only, no
+model. Derivations from any two excerpt numbers are not accepted: a table holds hundreds of numbers whose sums and ratios cover almost any
+value (that version caught 18-20% of planted wrong figures); rule B searches nothing, it only evaluates what the answer writes.
+correct_calculations() runs first (calculations.fix): a written calculation whose result is wrong is corrected in place, no model call.
 
 Log-only for now (Bedrock's advice: watch before blocking): the report goes into the trace, nothing is blocked or regenerated.
 """
@@ -10,6 +13,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 import numpy as np
 
 from app.modules.generation.answer_check.amounts import Amount, find_amounts
+from app.modules.generation.answer_check.calculations import CONSTANTS, fix, written_results
 
 META = "<answer_meta>"  # generator v3 appends a machine block; only the text before it is the answer
 SMALL = 12  # plain integers up to this are list markers, months, quarters or counts ("3 segments"): not checked
@@ -51,6 +55,19 @@ def _excerpt_numbers(chunks: Sequence[Dict[str, Any]]) -> List[float]:
     return [v for a in amounts if a.value is not None and not a.is_year and a.value != 0 for v, _ in _readings(a)]
 
 
+def _trusted(chunks: Sequence[Dict[str, Any]]) -> set:
+    """The excerpt numbers at every scale a printed figure may use ("$20.6 billion" for 20,604 millions)."""
+    return {round(v * s, 6) for v in _excerpt_numbers(chunks) for s in (1.0, 1e3, 1e6, 1e9, 1e-3, 1e-6)}
+
+
+def correct_calculations(answer: str, chunks: Sequence[Dict[str, Any]]) -> Tuple[str, List[Dict[str, Any]]]:
+    """(answer with the wrong results of its written calculations corrected, [{"written", "was", "now", "only_here"}]). Only a step whose
+    numbers all come from the excerpts (or from another correct step, or a standard constant) is touched."""
+    if not chunks:
+        return answer, []
+    return fix(answer, _trusted(chunks))
+
+
 def _tolerance(decimals: int) -> float:
     """Half a unit of the last digit the answer printed: 5.6 covers 5.55-5.65, 2,197 covers 2,196.5-2,197.5."""
     return 0.5 * 10.0 ** -decimals + 1e-9
@@ -72,7 +89,7 @@ def _derived(pool: np.ndarray):
 
 
 def check_numbers(answer: str, chunks: Sequence[Dict[str, Any]], passes: int = 3) -> Dict[str, Any]:
-    """{"checked", "verified", "derived", "unverified": [figure as printed], "figures": [{"text", "status"}]}."""
+    """{"checked", "verified", "derived", "written", "unverified": [figure as printed], "figures": [{"text", "status"}]}."""
     figures = _figures(answer)
     readings = [_readings(f) for f in figures]
     status = ["unverified"] * len(figures)
@@ -100,10 +117,17 @@ def check_numbers(answer: str, chunks: Sequence[Dict[str, Any]], passes: int = 3
                         break
         if not changed:
             break
+    if "unverified" in status:  # rule B: a figure the answer's own written, correct calculation of checked numbers produces
+        known = {abs(u) for u, s in zip(used, status) if s != "unverified"} | _trusted(chunks)
+        ok = written_results(answer, known | CONSTANTS)
+        for k in range(len(figures)):
+            if status[k] == "unverified" and any(abs(v - x) <= 1e-6 for v, _ in readings[k] for x in ok):
+                status[k] = "written"
     return {
         "checked": len(figures),
         "verified": status.count("verified"),
         "derived": status.count("derived"),
+        "written": status.count("written"),
         "unverified": [f.raw for f, s in zip(figures, status) if s == "unverified"],
         "figures": [{"text": f.raw, "status": s} for f, s in zip(figures, status)],
     }

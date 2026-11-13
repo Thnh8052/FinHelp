@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { Suspense, lazy, useState } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import { LandingPage } from "./features/landing/LandingPage";
 import { Workspace } from "./features/workspace/Workspace";
@@ -9,6 +9,8 @@ import { AuthModal } from "./components/auth/AuthModal";
 import { useAuth } from "./context/AuthContext";
 import "./App.css";
 
+const AdminRoutes = lazy(() => import("./features/admin/AdminRoutes"));
+
 /** /app và /app/:notebookId: một giao diện chat cho cả thành viên (nhiều đoạn chat) lẫn khách (một đoạn chat dùng thử). */
 const AppHome: React.FC<{ onNavigateHome: () => void }> = ({ onNavigateHome }) => {
   const { user, hasSession, isLoading } = useAuth();
@@ -16,6 +18,19 @@ const AppHome: React.FC<{ onNavigateHome: () => void }> = ({ onNavigateHome }) =
   // show a wrong password), and not after a check that failed on the network (the session is kept for the next load: guest view now)
   if (hasSession && !user && isLoading) return null;
   return <Workspace onNavigateHome={onNavigateHome} />;
+};
+
+/** /admin is for the admin role only: a visitor goes to sign in, a member to the chat. The backend refuses every admin request anyway. */
+const AdminRoute: React.FC = () => {
+  const { user, hasSession, isLoading } = useAuth();
+  if (hasSession && !user && isLoading) return null; // the session is still being checked
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "admin") return <Navigate to="/app" replace />;
+  return (
+    <Suspense fallback={null}>
+      <AdminRoutes />
+    </Suspense>
+  );
 };
 
 const AppRoutes: React.FC = () => {
@@ -53,6 +68,9 @@ const AppRoutes: React.FC = () => {
 
         {/* Workspace 4-Zone Workstation (Financial Report Intelligence) */}
         <Route path="/app/:notebookId?" element={<AppHome onNavigateHome={handleNavigateHome} />} />
+
+        {/* Admin console (role admin) */}
+        <Route path="/admin/*" element={<AdminRoute />} />
 
         {/* Dedicated Standalone Auth Pages (Email verification / Direct URL) */}
         <Route path="/login" element={<LoginPage />} />
