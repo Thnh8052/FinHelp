@@ -21,19 +21,27 @@ from app.modules.generation.answer_check.citations import CITE, SENTENCE
 
 YEAR = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")  # also inside "FY2018"
 MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
-DATE = re.compile(rf"\b{MONTH}\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+((?:19|20)\d{{2}})\b", re.I)  # "December 31, 2017": its year is a date, not a fiscal year
+# The same rules read an English and a Vietnamese answer: each pattern lists both languages' words ("in FY2019" / "trong năm tài chính 2019").
+# "December 31, 2017", "31/12/2017", "tháng 12 năm 2017": the year of a date is not a fiscal year given to a figure
+DATE = re.compile(rf"\b{MONTH}\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+((?:19|20)\d{{2}})\b|\b\d{{1,2}}[/.-]\d{{1,2}}[/.-]((?:19|20)\d{{2}})\b"
+                  r"|\btháng\s+\d{1,2}(?:\s+năm\s+|/)((?:19|20)\d{2})\b", re.I)
 MONTH_NAME = re.compile(rf"\b{MONTH}", re.I)
-DAY = re.compile(rf"\b{MONTH}\s+(\d{{1,2}})(?:st|nd|rd|th)?\b", re.I)  # "January 28": the 28 is a day, not a figure
-BIG_SCALE = re.compile(r"\s*(?:billion|bn|trillion)\b", re.I)  # "$1.2 billion" says nothing about a table cell printed "1.2": the units differ
-YEAR_LIST = re.compile(r"(?:19|20)\d{2}(?:\s*(?:/|,|&|-|–|and|to|vs\.?)\s*(?:19|20)\d{2})+", re.I)  # "for 2019/2018/2017": years in the order of a list of figures
+# "January 28", "28/12/2019", "ngày 28", "28 tháng 12": the day and the month of a date are not figures
+DAY = re.compile(rf"\b{MONTH}\s+(\d{{1,2}})(?:st|nd|rd|th)?\b|\b(\d{{1,2}}[/.-]\d{{1,2}})[/.-](?:19|20)\d{{2}}\b|\bngày\s+(\d{{1,2}})\b|\b(\d{{1,2}})\s+tháng\b|\btháng\s+(\d{{1,2}})\b", re.I)
+BIG_SCALE = re.compile(r"\s*(?:billion|bn|trillion|nghìn tỷ|tỷ|tỉ)\b", re.I)  # "$1.2 billion", "1,2 tỷ" say nothing about a table cell printed "1.2": the units differ
+YEAR_LIST = re.compile(r"(?:19|20)\d{2}(?:\s*(?:/|,|&|-|–|and|to|vs\.?|và|đến|so với)\s*(?:19|20)\d{2})+", re.I)  # "for 2019/2018/2017": years in the order of a list of figures
 SMALL = 12  # plain integers up to this are counts or list markers, as in numbers.py
-TIES = re.compile(r"\b(?:in|for|of|during|at|fy|fiscal|year)\s*(?:fiscal\s*|fy\s*|year\s*)*$", re.I)  # what may stand between a figure and "its" year
-COMPARES = re.compile(r"\b(?:compared|versus|vs|prior|previous|previously|earlier|before|from|than|last year|year-ago|year ago|down|up)\b", re.I)
+# what may stand between a figure and "its" year
+TIES = re.compile(r"\b(?:in|for|of|during|at|fy|fiscal|year|trong|cho|của|vào|tại|năm|kỳ)\s*(?:fiscal\s*|fy\s*|year\s*|năm\s*|tài chính\s*|kỳ\s*)*$", re.I)
+# A sentence (or an answer table's row label) with one of these also talks about another year than the one it writes: a comparison, or an opening
+# balance ("beginning inventory" of FY2018 is the 2017 closing figure, and sits in the 2017 column).
+COMPARES = re.compile(r"\b(?:compared|versus|vs|prior|previous|previously|earlier|before|from|than|last year|year-ago|year ago|down|up|beginning|opening|start"
+                      r"|so với|trước|ngoái|cùng kỳ|tăng|giảm|lên|xuống|hơn|thay đổi|đầu kỳ|đầu năm)\b", re.I)
 TIE_REACH = 45  # characters between a figure and the year that follows it
 
 
 def _figures(segment: str) -> List[Amount]:
-    days = [m.span(1) for m in DAY.finditer(segment)]
+    days = [m.span(m.lastindex) for m in DAY.finditer(segment)]
     out = []
     for a in find_amounts(segment, space_groups=True):
         if a.is_year or a.is_reference or a.value is None or (a.is_plain_integer and abs(a.value) <= SMALL):
@@ -50,7 +58,7 @@ def _figures(segment: str) -> List[Amount]:
 
 def _years(segment: str) -> List[Tuple[int, int]]:
     """[(position, year)] of the years the sentence writes, without the years of dates."""
-    dates = [m.span(1) for m in DATE.finditer(segment)]
+    dates = [m.span(m.lastindex) for m in DATE.finditer(segment)]
     return [(m.start(), int(m.group())) for m in YEAR.finditer(segment) if not any(s <= m.start() < e for s, e in dates)]
 
 
@@ -78,6 +86,8 @@ def claims(answer: str) -> List[Dict[str, Any]]:
                 continue
             if _is_header(cells):
                 header = [_single_year(c) for c in cells]
+                continue
+            if COMPARES.search(cells[0]):
                 continue
             row_cites = {int(x) for m in CITE.finditer(line) for x in re.split(r"\s*[,;]\s*", m.group(1))}
             for j, cell in enumerate(cells[1:], 1):

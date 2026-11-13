@@ -140,3 +140,44 @@ def test_a_figure_taken_from_the_wrong_report_year_is_still_reported():
     """The one real catch on the stored answers: eBay's FY2019 report prints 666 under 2017, an answer gave it to FY2015."""
     ebay = {"content": "| | 2019 | 2018 | 2017 |\n|---|---|---|---|\n| Purchases of property and equipment | (554) | (651) | (666) |"}
     assert wrong("eBay's FY2015 capital expenditure was USD 666 million [1].", [ebay])
+
+
+# ---------------------------------------------------------------- Vietnamese answers: the same rules with Vietnamese words, dates and number formats
+CASH = {"content": "| Year Ended December 31, | 2019 | 2018 | 2017 |\n|---|---|---|---|\n| Net revenues | 10,800 | 10,746 | 9,927 |\n"
+                   "| Purchases of property and equipment | (554) | (651) | (666) |\n| Stores | 31 | 28 | 35 |\n| Operating margin | 21.5 % | 10.8 % | 22.9 % |", "document_id": "d1", "page": 68}
+
+
+def test_vietnamese_a_figure_given_to_the_wrong_year_is_reported():
+    assert wrong("Chi mua tài sản cố định của eBay năm 2019 là 666 triệu USD [1].", (CASH,))
+    assert wrong("Doanh thu thuần đạt 9 927 triệu USD trong năm tài chính 2019, so với 10 746 triệu USD trong năm 2018 [1].", (CASH,))  # 9 927 is 2017's
+
+
+def test_vietnamese_figures_in_their_own_columns_are_not_reported():
+    assert not wrong("Chi mua tài sản cố định của eBay năm 2019 là 554 triệu USD [1].", (CASH,))
+    assert not wrong("Doanh thu thuần đạt 10 800 triệu USD trong năm 2019 và 10 746 triệu USD trong năm 2018 [1].", (CASH,))
+
+
+def test_vietnamese_comparison_with_one_year_written_is_left_alone():
+    """One year in the sentence, but it compares: the second figure belongs to a year the sentence does not write."""
+    assert not wrong("Doanh thu thuần năm 2019 là 10 800 triệu USD, tăng từ 10 746 triệu USD [1].", (CASH,))
+    assert not wrong("Doanh thu thuần năm 2019 là 10 800 triệu USD so với 10 746 triệu USD của năm trước [1].", (CASH,))
+    assert not wrong("Năm 2019 doanh thu thuần là 10 800 triệu USD, cao hơn mức 10 746 triệu USD cùng kỳ [1].", (CASH,))
+
+
+def test_vietnamese_dates_are_not_figures_and_not_fiscal_years():
+    assert not wrong("Tại ngày 28/12/2019, eBay có doanh thu thuần 10 800 triệu USD [1].", (CASH,))   # 28 is a day, not the 28 stores of the 2018 column
+    assert not wrong("Tính đến ngày 28 tháng 12 năm 2019, doanh thu thuần là 10 800 triệu USD [1].", (CASH,))
+    assert not wrong("Doanh thu thuần năm 2019 là 10,8 tỷ USD [1].", (CASH,))  # 10,8 billion is not the 10.8 % of the 2018 column
+
+
+# ---------------------------------------------------------------- an opening balance is the year before's closing figure (found 13/11 on a stored cash-conversion-cycle answer)
+BALANCE = {"content": "| December 31, | 2018 | 2017 |\n|---|---|---|\n| Inventories | 17,174 | 16,047 |\n| Accounts payable | 38,192 | 34,616 |", "document_id": "d1", "page": 40}
+
+
+def test_an_opening_balance_under_the_year_it_opens_is_not_reported():
+    table = "| Item | Amazon FY2018 (USD million) |\n| :--- | ---: |\n| {opening} | 16,047 [1] |\n| {closing} | 17,174 [1] |"
+    assert not wrong(table.format(opening="Beginning inventory", closing="Ending inventory"), (BALANCE,))
+    assert not wrong(table.format(opening="Hàng tồn kho đầu kỳ", closing="Hàng tồn kho cuối kỳ"), (BALANCE,))
+    assert not wrong("Amazon's opening inventory for FY2018 was 16,047 [1].", (BALANCE,))
+    assert not wrong("Hàng tồn kho đầu năm 2018 của Amazon là 16 047 triệu USD [1].", (BALANCE,))
+    assert wrong(table.format(opening="Accounts payable", closing="Ending inventory"), (BALANCE,))  # no opening word: 16,047 under FY2018 is still reported

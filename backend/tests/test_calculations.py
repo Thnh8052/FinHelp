@@ -69,3 +69,55 @@ def test_rule_b_lets_no_wrong_result_through():
 def test_rule_b_needs_every_input_checked():
     answer = "Adjusted assets: 1,185 + 7,777 = 8,962 [1]."  # 7,777 is invented, so its sum is not accepted either
     assert set(unverified(answer, AMD)) == {"7,777", "8,962"}
+
+
+# ---------------------------------------------------------------- numbers written the Vietnamese way (found 13/11 on a stored ROIC answer: a repair call nobody needed)
+AMZN = [{"content": "| | 2018 | 2017 |\n|---|---|---|\n| Operating income | 12,421 | 4,106 |\n| Provision for income taxes | 1,197 | 769 |\n"
+                    "| Income before income taxes | 11,261 | 3,806 |\n| Long-term debt | 23,495 | 24,743 |\n| Total stockholders' equity | 43,549 | 27,709 |"}]
+ROIC = ("Thuế suất = {a} / {b} = 10,63%. NOPAT = {c} × (1 − 0,1063) = {c} × 0,8937 = {d} [1]. "
+        "Vốn đầu tư = {e} + {f} = {g} [1]. ROIC = {d} / {g} = 16,6% [1].")
+SPACES = dict(a="1 197", b="11 261", c="12 421", d="11 100,6", e="23 495", f="43 549", g="67 044")   # 11 100,6: space groups, decimal comma
+DOTS = dict(a="1.197", b="11.261", c="12.421", d="11.100,6", e="23.495", f="43.549", g="67.044")     # 11.100,6: dot groups, decimal comma
+MIXED = dict(a="1,197", b="11,261", c="12,421", d="11 100,6", e="23,495", f="43,549", g="67,044")    # inputs as the report prints them, results the Vietnamese way
+
+
+def test_a_calculation_written_with_vietnamese_numbers_is_accepted():
+    for style in (SPACES, DOTS, MIXED):
+        answer = ROIC.format(**style)
+        assert correct_calculations(answer, AMZN) == (answer, []), style  # every step is right: nothing to correct
+        assert unverified(answer, AMZN) == [], style
+
+
+def test_a_right_vietnamese_result_is_never_rewritten():
+    answer = "Thuế suất = 1.197 / 11.261 = 10,63% [1]."  # before the fix "10,63" was read as 1063 and replaced by "11"
+    assert correct_calculations(answer, AMZN) == (answer, [])
+
+
+def test_a_wrong_vietnamese_result_is_corrected_in_its_own_style():
+    fixed, fixes = correct_calculations("Vốn đầu tư = 23 495 + 43 549 = 66 044 [1].", AMZN)
+    assert fixed == "Vốn đầu tư = 23 495 + 43 549 = 67 044 [1]." and [(f["was"], f["now"]) for f in fixes] == [("66 044", "67 044")]
+    fixed, _ = correct_calculations("Thuế suất = 1.197 / 11.261 = 10,53% và NOPAT = 12.421 × 0,8937 = 11.100,6 [1].", AMZN)
+    assert "= 10,63% và" in fixed and "11.100,6" in fixed
+
+
+def test_a_result_is_not_rewritten_when_its_reading_is_not_certain():
+    """Report-style thousands in an answer that writes its decimals with a comma: "23,495" may be 23495 or 23.495, and the two readings would
+    write different corrections ("67 044" or "67"), so the wrong result is left for the number check to report (the model rewrites it)."""
+    answer = "Thuế suất = 1,197 / 11,261 = 10,63%. Vốn đầu tư = 23,495 + 43,549 = 66 044 [1]."
+    assert correct_calculations(answer, AMZN) == (answer, [])
+    assert unverified(answer, AMZN) == ["66 044"]
+
+
+def test_english_answers_read_as_before():
+    assert evaluate("1 185 + 454")[0] == 1639  # a space also groups thousands in an English answer
+    fixed, fixes = correct_calculations("Total = 1,185 + 454 = 1,649 [1].", AMD)
+    assert fixed == "Total = 1,185 + 454 = 1,639 [1]." and len(fixes) == 1
+
+
+def test_a_result_next_to_the_following_number_is_not_read_as_one_number():
+    """Found on a stored answer (financebench_id_06247): "… + 737 = 374,133" must leave 737 and 374,133 two numbers, or the chain that follows loses its inputs."""
+    chunks = [{"content": "Cost of sales 373,396. Inventories 46,092 and 41,433. LIFO reserve 43,783 and 43,046."}]
+    answer = ("(46,092 + 41,433) ÷ 2 = 43,762.5; 43,783 − 43,046 = 737; 373,396 + 737 = 374,133; "
+              "365 × 43,762.5 ÷ 374,133 = 15,973,312.5 ÷ 374,133 = **41.93** days [1].")
+    fixed, fixes = correct_calculations(answer, chunks)
+    assert [(f["was"], f["now"]) for f in fixes] == [("41.93", "42.69")] and "**42.69** days" in fixed
