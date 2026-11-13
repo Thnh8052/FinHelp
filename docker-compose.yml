@@ -1,0 +1,76 @@
+version: "3.8"
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: datn-finance-mongodb
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27018:27017" # 27018: a MongoDB service on the Windows host already holds 127.0.0.1:27017. This machine only: no password
+    environment:
+      MONGO_INITDB_DATABASE: datn_finance
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - datn_network
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    container_name: datn-finance-qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333" # HTTP REST API & Web Dashboard. This machine only: no API key
+      - "127.0.0.1:6334:6334" # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - datn_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: datn-finance-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment: # the development environment: same values as backend/.env.dev, never the real data, files or email
+      - MONGODB_URI=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=datn_dev
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_API_KEY=
+      - QDRANT_COLLECTION_NAME=financial_chunks_dev
+      - STORAGE_BACKEND=local
+      - SENDGRID_API_KEY=
+    depends_on:
+      - mongodb
+      - qdrant
+    volumes:
+      - ./backend/storage:/app/storage
+    networks:
+      - datn_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: datn-finance-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - datn_network
+
+volumes:
+  mongo_data:
+    name: datn_finance_mongo_data
+  qdrant_data:
+    name: datn_finance_qdrant_data
+
+networks:
+  datn_network:
+    name: datn_finance_network
+    driver: bridge
