@@ -70,10 +70,10 @@ Bản MVP đạt khi cả 6 điều kiện sau đúng:
 |---|---|---|---|
 | 1 | Luồng chính chạy trọn: đăng ký, tải PDF, hỏi, xem trích dẫn tô sáng, hỏi nối tiếp | Đạt từng phần riêng lẻ. Chưa chạy trọn một lượt trong ứng dụng thật sau khi gộp F9. | GD-1 |
 | 2 | Không còn lỗi im lặng đã biết: con số gán nhầm năm, mục thiếu bằng chứng bị che | **Chưa đạt.** Ca T01, D07, G02 trượt. | TC-1, TC-3 |
-| 3 | Hạ tầng trục trặc thì người dùng nhận thông báo rõ, không phải lỗi chung | **Chưa đạt.** Ca J03 trượt. | TC-2 |
+| 3 | Hạ tầng trục trặc thì người dùng nhận thông báo rõ, không phải lỗi chung | **Đạt với vector store** (J03 đạt 13/11). Chưa thử lỗi máy GPU và lỗi mô hình ngôn ngữ trong ứng dụng thật. | TC-2 |
 | 4 | Người khác lấy mã nguồn về và chạy được theo hướng dẫn | **Chưa đạt.** Bản lấy về thiếu 5 file cần thiết, chưa có README. | VH-1 |
 | 5 | Số liệu đo trong báo cáo chạy lại được bằng một lệnh từ kho mã | **Chưa đạt.** Mọi bộ đo nằm trong `experiments/` (git bỏ qua). | DG-1, DG-2 |
-| 6 | Đủ "Nội dung 6" của phiếu giao nhiệm vụ: triển khai thực tế, phản hồi người dùng | **Chưa làm, và chưa quyết cách làm.** | DA-1 |
+| 6 | Đủ "Nội dung 6" của phiếu giao nhiệm vụ | **Đã quyết 13/11: chỉ cần demo chạy được, không cần người dùng thật.** Phiếu ghi các gợi ý nối bằng "và/hoặc", và "thuật toán thử nghiệm với bộ dữ liệu thật" (FinanceBench) đã là một gợi ý hợp lệ. Còn lại: một kịch bản demo chạy trọn. | DA-1 |
 
 Những thứ **không** thuộc MVP, dù hay: vòng lặp nhiều bước kiểu agent, LangGraph, kho tri thức khái niệm tài chính, đo tiếng Việt, so sánh 5 đến 10 công ty, hàng đợi Redis, thanh hạn mức token. Chúng nằm ở mục 8.
 
@@ -91,7 +91,7 @@ Những thứ **không** thuộc MVP, dù hay: vòng lặp nhiều bước kiể
 | 2 | "Chưa có README" (một dòng trong F11) | Nặng hơn thế: `.gitignore` đang chặn `docker-compose.yml` (luật `*.yml`), `backend/.env.example` (luật `.env.*`), 3 mẫu email trong `backend/app/templates/email/` (luật `templates/`), mọi file CI (luật `*.yml`), và luật mới chưa commit `/*.md` sẽ chặn luôn `README.md`. Người lấy mã về không có file nào trong số này. |
 | 3 | Có `backend/Dockerfile`, `frontend/Dockerfile` | Có, nhưng chưa chạy được bằng một lệnh: backend dùng Python 3.10 (máy phát triển 3.13) và không cài thư viện mô hình; compose không truyền khóa bí mật và khóa API vào backend; frontend không có cấu hình nginx nên tải lại trang `/app` sẽ lỗi 404 và `/api` không tới backend. |
 | 4 | Trạng thái bằng chứng "đã có `answer_meta`" | Backend có, **giao diện chat chưa hiển thị** (không tìm thấy trong `frontend/src/components/chat/`). |
-| 5 | "Triển khai công khai" nằm trong mục "chưa làm trong lộ trình này" | Mẫu phiếu giao nhiệm vụ (Mẫu ĐATN 02) ghi Nội dung 6 "Triển khai trong thực tế và đánh giá, phản hồi của người sử dụng" là **bắt buộc với đồ án kỹ sư**. Cần quyết (mục 7, quyết định 2). File `PGNV_Vũ Thành_20225405.xlsx` trong thư mục gốc vẫn là mẫu trống. |
+| 5 | "Triển khai công khai" nằm trong mục "chưa làm trong lộ trình này" | Mẫu phiếu giao nhiệm vụ (Mẫu ĐATN 02) ghi Nội dung 6 "Triển khai trong thực tế và đánh giá, phản hồi của người sử dụng" là **bắt buộc với đồ án kỹ sư**. Sinh viên đã quyết ngày 13/11: chỉ cần demo (mục 7, quyết định 2). File `PGNV_Vũ Thành_20225405.xlsx` trong thư mục gốc vẫn là mẫu trống. |
 | 6 | 740 test | Không chạy lại hôm nay. Đếm được 508 hàm `test_` trong 41 file; con số 740 là số ca sau khi nhân tham số ở lần chạy 13/11. |
 
 **Chưa có trong code (đã tìm bằng grep):** trang chính sách riêng tư, xóa tài khoản, chặn gửi trùng một câu hỏi, cờ báo "kết quả bị suy giảm", kiểm cấu trúc đầu ra JSON của mô hình bằng Pydantic, nhãn loại câu hỏi, thử lại khi tìm kiếm hết giờ, thư mục `backend/evaluation/`, `.github/workflows/`, `frontend/nginx.conf`.
@@ -118,14 +118,14 @@ Công sức tính bằng ngày làm việc tập trung. "Cần" ghi thứ phải
 | Mã | Việc (mã cũ) | Mức | Công sức | Cần | Trạng thái |
 |---|---|---|---|---|---|
 | **VH-1** | Kho mã lấy về là chạy được: sửa `.gitignore`, README, đưa file thiếu vào git (một phần F11) | 1 | 1,5 | | Đã làm 13/11, chưa commit (kết quả ở mục 5) |
-| **TC-2** | Thử lại khi tìm kiếm hết giờ, mã lỗi riêng (B1) | 1 | 0,5 | Duyệt | Chưa làm |
+| **TC-2** | Thử lại khi tìm kiếm hết giờ, mã lỗi riêng (B1) | 1 | 0,5 | Duyệt | Đã làm 13/11, chưa commit (kết quả ở mục 5) |
 | **TC-1** | Kiểm cột năm của bảng (B5) | 1 | 2,5 | Duyệt | Chưa làm |
-| **DG-1** | Bộ đánh giá vào kho mã, chạy lại bằng một lệnh (F2) | 1 | 2,5 | Sinh viên kiểm đáp án | Chưa làm |
+| **DG-1** | Bộ đánh giá vào kho mã, chạy lại bằng một lệnh (F2) | 1 | 2,5 | Sinh viên chấm xong 200 câu nhiều tài liệu (cuối tuần sau, khoảng 22–23/11) | Chưa làm |
 | **TC-3** | Kiểm đủ bằng chứng theo từng mục, tìm bổ sung 1 lần (B2) | 1 | 2 + 1 đo | Duyệt; đo cần GPU, API | Chưa làm |
 | **TC-4** | Bảng chỉ tiêu chuẩn, bản tối thiểu (C1) | 1 | 3 | Duyệt | Chưa làm |
 | **DG-2** | Một đợt đo có GPU và API: bảng trước/sau, ngưỡng cho TC-3, ca D03 | 1 | 1 | GPU, API | Chờ GPU |
-| **GD-1** | Chạy trọn luồng chính trong ứng dụng thật, gồm cả tô sáng (đợt A cũ) | 1 | 0,5 | Backend chạy | Chưa làm |
-| **DA-1** | Nội dung 6: triển khai thực tế và phản hồi người dùng | 1 | 2 | Quyết định 2 | Chưa quyết |
+| **GD-1** | Chạy trọn luồng chính trong ứng dụng thật, gồm cả tô sáng (đợt A cũ) | 1 | 0,5 | Backend chạy | Một lượt đầu đã chạy 13/11 trên đường local; còn hỏi nối tiếp và so sánh hai công ty |
+| **DA-1** | Nội dung 6: kịch bản demo chạy trọn (không cần người dùng thật) | 1 | 0,5 | GD-1, DG-2 | Đã quyết 13/11 |
 | **DA-2** | Báo cáo, slide, video demo (F12) | 1 | chạy song song | | Chưa làm |
 | TC-5 | Năm chỉ có ở cột so sánh: tìm mọi báo cáo hoặc báo có bản điều chỉnh (B3) | 2 | 1 | Duyệt | Chưa làm |
 | VH-2 | Kiểm tra tự động khi đẩy mã (CI) (một phần F11) | 2 | 0,5 | VH-1 | Chưa làm |
@@ -136,7 +136,7 @@ Công sức tính bằng ngày làm việc tập trung. "Cần" ghi thứ phải
 | DG-4 | So sánh 10 câu với NotebookLM; báo cáo thử tấn công | 2 | 1,5 | API (ít) | Chưa làm |
 | TC-6 | Một dòng prompt: "không tìm thấy" khác "không công bố" (B4) | 3 | 0,5 | Prompt, API | Chờ |
 | TC-7 | Cổng hỏi tiêu chí cho câu "công ty nào tốt hơn" | 3 | 0,5 | Duyệt | Chưa làm |
-| VH-4 | Trang riêng tư, xóa tài khoản | 3 (lên 1 nếu mở công khai) | 1 | Duyệt | Chưa làm |
+| VH-4 | Trang riêng tư, xóa tài khoản | 3 (chỉ lên 1 nếu sau này mở ra mạng) | 1 | Duyệt | Chưa làm |
 | VH-5 | Chặn gửi trùng, kiểm cấu trúc JSON của mô hình, cờ suy giảm | 3 | 2 | Duyệt | Chưa làm |
 | GD-3 | Gợi ý câu hỏi tiếp theo sinh theo chỉ tiêu | 3 | 1 | Duyệt | Chưa làm |
 | GD-4 | Báo cáo phân tích một công ty, xuất Excel | 3 | 3 | TC-4 | Chưa làm |
@@ -166,6 +166,7 @@ Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày
 - **Vì sao làm.** Hiện tìm kiếm chờ Qdrant 60 giây, máy GPU 180 giây, rồi bỏ; lỗi hết giờ thành lỗi 500 chung. Đường hầm tới máy GPU từ xa đã chết sau khoảng một giờ trong các lần thử ngày 12/11.
 - **Vì sao mức 1.** Đúng điều 2 và 4: buổi demo chạy trên chính hạ tầng hay rớt này, và việc này nhỏ nhất trong danh sách (nửa ngày). Làm đầu tiên trong luồng TC để các đợt đo sau đỡ hỏng giữa chừng.
 - **Xong khi.** Ca J03 đạt trên `run_l1.py`; có test cho cả hai nhánh (thử lại thành công, thử lại vẫn hỏng).
+- **Kết quả làm ngày 13/11 (chưa commit).** Hàm `search_with_retry` trong `chat/retrieval_step.py` bọc mọi lời gọi tìm; thử lại `SEARCH_RETRIES` lần (mặc định 1, nghỉ 1 giây) với lỗi hết giờ, mất kết nối, lỗi truyền của httpx và lỗi Qdrant; vẫn hỏng thì trả `ServiceUnavailableError` mã mới `search_unavailable` (503), có câu tiếng Anh và tiếng Việt trong giao diện. Lỗi lập trình (ví dụ `KeyError`) và lỗi máy GPU (đã tự gửi lại một lần ở `gpu_client`) không bị thử lại. Một thay đổi hành vi nhỏ: bước tìm thêm **sau** câu trả lời (`_search_more`) nếu hỏng thì giữ câu trả lời đã viết, ghi `search_failed` vào dấu vết, thay vì biến cả câu hỏi thành lỗi. `run_l1.py`: **J03 đạt** (2 lần thử, lỗi có mã); L1 từ 5 đạt, 4 trượt thành 6 đạt, 3 trượt (D07, G02, G04), 1 không áp dụng (G03). `pytest`: 749 qua (740 cũ, 8 ca mới ở `test_search_retry.py`, 1 ca mới ở `test_lazy_net.py`); `tsc` sạch.
 - **Mở rộng sau MVP.** Chỉ chạy lại nhánh lỗi thay vì cả câu hỏi; ngắt mạch khi máy GPU hỏng liên tục; khi phải bỏ qua bước reranker thì gắn cờ "suy giảm" cho người dùng biết (VH-5).
 
 #### TC-3. Kiểm đủ bằng chứng theo từng mục, tìm bổ sung một lần (mã cũ B2) · Mức 1
@@ -228,16 +229,16 @@ Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày
 #### VH-3. Chạy bằng một lệnh Docker · Mức 2
 
 - **Làm gì.** Sửa `backend/Dockerfile` (Python 3.13, người dùng không phải root, kiểm tra sức khỏe), thêm `frontend/nginx.conf` (mở thẳng `/app`, chuyển `/api` sang backend, tắt đệm cho SSE), compose đọc `env_file`.
-- **Vì sao mức 2.** MVP chỉ cần "chạy được theo hướng dẫn" (VH-1). Một lệnh Docker tiện hơn nhưng tốn 2 ngày, và ảnh backend có mô hình rất nặng. **Lên mức 1 nếu** quyết định 2 chọn triển khai công khai bằng Docker.
+- **Vì sao mức 2.** MVP chỉ cần "chạy được theo hướng dẫn" (VH-1). Một lệnh Docker tiện hơn nhưng tốn 2 ngày, và ảnh backend có mô hình rất nặng. Vẫn mức 2 vì sinh viên đã chọn chỉ demo (quyết định 2); lên mức 1 nếu sau này mở ra mạng bằng Docker.
 
 ### Luồng DG: đánh giá
 
 #### DG-1. Bộ đánh giá vào kho mã (mã cũ F2) · Mức 1
 
-- **Làm gì.** Tạo `backend/evaluation/`: sao chép các script đo cần thiết từ `experiments/` (không đưa dữ liệu nặng vào git); một bộ vàng nhỏ gồm ít nhất 30 câu hỏi thật, 15 câu ngoài phạm vi hoặc tấn công prompt, 5 ca dữ liệu thiếu; một file đặc tả cách đo; một lệnh chạy lại. Giữ FinanceBench để so với số đã có.
+- **Làm gì.** Tạo `backend/evaluation/`: sao chép các script đo cần thiết từ `experiments/` (không đưa dữ liệu nặng vào git); hai bộ câu hỏi: **FinanceBench 150 câu** (một tài liệu, để so với số đã có) và **bộ nhiều tài liệu 200 câu do sinh viên tự tạo và tự chấm**; thêm bộ guard đã có (câu ngoài phạm vi, tấn công prompt) nếu còn chỗ; một file đặc tả cách đo; một lệnh chạy lại. Quyết định ngày 13/11 thay cho bộ 30 câu nhỏ tôi đề xuất lúc đầu.
 - **Vì sao làm.** Mọi con số sẽ trích trong báo cáo (FinanceBench 27/30, độ đủ bằng chứng 89 %, guard 32/32...) đều nằm trong thư mục git bỏ qua. Người đọc báo cáo không thể chạy lại.
 - **Vì sao mức 1.** Đúng điều 2 và 3: một đồ án về "số liệu có kiểm chứng" mà số liệu của chính nó không kiểm chứng được là điểm yếu dễ bị hỏi nhất; và mọi việc luồng TC cần bộ đo này để có bảng trước/sau.
-- **Cần sinh viên.** Đáp án của bộ vàng phải do người viết hoặc kiểm. Nên bắt đầu ngay từ tuần 1, song song với việc khác.
+- **Cần sinh viên.** Đáp án của 200 câu nhiều tài liệu do sinh viên chấm, dự kiến xong cuối tuần sau (khoảng 22–23/11). Việc dựng khung `backend/evaluation/` (chép script, đặc tả đo, lệnh chạy) làm trước được với FinanceBench 150 câu; phần nhiều tài liệu chờ đáp án. Nếu chấm trễ, đo trên phần đã chấm xong thay vì chờ đủ 200.
 - **Xong khi.** Một lệnh in ra bảng chỉ số (độ đúng số liệu, tỷ lệ trích dẫn đúng, tỷ lệ từ chối đúng, thời gian, chi phí mỗi câu); phần không cần mô hình thật chạy được không tốn tiền.
 - **Mở rộng sau MVP.** Chạy 2 lần mỗi cấu hình để đo độ ổn định; bộ tiếng Việt; chạy tự động hằng tuần.
 
@@ -272,6 +273,14 @@ Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày
 - **Làm gì.** Với backend và cơ sở dữ liệu phát triển đang chạy: đăng ký, tải một PDF, hỏi, bấm trích dẫn, xem dải tô sáng, hỏi nối tiếp. Ghi lại lỗi gặp phải. Kiểm luôn lỗi cũ số 6 (PDF bị tải lại mỗi lần bấm trích dẫn) còn hay không.
 - **Vì sao mức 1.** F9 mới chỉ được kiểm trên trang thử riêng, không qua backend. Đây là điều kiện 1 của MVP và chỉ tốn nửa ngày. Phần cần bộ lập kế hoạch và máy GPU thật thì làm trong DG-2.
 - **Xong khi.** Một lượt chạy trọn không lỗi, có ảnh chụp màn hình dùng luôn cho báo cáo.
+- **Một lượt đầu chạy 13/11 trên đường local** (backend dùng mô hình trên máy, dữ liệu `datn_dev`, tài khoản thử tạo riêng; 4 lời gọi DeepSeek trên 8 được duyệt): tải `ULTABEAUTY_2023Q4_EARNINGS.pdf` (9 trang, 97 KB) → **nạp xong sau 106 giây** (Docling 41 giây, khởi động Docling 36 giây, nạp BGE-M3 16 giây; 10 đoạn trích; danh mục đúng: Ulta Beauty, FY2022, quý 4). Hỏi "What was Ulta Beauty's net income in the fourth quarter of fiscal 2022?" → trả lời đúng **$340,8 triệu** ($340.751 nghìn) sau **19,9 giây** (lập kế hoạch 14,2 giây gồm cả nạp lại reranker lần đầu, tìm 0,7 giây, viết 1,6 giây; 3 lời gọi, 8.410 token; guard "ok" 1,25 giây; kiểm chứng đạt, không phải sửa). Mở giao diện, đăng nhập, sổ tay và lịch sử hiện đúng; bấm trích dẫn [2] mở PDF đúng trang 6, banner "Citation verified on page: Page 6" và "Marked 9 line(s) of the excerpt on this page", các dải tô hiện đúng dòng.
+  - **Hạn chế đó đã sửa cùng ngày (chưa commit), theo yêu cầu của sinh viên:** khung "Citation verified" kèm bảng Markdown của đoạn trích đã bỏ; giao diện chỉ còn PDF có tô vàng. Khung nhỏ chỉ hiện khi có điều cần nói (tài liệu được trích đã bị xóa, hoặc trang không tô được vì là trang quét hay xoay ngang). Thêm tô **đậm hơn** các dòng chứa con số mà câu trả lời nêu cạnh dấu [n] (`citedFigures` lấy số trong câu hoặc ô bảng có [n], bỏ năm và số nhỏ; `figureLines` tìm cả dòng chứa số đó trên trang, tối đa 3 chỗ mỗi số). Kiểm trên trình duyệt với đúng câu trả lời Ulta: trang 6 tô đậm dòng "Net income" 340,751, trang 1 tô đậm tiêu đề "Net Income of $340.8 Million"; các dòng của đoạn trích vẫn tô nhạt hơn. `tsc`, `vite build` và `npm run test:highlight` (thêm 2 ca) đều qua.
+  - **Chưa chạy:** hỏi nối tiếp, so sánh hai công ty (cần thêm một tài liệu và thêm lời gọi), lỗi máy GPU hoặc mô hình ngôn ngữ trong ứng dụng thật.
+- **Đường local (kiểm 13/11, vì chưa mở được máy GPU từ xa).**
+  - **Mã giống nhau.** Hai đường dùng chung mã backend; chỉ khác ba chỗ rẽ nhánh theo `REMOTE_GPU_URL`: vector hóa, chấm lại, và Docling. Đã đối chiếu với notebook worker: phần postprocess nhúng trong notebook **giống từng byte** `backend/app/modules/ingestion/postprocess/`; câu lệnh và tiền tố của reranker, độ dài tối đa, cách tính điểm, tham số vector hóa, tùy chọn Docling (không OCR, bảng chính xác) đều giống. Khác biệt duy nhất về hành vi: khi postprocess lỗi, worker dùng Markdown thô của Docling còn đường local rơi về PyMuPDF cho cả tài liệu. Bước lập danh mục dùng API DeepSeek nên không phụ thuộc đường nào. Phần chỉ khác về cấu hình chạy (kích thước lô, số GPU) không tính, theo yêu cầu.
+  - **Chạy được, có một lỗi môi trường.** Máy có RTX 3050 Ti 4 GB; hai mô hình có sẵn trong `backend/storage/models/`. Từng mô hình chạy riêng đều tốt (vector hóa 1024 chiều, chấm lại cho điểm hợp lý). Nhưng **nạp reranker sau BGE-M3 trong cùng một tiến trình làm tiến trình chết (segfault, mã 139)**, ở cả ba chế độ GPU (`auto`, `swap`, và có `HF_DEACTIVATE_ASYNC_LOAD`); nạp reranker trước rồi BGE-M3 thì chạy ổn. Bộ nhớ ảo Windows lúc đó còn 16,7 GB nên không phải lỗi hết bộ nhớ như lần ghi trong `version_control.md` dòng 123. Chưa rõ nguyên nhân gốc. Cách tránh đang dùng: một file khởi động ngoài kho mã nạp reranker trước rồi chạy backend. Nếu muốn sửa trong mã, chỗ hợp lý là `warm_models` (nạp reranker trước, và bật `PRELOAD_MODELS` khi chạy local); cần bạn duyệt.
+  - **Cẩn thận khi tự viết lệnh khởi động.** `backend/.env.dev` chỉ có tác dụng nếu được nạp **trước** khi `app.core.config` được import; nạp muộn thì backend nối vào dữ liệu thật (Atlas, collection `financial_chunks_m3`). Lần khởi động thử đầu tiên mắc lỗi này (không tải gì lên, không hỏi gì; đã kiểm bằng truy vấn chỉ đọc: 6 job và 6 tài liệu thật giữ nguyên trạng thái); file khởi động nay kiểm tên cơ sở dữ liệu trước khi nạp mô hình và dừng nếu không phải `datn_dev`.
+
 
 #### GD-2. Hiện trạng thái bằng chứng trên giao diện · Mức 2
 
@@ -282,14 +291,13 @@ Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày
 
 ### Luồng DA: đồ án
 
-#### DA-1. Nội dung 6: triển khai thực tế và phản hồi người dùng · Mức 1
+#### DA-1. Nội dung 6: kịch bản demo chạy trọn · Mức 1
 
-- **Làm gì.** Tùy quyết định 2. Hai cách:
-  - **Cách A, mở tạm ra mạng:** máy có GPU chạy backend, nối ra ngoài bằng Cloudflare Tunnel; MongoDB Atlas và Cloudflare R2 đã dùng sẵn. Mở trong một khoảng thời gian có hẹn, mời ít nhất 5 người dùng thử, thu 3 câu chấm điểm 1 đến 5 và 1 câu "điều gì làm bạn khó chịu nhất". Cần thêm VH-4 (trang riêng tư nói rõ nội dung được gửi tới mô hình của bên thứ ba).
-  - **Cách B, không mở ra mạng:** dựa vào ý "thử nghiệm với bộ dữ liệu thật" của mẫu phiếu (FinanceBench là báo cáo thật của doanh nghiệp), cộng 5 người dùng thử trực tiếp trên máy.
-- **Vì sao mức 1.** Đúng điều 2: mẫu phiếu giao nhiệm vụ ghi đây là nội dung bắt buộc với đồ án kỹ sư. Bản roadmap trước xếp "triển khai công khai" vào nhóm không làm, tức đang lệch với yêu cầu.
-- **Việc đầu tiên.** Hỏi giảng viên hướng dẫn cách B có được chấp nhận không. Câu trả lời quyết định 2 đến 3 ngày công.
-- **Xong khi.** Có bảng phản hồi của ít nhất 5 người, trích nguyên văn (có đồng ý), kèm danh sách việc đã sửa theo phản hồi.
+- **Quyết định của sinh viên (13/11).** Không cần người dùng thật, không cần mở ra mạng; chỉ cần demo được. Phần "thử nghiệm với bộ dữ liệu thật" của mẫu phiếu được đáp ứng bằng FinanceBench 150 câu và bộ 200 câu nhiều tài liệu (DG-1).
+- **Làm gì.** Viết một kịch bản demo 8 đến 10 phút và chạy thử hai lần trước ngày bảo vệ: tải báo cáo, hỏi một câu số liệu, bấm trích dẫn (tô sáng), hỏi nối tiếp, hỏi so sánh hai công ty, một câu bị từ chối, một câu có phép tính, trang quản trị. Chuẩn bị sẵn tài liệu đã nạp để không chờ bóc tách trên sân khấu, và một phương án khi máy GPU hoặc mạng hỏng.
+- **Vì sao mức 1.** Vẫn là điều kiện bảo vệ, nhưng chỉ còn khoảng nửa ngày. Phụ thuộc GD-1 (luồng chạy trọn) và DG-2 (số liệu để đưa vào demo).
+- **Xong khi.** Chạy trọn kịch bản hai lần không lỗi, có ảnh chụp và bản ghi hình dự phòng.
+- **Nếu sau này đổi ý (mở ra mạng, thu phản hồi).** Cần thêm VH-4 (trang riêng tư), VH-3 (Docker một lệnh) và ít nhất 2 đến 3 ngày công; xem mục 8, hướng 6.
 
 #### DA-2. Báo cáo, slide, video demo (mã cũ F12) · Mức 1
 
@@ -309,9 +317,9 @@ Nguyên tắc xếp: việc ngoại tuyến và việc mở khóa cho việc kh�
 
 | Tuần | Ngày | Kỹ thuật | Song song (sinh viên) | Điểm dừng báo cáo |
 |---|---|---|---|---|
-| 1 | 14 đến 20/11 | **VH-1** → **TC-2** → **TC-1** → **GD-1** | Hỏi giảng viên về Nội dung 6 (DA-1). Bắt đầu viết đáp án bộ vàng (DG-1). Dựng khung báo cáo (DA-2). | Sau VH-1; sau TC-1 |
-| 2 | 21 đến 27/11 | **DG-1** → **TC-3** (phần code, cờ tắt) → **TC-4** | Viết chương thiết kế. Tìm nguồn GPU (quyết định 3). | Sau DG-1; sau TC-4 |
-| 3 | 28/11 đến 04/12 | **DG-2** (đợt đo) → **DA-1** → mức 2 theo thứ tự: TC-5, VH-2, GD-2, DG-3 | Thu phản hồi người dùng. Viết chương đánh giá ngay khi có bảng. | Sau DG-2 |
+| 1 | 14 đến 20/11 | **VH-1** → **TC-2** → **TC-1** → **GD-1** | Chấm 200 câu nhiều tài liệu (xong khoảng 22–23/11). Dựng khung báo cáo (DA-2). | Sau VH-1; sau TC-1 |
+| 2 | 21 đến 27/11 | **DG-1** (khung với FinanceBench trước, 200 câu nhiều tài liệu khi chấm xong) → **TC-3** (phần code, cờ tắt) → **TC-4** | Viết chương thiết kế. Tìm nguồn GPU (quyết định 3). | Sau DG-1; sau TC-4 |
+| 3 | 28/11 đến 04/12 | **DG-2** (đợt đo) → **DA-1** → mức 2 theo thứ tự: TC-5, VH-2, GD-2, DG-3 | Viết chương đánh giá ngay khi có bảng. Tập dượt demo (DA-1). | Sau DG-2 |
 | 4 | 05 đến 10/12 | Chỉ sửa lỗi phát hiện khi demo thử. Đóng băng code ngày 08/12. | **DA-2**: hoàn thiện báo cáo, slide, quay video. DA-3. | 08/12 |
 
 **Phụ thuộc cần nhớ:** VH-1 trước VH-2 và VH-3. TC-2 trước DG-2. DG-1 trước DG-2. TC-3 (code) trước DG-2 (đo ngưỡng). TC-4 trước GD-4. Quyết định 2 trước DA-1.
@@ -331,7 +339,7 @@ Xếp theo mức gấp. Ba quyết định đầu chặn việc của tuần 1 v
 | # | Quyết định | Vì sao phải quyết | Đề xuất |
 |---|---|---|---|
 | 1 | **Duyệt sửa `backend/` cho TC-2 và TC-1** | Đây là hai việc kỹ thuật đầu tiên; không duyệt thì tuần 1 chỉ làm được VH-1. | Duyệt. Cả hai có ca test sẵn để đo trước và sau, không cần GPU hay tiền. |
-| 2 | **Nội dung 6: mở tạm ra mạng (cách A) hay chỉ dữ liệu thật và người dùng thử trực tiếp (cách B)** | Quyết định mức của VH-3, VH-4 và 2 đến 3 ngày công. | Hỏi giảng viên trước. Nếu được chọn: cách A với đường hầm tạm, vì "có người ngoài dùng thật" là bằng chứng mạnh và hạ tầng đã hỗ trợ sẵn. |
+| 2 | ~~Nội dung 6: mở ra mạng hay chỉ demo~~ | **Đã quyết 13/11: chỉ cần demo được, không cần người dùng thật.** | Giữ. DA-1 thu còn nửa ngày; VH-3 và VH-4 ở mức 2 và 3. |
 | 3 | **Nguồn GPU cho đợt đo DG-2** | Hạn mức Kaggle đã hết; đây là rủi ro lớn nhất về tiến độ. | Biết ngày hạn mức Kaggle có lại; chuẩn bị sẵn `colab_gpu_worker.ipynb` làm phương án hai. Cần chốt trước 27/11. |
 | 4 | **Ngày bảo vệ và định nghĩa MVP ở mục 2** | Cả lịch dựa trên mốc 10/12 "dự kiến" và 6 điều kiện tôi đề xuất. | Xác nhận hoặc sửa. |
 | 5 | **Đưa ca P0 vào `backend/tests/` cùng lúc với từng sửa (DG-3)** | Bạn đã nói "chưa làm vội". Nhưng sửa mà không có test hồi quy thì dễ hỏng lại. | Đổi thành: mỗi việc TC mang theo ca của chính nó. Không làm một đợt riêng. |
