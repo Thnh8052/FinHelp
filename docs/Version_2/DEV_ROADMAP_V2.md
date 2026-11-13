@@ -1,205 +1,394 @@
-# FinHelp: Kế hoạch Phát triển & Lộ trình Hoàn thiện V2 (Dev Roadmap V2)
+# FinHelp: Lộ trình đi tới bản MVP (Dev Roadmap V2)
 
-> **Tài liệu chiến lược & Lộ trình kỹ thuật chính thức**  
-> **Dự án tốt nghiệp:** Hệ thống Trợ lý AI Phân tích & Tra cứu Báo cáo Tài chính có Kiểm chứng Số liệu (**FinHelp**)  
-> **Sinh viên thực hiện:** Vũ Thành (MSSV: 20225405) - Trường CNTT & TT, ĐHBK Hà Nội (HUST)  
-> **Cập nhật ngày:** 13/11/2026 (lần 2, sau khi gộp nhánh và làm xong F9). Trạng thái trong bảng mục 1 đã được **đối chiếu với code và git** ngày này. Bản trước: 07/11/2026.  
-> **Trạng thái quy ước:** ✅ Đã hoàn thành · 🚧 Đang triển khai · ⬜ Chưa triển khai · ↪ Đã đổi hướng
+> **Dự án tốt nghiệp:** Hệ thống Trợ lý AI Phân tích & Tra cứu Báo cáo Tài chính có Kiểm chứng Số liệu (**FinHelp**)
+> **Sinh viên thực hiện:** Vũ Thành (MSSV: 20225405) - Trường CNTT & TT, ĐHBK Hà Nội (HUST)
+> **Cập nhật:** 13/11/2026 (lần 3: viết lại toàn bộ theo từng việc, kèm lý do và mức ưu tiên). Trạng thái đã đối chiếu với code và git cùng ngày.
+> **Mốc:** bảo vệ dự kiến 10/12/2026, còn 27 ngày.
 
-Ghi chú về dòng "Sinh viên thực hiện": bản 07/11 ghi tên và mã số của tác giả một đồ án khác (đã được nêu trong `Version_3/PROJECT_PLAN.md`). Bản này sửa theo `docs/new_ideas.md` và tên tài khoản git; sinh viên đã xác nhận ngày 13/11/2026.
+Bản này thay cách trình bày cũ (mã F-1 đến F12, G1 đến G3, đợt A đến E, bảng ⏸ nằm rải ở nhiều mục) bằng **một danh sách việc duy nhất**. Mỗi việc có: làm gì, vì sao làm, mức ưu tiên, vì sao xếp mức đó, khi nào coi là xong, và sau MVP mở rộng thế nào. Mã cũ được ghi trong ngoặc để tra ngược.
 
 Tài liệu liên quan:
-- [Version_3/PROJECT_PLAN.md](../Version_3/PROJECT_PLAN.md): kế hoạch tổng thể ngày 09/11 (các giai đoạn 0–6, thiết kế Agentic RAG).
-- [Version_3/plan_p0_tests.md](../Version_3/plan_p0_tests.md): bộ test P0, nhật ký thực hiện.
-- [Version_3/report_p0_suite_2026-11-13.md](../Version_3/report_p0_suite_2026-11-13.md): bảng điểm P0 và danh sách việc cần sửa.
 - [ARCHITECTURE.md](../../ARCHITECTURE.md): kiến trúc đúng với code.
+- [Version_3/PROJECT_PLAN.md](../Version_3/PROJECT_PLAN.md): kế hoạch tổng thể 09/11 và thiết kế vòng lặp "thiếu bằng chứng thì tìm lại".
+- [Version_3/report_p0_suite_2026-11-13.md](../Version_3/report_p0_suite_2026-11-13.md): bảng điểm bộ test P0. [Version_3/plan_p0_tests.md](../Version_3/plan_p0_tests.md): nhật ký làm bộ test.
+- `tối ưu.txt` (thư mục gốc): danh sách ca kiểm thử hành vi, nguồn của khái niệm "P0".
 
 ---
 
-## 1. Tổng quan Tiến độ Thực hiện (Progress Tracker)
+## 1. Cách đọc tài liệu này
 
-| Mã | Hạng mục công việc | Trạng thái | Bằng chứng (đối chiếu 13/11) và việc còn lại |
+**Thuật ngữ**
+
+| Từ | Nghĩa |
+|---|---|
+| MVP | Bản sản phẩm nhỏ nhất dùng được và bảo vệ được. Định nghĩa cụ thể ở mục 2. |
+| Ca P0 | 18 hành vi mà `tối ưu.txt` ghi là "phải đúng trước khi ra MVP" (ví dụ D07, G04, J03), cộng 5 ca thêm sau (C02b, E03w, G03, G16, T01). Tổng 23 ca trong `experiments/p0_suite/`. |
+| Lỗi im lặng | Câu trả lời sai mà mọi bước kiểm tra đều cho qua, người dùng không có dấu hiệu nào để nghi ngờ. |
+| Đoạn trích | Một đoạn của PDF được tìm ra và đưa cho mô hình ngôn ngữ đọc (trong code gọi là chunk). |
+| Reranker | Mô hình chấm lại mức liên quan giữa câu truy vấn và từng đoạn trích (đang dùng Qwen3-Reranker-0.6B). |
+| Bộ vàng | Bộ câu hỏi có đáp án và trang bằng chứng do người kiểm, dùng để đo. |
+
+**Năm luồng việc.** Mọi việc thuộc đúng một luồng. Mã việc gồm tên luồng và số thứ tự; số không nói lên mức ưu tiên.
+
+| Luồng | Mã | Câu hỏi nó trả lời |
+|---|---|---|
+| Tin cậy của câu trả lời | TC | Con số hệ thống đưa ra có đúng và có đủ không? |
+| Vận hành | VH | Người khác có lấy mã nguồn về và chạy được không? |
+| Đánh giá | DG | Số liệu trong báo cáo có chạy lại được từ kho mã không? |
+| Giao diện | GD | Người dùng có nhìn thấy độ tin cậy đó không? |
+| Đồ án | DA | Có đủ thứ để nộp và bảo vệ không? |
+
+**Bốn mức ưu tiên**
+
+| Mức | Tên | Nghĩa |
+|---|---|---|
+| 1 | Bắt buộc cho MVP | Thiếu thì không gọi là MVP. Không cắt. |
+| 2 | Nên có | Làm sau khi mọi việc mức 1 của tuần đó xong. Cắt được nếu trễ. |
+| 3 | Tùy chọn | Chỉ làm khi còn thừa thời gian. Cắt đầu tiên. |
+| 4 | Sau MVP | Không làm trước bảo vệ. Ghi lại để biết hướng mở rộng (mục 8). |
+
+**Quy tắc xếp mức.** Một việc lên mức 1 khi đúng ít nhất một điều sau, và càng đúng nhiều điều càng làm sớm:
+
+1. **Nó chặn một lỗi im lặng.** Lỗi mà người dùng tự thấy được (báo lỗi, từ chối) ít nguy hiểm hơn lỗi đưa ra một con số sai trông như đúng. Sản phẩm này tồn tại vì lời hứa "số liệu có kiểm chứng".
+2. **Thiếu nó thì không demo hoặc không bảo vệ được** (yêu cầu của phiếu giao nhiệm vụ, hệ thống sập giữa buổi demo, người chấm không chạy được).
+3. **Việc khác phải chờ nó.**
+4. **Nó rẻ và làm ngay được**: không cần GPU, không gọi mô hình trả tiền. Hiện hạn mức GPU Kaggle đã hết, nên việc làm được ngoại tuyến đi trước.
+
+Việc lớn nhưng chỉ đúng điều 4 thì không lên mức 1.
+
+**Ràng buộc làm việc (không đổi so với bản trước).** Mọi sửa trong `backend/` cần sinh viên duyệt trước. Mọi lần gọi mô hình trả tiền cần lời đồng ý kèm số lần gọi. Sửa prompt hệ thống thì gửi nguyên văn bản cũ và bản mới trước. Mỗi đợt dừng lại báo cáo rồi mới sang đợt sau. Chỉ đo câu hỏi tiếng Anh; tiếng Việt giữ cho chạy được nhưng không đo.
+
+---
+
+## 2. MVP là gì
+
+Một câu: **một người chưa từng thấy dự án có thể mở FinHelp, tải lên báo cáo 10-K tiếng Anh, hỏi một câu về số liệu, nhận câu trả lời có trích dẫn tô sáng trên PDF; và với những kiểu lỗi đã biết, hệ thống hoặc trả lời đúng, hoặc nói rõ là nó thiếu bằng chứng.**
+
+Bản MVP đạt khi cả 6 điều kiện sau đúng:
+
+| # | Điều kiện | Hiện tại (13/11) | Việc đưa nó tới đạt |
 |---|---|---|---|
-| **F-1** | Chuẩn hóa `.env.example` & dọn dẹp schema rác | ✅ 2026-10-28 | Không đổi. |
-| **F0** | Nhánh git an toàn & hạ tầng | ✅ 2026-11-07 | Docker Compose: MongoDB 7.0, Qdrant **v1.19.2** (bản trước ghi nhầm v1.12). |
-| **F1** | Tái cấu trúc Backend Modular Monolith | ✅ 2026-11-07 | Hiện có **740 test** trong `backend/tests/` (lúc tái cấu trúc: 199). |
-| **F2** | Chuyển bộ đánh giá sang `backend/evaluation/` | ⬜ | Thư mục `backend/evaluation/` **chưa tồn tại**. Mọi bộ đo vẫn nằm trong `experiments/` (bị git bỏ qua), nên số liệu báo cáo chưa tái lập được từ repo. |
-| **F3** | Frontend Router, Landing Page, Multi-Notebook Hub | ✅ | `react-router-dom` đã cài, có `features/landing`, `features/workspace`. TanStack Query: ↪ đã quyết không làm trước bảo vệ (PROJECT_PLAN). |
-| **F3.5** | Schema MongoDB V3.1 | 🚧 | Có `scripts/migrate_mongo_v3.py` và `tests/test_mongo_v3.py`. **Chưa xác minh** trong lần đối chiếu này việc migration đã chạy trên cơ sở dữ liệu thật. |
-| **F4** | Hội thoại: `focus_state`, câu nối tiếp, báo câu trả lời sai | ✅ | `query_router/focus.py`, `test_conversation_focus.py`, bộ 30 đoạn hội thoại; ca P0 F01 đạt. Báo sai số liệu: `user_rating = -1`. Nhánh `feat/f4-conversation` đã **gộp vào `main` cục bộ ngày 13/11** (commit `4f5a9ec`, 7 commit sau PR #8; 740 test qua), **chưa đẩy `main` lên GitHub** (lần đẩy bị từ chối 403, xem Đợt A). Chưa làm: gợi ý câu hỏi tiếp theo sinh theo chỉ tiêu (hiện là 3 gợi ý cố định). Cây tin nhắn `parent_message_id`: ↪ không làm (trái với "1 notebook = 1 chat"). |
-| **F5** | SSE Streaming và tiến trình | ✅ | Route `POST /chat/query/stream`, `chat/events.py` (commit `1042522`). |
-| **F6** | Redis + `arq` worker | ↪ | Không có Redis hay `arq` trong `requirements.txt` và `docker-compose.yml`. PROJECT_PLAN đã quyết giữ job trong MongoDB. Giới hạn tần suất đang lưu trong bộ nhớ của một tiến trình (`shared/rate_limit.py`). |
-| **F7** | Email OTP (SendGrid) | ✅ | `/auth/forgot-password`, `/auth/reset-password`; cơ sở dữ liệu chỉ giữ mã băm của OTP. Không chạy thử lại trong lần đối chiếu này. |
-| **F8** | Cloudflare R2 | ✅ | `STORAGE_BACKEND = "local" \| "r2"`, `boto3`, `scripts/test_r2_connection.py`. Không chạy thử lại trong lần đối chiếu này. |
-| **F9** | PDF Viewer tô sáng trích dẫn | ✅ 2026-11-13 (commit `10422a0`, đã gộp vào `main` cục bộ) | Bấm trích dẫn thì nhảy tới trang **và tô vàng đúng các dòng của đoạn trích** trên trang. Cách làm: đọc chữ của trang bằng pdf.js (`getTextContent`), cắt đoạn trích và chữ trang thành từ và số, tìm cửa sổ chữ khớp nhất cho từng dòng của đoạn trích (số có trọng số cao hơn từ), rồi gộp các ô cùng một dòng thành một dải (`locateExcerpt.ts`). Đo trên 27 trang bảng thật của 10 báo cáo: **303/304 dòng được tìm thấy (99,7%)**; dòng có con số bị tìm nhầm sang trang khác 6,5%. Xem trên trình duyệt 3 PDF (Coca-Cola, AES, Netflix): dải tô nằm đúng dòng, bám theo khi phóng to, mất khi sang trang khác, hiện lại khi quay về. Giới hạn: trang quét ảnh (không có chữ) hoặc xoay ngang thì không tô được, banner báo rõ và vẫn nhảy tới trang; chưa thử với tài liệu tiếng Việt. Chạy lại bài đo: `npm run test:highlight` trong `frontend/`. |
-| **F10** | Admin Portal | ✅ | Commit `2fb1cd9`: `modules/admin/overview.py`, `frontend/src/features/admin/` (Overview, Documents, Audit, Tokens, Users). |
-| **F11** | Observability, Dockerization, CI/CD | ⬜ | Có `backend/Dockerfile`, `frontend/Dockerfile`; `/health` đã thử kết nối thật (trả 503 khi hỏng). **Chưa có** `.github/workflows/`, `README.md`, `frontend/nginx.conf`. |
-| **F12** | Chuẩn bị bảo vệ | ⬜ | Dự kiến 10/12. |
+| 1 | Luồng chính chạy trọn: đăng ký, tải PDF, hỏi, xem trích dẫn tô sáng, hỏi nối tiếp | Đạt từng phần riêng lẻ. Chưa chạy trọn một lượt trong ứng dụng thật sau khi gộp F9. | GD-1 |
+| 2 | Không còn lỗi im lặng đã biết: con số gán nhầm năm, mục thiếu bằng chứng bị che | **Chưa đạt.** Ca T01, D07, G02 trượt. | TC-1, TC-3 |
+| 3 | Hạ tầng trục trặc thì người dùng nhận thông báo rõ, không phải lỗi chung | **Chưa đạt.** Ca J03 trượt. | TC-2 |
+| 4 | Người khác lấy mã nguồn về và chạy được theo hướng dẫn | **Chưa đạt.** Bản lấy về thiếu 5 file cần thiết, chưa có README. | VH-1 |
+| 5 | Số liệu đo trong báo cáo chạy lại được bằng một lệnh từ kho mã | **Chưa đạt.** Mọi bộ đo nằm trong `experiments/` (git bỏ qua). | DG-1, DG-2 |
+| 6 | Đủ "Nội dung 6" của phiếu giao nhiệm vụ: triển khai thực tế, phản hồi người dùng | **Chưa làm, và chưa quyết cách làm.** | DA-1 |
 
-### Hạng mục phát sinh sau 07/11 (không có trong bản trước)
+Những thứ **không** thuộc MVP, dù hay: vòng lặp nhiều bước kiểu agent, LangGraph, kho tri thức khái niệm tài chính, đo tiếng Việt, so sánh 5 đến 10 công ty, hàng đợi Redis, thanh hạn mức token. Chúng nằm ở mục 8.
 
-| Mã | Hạng mục | Trạng thái | Ghi chú |
+---
+
+## 3. Đang đứng ở đâu (đối chiếu 13/11)
+
+**Phần lõi đã xong và đã ở trên GitHub.** Tái cấu trúc backend thành 9 module; tìm kiếm lai (BGE-M3 dense và sparse, Qwen3-Reranker); bộ lập kế hoạch cho câu hỏi nhiều tài liệu và lưới an toàn; kiểm chứng con số và phép tính bằng code; lớp guard an toàn; hội thoại nối tiếp; trả lời dạng dòng chảy (SSE) có tiến trình; tô sáng trích dẫn trên PDF; trang quản trị; quên mật khẩu qua email; lưu file trên Cloudflare R2. Bảng trạng thái từng hạng mục cũ ở Phụ lục A.
+
+**Sáu chỗ bản roadmap trước ghi sai hoặc chưa biết, nay đã kiểm:**
+
+| # | Bản trước ghi | Thực tế kiểm 13/11 |
+|---|---|---|
+| 1 | Chưa đẩy `main` lên GitHub, bị từ chối 403 | **Đã đẩy xong.** `origin/main` và `origin/feat/f9-pdf-highlight` đều ở commit `4debdd1`, trùng với máy (`git ls-remote`). Mọi nhánh cục bộ đã gộp vào `main`. |
+| 2 | "Chưa có README" (một dòng trong F11) | Nặng hơn thế: `.gitignore` đang chặn `docker-compose.yml` (luật `*.yml`), `backend/.env.example` (luật `.env.*`), 3 mẫu email trong `backend/app/templates/email/` (luật `templates/`), mọi file CI (luật `*.yml`), và luật mới chưa commit `/*.md` sẽ chặn luôn `README.md`. Người lấy mã về không có file nào trong số này. |
+| 3 | Có `backend/Dockerfile`, `frontend/Dockerfile` | Có, nhưng chưa chạy được bằng một lệnh: backend dùng Python 3.10 (máy phát triển 3.13) và không cài thư viện mô hình; compose không truyền khóa bí mật và khóa API vào backend; frontend không có cấu hình nginx nên tải lại trang `/app` sẽ lỗi 404 và `/api` không tới backend. |
+| 4 | Trạng thái bằng chứng "đã có `answer_meta`" | Backend có, **giao diện chat chưa hiển thị** (không tìm thấy trong `frontend/src/components/chat/`). |
+| 5 | "Triển khai công khai" nằm trong mục "chưa làm trong lộ trình này" | Mẫu phiếu giao nhiệm vụ (Mẫu ĐATN 02) ghi Nội dung 6 "Triển khai trong thực tế và đánh giá, phản hồi của người sử dụng" là **bắt buộc với đồ án kỹ sư**. Cần quyết (mục 7, quyết định 2). File `PGNV_Vũ Thành_20225405.xlsx` trong thư mục gốc vẫn là mẫu trống. |
+| 6 | 740 test | Không chạy lại hôm nay. Đếm được 508 hàm `test_` trong 41 file; con số 740 là số ca sau khi nhân tham số ở lần chạy 13/11. |
+
+**Chưa có trong code (đã tìm bằng grep):** trang chính sách riêng tư, xóa tài khoản, chặn gửi trùng một câu hỏi, cờ báo "kết quả bị suy giảm", kiểm cấu trúc đầu ra JSON của mô hình bằng Pydantic, nhãn loại câu hỏi, thử lại khi tìm kiếm hết giờ, thư mục `backend/evaluation/`, `.github/workflows/`, `frontend/nginx.conf`.
+
+**Bảng điểm bộ test P0** (chi tiết trong báo cáo P0): 12 ca đạt rõ ràng. Các ca chưa đạt và việc xử lý:
+
+| Ca | Hiện tượng | Việc |
+|---|---|---|
+| T01 | Con số đúng nhưng gán nhầm cột năm của bảng nhiều năm, cả hai bước kiểm tra đều cho qua | TC-1 |
+| J03 | Tìm kiếm hết giờ: không thử lại, người dùng nhận `INTERNAL_ERROR` | TC-2 |
+| D07, G02, G03 | Một mục thiếu bằng chứng bị các đoạn không liên quan che mất; không có lượt tìm bổ sung | TC-3 |
+| E01 (đạt yếu), E03w | Bộ tính chỉ sửa số học, không biết công thức chuẩn của chỉ tiêu | TC-4 |
+| G04 | Năm chỉ có ở cột so sánh: chỉ tìm trong một báo cáo, số liệu đã điều chỉnh không tới được mô hình | TC-5 |
+| G16 | Nói "không công bố" khi thực ra chỉ là không tìm thấy | TC-6 |
+| A04 | Câu "công ty nào tốt hơn" không qua cổng hỏi tiêu chí (mô hình tự xử lý ổn) | TC-7 |
+| D03 | Chưa chạy: cần GPU | DG-2 |
+
+---
+
+## 4. Bảng điều khiển: mọi việc trong một bảng
+
+Công sức tính bằng ngày làm việc tập trung. "Cần" ghi thứ phải có trước khi bắt đầu: **Duyệt** = sinh viên đồng ý sửa `backend/`; **GPU** = địa chỉ máy GPU từ xa còn sống; **API** = lời đồng ý gọi mô hình trả tiền kèm số lần; **Prompt** = duyệt nguyên văn dòng prompt.
+
+| Mã | Việc (mã cũ) | Mức | Công sức | Cần | Trạng thái |
+|---|---|---|---|---|---|
+| **VH-1** | Kho mã lấy về là chạy được: sửa `.gitignore`, README, đưa file thiếu vào git (một phần F11) | 1 | 1,5 | | Đã làm 13/11, chưa commit (kết quả ở mục 5) |
+| **TC-2** | Thử lại khi tìm kiếm hết giờ, mã lỗi riêng (B1) | 1 | 0,5 | Duyệt | Chưa làm |
+| **TC-1** | Kiểm cột năm của bảng (B5) | 1 | 2,5 | Duyệt | Chưa làm |
+| **DG-1** | Bộ đánh giá vào kho mã, chạy lại bằng một lệnh (F2) | 1 | 2,5 | Sinh viên kiểm đáp án | Chưa làm |
+| **TC-3** | Kiểm đủ bằng chứng theo từng mục, tìm bổ sung 1 lần (B2) | 1 | 2 + 1 đo | Duyệt; đo cần GPU, API | Chưa làm |
+| **TC-4** | Bảng chỉ tiêu chuẩn, bản tối thiểu (C1) | 1 | 3 | Duyệt | Chưa làm |
+| **DG-2** | Một đợt đo có GPU và API: bảng trước/sau, ngưỡng cho TC-3, ca D03 | 1 | 1 | GPU, API | Chờ GPU |
+| **GD-1** | Chạy trọn luồng chính trong ứng dụng thật, gồm cả tô sáng (đợt A cũ) | 1 | 0,5 | Backend chạy | Chưa làm |
+| **DA-1** | Nội dung 6: triển khai thực tế và phản hồi người dùng | 1 | 2 | Quyết định 2 | Chưa quyết |
+| **DA-2** | Báo cáo, slide, video demo (F12) | 1 | chạy song song | | Chưa làm |
+| TC-5 | Năm chỉ có ở cột so sánh: tìm mọi báo cáo hoặc báo có bản điều chỉnh (B3) | 2 | 1 | Duyệt | Chưa làm |
+| VH-2 | Kiểm tra tự động khi đẩy mã (CI) (một phần F11) | 2 | 0,5 | VH-1 | Chưa làm |
+| DG-3 | Đưa ca P0 vào `backend/tests/` làm test hồi quy | 2 | 1 | Duyệt; quyết định 5 | Sinh viên: chưa làm vội |
+| GD-2 | Hiện trạng thái bằng chứng trên giao diện (đợt D cũ) | 2 | 1 | | Chưa làm |
+| DA-3 | Vẽ lại sơ đồ thiết kế cho đúng code | 2 | 1 | | Chưa làm |
+| VH-3 | Chạy bằng một lệnh Docker | 2 | 2 | VH-1 | Chưa làm |
+| DG-4 | So sánh 10 câu với NotebookLM; báo cáo thử tấn công | 2 | 1,5 | API (ít) | Chưa làm |
+| TC-6 | Một dòng prompt: "không tìm thấy" khác "không công bố" (B4) | 3 | 0,5 | Prompt, API | Chờ |
+| TC-7 | Cổng hỏi tiêu chí cho câu "công ty nào tốt hơn" | 3 | 0,5 | Duyệt | Chưa làm |
+| VH-4 | Trang riêng tư, xóa tài khoản | 3 (lên 1 nếu mở công khai) | 1 | Duyệt | Chưa làm |
+| VH-5 | Chặn gửi trùng, kiểm cấu trúc JSON của mô hình, cờ suy giảm | 3 | 2 | Duyệt | Chưa làm |
+| GD-3 | Gợi ý câu hỏi tiếp theo sinh theo chỉ tiêu | 3 | 1 | Duyệt | Chưa làm |
+| GD-4 | Báo cáo phân tích một công ty, xuất Excel | 3 | 3 | TC-4 | Chưa làm |
+
+Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày lịch. Vừa đủ nếu báo cáo (DA-2) được viết song song từ tuần đầu, và **không còn chỗ cho việc mức 2 nếu một việc mức 1 trượt hạn**. Xem thứ tự cắt ở mục 6.
+
+---
+
+## 5. Chi tiết từng việc mức 1 và mức 2
+
+### Luồng TC: tin cậy của câu trả lời
+
+Đây là luồng làm nên khác biệt với NotebookLM. Kết luận chính của bộ test P0: mô hình ngôn ngữ đã trung thực khi nhận đoạn trích gọn; chỗ thiếu nằm ở **cái gì tới được mô hình** và **cái gì được kiểm sau khi mô hình trả lời**.
+
+#### TC-1. Kiểm cột năm của bảng (mã cũ B5) · Mức 1
+
+- **Làm gì.** Với mỗi con số trong câu trả lời có gắn năm: tìm ô chứa con số đó trong bảng Markdown của đoạn trích, đọc năm ở hàng tiêu đề của cột, so với năm mà câu trả lời gán. Lệch thì thêm một lỗi vào danh sách lỗi của bước kiểm chứng, để được sửa một lần hoặc đánh dấu như các lỗi khác. Con số có ở nhiều cột thì chấp nhận nếu một cột khớp năm. Nơi sửa: module mới trong `generation/answer_check/`, nối vào `verification.py`. Cách tách từ và số có thể mượn từ `locateExcerpt.ts` của F9.
+- **Vì sao làm.** Báo cáo 10-K in ba năm cạnh nhau. Bước kiểm số hiện chỉ hỏi "con số có trong một đoạn trích nào không"; bước kiểm trích dẫn so năm theo cả báo cáo, nên báo cáo năm 2019 (phủ 2017 đến 2019) không bao giờ bị coi là sai kỳ. Đã kiểm bằng tay: câu gán 52,4 cho năm 2019 trong khi nó thuộc cột 2017 qua được cả hai bước.
+- **Vì sao mức 1.** Đúng điều 1 và 4: đây là lỗi im lặng nặng nhất còn lại, nó đánh thẳng vào lời hứa "có kiểm chứng", nhắc trong prompt không chặn được, và sửa hoàn toàn bằng code, không cần GPU hay tiền.
+- **Xong khi.** Ca T01 đạt; chạy bộ kiểm trên các câu trả lời thật đã lưu và ghi lại tỷ lệ báo nhầm; nếu tỷ lệ báo nhầm cao thì để sau một cờ cấu hình tắt mặc định và ghi con số vào báo cáo. Toàn bộ test cũ vẫn qua.
+- **Giới hạn biết trước.** Tiêu đề bảng nhiều tầng, đơn vị khác nhau giữa các cột, bảng bị bóc tách sai thì không kiểm được. Ở bài đo 12/11, chỉ 33,6 % con số đã kiểm nằm trên một dòng bảng có nhãn; phần còn lại nằm trong câu văn.
+- **Mở rộng sau MVP.** Kiểm thêm nhãn dòng (đúng chỉ tiêu, không chỉ đúng năm) và đơn vị của cột; xa hơn là đọc số liệu có cấu trúc XBRL của SEC để mỗi con số mang sẵn chỉ tiêu, kỳ và đơn vị (mục 8, hướng 3).
+
+#### TC-2. Thử lại khi tìm kiếm hết giờ, mã lỗi riêng (mã cũ B1) · Mức 1
+
+- **Làm gì.** Bọc các lời gọi tìm kiếm trong `retrieval_step.py` bằng một lần thử lại có giới hạn; khi vẫn hỏng, trả mã lỗi riêng (ví dụ `SEARCH_UNAVAILABLE`) thay cho `INTERNAL_ERROR`. Câu hiển thị cho người dùng vẫn là câu chung "hệ thống đang bận, vui lòng thử lại", không nêu tên thành phần.
+- **Vì sao làm.** Hiện tìm kiếm chờ Qdrant 60 giây, máy GPU 180 giây, rồi bỏ; lỗi hết giờ thành lỗi 500 chung. Đường hầm tới máy GPU từ xa đã chết sau khoảng một giờ trong các lần thử ngày 12/11.
+- **Vì sao mức 1.** Đúng điều 2 và 4: buổi demo chạy trên chính hạ tầng hay rớt này, và việc này nhỏ nhất trong danh sách (nửa ngày). Làm đầu tiên trong luồng TC để các đợt đo sau đỡ hỏng giữa chừng.
+- **Xong khi.** Ca J03 đạt trên `run_l1.py`; có test cho cả hai nhánh (thử lại thành công, thử lại vẫn hỏng).
+- **Mở rộng sau MVP.** Chỉ chạy lại nhánh lỗi thay vì cả câu hỏi; ngắt mạch khi máy GPU hỏng liên tục; khi phải bỏ qua bước reranker thì gắn cờ "suy giảm" cho người dùng biết (VH-5).
+
+#### TC-3. Kiểm đủ bằng chứng theo từng mục, tìm bổ sung một lần (mã cũ B2) · Mức 1
+
+- **Làm gì.** Bộ lập kế hoạch đã cho danh sách các cặp (tài liệu, mục cần tìm). Sau khi tìm, chấm từng cặp: cặp nào không có đoạn trích nào đạt ngưỡng điểm reranker thì coi là thiếu; tìm bổ sung đúng cặp đó tối đa 1 lần; vẫn thiếu thì báo cho mô hình "mục này chưa có bằng chứng" để nó nói thật thay vì đoán. Nơi sửa: `retrieval_step.py`, `hybrid_search.py` (đưa điểm reranker ra ngoài).
+- **Vì sao làm.** Tìm kiếm vector luôn trả về cái gì đó, nên ghi chú "không tìm thấy đoạn nào" hiện gần như không bao giờ bật. Hệ thống biết một tài liệu rỗng, chưa biết một mục thiếu. Khi so sánh 5 công ty mà một công ty thiếu doanh thu, câu trả lời có thể lặng lẽ bỏ công ty đó.
+- **Vì sao mức 1.** Đúng điều 1 và 3: đây là lỗi im lặng về độ đầy đủ, và là "vòng lặp tìm lại" mà mọi hướng mở rộng kiểu agent ở mục 8 phải dựng lên trên. Nó cũng là phần mới có giá trị nhất để viết trong báo cáo.
+- **Điểm cần lưu ý.** Ngưỡng điểm không chọn bằng tay. Phần code làm ngay được, để sau một cờ cấu hình **tắt mặc định**. Việc đo ngưỡng trên bộ vàng nhiều tài liệu và quyết định bật nằm trong DG-2 (cần GPU và API). Nếu đo cho thấy không tốt hơn thì giữ cờ tắt và đưa kết quả vào báo cáo: đó vẫn là một kết quả có giá trị.
+- **Xong khi.** D07, G02, G03 đạt trên bộ giả của `run_l1.py`; câu hỏi đủ bằng chứng ngay lượt đầu không tốn thêm lượt tìm nào (ca K01 vẫn đạt); có test chứng minh dừng sau đúng 1 lần tìm bổ sung.
+- **Mở rộng sau MVP.** Viết lại truy vấn cho mục thiếu bằng một lời gọi mô hình thay vì tìm lại bằng truy vấn cũ; nâng lên 2 lần tìm lại; câu hỏi nhiều bước (mục 8, hướng 1).
+
+#### TC-4. Bảng chỉ tiêu chuẩn, bản tối thiểu (mã cũ C1) · Mức 1
+
+- **Làm gì.** Một bảng dữ liệu trong code: tên chỉ tiêu, công thức, đầu vào, tên gọi khác, lưu ý (ví dụ ROA dùng tổng tài sản bình quân). Soạn từ giáo trình CFA có sẵn trên máy. Bộ tính hiện có (`answer_check/calculations.py`) dùng bảng này để kiểm cả công thức, không chỉ số học. Bản tối thiểu: khoảng 15 đến 20 chỉ tiêu hay gặp nhất (biên lợi nhuận gộp, biên hoạt động, biên ròng, ROA, ROE, tăng trưởng, dòng tiền tự do, thuế suất hiệu dụng, tỷ số thanh toán hiện hành và nhanh, vòng quay hàng tồn kho, số ngày phải thu, nợ trên vốn chủ, cường độ đầu tư tài sản cố định).
+- **Vì sao làm.** Khi mô hình được suy nghĩ, lỗi số học gần như bằng 0 (0 trên 167 phép tính viết ra trong bài đo 12/11). Loại lỗi còn lại nhiều nhất trên FinanceBench là **sai công thức, sai định nghĩa hoặc sai dòng đầu vào** (14 câu sai dù đã có đúng trang). Bộ tính hiện tại không bắt được loại này: ca E03w trượt, ca E01 đạt yếu.
+- **Vì sao mức 1.** Đúng điều 1 và 4: nó nhắm đúng loại lỗi lớn nhất đã đo được, và làm ngoại tuyến hoàn toàn. Nó cũng là phần "phân tích tài chính" phân biệt sản phẩm với một công cụ hỏi đáp PDF chung. Việc này không phụ thuộc quyết định về kho tri thức (quyết định 4).
+- **Vì sao chỉ bản tối thiểu.** Bản đầy đủ là việc lớn; 15 đến 20 chỉ tiêu phủ phần lớn câu hỏi tính toán của FinanceBench và đủ để chứng minh cơ chế.
+- **Xong khi.** Viết ca P0 mới cho bảng chỉ tiêu **trước** khi viết code; E01 và E03w đạt; không báo nhầm trên các câu trả lời đúng đã lưu.
+- **Mở rộng sau MVP.** Thêm chỉ tiêu; báo cáo phân tích một công ty (GD-4); quét "dấu hiệu cần chú ý" theo CFA; kho đoạn trích giáo trình để trả lời câu hỏi khái niệm (mục 8, hướng 2).
+
+#### TC-5. Năm chỉ có ở cột so sánh của nhiều báo cáo (mã cũ B3) · Mức 2
+
+- **Làm gì.** Khi năm được hỏi chỉ xuất hiện ở cột so sánh của nhiều báo cáo, tìm trong tất cả các báo cáo đó, hoặc tối thiểu báo cho người dùng biết có bản số liệu đã điều chỉnh. Nơi sửa: `target_scope.py`.
+- **Vì sao làm.** Quy tắc hiện tại "lấy từ báo cáo sớm nhất có năm đó" che mất số liệu đã điều chỉnh (ca G04): người dùng thấy số cũ mà không biết có số mới.
+- **Vì sao mức 2, không phải 1.** Chỉ ảnh hưởng nhóm câu hỏi về năm không có báo cáo riêng và có điều chỉnh số liệu; phạm vi hẹp hơn TC-1 và TC-3. Nhưng nó nhỏ (1 ngày) và là ca P0, nên là **việc mức 2 làm đầu tiên**.
+- **Xong khi.** Ca G04 đạt trên `run_l1.py`; chi phí tăng thêm ở các câu hỏi này được ghi lại.
+- **Mở rộng sau MVP.** Phân biệt ba loại số: báo cáo gốc, đã điều chỉnh, và số không theo chuẩn kế toán (GAAP và non-GAAP).
+
+### Luồng VH: vận hành
+
+#### VH-1. Kho mã lấy về là chạy được · Mức 1
+
+- **Làm gì.**
+  1. Sửa `.gitignore`: bỏ luật `*.yml`; thêm ngoại lệ `!.env.example`, `!README.md`; đổi `templates/` và `storage/` thành đường dẫn cụ thể để không chặn `backend/app/templates/email/`. Giữ nguyên việc bỏ qua `docs/Version_3/` và `experiments/` (quyết định ngày 13/11).
+  2. Đưa vào git: `docker-compose.yml`, `backend/.env.example`, 3 mẫu email.
+  3. Bỏ `frontend/tsconfig.tsbuildinfo` khỏi git (file build bị commit nhầm).
+  4. Viết `README.md`: dự án là gì, kiến trúc một đoạn, cách chạy từng bước (MongoDB và Qdrant bằng Docker, backend bằng môi trường ảo Python, frontend bằng `npm`), biến môi trường, giới hạn đã biết.
+  5. Kiểm việc chuyển đổi cấu trúc MongoDB V3 đã chạy trên cơ sở dữ liệu thật chưa bằng `scripts/inspect_db.py` (chỉ đọc). Đây là dòng "chưa xác minh" của hạng mục F3.5 cũ.
+  6. Kiểm bằng cách lấy mã về một thư mục tạm và làm theo README.
+- **Vì sao làm.** Xem dòng 2 bảng "sáu chỗ ghi sai" ở mục 3: hiện một bản lấy về không có compose, không có mẫu biến môi trường, không có mẫu email, không có hướng dẫn.
+- **Vì sao mức 1.** Đúng điều 2, 3 và 4: giảng viên hay hội đồng không thể chạy thử; VH-2, VH-3 và DA-1 đều phải chờ nó; và nó không cần GPU, không cần duyệt sửa `backend/` (chỉ thêm file vào git). Vì thế nó là **việc làm đầu tiên của cả lộ trình**.
+- **Xong khi.** Từ bản lấy về sạch, làm theo README: đăng nhập, tải PDF, hỏi, nhận câu trả lời có trích dẫn.
+- **Kết quả làm ngày 13/11 (chưa commit, chờ bạn duyệt).**
+  - `.gitignore`: bỏ `*.yml`; thêm `!.env.example` và `!README.md`; `templates/` thành `/templates/`; `storage/` thành `/storage/` và `/backend/storage/` (luật cũ còn che cả `backend/app/infrastructure/storage/__init__.py`); `.docx` thành `*.docx`; thêm `*.tsbuildinfo`. `frontend/tsconfig.tsbuildinfo` đã gỡ khỏi chỉ mục git (file vẫn ở trên máy).
+  - Git nay thấy thêm: `docker-compose.yml`, `backend/.env.example`, 3 mẫu email, `backend/app/infrastructure/storage/__init__.py`, `README.md`. Vẫn bị bỏ qua: `.env`, `.env.dev`, `backend/storage/`, `docs/Version_3/`, `experiments/`, `ARCHITECTURE.md`, `frontend/dist`, `node_modules`. Đã kiểm trên một bản sao chỉ gồm các file git thấy.
+  - `backend/.env.example`: cổng MongoDB đổi từ 27017 sang 27018 cho khớp `docker-compose.yml` (trước đây người làm đúng README sẽ không kết nối được); thêm dòng ghi chú cho `REMOTE_GPU_URL` và `FRONTEND_URL`.
+  - **Lỗi tìm thấy khi thử trên bản sao sạch:** chép nguyên `.env.example` thành `.env` thì 33 file test không thu thập được và server không khởi động, vì dòng `ADMIN_PASSWORD=` để trống không qua kiểm tra tối thiểu 8 ký tự. Đã đổi thành dòng chú thích. Sau sửa, bản sao chỉ gồm file git thấy chạy `pytest` qua 740 ca và `app.main` nạp được.
+  - **Chưa kiểm:** `npm install` và `npm run build` trên bản sao sạch, và toàn bộ luồng đăng nhập, tải PDF, hỏi (cần Docker, hiện chưa chạy trên máy này). Việc đó thuộc GD-1.
+  - **Cơ sở dữ liệu MongoDB V3 (hạng mục F3.5) đã xác minh bằng truy vấn chỉ đọc:** trên `datn_finance` (Atlas), 4 người dùng và 3 sổ tay đều ở dạng mới, không còn bản ghi dạng cũ, không còn collection `chat_sessions`. Hai chỉ mục cũ `email_1` và `username_1` của `users` vẫn còn; chưa rõ có trùng tên với chỉ mục V3 hay không nên chưa xóa. Lưu ý: `migrate_mongo_v3.py --dry-run` báo "STOP" trên cơ sở dữ liệu này vì nó chỉ đếm số bản ghi trong 4 collection, không phân biệt dạng cũ hay mới; đừng đọc "STOP" đó là chưa chuyển đổi.
+- **Mở rộng sau MVP.** VH-3 (một lệnh Docker), rồi triển khai công khai ổn định (mục 8, hướng 6).
+
+#### VH-2. Kiểm tra tự động khi đẩy mã (CI) · Mức 2
+
+- **Làm gì.** Một file `.github/workflows/ci.yml` chạy `pytest`, `tsc`, `vite build`, `npm run test:highlight`.
+- **Vì sao làm.** Hơn 700 ca test đang chỉ chạy khi nhớ chạy tay. Ba tuần tới sẽ sửa `backend/` nhiều lần liên tiếp.
+- **Vì sao mức 2.** Rẻ (nửa ngày) và bảo vệ các sửa của luồng TC, nhưng thiếu nó sản phẩm vẫn chạy và vẫn bảo vệ được. Phải chờ VH-1 vì luật `*.yml` đang chặn file CI.
+- **Xong khi.** Một lần đẩy mã làm CI chạy và báo xanh.
+- **Mở rộng sau MVP.** Thêm kiểm kiểu viết code (`ruff`), đo độ phủ test, đặt ngưỡng chặn.
+
+#### VH-3. Chạy bằng một lệnh Docker · Mức 2
+
+- **Làm gì.** Sửa `backend/Dockerfile` (Python 3.13, người dùng không phải root, kiểm tra sức khỏe), thêm `frontend/nginx.conf` (mở thẳng `/app`, chuyển `/api` sang backend, tắt đệm cho SSE), compose đọc `env_file`.
+- **Vì sao mức 2.** MVP chỉ cần "chạy được theo hướng dẫn" (VH-1). Một lệnh Docker tiện hơn nhưng tốn 2 ngày, và ảnh backend có mô hình rất nặng. **Lên mức 1 nếu** quyết định 2 chọn triển khai công khai bằng Docker.
+
+### Luồng DG: đánh giá
+
+#### DG-1. Bộ đánh giá vào kho mã (mã cũ F2) · Mức 1
+
+- **Làm gì.** Tạo `backend/evaluation/`: sao chép các script đo cần thiết từ `experiments/` (không đưa dữ liệu nặng vào git); một bộ vàng nhỏ gồm ít nhất 30 câu hỏi thật, 15 câu ngoài phạm vi hoặc tấn công prompt, 5 ca dữ liệu thiếu; một file đặc tả cách đo; một lệnh chạy lại. Giữ FinanceBench để so với số đã có.
+- **Vì sao làm.** Mọi con số sẽ trích trong báo cáo (FinanceBench 27/30, độ đủ bằng chứng 89 %, guard 32/32...) đều nằm trong thư mục git bỏ qua. Người đọc báo cáo không thể chạy lại.
+- **Vì sao mức 1.** Đúng điều 2 và 3: một đồ án về "số liệu có kiểm chứng" mà số liệu của chính nó không kiểm chứng được là điểm yếu dễ bị hỏi nhất; và mọi việc luồng TC cần bộ đo này để có bảng trước/sau.
+- **Cần sinh viên.** Đáp án của bộ vàng phải do người viết hoặc kiểm. Nên bắt đầu ngay từ tuần 1, song song với việc khác.
+- **Xong khi.** Một lệnh in ra bảng chỉ số (độ đúng số liệu, tỷ lệ trích dẫn đúng, tỷ lệ từ chối đúng, thời gian, chi phí mỗi câu); phần không cần mô hình thật chạy được không tốn tiền.
+- **Mở rộng sau MVP.** Chạy 2 lần mỗi cấu hình để đo độ ổn định; bộ tiếng Việt; chạy tự động hằng tuần.
+
+#### DG-2. Một đợt đo có GPU và API · Mức 1, đang chờ GPU
+
+- **Làm gì.** Gom mọi việc cần máy GPU hoặc mô hình trả tiền vào **một đợt**, chuẩn bị sẵn script để chạy liền một mạch:
+  1. Bảng mốc "trước": bộ vàng trên code hiện tại.
+  2. Đo ngưỡng điểm reranker cho TC-3, rồi quyết bật hay tắt mặc định.
+  3. Ca D03: tìm trên PDF thật với ba báo cáo.
+  4. Bảng "sau": cùng bộ vàng, sau TC-1 đến TC-4.
+  5. Nếu làm TC-6: đo dòng prompt đó.
+- **Vì sao gom một đợt.** Đường hầm tới máy GPU sống khoảng một giờ và địa chỉ đổi mỗi lần; hạn mức Kaggle đang hết. Mỗi lần xin địa chỉ mới là một lần gián đoạn.
+- **Vì sao mức 1.** Không có nó thì TC-3 mãi ở trạng thái tắt và báo cáo không có bảng trước/sau.
+- **Rủi ro lớn nhất của cả lộ trình.** Nếu tới 01/12 vẫn không có GPU: bảng trước/sau chỉ còn phần đo được không cần GPU (kiểm chứng trên câu trả lời đã lưu, bộ giả `run_l1.py`), TC-3 nộp ở trạng thái tắt kèm kết quả trên bộ giả. Cần phương án GPU thay thế (quyết định 3).
+- **Xong khi.** Có hai bảng trước và sau trên cùng bộ câu hỏi, mỗi lần so chỉ đổi một yếu tố, kèm số lần gọi và chi phí.
+
+#### DG-3. Đưa ca P0 vào `backend/tests/` · Mức 2
+
+- **Làm gì.** Ca đang đạt vào làm test hồi quy; ca đang trượt vào dưới dạng "biết trước là trượt" (`xfail(strict=True)`), để khi sửa xong test tự đổi màu. Ca gọi mô hình thật ở lại `experiments/`.
+- **Vì sao làm.** TC-1 đến TC-5 sửa đúng các hành vi này. Không có test hồi quy thì một sửa sau có thể làm hỏng lại sửa trước mà không ai biết.
+- **Trạng thái.** Sinh viên đã nói "chưa làm vội" ngày 13/11. Đề xuất xem lại: làm **cùng lúc** với từng việc TC (mỗi việc mang theo ca của nó), thay vì một đợt riêng. Xem quyết định 5.
+
+#### DG-4. So sánh với NotebookLM và báo cáo thử tấn công · Mức 2
+
+- **Làm gì.** 10 câu hỏi giống nhau hỏi FinHelp và NotebookLM trên cùng PDF, chấm tay. Một báo cáo thử tấn công dựa trên bộ guard đã đo.
+- **Vì sao mức 2.** Câu hỏi "khác NotebookLM ở đâu" gần như chắc chắn được hỏi khi bảo vệ, và 10 câu chấm tay là bằng chứng rẻ. Nhưng nó không làm sản phẩm tốt hơn, nên đứng sau luồng TC.
+
+### Luồng GD: giao diện
+
+#### GD-1. Chạy trọn luồng chính trong ứng dụng thật · Mức 1
+
+- **Làm gì.** Với backend và cơ sở dữ liệu phát triển đang chạy: đăng ký, tải một PDF, hỏi, bấm trích dẫn, xem dải tô sáng, hỏi nối tiếp. Ghi lại lỗi gặp phải. Kiểm luôn lỗi cũ số 6 (PDF bị tải lại mỗi lần bấm trích dẫn) còn hay không.
+- **Vì sao mức 1.** F9 mới chỉ được kiểm trên trang thử riêng, không qua backend. Đây là điều kiện 1 của MVP và chỉ tốn nửa ngày. Phần cần bộ lập kế hoạch và máy GPU thật thì làm trong DG-2.
+- **Xong khi.** Một lượt chạy trọn không lỗi, có ảnh chụp màn hình dùng luôn cho báo cáo.
+
+#### GD-2. Hiện trạng thái bằng chứng trên giao diện · Mức 2
+
+- **Làm gì.** Backend đã trả `answer_meta` với ba trạng thái: đã trả lời, một phần, không tìm thấy. Giao diện chat hiện một nhãn nhỏ tương ứng trên mỗi câu trả lời.
+- **Vì sao làm.** Mọi công sức của luồng TC là vô hình với người dùng nếu câu trả lời "một phần" trông y hệt câu trả lời đầy đủ.
+- **Vì sao mức 2.** Dữ liệu đã có sẵn, chỉ là phần hiển thị (1 ngày), và nó làm buổi demo thuyết phục hơn. Nhưng thiếu nó câu trả lời vẫn đúng.
+- **Mở rộng sau MVP.** Sáu trạng thái của `tối ưu.txt` (thêm: không tìm thấy khi tìm, nguồn không công bố, nguồn không dùng được, bằng chứng mâu thuẫn), cần TC-3 và TC-5 xong trước.
+
+### Luồng DA: đồ án
+
+#### DA-1. Nội dung 6: triển khai thực tế và phản hồi người dùng · Mức 1
+
+- **Làm gì.** Tùy quyết định 2. Hai cách:
+  - **Cách A, mở tạm ra mạng:** máy có GPU chạy backend, nối ra ngoài bằng Cloudflare Tunnel; MongoDB Atlas và Cloudflare R2 đã dùng sẵn. Mở trong một khoảng thời gian có hẹn, mời ít nhất 5 người dùng thử, thu 3 câu chấm điểm 1 đến 5 và 1 câu "điều gì làm bạn khó chịu nhất". Cần thêm VH-4 (trang riêng tư nói rõ nội dung được gửi tới mô hình của bên thứ ba).
+  - **Cách B, không mở ra mạng:** dựa vào ý "thử nghiệm với bộ dữ liệu thật" của mẫu phiếu (FinanceBench là báo cáo thật của doanh nghiệp), cộng 5 người dùng thử trực tiếp trên máy.
+- **Vì sao mức 1.** Đúng điều 2: mẫu phiếu giao nhiệm vụ ghi đây là nội dung bắt buộc với đồ án kỹ sư. Bản roadmap trước xếp "triển khai công khai" vào nhóm không làm, tức đang lệch với yêu cầu.
+- **Việc đầu tiên.** Hỏi giảng viên hướng dẫn cách B có được chấp nhận không. Câu trả lời quyết định 2 đến 3 ngày công.
+- **Xong khi.** Có bảng phản hồi của ít nhất 5 người, trích nguyên văn (có đồng ý), kèm danh sách việc đã sửa theo phản hồi.
+
+#### DA-2. Báo cáo, slide, video demo (mã cũ F12) · Mức 1
+
+- **Làm gì.** Viết song song từ tuần 1, không dồn vào tuần cuối. Mỗi việc TC xong thì viết luôn đoạn tương ứng khi số liệu còn mới.
+- **Lưu ý.** Không đưa con số nào chưa có nguồn đo vào báo cáo. Điền file phiếu giao nhiệm vụ (hiện còn là mẫu trống).
+
+#### DA-3. Vẽ lại sơ đồ thiết kế cho đúng code · Mức 2
+
+- **Làm gì.** Bốn sơ đồ trong `docs/Version_2/diagrams/` vẽ theo trạng thái 07/11: chưa có lớp guard, luồng SSE, trang quản trị. `ARCHITECTURE.md` đã đúng; cập nhật sơ đồ theo nó.
+- **Vì sao mức 2.** Báo cáo cần sơ đồ đúng, nhưng có thể dùng sơ đồ sinh từ `ARCHITECTURE.md` nếu hết thời gian.
+
+---
+
+## 6. Thứ tự làm, từ 14/11 đến 10/12
+
+Nguyên tắc xếp: việc ngoại tuyến và việc mở khóa cho việc khác đi trước; việc cần GPU gom vào một đợt ở tuần 3; hai ngày cuối không viết code mới.
+
+| Tuần | Ngày | Kỹ thuật | Song song (sinh viên) | Điểm dừng báo cáo |
+|---|---|---|---|---|
+| 1 | 14 đến 20/11 | **VH-1** → **TC-2** → **TC-1** → **GD-1** | Hỏi giảng viên về Nội dung 6 (DA-1). Bắt đầu viết đáp án bộ vàng (DG-1). Dựng khung báo cáo (DA-2). | Sau VH-1; sau TC-1 |
+| 2 | 21 đến 27/11 | **DG-1** → **TC-3** (phần code, cờ tắt) → **TC-4** | Viết chương thiết kế. Tìm nguồn GPU (quyết định 3). | Sau DG-1; sau TC-4 |
+| 3 | 28/11 đến 04/12 | **DG-2** (đợt đo) → **DA-1** → mức 2 theo thứ tự: TC-5, VH-2, GD-2, DG-3 | Thu phản hồi người dùng. Viết chương đánh giá ngay khi có bảng. | Sau DG-2 |
+| 4 | 05 đến 10/12 | Chỉ sửa lỗi phát hiện khi demo thử. Đóng băng code ngày 08/12. | **DA-2**: hoàn thiện báo cáo, slide, quay video. DA-3. | 08/12 |
+
+**Phụ thuộc cần nhớ:** VH-1 trước VH-2 và VH-3. TC-2 trước DG-2. DG-1 trước DG-2. TC-3 (code) trước DG-2 (đo ngưỡng). TC-4 trước GD-4. Quyết định 2 trước DA-1.
+
+**Thứ tự cắt khi trễ.** Cắt từ trái sang phải; không bao giờ cắt việc mức 1:
+
+GD-4 → GD-3 → VH-5 → TC-7 → TC-6 → VH-3 → DG-4 → DA-3 → GD-2 → VH-2 → DG-3 → TC-5.
+
+Nếu chính một việc mức 1 trễ: thu hẹp **phạm vi** của nó chứ không bỏ. TC-4 còn 8 chỉ tiêu thay vì 15 đến 20. TC-3 nộp ở trạng thái tắt kèm số đo. DG-1 còn 30 câu, bỏ phần ca dữ liệu thiếu. DA-1 dùng cách B.
+
+---
+
+## 7. Quyết định đang chờ sinh viên
+
+Xếp theo mức gấp. Ba quyết định đầu chặn việc của tuần 1 và 2.
+
+| # | Quyết định | Vì sao phải quyết | Đề xuất |
 |---|---|---|---|
-| **G1** | Lớp guard: gắn một nhãn an toàn cho mỗi tin nhắn | ✅ | Commit `a0ca4b5`; bộ đo 363 ca trong `experiments/guardrail_eval/`. |
-| **G2** | Kiểm chứng câu trả lời: sửa phép tính bằng code, kiểm từng con số với đoạn trích | ✅ | Commit `93ad4ee`, `922d38f`. |
-| **G3** | Lưới an toàn (safety net) cho câu hỏi nhiều tài liệu, lưới sau câu trả lời | ✅ | Commit `3ef849b`. |
-| **P0** | Bộ test hành vi P0 từ `tối ưu.txt` (P0 = nhóm ưu tiên cao nhất trong file đó: những hành vi phải đúng trước khi ra bản MVP; P1, P2 là nhóm sau) | ✅ (trừ 1 ca chờ GPU) | 22 ca, ba mức chạy. Kết quả ở mục 5. Chưa đưa vào `backend/tests/` (sinh viên: chưa làm vội). |
+| 1 | **Duyệt sửa `backend/` cho TC-2 và TC-1** | Đây là hai việc kỹ thuật đầu tiên; không duyệt thì tuần 1 chỉ làm được VH-1. | Duyệt. Cả hai có ca test sẵn để đo trước và sau, không cần GPU hay tiền. |
+| 2 | **Nội dung 6: mở tạm ra mạng (cách A) hay chỉ dữ liệu thật và người dùng thử trực tiếp (cách B)** | Quyết định mức của VH-3, VH-4 và 2 đến 3 ngày công. | Hỏi giảng viên trước. Nếu được chọn: cách A với đường hầm tạm, vì "có người ngoài dùng thật" là bằng chứng mạnh và hạ tầng đã hỗ trợ sẵn. |
+| 3 | **Nguồn GPU cho đợt đo DG-2** | Hạn mức Kaggle đã hết; đây là rủi ro lớn nhất về tiến độ. | Biết ngày hạn mức Kaggle có lại; chuẩn bị sẵn `colab_gpu_worker.ipynb` làm phương án hai. Cần chốt trước 27/11. |
+| 4 | **Ngày bảo vệ và định nghĩa MVP ở mục 2** | Cả lịch dựa trên mốc 10/12 "dự kiến" và 6 điều kiện tôi đề xuất. | Xác nhận hoặc sửa. |
+| 5 | **Đưa ca P0 vào `backend/tests/` cùng lúc với từng sửa (DG-3)** | Bạn đã nói "chưa làm vội". Nhưng sửa mà không có test hồi quy thì dễ hỏng lại. | Đổi thành: mỗi việc TC mang theo ca của chính nó. Không làm một đợt riêng. |
+| 6 | **LangGraph hay vòng lặp viết tay** (còn mở từ 13/11) | Không chặn MVP. | Để sau MVP. TC-3 là vòng lặp tối đa một lần, viết bằng code thường là đủ. Xét lại khi làm câu hỏi nhiều bước (mục 8, hướng 1). |
+| 7 | **Câu hỏi khái niệm tài chính trả lời từ kho tri thức** (còn mở, nghiêng 70 % có) và bản quyền giáo trình CFA | Không chặn MVP: TC-4 không cần kho tri thức. | Để sau MVP. Giữ chính sách từ chối nhất quán hiện tại. |
+
+Các quyết định đã chốt ngày 13/11 và vẫn giữ: không đưa `docs/Version_3/` và `experiments/p0_suite/` vào git; giữ mô hình suy nghĩ cho bước trả lời và bước lập kế hoạch; giữ DeepSeek (đã thử một mô hình khác, không tốt hơn); không dùng Redis, không dùng cây tin nhắn, không dùng TanStack Query trước bảo vệ.
 
 ---
 
-## 2. So sánh Kiến trúc V1 (Cũ) và V2 (Mới sau Tái cấu trúc)
+## 8. Mở rộng sau MVP: làm gì, vì sao, cần gì trước
 
-```mermaid
-graph TD
-  subgraph "Kiến trúc V1 (Chưa tái cấu trúc - Flat Layered)"
-    A1["backend/app/api/v1/ (routers ôm đồm)"]
-    A2["backend/app/services/ (services phình to, coupling cao)"]
-    A3["backend/app/repositories/ (trộn lẫn các domain)"]
-    A4["backend/app/models/ (schema và ORM lẫn lộn)"]
-    A1 --> A2 --> A3 --> A4
-  end
+Mỗi hướng ghi rõ nó dựng trên việc nào của MVP, để thấy vì sao thứ tự hiện tại là đúng.
 
-  subgraph "Kiến trúc V2 (FinHelp - Feature-based Modular Monolith)"
-    B1["backend/app/core/ (config, security, logging, exceptions)"]
-    B2["backend/app/infrastructure/ (mongodb, qdrant, storage)"]
-    B3["backend/app/shared/ (base_repo, common, deps)"]
-    
-    subgraph "Domain Modules (Độc lập, đóng gói tính năng)"
-      M1["modules/auth (controller, service, repo, models)"]
-      M2["modules/documents (upload, catalog edit, repo)"]
-      M3["modules/ingestion (docling parser, chunker, embedder, pipeline)"]
-      M4["modules/retrieval (hybrid search, fusion, reranker, qdrant)"]
-      M5["modules/query_router (planner, target scope, decomposer)"]
-      M6["modules/generation (generator, answer_check, verification)"]
-      M7["modules/chat (orchestrator, retrieval_step, sessions)"]
-      M8["modules/notebooks (workspace, permissions)"]
-      M9["modules/admin (quota, user stats)"]
-    end
-    
-    B1 & B2 & B3 --> M1 & M2 & M3 & M4 & M5 & M6 & M7 & M8 & M9
-  end
-```
+| # | Hướng | Làm gì | Vì sao đáng làm | Cần xong trước | Vì sao không làm bây giờ |
+|---|---|---|---|---|---|
+| 1 | **Câu hỏi nhiều bước** | Thay câu từ chối `not_supported_yet` bằng tối đa 2 bước nối nhau (ví dụ "công ty nào doanh thu cao nhất, và lợi nhuận của công ty đó"). Có thể bọc luồng hỏi đáp bằng LangGraph. | Đây là loại câu NotebookLM hay sai và là điểm demo rõ nhất của hướng agent. | TC-3 (vòng tìm lại), DG-1 (bộ đo) | Chưa có vòng lặp nền; thêm bước là thêm chỗ sai khó đo. |
+| 2 | **Kho tri thức khái niệm** | Một sổ tay chung do quản trị viên nạp giáo trình; câu "ROE là gì" được trả lời có trích dẫn. | Hiện các câu này bị từ chối; với người học tài chính đó là nhu cầu thật. | TC-4, quyết định 7, bản quyền | Cần mã hóa vector (GPU) và một chính sách quyền xem mới. |
+| 3 | **Số liệu có cấu trúc** | Đọc XBRL của SEC (thư viện `edgartools`) để có bảng số chuẩn theo chỉ tiêu, kỳ, đơn vị; truy vấn bảng bằng SQL. | Xóa tận gốc lỗi đọc nhầm cột, nhầm đơn vị mà TC-1 chỉ bắt được một phần. | TC-1 (đo được lỗi cột nhiều tới đâu) | Phải đổi khâu nạp tài liệu; chỉ áp dụng cho hồ sơ SEC. |
+| 4 | **So sánh rộng** | 5 đến 10 công ty, nhiều năm, GAAP và non-GAAP, nhiều đơn vị tiền tệ (nhóm P1 của `tối ưu.txt`). | Mở rộng phạm vi phân tích thật. | TC-3, TC-5 | Mỗi công ty thêm là thêm chỗ thiếu bằng chứng; cần TC-3 chạy ổn trước. |
+| 5 | **Tiếng Việt** | Đo câu hỏi tiếng Việt; bộ lập kế hoạch trả thêm câu hỏi dịch sang tiếng Anh cho nhánh nhiều tài liệu; tên công ty Việt. | Người dùng mục tiêu ban đầu hỏi bằng tiếng Việt. | DG-1 | Đã quyết "tiếng Anh trước" để giữ mốc đo. |
+| 6 | **Vận hành thật** | Triển khai công khai ổn định; giới hạn tần suất dùng chung nhiều tiến trình (Redis); thanh hạn mức token theo ngày; chặn gửi trùng; cờ suy giảm; dấu vết đầy đủ (mã băm prompt, điểm từng đoạn trích). | Cần khi có nhiều người dùng đồng thời. | VH-1, VH-3, VH-4 | Một tiến trình, ít người dùng thì chưa cần. |
+| 7 | **Tốc độ** | Câu trả lời dài mất khoảng 23 giây, phần lớn là mô hình suy nghĩ. Hướng thử: định dạng "tính trước, kết luận sau" khi tắt suy nghĩ; bộ nhớ đệm khớp chính xác. | Thời gian chờ là than phiền dễ gặp nhất. | DG-1 | Tắt suy nghĩ đã đo làm độ đúng giảm từ 27/30 xuống 12/30; mọi thay đổi ở đây phải đo lại. |
+| 8 | **Khâu nạp tài liệu** | Tiêu đề ngữ cảnh cho mỗi đoạn trích; thử bộ bóc tách nhanh hơn Docling (pdfplumber giai đoạn 2, xberg); nhận diện công ty đổi tên qua mã CIK của SEC; định tuyến theo mục của 10-K. | Docling mất 0,74 giây mỗi trang trên GPU; đoạn trích bảng thiếu tên công ty và năm. | DG-1 | Đổi khâu nạp là phải nạp lại và đo lại toàn bộ. |
+| 9 | **Hiểu câu hỏi** | Nhãn loại câu hỏi (tra số, so sánh, tính toán, diễn giải); chính sách "tìm rồi mới hỏi lại"; sáu trạng thái bằng chứng. | Hỏi lại đúng lúc, không hỏi thừa. | GD-2, TC-3 | Mô hình đang tự xử lý ổn các ca đã đo (A04). |
 
 ---
 
-## 3. Bản đồ Thiết kế Hệ thống trong Thư mục `docs/Version_2/`
+## Phụ lục A. Trạng thái các hạng mục theo mã cũ
 
-Toàn bộ tài liệu phân tích thiết kế, use case và sơ đồ quy trình được tổ chức khoa học theo đúng chuẩn đề cương đồ án tốt nghiệp ĐHBK Hà Nội:
+Giữ để tra ngược từ tài liệu khác. Quy ước: ✅ xong · 🚧 đang dở · ⬜ chưa làm · ↪ đã đổi hướng.
 
-1. **Kiến trúc & Sơ đồ Tổng thể (`docs/Version_2/diagrams/`):**
-   - `overview_usecase.mermaid`: Biểu đồ Use Case tổng quan toàn bộ hệ thống FinHelp (Actor: User, Admin, Support Specialist, System).
-   - `system_architecture.mermaid`: Sơ đồ kiến trúc phân tầng Modular Monolith và luồng dữ liệu 4 Zone.
-   - `rag_pipeline_e2e.mermaid`: Sơ đồ pipeline RAG E2E kết hợp Dense + Sparse + Qwen Reranker + Verification.
-   - `database_erd.mermaid`: Sơ đồ thực thể liên kết ERD giữa MongoDB (metadata, chat, catalog) và Qdrant (vectors).
-   - `diagrams_viewer.html`: Trang web hiển thị trực quan toàn bộ sơ đồ có thể zoom, xuất ảnh và thuyết trình.
+| Mã cũ | Hạng mục | Trạng thái | Ghi chú (đối chiếu 13/11) | Mã mới |
+|---|---|---|---|---|
+| F-1 | Chuẩn hóa `.env.example`, dọn schema | ✅ 28/10 | File có trên máy nhưng **bị git bỏ qua**. | VH-1 |
+| F0 | Nhánh git, hạ tầng | ✅ 07/11 | MongoDB 7.0, Qdrant v1.19.2 trong Docker Compose. | |
+| F1 | Tái cấu trúc backend thành module | ✅ 07/11 | 9 module trong `backend/app/modules/`. Còn sót thư mục cũ `backend/app/services/` (có `email_service.py`). | |
+| F2 | Bộ đánh giá trong `backend/evaluation/` | ⬜ | Thư mục chưa tồn tại. | DG-1 |
+| F3 | Router frontend, trang giới thiệu, danh sách sổ tay | ✅ | TanStack Query: ↪ không làm. | |
+| F3.5 | Cấu trúc MongoDB V3.1 | 🚧 | Nhánh `feat/mongodb-v3-schema` đã gộp vào `main`. Chưa xác minh việc chuyển đổi đã chạy trên cơ sở dữ liệu thật. | VH-1 (bước 5) |
+| F4 | Hội thoại nối tiếp, báo câu trả lời sai | ✅ | Đã ở `origin/main`. Chưa làm: gợi ý câu hỏi sinh theo chỉ tiêu (hiện 3 gợi ý cố định). | GD-3 |
+| F5 | Trả lời dạng dòng chảy (SSE), tiến trình | ✅ | `POST /chat/query/stream`. | |
+| F6 | Redis và hàng đợi `arq` | ↪ | Giữ job trong MongoDB. Giới hạn tần suất lưu trong bộ nhớ một tiến trình. | Mục 8, hướng 6 |
+| F7 | Quên mật khẩu qua email | ✅ | Không chạy thử lại. Mẫu email **bị git bỏ qua**. | VH-1 |
+| F8 | Cloudflare R2 | ✅ | Không chạy thử lại. | |
+| F9 | Tô sáng trích dẫn trên PDF | ✅ 13/11 | Commit `10422a0`. 303/304 dòng được tìm thấy trên 27 trang bảng thật. Chưa chạy trong ứng dụng thật qua backend. Trang quét ảnh hoặc xoay ngang thì không tô được. | GD-1 |
+| F10 | Trang quản trị | ✅ | Commit `2fb1cd9`. | |
+| F11 | Quan sát, Docker, CI | ⬜ | `/health` đã thử kết nối thật. Chưa có CI, README, `nginx.conf`. | VH-1, VH-2, VH-3 |
+| F12 | Chuẩn bị bảo vệ | ⬜ | | DA-2 |
+| G1 | Lớp guard an toàn | ✅ | Commit `a0ca4b5`. | |
+| G2 | Kiểm chứng phép tính và con số bằng code | ✅ | Commit `93ad4ee`, `922d38f`. | Nền của TC-1, TC-4 |
+| G3 | Lưới an toàn cho câu hỏi nhiều tài liệu | ✅ | Commit `3ef849b`. | Nền của TC-3 |
+| P0 | Bộ test hành vi P0 | ✅ trừ D03 | 23 ca; chưa vào `backend/tests/`. | DG-2, DG-3 |
+| B1 đến B5, C1, C2 | Các sửa theo bảng điểm P0 | ⬜ | | TC-2, TC-3, TC-5, TC-6, TC-1, TC-4; C2 ở mục 8, hướng 2 |
 
-2. **Chi tiết Từng Phân hệ Chức năng (`docs/Version_2/use_cases/`):**
-   - `01_authentication_and_user/`: Đặc tả UC Đăng ký, Đăng nhập JWT, Quản lý tài khoản và Phân quyền Role.
-   - `02_document_ingestion_and_catalog/`: Đặc tả UC Upload BCTC PDF, Bóc tách Docling, Xác nhận kỳ báo cáo/Ticker và Embedding BGE-M3.
-   - `03_chat_and_rag_query/`: Đặc tả UC Truy vấn ngôn ngữ tự nhiên, Định tuyến câu hỏi đơn/đa tài liệu, Hybrid Search RRF và Rerank.
-   - `04_citation_and_numerical_verification/`: Đặc tả UC Bóc tách trích dẫn trang BCTC, Kiểm tra độ chính xác số học (`answer_check/`) và Nhảy Split-View.
-   - `05_workspace_and_notebooks/`: Đặc tả UC Quản lý Notebook cá nhân, Nhóm tài liệu theo danh mục đầu tư, Lịch sử trò chuyện.
-   - `06_admin_and_monitoring/`: Đặc tả UC Giám sát hạn mức người dùng, Quản trị kho tài liệu công khai và Nhật ký kiểm toán.
+## Phụ lục B. Tài liệu thiết kế trong `docs/Version_2/`
 
-Lưu ý: các sơ đồ này vẽ theo trạng thái 07/11 và chưa có lớp guard, luồng SSE và trang admin. Sơ đồ đúng với code hiện tại nằm trong `ARCHITECTURE.md` (mục 1).
-
----
-
-## 4. Việc đã làm ngày 13/11: bộ test P0
-
-Bối cảnh: câu hỏi "hệ thống giống NotebookLM nhưng kém hơn, có nên chuyển sang agent với LangGraph và thêm kho tri thức tài chính". Trước khi đổi kiến trúc, 18 hành vi bắt buộc (P0) của `tối ưu.txt` được viết thành ca kiểm thử và chạy trên code hiện tại. Chi tiết từng bước, từng thay đổi và lý do: [plan_p0_tests.md](../Version_3/plan_p0_tests.md).
-
-| Mức | Chạy gì | Kết quả |
-|---|---|---|
-| L0: hàm thuần của backend | 10 ca | 8 đạt, 2 trượt |
-| L1: orchestrator thật, mô hình và tìm kiếm giả | 10 ca | 5 đạt, 4 trượt, 1 không áp dụng |
-| L2: câu trả lời do DeepSeek thật viết, đoạn trích bịa | 10 ca, 11 lần gọi | 8 đạt, 1 đạt yếu, 1 lưng chừng |
-| Tìm trên PDF thật (ca D03) | 1 ca | **Chưa chạy**: chờ địa chỉ GPU worker |
-
-Không file nào trong `backend/` hay `frontend/` bị sửa khi làm bộ test. Mã và kết quả ở `experiments/p0_suite/`.
-
-### Cùng ngày, sau quyết định của sinh viên
-
-1. **Gộp `feat/f4-conversation` vào `main`.** Làm trong một thư mục git tạm (không đụng thư mục làm việc đang có thay đổi chưa commit). `origin/main` đã có PR #8, nên còn 7 commit chưa vào (bản trước ghi 10 vì so với `main` cục bộ đã cũ). Không xung đột; cây thư mục sau gộp **giống hệt** đầu nhánh; `pytest` 740 qua. Commit gộp `4f5a9ec`. **Chưa đẩy `main` lên GitHub** (máy không có `gh`, và đẩy là việc cần bạn đồng ý). Ghi chú: nhánh này đã đưa file build `frontend/tsconfig.tsbuildinfo` vào git; nên bỏ khỏi git.
-2. **F9 tô sáng trích dẫn trên PDF**: xem dòng F9 ở mục 1. File mới: `frontend/src/components/notebook/locateExcerpt.ts` (hàm thuần), `frontend/scripts/test-highlight.mjs`; sửa `SourceViewer.tsx`, `notebook.css`, ba file `locales/`, `package.json`. `tsc` và `vite build` qua. Không cần backend, GPU hay API: đoạn trích (`snippet`) đã có sẵn trong mỗi trích dẫn.
-
----
-
-## 5. Điều bảng điểm P0 cho thấy
-
-1. **Chỗ thiếu nằm trước mô hình ngôn ngữ.** Với đoạn trích gọn, mô hình thật tự nói "không có trong đoạn trích", không bịa số, nêu cả hai giá trị khi thấy cả hai, không theo lệnh ẩn trong PDF. Các ca trượt đều là chuyện **cái gì tới được mô hình**.
-2. **Hệ thống biết một tài liệu rỗng, chưa biết một mục thiếu.** Tìm kiếm vector luôn trả về cái gì đó, nên ghi chú "không tìm thấy đoạn nào" gần như không bao giờ kích hoạt (ca D07, G02). Đây chính là bước "Grader" còn thiếu đã ghi trong PROJECT_PLAN ngày 09/11.
-3. **Số liệu đã điều chỉnh bị che.** Hỏi một năm chỉ có ở cột so sánh, hệ thống chỉ tìm trong một báo cáo sớm nhất (ca G04).
-4. **Máy tính chỉ tiêu sửa số học, không sửa công thức** (ca E03w; E01: mô hình gọi tổng tài sản cuối kỳ là công thức ROA "chuẩn").
-5. **Tìm kiếm hết giờ thì không thử lại**, người dùng nhận lỗi chung `INTERNAL_ERROR` (ca J03).
-6. **Câu đơn giản không bị làm quá**: 2 lần gọi mô hình, 1 lượt tìm (ca K01). Kiểm soát truy cập, khớp tên công ty, câu nối tiếp, căn chỉnh năm tài chính đều đạt.
-
----
-
-## 6. Các quyết định
-
-Ghi theo trả lời của sinh viên ngày 13/11.
-
-| # | Quyết định | Trạng thái |
-|---|---|---|
-| 1 | **LangGraph hay vòng lặp viết tay** | **Chưa chốt.** Sinh viên hỏi LangGraph có dễ xem và hiểu luồng hơn không. Trả lời: có một phần, chủ yếu là cách trình bày (sơ đồ sinh tự động từ code, mỗi bước là một nút có tên, test từng nút). Phần "dễ hiểu" đó cũng làm được bằng cách tách `orchestrator.py` (khoảng 660 dòng) thành các hàm bước có tên và vẽ sơ đồ từ code, vì `ARCHITECTURE.md` và sơ đồ archify đã cho thấy luồng. LangGraph không làm logic đơn giản hơn, thêm một thư viện cần gỡ lỗi, và sự kiện tiến trình đã có (`chat/events.py`). Đề xuất giữ nguyên: viết vòng lặp B2 bằng code thường, đo, rồi bọc bằng LangGraph nếu cần cho đồ án. |
-| 2 | **Câu hỏi khái niệm tài chính trả lời từ kho tri thức** | **Chưa quyết**, nghiêng về có (khoảng 70% có, 30% không). Kho tri thức chưa làm, nên chưa cần đổi chính sách `refuse_concept` lúc này. |
-| 3 | **`docs/Version_3/` và `experiments/p0_suite/` có bỏ khỏi danh sách git bỏ qua không** | **Không bỏ.** Các file đó tiếp tục chỉ ở trên máy này. (Riêng `docs/Version_2/` đã được git theo dõi.) |
-| 4 | **Gộp `feat/f4-conversation` vào `main`** | **Đã gộp cục bộ**, chưa đẩy lên GitHub (mục 4). |
-| 5 | **Đưa ca P0 vào `backend/tests/`** | **Chưa làm vội.** |
-| 6 | **Tô sáng trích dẫn trên PDF (F9)** | **Đã làm xong** (mục 1). |
-| 7 | **Bản quyền giáo trình CFA** | Chưa quyết, chỉ cần khi có kho tri thức. Đề xuất: dùng trong đồ án và demo nội bộ, không phát hành công khai kèm nội dung. |
-
-**Quy ước tạm thời:** việc cần địa chỉ GPU (tunnel) hoặc gọi API trả tiền được để sau, vì hết hạn mức Kaggle. Chúng được gắn nhãn ⏸ ở mục 7.
-
----
-
-## 7. Các bước tiếp theo (từ 14/11 đến 10/12)
-
-Thứ tự theo giá trị với mục tiêu "khác NotebookLM ở chỗ số liệu đáng tin và phân tích tài chính được". Ngày là ước lượng; mỗi đợt dừng báo cáo trước khi sang đợt sau. Mọi sửa trong `backend/` cần duyệt; mọi lần gọi mô hình trả tiền cần lời đồng ý kèm số lần gọi. Việc cần **tunnel GPU hoặc API** gắn ⏸ và để sau (hết hạn mức Kaggle).
-
-### Việc làm ngay được: không cần GPU, không gọi API
-
-**Đợt A (14–15/11): dọn sau đợt vừa rồi**
-- [x] Commit F9 (`10422a0`) và gộp vào `main` cục bộ. **Còn: đẩy `main` và `feat/f9-pdf-highlight` lên GitHub.** Lần đẩy 13/11 bị từ chối (HTTP 403: tài khoản git trên máy là `Vuthanh2508`, kho `Thnh8052/FinHelp` thuộc tài khoản khác). Cần đăng nhập đúng tài khoản có quyền ghi, hoặc thêm `Vuthanh2508` làm cộng tác viên, rồi chạy `git push origin main` và `git push -u origin feat/f9-pdf-highlight`.
-- [ ] Bỏ `frontend/tsconfig.tsbuildinfo` khỏi git và thêm vào `.gitignore` (file build bị commit nhầm).
-- [ ] Chạy thử F9 trong ứng dụng thật với PDF tải lên (cần Mongo và backend đang chạy; lần kiểm vừa rồi dùng trang thử riêng, không qua backend).
-
-**Đợt B (16–20/11): sửa đường ống theo bảng điểm P0.** Mỗi việc đo lại bằng `run_l1.py` (miễn phí).
-| Việc | Nơi sửa | Ca chuyển sang đạt |
-|---|---|---|
-| B1. Thử lại có giới hạn khi tìm kiếm hết giờ, mã lỗi riêng thay cho `INTERNAL_ERROR` | quanh các lời gọi tìm trong `retrieval_step.py`; `error_codes.py` | J03 |
-| B3. Năm chỉ có ở cột so sánh của nhiều báo cáo: tìm trong tất cả, hoặc báo có bản điều chỉnh | `target_scope.py` | G04 |
-| B2 (phần code). Kiểm đủ bằng chứng theo từng (tài liệu, mục của kế hoạch), tìm bổ sung đúng mục thiếu tối đa 1 lần, báo cho mô hình mục vẫn thiếu. Phần này dùng điểm reranker; cho tới khi đo được ngưỡng, để sau một cờ cấu hình, tắt mặc định. | `retrieval_step.py` (khối V1), `hybrid_search.py` | D07, G02, G03 (trên bộ giả của L1) |
-
-B2 là việc quan trọng nhất của cả lộ trình. Chỉ bật mặc định khi đo trên bộ vàng cho thấy tốt hơn (điều kiện đã ghi trong PROJECT_PLAN): bước đó ⏸ bên dưới.
-
-**Đợt C (21–26/11): bảng chỉ tiêu chuẩn (không cần kho tri thức)**
-- [ ] **C1. Bảng chỉ tiêu chuẩn** (tên, công thức, đầu vào, tên gọi khác, lưu ý), soạn từ giáo trình CFA đọc trên máy. Máy tính kiểm cả công thức, không chỉ số học. Chuyển E01, E03w. Không phụ thuộc quyết định 2 (kho tri thức).
-- [ ] Bổ sung ca P0 cho C1 trước khi viết code.
-
-**Đợt D (27/11–01/12): giao diện và tùy chọn**
-- [x] ~~F9 tô sáng trích dẫn~~ (xong 13/11).
-- [ ] Trạng thái bằng chứng trên giao diện: tìm thấy, một phần, không tìm thấy (đã có `answer_meta`: `answered`, `partial`, `not_found`).
-- [ ] Tùy chọn, cắt trước nếu trễ: báo cáo phân tích một công ty (bảng tỷ số theo nhóm, xuất Excel); quét "dấu hiệu cần chú ý" theo CFA.
-
-**Đợt E (02–08/12): bằng chứng và đóng gói**
-- [ ] **F2**: `backend/evaluation/` với bộ câu hỏi và lệnh chạy lại.
-- [ ] **F11 tối thiểu**: `README.md`, một workflow CI chạy `pytest`, `tsc` và `npm run test:highlight`.
-- [ ] **F12**: báo cáo, slide, video demo (chạy song song từ đợt C).
-
-### ⏸ Để sau: cần tunnel GPU hoặc API trả tiền
-| Việc | Cần gì | Vì sao đang chờ |
-|---|---|---|
-| Ca D03: tìm trên PDF thật (bước 3 bộ test P0) | Địa chỉ GPU worker mới (`REMOTE_GPU_URL`) | Hết hạn mức Kaggle; địa chỉ cũ đã hết hạn |
-| Đo ngưỡng điểm reranker cho B2 trên bộ vàng nhiều tài liệu, rồi quyết bật mặc định | GPU + gọi API, lời đồng ý kèm số lần | Không chọn ngưỡng bằng tay |
-| B4: một dòng prompt về cách nói "không tìm thấy" (ca G16) và đo lại bằng `run_l2.py` | API; gửi prompt hiện tại và dòng sửa trước | Quy tắc "gửi prompt trước khi sửa" |
-| C2: kho đoạn trích giáo trình CFA trong Qdrant | Mã hóa vector (GPU hoặc worker) và quyết định 2 | Chưa quyết có làm kho tri thức không |
-| Bảng trước/sau cho báo cáo (bộ câu hỏi chuẩn chạy bằng mô hình thật) | API | Chi phí |
-| Chạy F9 trên PDF dùng planner/GPU thật trong ứng dụng đầy đủ | Backend đủ dịch vụ | Phụ thuộc hạ tầng |
-
-### Thứ tự cắt khi trễ
-Phần tùy chọn của đợt D → C2 → cổng hỏi tiêu chí (ca A04, mô hình đã tự xử lý ổn) → F11. Không cắt: B1, B2, C1, F2, F12.
-
-### Chưa làm trong lộ trình này
-Tiếng Việt (đã hoãn theo "English first"), so sánh 5–10 công ty, GAAP và non-GAAP, nhiều đơn vị tiền tệ, hàng đợi Redis, triển khai công khai, đưa ca P0 vào `backend/tests/` (sinh viên: chưa làm vội).
+- `diagrams/`: sơ đồ use case tổng quan, kiến trúc, pipeline RAG, ERD, và `diagrams_viewer.html`. **Vẽ theo trạng thái 07/11**, chưa có lớp guard, SSE, trang quản trị (việc DA-3).
+- `use_cases/01` đến `06`: đặc tả use case theo sáu phân hệ (xác thực, nạp tài liệu, hỏi đáp, trích dẫn và kiểm chứng, sổ tay, quản trị).
+- `SYSTEM_ARCHITECTURE_V2.md`, `PILLAR_2_MONGODB_SPECIFICATION.md`: thiết kế V2. Kiến trúc đúng với code hiện tại là `ARCHITECTURE.md` ở thư mục gốc.
