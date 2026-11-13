@@ -164,6 +164,9 @@ class Settings(BaseSettings):
     # between tries (chat/retrieval_step.py); still failing -> the SEARCH_UNAVAILABLE error (503) instead of INTERNAL_ERROR. 0 = no retry.
     SEARCH_RETRIES: int = 1
     SEARCH_RETRY_DELAY_SECONDS: float = 1.0
+    # TC-1 (answer_check/column_years.py): a figure an answer gives to a year must sit in that year's column of the table it is cited to; a figure printed
+    # only under other years is a problem for the one repair call, and is flagged under the answer if it stays. Off = nothing is checked.
+    COLUMN_CHECK_ENABLED: bool = True
     MULTIDOC_CATALOG_LIMIT: int = 80  # more filings than this: skip the planner and search the whole notebook as before
     # Sources a question may use, and documents a notebook may hold: a guest 1, every signed-in account (admin too) 5.
     # The one place these numbers live: TIER_SPECS, the error messages and the web app (through /auth/me) all read them from here.

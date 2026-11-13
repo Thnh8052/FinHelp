@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 
 from app.core.config import settings
 from app.modules.generation.answer_check.citations import check_citations, problems
+from app.modules.generation.answer_check.column_years import check_columns
 from app.modules.generation.answer_check.inputs import check_inputs
 from app.modules.generation.answer_check.numbers import check_numbers
 from app.modules.query_router.target_scope import ScopeDoc
@@ -16,7 +17,9 @@ def verify(answer: str, chunks: List[Dict[str, Any]], docs: List[ScopeDoc]):
     cites = check_citations(text, chunks, docs)
     # H4: the figures the answer says it took, checked against the excerpt each names; in the trace (numbers["inputs"]), a rewrite only when enabled
     numbers["inputs"] = check_inputs((meta or {}).get("inputs") or [], chunks)
-    issues = problems(numbers, cites)
+    # TC-1: a figure stated for a year that the cited table prints under other years only
+    numbers["columns"] = check_columns(text, chunks) if settings.COLUMN_CHECK_ENABLED else []
+    issues = problems(numbers, cites) + [c["problem"] for c in numbers["columns"]]
     if settings.ANSWER_INPUTS_REPAIR:
         issues += [p["problem"] for p in numbers["inputs"]]
     return numbers, cites, issues
@@ -28,6 +31,9 @@ def flag_unverified(answer: str, numbers: Dict[str, Any], cites: Dict[str, Any],
     parts = []
     if numbers.get("unverified"):
         parts.append(("số chưa kiểm chứng được trong đoạn trích: " if vi else "figures not verified in the excerpts: ") + ", ".join(numbers["unverified"]))
+    if numbers.get("columns"):
+        shown = ", ".join(f"{c['figure']} ({c['year']})" for c in numbers["columns"][:3])
+        parts.append(("số nằm ở cột năm khác với năm được nêu: " if vi else "figures that sit in another year's column than the year stated: ") + shown)
     if cites["invalid"] or cites["wrong_company"] or cites["wrong_period"]:
         parts.append("có trích dẫn không khớp nguồn" if vi else "some citations do not match their source")
     line = "\n\n⚠️ " + ("Lưu ý: " if vi else "Note: ") + "; ".join(parts) + "."

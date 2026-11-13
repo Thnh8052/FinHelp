@@ -220,7 +220,8 @@ class RAGWorkflowOrchestrator:
         if issues:
             answer = flag_unverified(answer, number_check, cite_check, decision.lang)
         verification = {"passed": not issues, "repaired": repaired, "unverified_figures": number_check["unverified"], "citations": cite_check,
-                        "first_issues": first_issues, "calculator": calculated, "inputs": number_check.get("inputs", [])}  # what the first answer got wrong (why a repair was tried), kept for the trace
+                        "first_issues": first_issues, "calculator": calculated, "inputs": number_check.get("inputs", []),
+                        "columns": [{k: v for k, v in c.items() if k != "problem"} for c in number_check.get("columns", [])]}  # what the first answer got wrong (why a repair was tried), kept for the trace
         text, meta = split_answer(answer)
         cited = cited_numbers(text)
         timings = {**found.timings, "generate": round(t1 - t0, 2), "verify_repair": round(time.perf_counter() - t2, 2), **({"lazy_net": round(t2 - t1, 2)} if lazy else {})}
