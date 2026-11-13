@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:setup": "node scripts/test-setup.cjs",
     "test:auth": "node scripts/test-auth.cjs",
+    "test:highlight": "node scripts/test-highlight.mjs",
     "inspect:zip": "node scripts/inspect-zip.cjs",
     "backend": "cd ../backend && .venv\\Scripts\\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload",
     "backend:dev": "cd ../backend && .venv\\Scripts\\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --env-file .env.dev"

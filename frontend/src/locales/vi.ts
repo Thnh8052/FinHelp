@@ -376,6 +376,8 @@ export const vi: TranslationSchema = {
     openPageNewTab: "Mở trang {page} trong tab mới",
     closeViewer: "Đóng trình xem chia đôi",
     clearHighlight: "Bỏ làm nổi bật trích dẫn",
+    highlightFound: "Đã đánh dấu {n} dòng của đoạn trích trên trang này.",
+    highlightNotFound: "Không tìm thấy các dòng của đoạn trích trên trang này (trang quét ảnh hoặc xoay ngang không có chữ để đối chiếu). Trang được hiện không có đánh dấu.",
     reportTitle: "Báo cáo tài chính: {name}",
   },
   userDropdown: {

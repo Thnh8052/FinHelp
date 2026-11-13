@@ -377,6 +377,8 @@ export interface TranslationSchema {
     openPageNewTab: string;
     closeViewer: string;
     clearHighlight: string;
+    highlightFound: string;
+    highlightNotFound: string;
     reportTitle: string;
   };
   userDropdown: {

@@ -5,6 +5,7 @@ import { CitationItem } from "../../types/chat";
 import { DocumentRecord } from "../../types/notebook";
 import { documentService } from "../../services/documents";
 import { MarkdownRenderer } from "../chat/MarkdownRenderer";
+import { bandsFor, locateExcerpt, type Box, type PageItem } from "./locateExcerpt";
 import {
   FileTextIcon,
   CloseIcon,
@@ -58,8 +59,13 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   const [pdfFailed, setPdfFailed] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
+  // How the page was last drawn (the scale the lines of the excerpt are placed with) and the lines found for the active citation
+  const [pageView, setPageView] = useState<{ page: number; transform: number[]; width: number; rotated: boolean } | null>(null);
+  const [marks, setMarks] = useState<{ page: number; boxes: Box[]; found: number } | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const pageText = useRef<Map<number, PageItem[]>>(new Map()); // the text pdf.js reads from each page of the open report, read once
 
   const handleZoomIn = () => {
     setIsFitWidth(false);
@@ -98,6 +104,8 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
     setPdfObjectUrl(null);
     setPdfDoc(null);
     setPdfFailed(false);
+    setPageView(null);
+    pageText.current = new Map();
     Promise.all([documentService.getFile(documentId), loadPdfJs()])
       .then(async ([blob, pdfjs]) => {
         if (replaced) return;
@@ -154,6 +162,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
       canvas.style.width = `${Math.floor(viewport.width)}px`;
       canvas.style.height = `${Math.floor(viewport.height)}px`;
       canvas.getContext("2d")?.drawImage(offscreen, 0, 0);
+      setPageView({ page: page.pageNumber, transform: viewport.transform, width: viewport.width, rotated: page.rotate % 360 !== 0 });
     })().catch((err) => {
       if (!cancelled && err?.name !== "RenderingCancelledException") setPdfFailed(true);
     });
@@ -176,6 +185,50 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
       }
     }
   }, [activeCitation, currentDoc?.document_id]);
+
+  // F9: the lines of the cited excerpt are looked for in the text of the page the citation points at, and marked once the page is drawn.
+  // A page without text (a scan) or turned sideways has nothing to mark: the banner says so and the page jump still works.
+  const citationHere = !!activeCitation && !!currentDoc && activeCitation.document_id === currentDoc.document_id && activeCitation.page === currentPage;
+  useEffect(() => {
+    if (!pdfDoc || !pageView || pageView.page !== currentPage || !activeCitation || !citationHere) {
+      setMarks(null);
+      return;
+    }
+    if (pageView.rotated) {
+      setMarks({ page: currentPage, boxes: [], found: 0 });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      let items = pageText.current.get(currentPage);
+      if (!items) {
+        const content = await (await pdfDoc.getPage(currentPage)).getTextContent();
+        items = (content.items as Array<{ str?: string; transform?: number[]; width?: number }>)
+          .filter((i) => typeof i.str === "string" && Array.isArray(i.transform))
+          .map((i) => ({ str: i.str as string, transform: i.transform as number[], width: i.width ?? 0 }));
+        pageText.current.set(currentPage, items);
+      }
+      if (cancelled) return;
+      const located = locateExcerpt(activeCitation.snippet, items);
+      setMarks({ page: currentPage, boxes: bandsFor(items, located.items, pageView.transform, pageView.width), found: located.found });
+    })().catch(() => {
+      if (!cancelled) setMarks({ page: currentPage, boxes: [], found: 0 });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfDoc, pageView, currentPage, activeCitation, citationHere]);
+
+  // The first marked line is brought into view (a page is taller than the panel)
+  useEffect(() => {
+    const first = marks && marks.page === currentPage ? marks.boxes[0] : undefined;
+    const container = viewportRef.current;
+    const wrap = wrapRef.current;
+    if (!first || !container || !wrap) return;
+    const top = wrap.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop + first.top - container.clientHeight / 3;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    container.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
+  }, [marks, currentPage]);
 
   const handleCopy = () => {
     if (!activeCitation?.snippet) return;
@@ -365,18 +418,32 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
           <div className="pdf-evidence-rendered-wrapper scrollbar-slim">
             <MarkdownRenderer content={activeCitation.snippet} />
           </div>
+          {citationHere && marks && marks.page === currentPage && (
+            <p className="pdf-evidence-note" role="status">
+              {marks.boxes.length > 0 ? t.sourceViewer.highlightFound.replace("{n}", String(marks.boxes.length)) : t.sourceViewer.highlightNotFound}
+            </p>
+          )}
         </div>
       )}
 
       {/* 3. Original PDF Page Viewport */}
       <div className="pdf-display-viewport scrollbar-slim" ref={viewportRef}>
         {pdfDoc && !pdfFailed ? (
-          <canvas
-            ref={canvasRef}
-            role="img"
-            aria-label={`${t.sourceViewer.reportTitle.replace("{name}", currentDoc.file_name)}, ${t.sourceViewer.page} ${currentPage}`}
-            className="pdf-render-canvas"
-          />
+          <div className="pdf-page-wrap" ref={wrapRef}>
+            <canvas
+              ref={canvasRef}
+              role="img"
+              aria-label={`${t.sourceViewer.reportTitle.replace("{name}", currentDoc.file_name)}, ${t.sourceViewer.page} ${currentPage}`}
+              className="pdf-render-canvas"
+            />
+            {citationHere && marks && marks.page === currentPage && (
+              <div className="pdf-highlight-layer" aria-hidden="true">
+                {marks.boxes.map((b, i) => (
+                  <div key={i} className="pdf-highlight-box" style={{ left: b.left - 2, top: b.top - 1, width: b.width + 4, height: b.height + 2 }} />
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="pdf-viewer-empty-state">
             <p className="pdf-empty-sub" role="status">{pdfFailed ? t.sourceViewer.pdfFailed : t.sourceViewer.pdfLoading}</p>

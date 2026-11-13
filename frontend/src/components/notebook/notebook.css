@@ -943,13 +943,52 @@
   display: flex;
 }
 
-.pdf-render-canvas {
+/* the page and the marks over it share one box, so they scroll and scale together */
+.pdf-page-wrap {
+  position: relative;
   margin: 0 auto; /* centred, and a page wider than the panel still scrolls to its left edge */
   align-self: flex-start;
   flex-shrink: 0;
+}
+
+.pdf-render-canvas {
+  display: block;
   border: 1px solid #22304d;
   border-radius: 8px;
   background-color: #ffffff;
+}
+
+/* F9: the lines of the cited excerpt on the page. left/top of the layer = the canvas border, so a box sits exactly on its text */
+.pdf-highlight-layer {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  pointer-events: none;
+}
+
+.pdf-highlight-box {
+  position: absolute;
+  background-color: rgba(250, 204, 21, 0.4);
+  outline: 1px solid rgba(217, 119, 6, 0.75);
+  border-radius: 2px;
+  mix-blend-mode: multiply; /* the text stays black under the mark */
+  animation: pdf-highlight-in 0.35s ease-out;
+}
+
+@keyframes pdf-highlight-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-highlight-box { animation: none; }
+}
+
+.pdf-evidence-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-dim, #94a3b8);
 }
 
 .pdf-viewer-empty-state {

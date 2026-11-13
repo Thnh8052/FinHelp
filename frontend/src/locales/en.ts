@@ -376,6 +376,8 @@ export const en: TranslationSchema = {
     openPageNewTab: "Open Page {page} in new tab",
     closeViewer: "Close split-view viewer",
     clearHighlight: "Clear citation highlight",
+    highlightFound: "Marked {n} line(s) of the excerpt on this page.",
+    highlightNotFound: "Could not find the excerpt's lines on this page (a scanned or turned page has no text to match). The page is shown without marks.",
     reportTitle: "Financial Report: {name}",
   },
   userDropdown: {
