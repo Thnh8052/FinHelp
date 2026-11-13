@@ -111,6 +111,52 @@ export function locateExcerpt(excerpt: string, items: PageItem[]): Located {
   return { items: [...marked].sort((a, b) => a - b), lines: units.length, found };
 }
 
+// ---------------------------------------------------------------- the figures the answer states
+
+/** A number worth looking for on the page: with a thousands separator or decimals, or at least 3 digits, and not a year ("13 weeks", "January 28" and "2023" are noise). */
+const isFigure = (raw: string, plain: string) => (raw.includes(",") || raw.includes(".") || plain.length >= 3) && !/^(19|20)\d\d$/.test(plain);
+
+/** The numbers the answer states in the sentences (or lines) that cite [n], without separators: what to look for on the cited page. */
+export function citedFigures(answer: string, n: number): string[] {
+  const marker = `[${n}]`;
+  const figures = new Set<string>();
+  const pieces = answer.split(/\n|(?<=[.!?])\s+/).flatMap((piece) => (piece.includes("|") ? piece.split("|") : [piece])); // a table row: one cell at a time
+  for (const piece of pieces) {
+    if (!piece.includes(marker)) continue;
+    for (const raw of piece.replace(/\[\d+\]/g, " ").match(/\d(?:[\d,]*\d)?(?:\.\d+)?/g) ?? []) {
+      const plain = raw.replace(/,/g, "");
+      if (isFigure(raw, plain)) figures.add(plain);
+    }
+  }
+  return [...figures];
+}
+
+/** Items on the same line of text as item `index` (the whole table row, label and figures). */
+function sameLine(items: PageItem[], index: number): number[] {
+  const y = items[index].transform[5];
+  const height = Math.hypot(items[index].transform[2], items[index].transform[3]) || 1;
+  const line: number[] = [];
+  items.forEach((it, i) => {
+    if (it.str?.trim() && Math.abs(it.transform[5] - y) < height * 0.5) line.push(i);
+  });
+  return line;
+}
+
+/** The lines of the page that carry one of the figures (at most `perFigure` places for each, a figure can be printed in the headline and in a table). */
+export function figureLines(items: PageItem[], figures: string[], perFigure = 3): number[] {
+  const page = pageTokens(items);
+  const marked = new Set<number>();
+  for (const figure of figures) {
+    let places = 0;
+    for (const token of page) {
+      if (token.t !== figure) continue;
+      for (const i of sameLine(items, token.item)) marked.add(i);
+      if (++places >= perFigure) break;
+    }
+  }
+  return [...marked].sort((a, b) => a - b);
+}
+
 // ---------------------------------------------------------------- where the items are on the drawn page
 
 const multiply = (m: number[], n: number[]): number[] => [

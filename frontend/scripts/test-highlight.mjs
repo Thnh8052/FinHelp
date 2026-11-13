@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bandsFor, excerptUnits, locateExcerpt, tokenize } from "../src/components/notebook/locateExcerpt.ts";
+import { bandsFor, citedFigures, excerptUnits, figureLines, locateExcerpt, tokenize } from "../src/components/notebook/locateExcerpt.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..", "..");
@@ -63,6 +63,20 @@ check("one band per row, from the label to the last figure; two rows are two ban
 check("two columns of text on the same line are not joined into one band", () => {
   const items = [item("left column", 10, 700, 50), item("right column", 560, 700, 50)];
   assert.equal(bandsFor(items, [0, 1], [1, 0, 0, -1, 0, 800], 600).length, 2); // 500 units apart on a 600-unit page
+});
+
+check("figures: the numbers of the sentences that cite [n], without years, small counts or other citations", () => {
+  const answer = "In the fourth quarter (the 13 weeks ended January 28, 2023), net income was **$340.8 million** ($340,751 thousand), 10.6% of net sales [1][2]. Sales rose 18.2% [3].";
+  assert.deepEqual(citedFigures(answer, 1), ["340.8", "340751", "10.6"]);
+  assert.deepEqual(citedFigures(answer, 3), ["18.2"]);
+  assert.deepEqual(citedFigures(answer, 4), []);
+  assert.deepEqual(citedFigures("| Revenue | 5,555 [1] | 4,444 [2] |\nCash was 12 [1].", 2), ["4444"]); // a table row is its own line; 12 alone is a count
+});
+check("figure lines: the whole row of the figure, in every place it is printed (up to 3), and nothing else", () => {
+  const items = [item("Net income", 10, 500), item("$ 340,751", 200, 500), item("10.6%", 260, 500), item("Net sales", 10, 480), item("3,226,773", 200, 480), item("Net income", 10, 300), item("340,751", 200, 300)];
+  assert.deepEqual(figureLines(items, ["340751"]), [0, 1, 2, 5, 6]);
+  assert.deepEqual(figureLines(items, ["99999"]), []);
+  assert.deepEqual(figureLines(items, ["340751"], 1), [0, 1, 2]);
 });
 
 // ---------------------------------------------------------------- real pages

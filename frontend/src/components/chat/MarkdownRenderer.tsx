@@ -5,6 +5,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { CitationItem } from "../../types/chat";
+import { citedFigures } from "../notebook/locateExcerpt";
 
 // A single $ stays plain text: answers are full of amounts such as "$1,234 and $5,678", which must never be read as a formula.
 const REMARK_PLUGINS = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as React.ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
@@ -68,7 +69,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           onClick={(e) => {
             e.stopPropagation();
             if (targetCitation && onSelectCitation) {
-              onSelectCitation(targetCitation);
+              onSelectCitation({ ...targetCitation, figures: citedFigures(content, citeNum) });
             }
           }}
         >

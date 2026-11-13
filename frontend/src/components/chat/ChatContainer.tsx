@@ -3,6 +3,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { citedFigures } from "../notebook/locateExcerpt";
 import { Flag } from "lucide-react";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, FileTextIcon, SendIcon } from "../common/Icons";
 import "./chat.css";
@@ -339,7 +340,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                               key={cite.citation_id}
                               citation={cite}
                               index={index}
-                              onClick={() => onSelectCitation(cite)}
+                              onClick={() => onSelectCitation({ ...cite, figures: citedFigures(msg.content, index) })}
                             />
                           ))}
                         </div>

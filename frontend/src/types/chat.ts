@@ -5,6 +5,8 @@ export interface CitationItem {
   snippet: string;
   /** Câu trả lời có dùng đoạn này ([n]) hay không; không có thì hiện như đã được dùng. */
   cited?: boolean | null;
+  /** Set by the chat when the citation is opened: the numbers the answer states next to this [n], whose lines the PDF viewer marks. */
+  figures?: string[];
 }
 
 export interface ChatMessage {

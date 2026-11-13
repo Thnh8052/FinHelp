@@ -4,14 +4,10 @@ import { useLanguage } from "../../context/LanguageContext";
 import { CitationItem } from "../../types/chat";
 import { DocumentRecord } from "../../types/notebook";
 import { documentService } from "../../services/documents";
-import { MarkdownRenderer } from "../chat/MarkdownRenderer";
-import { bandsFor, locateExcerpt, type Box, type PageItem } from "./locateExcerpt";
+import { bandsFor, figureLines, locateExcerpt, type Box, type PageItem } from "./locateExcerpt";
 import {
   FileTextIcon,
   CloseIcon,
-  CheckIcon,
-  CheckShieldIcon,
-  CopyIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ZoomInIcon,
@@ -51,8 +47,6 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
 }) => {
   const { t } = useLanguage();
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [copied, setCopied] = useState(false);
-  const [highlightPulse, setHighlightPulse] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [isFitWidth, setIsFitWidth] = useState<boolean>(true);
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
@@ -61,7 +55,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   const [viewportWidth, setViewportWidth] = useState(0);
   // How the page was last drawn (the scale the lines of the excerpt are placed with) and the lines found for the active citation
   const [pageView, setPageView] = useState<{ page: number; transform: number[]; width: number; rotated: boolean } | null>(null);
-  const [marks, setMarks] = useState<{ page: number; boxes: Box[]; found: number } | null>(null);
+  const [marks, setMarks] = useState<{ page: number; boxes: Box[]; figures: Box[]; found: number } | null>(null); // boxes: lines of the excerpt; figures: lines with the numbers the answer states
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -172,16 +166,13 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
     };
   }, [pdfDoc, currentPage, isFitWidth, zoomLevel, viewportWidth]);
 
-  // Khi có citation mới: Tự động nhảy sang trang của citation và kích hoạt hiệu ứng highlight
+  // Khi có citation mới: tự động nhảy sang trang của citation
   useEffect(() => {
     if (activeCitation) {
       if (activeCitation.document_id === currentDoc?.document_id) {
         if (activeCitation.page && activeCitation.page > 0) {
           setCurrentPage(activeCitation.page);
         }
-        setHighlightPulse(true);
-        const timer = setTimeout(() => setHighlightPulse(false), 3500);
-        return () => clearTimeout(timer);
       }
     }
   }, [activeCitation, currentDoc?.document_id]);
@@ -195,7 +186,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
       return;
     }
     if (pageView.rotated) {
-      setMarks({ page: currentPage, boxes: [], found: 0 });
+      setMarks({ page: currentPage, boxes: [], figures: [], found: 0 });
       return;
     }
     let cancelled = false;
@@ -210,9 +201,15 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
       }
       if (cancelled) return;
       const located = locateExcerpt(activeCitation.snippet, items);
-      setMarks({ page: currentPage, boxes: bandsFor(items, located.items, pageView.transform, pageView.width), found: located.found });
+      const stated = figureLines(items, activeCitation.figures ?? []); // the lines of the numbers the answer states: the evidence itself, marked stronger
+      setMarks({
+        page: currentPage,
+        boxes: bandsFor(items, located.items, pageView.transform, pageView.width),
+        figures: bandsFor(items, stated, pageView.transform, pageView.width),
+        found: located.found + stated.length,
+      });
     })().catch(() => {
-      if (!cancelled) setMarks({ page: currentPage, boxes: [], found: 0 });
+      if (!cancelled) setMarks({ page: currentPage, boxes: [], figures: [], found: 0 });
     });
     return () => {
       cancelled = true;
@@ -221,7 +218,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
 
   // The first marked line is brought into view (a page is taller than the panel)
   useEffect(() => {
-    const first = marks && marks.page === currentPage ? marks.boxes[0] : undefined;
+    const first = marks && marks.page === currentPage ? marks.figures[0] ?? marks.boxes[0] : undefined; // the stated figure first, else the first line of the excerpt
     const container = viewportRef.current;
     const wrap = wrapRef.current;
     if (!first || !container || !wrap) return;
@@ -229,13 +226,6 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     container.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
   }, [marks, currentPage]);
-
-  const handleCopy = () => {
-    if (!activeCitation?.snippet) return;
-    navigator.clipboard.writeText(activeCitation.snippet);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const handlePrevPage = () => {
     if (currentPage > 1) setCurrentPage((prev) => prev - 1);
@@ -377,52 +367,17 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
         </div>
       </div>
 
-      {/* 2. Grounded Evidence Banner */}
-      {activeCitation && (
-        <div className={`pdf-evidence-banner ${highlightPulse ? "highlight-flash" : ""}`}>
+      {/* 2. Only when there is something to say: the cited report is gone, or the page has nothing to mark (a scan, or turned sideways). Otherwise the PDF alone, with the marks on it. */}
+      {activeCitation && (citationGone || (citationHere && marks && marks.page === currentPage && marks.boxes.length + marks.figures.length === 0)) && (
+        <div className="pdf-evidence-banner">
           <div className="pdf-evidence-header">
-            <div className="pdf-evidence-title">
-              {citationGone ? (
-                <span role="status">{t.sourceViewer.citationSourceRemoved.replace("{page}", String(activeCitation.page))}</span>
-              ) : (
-                <>
-                  <CheckShieldIcon size={13} color="#2563eb" />
-                  <span>{t.sourceViewer.citationFound}: <strong>{t.sourceViewer.page} {activeCitation.page}</strong></span>
-                </>
-              )}
-            </div>
-            <div className="pdf-evidence-actions">
-              <button onClick={handleCopy} className="pdf-copy-excerpt-btn">
-                {copied ? (
-                  <>
-                    <CheckIcon size={11} color="#10b981" />
-                    <span>{t.common.copied}</span>
-                  </>
-                ) : (
-                  <>
-                    <CopyIcon size={11} />
-                    <span>{t.sourceViewer.copySnippet}</span>
-                  </>
-                )}
-              </button>
-              <button
-                onClick={onClearCitation}
-                className="pdf-clear-cite-btn"
-                title={t.sourceViewer.clearHighlight}
-              >
-                <CloseIcon size={11} />
-              </button>
-            </div>
-          </div>
-          {/* Render Markdown table */}
-          <div className="pdf-evidence-rendered-wrapper scrollbar-slim">
-            <MarkdownRenderer content={activeCitation.snippet} />
-          </div>
-          {citationHere && marks && marks.page === currentPage && (
             <p className="pdf-evidence-note" role="status">
-              {marks.boxes.length > 0 ? t.sourceViewer.highlightFound.replace("{n}", String(marks.boxes.length)) : t.sourceViewer.highlightNotFound}
+              {citationGone ? t.sourceViewer.citationSourceRemoved.replace("{page}", String(activeCitation.page)) : t.sourceViewer.highlightNotFound}
             </p>
-          )}
+            <button onClick={onClearCitation} className="pdf-clear-cite-btn" title={t.sourceViewer.clearHighlight}>
+              <CloseIcon size={11} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -439,7 +394,10 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
             {citationHere && marks && marks.page === currentPage && (
               <div className="pdf-highlight-layer" aria-hidden="true">
                 {marks.boxes.map((b, i) => (
-                  <div key={i} className="pdf-highlight-box" style={{ left: b.left - 2, top: b.top - 1, width: b.width + 4, height: b.height + 2 }} />
+                  <div key={`e${i}`} className="pdf-highlight-box" style={{ left: b.left - 2, top: b.top - 1, width: b.width + 4, height: b.height + 2 }} />
+                ))}
+                {marks.figures.map((b, i) => (
+                  <div key={`f${i}`} className="pdf-highlight-box strong" style={{ left: b.left - 2, top: b.top - 1, width: b.width + 4, height: b.height + 2 }} />
                 ))}
               </div>
             )}
