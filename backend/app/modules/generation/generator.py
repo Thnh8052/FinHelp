@@ -427,7 +427,7 @@ async def generate_answer(question: str, chunks: List[Dict[str, Any]], notes: Op
     multi_doc = len({c["document_id"] for c in chunks}) > 1
     sink = events.answer_sink()
     answer = await chat_completion(build_messages(build_context(chunks), question, multi_doc, notes), max_tokens=max_tokens,
-                                   on_delta=hold_meta(sink) if sink else None)
+                                   on_delta=hold_meta(sink) if sink else None, stream=True)  # a stream even for a second writing: it may write as long as the first answer
     if not answer and settings.GENERATION_PROMPT in STRUCTURED_PROMPTS:
         return refusal(question) + "\n" + META_OPEN + json.dumps({"status": "not_found", "short_answer": refusal(question), "citations": []}) + META_CLOSE
     return answer or refusal(question)

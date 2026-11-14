@@ -33,6 +33,10 @@ def _record_usage(usage: Optional[Dict]) -> None:
         REQUEST_USAGE.get().update(counts)
 
 
+def _drop(piece: str) -> None:
+    """The listener of a stream that nobody shows piece by piece."""
+
+
 async def _streamed(client: httpx.AsyncClient, url: str, headers: Dict, payload: Dict, on_delta: Callable[[str], None]) -> Tuple[int, str, Optional[str]]:
     """(status, content, finish_reason) of a streamed call; every piece of content goes to `on_delta` as it arrives. The reasoning
     of a thinking model (reasoning_content) is not passed on."""
@@ -69,12 +73,17 @@ async def chat_completion(
     retries: int = 4,
     on_delta: Optional[Callable[[str], None]] = None,
     thinking: bool = True,
+    stream: bool = False,
 ) -> str:
     """Call the DeepSeek chat-completions API (temperature 0) with timeout and exponential backoff.
     `max_tokens` is raised to LLM_MIN_MAX_TOKENS: the reasoning of deepseek-flash counts against it, and a small budget made the
     planner come back empty on ambiguous questions (finish_reason 'length', no content). A cut reply is retried with twice the budget.
-    With `on_delta` the reply is streamed and each piece is passed to it as it arrives; a retry after pieces were sent is not streamed
-    (the caller receives the whole text as the return value and shows that)."""
+    With `on_delta` the first attempt's pieces are passed to it as they arrive; a retry is not passed on (the caller receives the whole text
+    as the return value and shows that).
+    `stream=True` (or an `on_delta`) receives EVERY attempt as a stream even with no one listening. Needed for a call that may write for a long time: measured
+    14/11, a non-streamed generation sends no byte until it ends (a 39 s one: headers at 0.5 s, the whole body at 39.0 s), so the read timeout then limits the whole
+    generation (80 s is about 17,000 tokens) and a longer answer would time out, be asked again the same way, and fail. A stream sends bytes all along: the timeout
+    only counts silence."""
     if not settings.DEEPSEEK_API_KEY:
         raise LLMUnavailableError(Code.LLM_NOT_CONFIGURED)
 
@@ -92,12 +101,13 @@ async def chat_completion(
 
     url = f"{settings.LLM_BASE_URL}/chat/completions"
     delay = 2.0
+    streaming = stream or on_delta is not None
     async with httpx.AsyncClient(timeout=timeout) as client:
         for attempt in range(1, retries + 1):
-            sink, on_delta = on_delta, None  # at most one streamed attempt: pieces of a second one would repeat the first
+            sink, on_delta = on_delta, None  # pieces go to the listener for the first attempt only: those of a second one would repeat the first
             try:
-                if sink is not None:
-                    status, content, finish = await _streamed(client, url, headers, payload, sink)
+                if streaming:
+                    status, content, finish = await _streamed(client, url, headers, payload, sink or _drop)
                 else:
                     resp = await client.post(url, headers=headers, json=payload)
                     status, content, finish = resp.status_code, "", None

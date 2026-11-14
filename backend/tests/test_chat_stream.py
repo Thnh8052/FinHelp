@@ -77,19 +77,75 @@ async def test_a_streamed_reply_arrives_piece_by_piece_without_the_reasoning(mod
     assert model.bodies[0]["stream"] is True and model.bodies[0]["stream_options"] == {"include_usage": True}
 
 
-async def test_a_retry_after_a_streamed_attempt_is_not_streamed_again(model):
-    def reply(body):
-        if body.get("stream"):  # the first attempt is cut at the token budget: retried with a larger one
+async def test_a_retry_after_a_streamed_attempt_is_received_as_a_stream_but_not_shown_again(model):
+    attempts = []
+
+    def reply(body):  # the first attempt is cut at the token budget: retried with a larger one
+        attempts.append(body["max_tokens"])
+        if len(attempts) == 1:
             return httpx.Response(200, text=_sse_body({"choices": [{"delta": {"content": "Half"}, "finish_reason": "length"}]}))
-        return httpx.Response(200, json={"choices": [{"message": {"content": "The whole answer."}, "finish_reason": "stop"}], "usage": {}})
+        return httpx.Response(200, text=_sse_body({"choices": [{"delta": {"content": "The whole answer."}, "finish_reason": "stop"}]}))
 
     model.reply = reply
     pieces = []
 
     text = await llm_client.chat_completion([{"role": "user", "content": "q"}], on_delta=pieces.append)
 
-    assert text == "The whole answer." and pieces == ["Half"]  # the caller shows the returned text: the streamed half is replaced
-    assert [b.get("stream", False) for b in model.bodies] == [True, False]
+    assert text == "The whole answer." and pieces == ["Half"]  # the caller shows the returned text: the streamed half is replaced, the retry's pieces are not sent again
+    assert [b.get("stream", False) for b in model.bodies] == [True, True]  # the retry is the longest call: it must be a stream too (L22 follow-up, see below)
+
+
+async def test_a_call_asked_to_stream_is_received_as_a_stream_without_a_listener(model):
+    """Measured 14/11 with a real call: a non-streamed generation sends no byte until it ends (a 39 s one: headers at 0.5 s, the whole body at 39.0 s), so httpx's read timeout
+    (80 s) acts as a limit on the whole generation and an answer of more than about 17,000 tokens would never arrive. Received as a stream, bytes arrive all along and
+    the timeout only counts silence."""
+    model.reply = lambda body: httpx.Response(200, text=_sse_body(
+        {"choices": [{"delta": {"reasoning_content": "thinking..."}}]},
+        {"choices": [{"delta": {"content": "A long "}}]},
+        {"choices": [{"delta": {"content": "answer."}, "finish_reason": "stop"}]},
+        {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 4, "completion_tokens_details": {"reasoning_tokens": 2}}},
+    ))
+    counts = llm_client.Counter()
+    token = llm_client.REQUEST_USAGE.set(counts)
+    try:
+        text = await llm_client.chat_completion([{"role": "user", "content": "q"}], stream=True)
+    finally:
+        llm_client.REQUEST_USAGE.reset(token)
+
+    assert text == "A long answer." and model.bodies[0]["stream"] is True and model.bodies[0]["stream_options"] == {"include_usage": True}
+    assert counts["calls"] == 1 and counts["completion_tokens"] == 4 and counts["reasoning_tokens"] == 2  # the cost of the request is still counted
+
+
+async def test_every_attempt_of_a_call_asked_to_stream_is_a_stream_and_a_cut_one_is_retried(model):
+    attempts = []
+
+    def reply(body):
+        attempts.append(body["max_tokens"])
+        cut = len(attempts) == 1
+        return httpx.Response(200, text=_sse_body({"choices": [{"delta": {"content": "" if cut else "Done."}, "finish_reason": "length" if cut else "stop"}]}))
+
+    model.reply = reply
+    assert await llm_client.chat_completion([{"role": "user", "content": "q"}], stream=True) == "Done."
+    assert [b.get("stream", False) for b in model.bodies] == [True, True] and attempts[1] == 2 * attempts[0]
+
+
+async def test_every_answer_call_is_received_as_a_stream_the_second_writings_too(monkeypatch):
+    """The repair, the answer after the lazy net and the policy rewrite are not shown piece by piece (no listener) but they write as long as the first answer."""
+    from app.modules.generation import generator
+
+    seen = []
+
+    async def spy(messages, **kw):
+        seen.append(kw)
+        return "Revenue was 100 [1]."
+
+    monkeypatch.setattr(generator, "chat_completion", spy)
+    chunks = [{"document_id": "d", "page": 1, "content": "Revenue 100", "chunk_id": "c"}]
+    await generator.generate_answer("What was revenue?", chunks)  # no listener: a second writing, or a request that is not streamed to the browser
+    events.attach(events.ChatStream())
+    await generator.generate_answer("What was revenue?", chunks)  # the first answer of a streamed request: it has a listener
+    assert [kw.get("stream") for kw in seen] == [True, True]
+    assert seen[0]["on_delta"] is None and seen[1]["on_delta"] is not None
 
 
 async def test_a_call_without_a_listener_is_not_streamed(model):
