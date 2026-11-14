@@ -3,6 +3,7 @@
 > **Dự án tốt nghiệp:** Hệ thống Trợ lý AI Phân tích & Tra cứu Báo cáo Tài chính có Kiểm chứng Số liệu (**FinHelp**)
 > **Sinh viên thực hiện:** Vũ Thành (MSSV: 20225405) - Trường CNTT & TT, ĐHBK Hà Nội (HUST)
 > **Cập nhật:** 13/11/2026 (lần 3: viết lại toàn bộ theo từng việc, kèm lý do và mức ưu tiên). Trạng thái đã đối chiếu với code và git cùng ngày.
+> **Bổ sung 14/11/2026:** đối chiếu hệ thống với mục 3 đến 8 của bộ slide `RAG_TECHNICAL.pdf` (Pre-Retrieval, Retrieval, Post-Retrieval, Augmentation, Generation, Post-Generation) và bốn phép đo miễn phí. Thêm việc **TC-8** (đường một tài liệu, để sau) và **TC-9** (nhánh nhiều tài liệu, ưu tiên); thêm đầu việc vào DG-1 và DG-2; cập nhật hướng 7 và 8 của mục 8; bảng đối chiếu đầy đủ ở **Phụ lục C** (C.8: mục 9, Agentic RAG; C.9: tối ưu nhánh nhiều tài liệu). Sinh viên chọn 14/11: tối ưu nhánh nhiều tài liệu và hệ thống trước, đường một tài liệu (chi phí, độ trễ, số đoạn, ngữ cảnh, prompt) để sau. Các phần khác của tài liệu giữ nguyên trạng thái 13/11.
 > **Mốc:** bảo vệ dự kiến 10/12/2026, còn 27 ngày.
 
 Bản này thay cách trình bày cũ (mã F-1 đến F12, G1 đến G3, đợt A đến E, bảng ⏸ nằm rải ở nhiều mục) bằng **một danh sách việc duy nhất**. Mỗi việc có: làm gì, vì sao làm, mức ưu tiên, vì sao xếp mức đó, khi nào coi là xong, và sau MVP mở rộng thế nào. Mã cũ được ghi trong ngoặc để tra ngược.
@@ -69,7 +70,7 @@ Bản MVP đạt khi cả 6 điều kiện sau đúng:
 | # | Điều kiện | Hiện tại (13/11) | Việc đưa nó tới đạt |
 |---|---|---|---|
 | 1 | Luồng chính chạy trọn: đăng ký, tải PDF, hỏi, xem trích dẫn tô sáng, hỏi nối tiếp | Đạt từng phần riêng lẻ. Chưa chạy trọn một lượt trong ứng dụng thật sau khi gộp F9. | GD-1 |
-| 2 | Không còn lỗi im lặng đã biết: con số gán nhầm năm, mục thiếu bằng chứng bị che | **Đạt một nửa.** T01 (gán nhầm năm) đạt 13/11; D07, G02 (mục thiếu bằng chứng bị che) còn trượt. | TC-1, TC-3 |
+| 2 | Không còn lỗi im lặng đã biết: con số gán nhầm năm, mục thiếu bằng chứng bị che | **Chưa đạt.** T01 (gán nhầm năm) đạt 13/11 nhưng trượt lại sau khi gỡ TC-1 ngày 15/11; D07, G02 (mục thiếu bằng chứng bị che) còn trượt. | TC-1, TC-3 |
 | 3 | Hạ tầng trục trặc thì người dùng nhận thông báo rõ, không phải lỗi chung | **Đạt với vector store** (J03 đạt 13/11). Chưa thử lỗi máy GPU và lỗi mô hình ngôn ngữ trong ứng dụng thật. | TC-2 |
 | 4 | Người khác lấy mã nguồn về và chạy được theo hướng dẫn | **Chưa đạt.** Bản lấy về thiếu 5 file cần thiết, chưa có README. | VH-1 |
 | 5 | Số liệu đo trong báo cáo chạy lại được bằng một lệnh từ kho mã | **Chưa đạt.** Mọi bộ đo nằm trong `experiments/` (git bỏ qua). | DG-1, DG-2 |
@@ -81,7 +82,7 @@ Những thứ **không** thuộc MVP, dù hay: vòng lặp nhiều bước kiể
 
 ## 3. Đang đứng ở đâu (đối chiếu 13/11)
 
-**Phần lõi đã xong và đã ở trên GitHub.** Tái cấu trúc backend thành 9 module; tìm kiếm lai (BGE-M3 dense và sparse, Qwen3-Reranker); bộ lập kế hoạch cho câu hỏi nhiều tài liệu và lưới an toàn; kiểm chứng con số và phép tính bằng code; lớp guard an toàn; hội thoại nối tiếp; trả lời dạng dòng chảy (SSE) có tiến trình; tô sáng trích dẫn trên PDF; trang quản trị; quên mật khẩu qua email; lưu file trên Cloudflare R2. Bảng trạng thái từng hạng mục cũ ở Phụ lục A.
+**Phần lõi đã xong và đã ở trên GitHub.** Tái cấu trúc backend thành 9 module; tìm kiếm lai (BGE-M3 dense và sparse, Qwen3-Reranker); bộ lập kế hoạch cho câu hỏi nhiều tài liệu (lưới an toàn đã gỡ 15/11); kiểm chứng con số và phép tính bằng code; lớp guard an toàn; hội thoại nối tiếp; trả lời dạng dòng chảy (SSE) có tiến trình; tô sáng trích dẫn trên PDF; trang quản trị; quên mật khẩu qua email; lưu file trên Cloudflare R2. Bảng trạng thái từng hạng mục cũ ở Phụ lục A.
 
 **Sáu chỗ bản roadmap trước ghi sai hoặc chưa biết, nay đã kiểm:**
 
@@ -119,15 +120,17 @@ Công sức tính bằng ngày làm việc tập trung. "Cần" ghi thứ phải
 |---|---|---|---|---|---|
 | **VH-1** | Kho mã lấy về là chạy được: sửa `.gitignore`, README, đưa file thiếu vào git (một phần F11) | 1 | 1,5 | | Đã làm 13/11, commit `03f2373` (kết quả ở mục 5) |
 | **TC-2** | Thử lại khi tìm kiếm hết giờ, mã lỗi riêng (B1) | 1 | 0,5 | Duyệt | Đã làm 13/11, commit `6026fde` (kết quả ở mục 5) |
-| **TC-1** | Kiểm cột năm của bảng (B5) | 1 | 2,5 | Duyệt | Đã làm và commit 13/11 (kết quả ở mục 5) |
+| **TC-1** | Kiểm cột năm của bảng (B5) | 1 | 2,5 | Duyệt | Đã làm và commit 13/11; **đã gỡ 15/11** (kết quả ở mục 5) |
 | **DG-1** | Bộ đánh giá vào kho mã, chạy lại bằng một lệnh (F2) | 1 | 2,5 | Sinh viên chấm xong 200 câu nhiều tài liệu (cuối tuần sau, khoảng 22–23/11) | Chưa làm |
 | **TC-3** | Kiểm đủ bằng chứng theo từng mục, tìm bổ sung 1 lần (B2) | 1 | 2 + 1 đo | Duyệt; đo cần GPU, API | Chưa làm |
-| **TC-4** | Bảng chỉ tiêu chuẩn, bản tối thiểu (C1) | 1 | 3 | Duyệt | Chưa làm |
+| **TC-4** | Bảng chỉ tiêu chuẩn, bản tối thiểu (C1) | 1 | 3 | Duyệt | Lát 1 và 2 làm 14/11; **đã gỡ 15/11** |
 | **DG-2** | Một đợt đo có GPU và API: bảng trước/sau, ngưỡng cho TC-3, ca D03 | 1 | 1 | GPU, API | Chờ GPU |
 | **GD-1** | Chạy trọn luồng chính trong ứng dụng thật, gồm cả tô sáng (đợt A cũ) | 1 | 0,5 | Backend chạy | Một lượt đầu đã chạy 13/11 trên đường local; còn hỏi nối tiếp và so sánh hai công ty |
 | **DA-1** | Nội dung 6: kịch bản demo chạy trọn (không cần người dùng thật) | 1 | 0,5 | GD-1, DG-2 | Đã quyết 13/11 |
 | **DA-2** | Báo cáo, slide, video demo (F12) | 1 | chạy song song | | Chưa làm |
 | TC-5 | Năm chỉ có ở cột so sánh: tìm mọi báo cáo hoặc báo có bản điều chỉnh (B3) | 2 | 1 | Duyệt | Chưa làm |
+| TC-8 | Câu hỏi về một tài liệu: số đoạn trích gửi đi linh hoạt (6 đến 10) thay cho cố định 6 (thêm 14/11) | 3 (hoãn) | 0,5 + đo | Duyệt; đo độ đúng cần API | Sinh viên hoãn 14/11 (đường một tài liệu để sau). Đã đo phần tìm kiếm, chưa sửa mã, chưa đo độ đúng |
+| TC-9 | Nhánh nhiều tài liệu: chỉ chấm lại các đoạn bảng khi câu tìm kiếm nêu tên báo cáo tài chính (thêm 14/11) | 2 | 0,5 + đo | Duyệt | Đã đo miễn phí 14/11: −15 % cặp reranker, +2/−0 câu; chưa sửa mã |
 | VH-2 | Kiểm tra tự động khi đẩy mã (CI) (một phần F11) | 2 | 0,5 | VH-1 | Chưa làm |
 | DG-3 | Đưa ca P0 vào `backend/tests/` làm test hồi quy | 2 | 1 | Duyệt; quyết định 5 | Sinh viên: chưa làm vội |
 | GD-2 | Hiện trạng thái bằng chứng trên giao diện (đợt D cũ) | 2 | 1 | | Chưa làm |
@@ -152,6 +155,8 @@ Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày
 Đây là luồng làm nên khác biệt với NotebookLM. Kết luận chính của bộ test P0: mô hình ngôn ngữ đã trung thực khi nhận đoạn trích gọn; chỗ thiếu nằm ở **cái gì tới được mô hình** và **cái gì được kiểm sau khi mô hình trả lời**.
 
 #### TC-1. Kiểm cột năm của bảng (mã cũ B5) · Mức 1
+
+- **ĐÃ GỠ ngày 15/11/2026 theo quyết định của chủ dự án.** Đo lại trước khi gỡ trên 923 câu trả lời đã lưu có đoạn trích: 6 báo cáo, 1 đúng (eBay 666) và 5 báo nhầm, cùng một nguyên nhân (chữ `fy`, `năm`, `kỳ` trong `TIES` buộc con số với năm đứng sau nó: "FY2019 … A; FY2020 … B" bị gán A cho FY2020). Hệ quả: ca P0 T01 trượt lại. Bản sao ở `experiments/archive/removed_tc1_tc4_2026-11-15/`. Phần dưới là mô tả lúc còn dùng.
 
 - **Làm gì.** Với mỗi con số trong câu trả lời có gắn năm: tìm ô chứa con số đó trong bảng Markdown của đoạn trích, đọc năm ở hàng tiêu đề của cột, so với năm mà câu trả lời gán. Lệch thì thêm một lỗi vào danh sách lỗi của bước kiểm chứng, để được sửa một lần hoặc đánh dấu như các lỗi khác. Con số có ở nhiều cột thì chấp nhận nếu một cột khớp năm. Nơi sửa: module mới trong `generation/answer_check/`, nối vào `verification.py`. Cách tách từ và số có thể mượn từ `locateExcerpt.ts` của F9.
 - **Vì sao làm.** Báo cáo 10-K in ba năm cạnh nhau. Bước kiểm số hiện chỉ hỏi "con số có trong một đoạn trích nào không"; bước kiểm trích dẫn so năm theo cả báo cáo, nên báo cáo năm 2019 (phủ 2017 đến 2019) không bao giờ bị coi là sai kỳ. Đã kiểm bằng tay: câu gán 52,4 cho năm 2019 trong khi nó thuộc cột 2017 qua được cả hai bước.
@@ -191,6 +196,8 @@ Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày
 
 #### TC-4. Bảng chỉ tiêu chuẩn, bản tối thiểu (mã cũ C1) · Mức 1
 
+- **ĐÃ GỠ ngày 15/11/2026 theo quyết định của chủ dự án** (lát 1, kiểm phép tính và gốc tăng trưởng, và lát 2, bảng 17 chỉ tiêu; lát 2 chưa từng commit, bản sao ở `experiments/archive/removed_tc1_tc4_2026-11-15/`). Trên câu có suy luận bật (chế độ đang chạy) nó chưa từng báo gì. Hệ quả đã chạy: ca P0 E01, E03, E03w trượt (kết quả viết sai 20,0 % thay cho 16,7 % hay 25,0 % giờ không bị báo, vì bước kiểm số không coi nó là số chưa kiểm chứng). GD-4 mất nền này; muốn có lại thì làm từ đầu. Phần dưới là mô tả lúc còn dùng.
+
 - **Làm gì.** Một bảng dữ liệu trong code: tên chỉ tiêu, công thức, đầu vào, tên gọi khác, lưu ý (ví dụ ROA dùng tổng tài sản bình quân). Soạn từ giáo trình CFA có sẵn trên máy. Bộ tính hiện có (`answer_check/calculations.py`) dùng bảng này để kiểm cả công thức, không chỉ số học. Bản tối thiểu: khoảng 15 đến 20 chỉ tiêu hay gặp nhất (biên lợi nhuận gộp, biên hoạt động, biên ròng, ROA, ROE, tăng trưởng, dòng tiền tự do, thuế suất hiệu dụng, tỷ số thanh toán hiện hành và nhanh, vòng quay hàng tồn kho, số ngày phải thu, nợ trên vốn chủ, cường độ đầu tư tài sản cố định).
 - **Vì sao làm.** Khi mô hình được suy nghĩ, lỗi số học gần như bằng 0 (0 trên 167 phép tính viết ra trong bài đo 12/11). Loại lỗi còn lại nhiều nhất trên FinanceBench là **sai công thức, sai định nghĩa hoặc sai dòng đầu vào** (14 câu sai dù đã có đúng trang). Bộ tính hiện tại không bắt được loại này: ca E03w trượt, ca E01 đạt yếu.
 - **Vì sao mức 1.** Đúng điều 1 và 4: nó nhắm đúng loại lỗi lớn nhất đã đo được, và làm ngoại tuyến hoàn toàn. Nó cũng là phần "phân tích tài chính" phân biệt sản phẩm với một công cụ hỏi đáp PDF chung. Việc này không phụ thuộc quyết định về kho tri thức (quyết định 4).
@@ -205,6 +212,48 @@ Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày
 - **Vì sao mức 2, không phải 1.** Chỉ ảnh hưởng nhóm câu hỏi về năm không có báo cáo riêng và có điều chỉnh số liệu; phạm vi hẹp hơn TC-1 và TC-3. Nhưng nó nhỏ (1 ngày) và là ca P0, nên là **việc mức 2 làm đầu tiên**.
 - **Xong khi.** Ca G04 đạt trên `run_l1.py`; chi phí tăng thêm ở các câu hỏi này được ghi lại.
 - **Mở rộng sau MVP.** Phân biệt ba loại số: báo cáo gốc, đã điều chỉnh, và số không theo chuẩn kế toán (GAAP và non-GAAP).
+
+#### TC-8. Câu hỏi về một tài liệu: số đoạn trích gửi đi linh hoạt · Mức 3, hoãn (thêm 14/11)
+
+- **Trạng thái (14/11).** Sinh viên chọn làm nhánh nhiều tài liệu trước và chạy phép đo độ đúng sau. Giữ nguyên kết quả đo bên dưới để dùng lại khi quay về đường một tài liệu cùng nhóm việc chi phí, độ trễ, số đoạn, ngữ cảnh, prompt.
+
+- **Làm gì.** Đường một tài liệu (hàm `retrieve_research` trong `retrieval/hybrid_search.py`) luôn gửi đúng 6 đoạn trích đứng đầu (`RETRIEVAL_TOP_K = 6`). Đổi thành: giữ 6 đoạn đầu như cũ, rồi lấy thêm các đoạn kế tiếp có điểm reranker từ một nửa điểm cao nhất trở lên, tối đa 10 đoạn. Ngưỡng "một nửa điểm cao nhất" là ngưỡng đường nhiều tài liệu đang dùng (`MULTIDOC_REL_THRESHOLD = 0.5`), không phải số chỉnh riêng cho bài đo này.
+- **Vì sao làm.** Slide (mục 5, "Fixed K / Score threshold / Token budget / Dynamic K") nêu số đoạn cố định dễ lấy thiếu khi câu hỏi khó. Đường nhiều tài liệu đã chọn số đoạn linh hoạt; đường một tài liệu thì chưa, trong khi mọi khách (chỉ được chọn 1 tài liệu) luôn đi đường này.
+- **Kết quả đo 14/11 (miễn phí, `experiments/scripts/rag_improvement/d4_fb150_k.py`, điểm reranker đã lưu của FinanceBench 150 câu, cấu hình production).** "Đủ bằng chứng" nghĩa là mọi trang bằng chứng của đáp án đều nằm trong các đoạn gửi đi.
+
+  | Cách chọn | Có ít nhất một trang bằng chứng | Đủ bằng chứng | Câu được / mất so với cố định 6 | Số đoạn trung bình | Token trung bình |
+  |---|---|---|---|---|---|
+  | Cố định 4 | 86,7 % | 78,0 % | +0 / −13 | 4,0 | 3.068 (−33 %) |
+  | **Cố định 6 (đang dùng)** | 92,0 % | 86,7 % (130/150) | | 6,0 | 4.580 |
+  | Cố định 8 | 94,7 % | 90,7 % | +6 / −0 | 8,0 | 6.045 (+32 %) |
+  | Cố định 10 | 95,3 % | 91,3 % | +7 / −0 | 9,9 | 7.492 (+64 %) |
+  | **6 đến 10, ngưỡng 0,5 (đề xuất)** | 94,0 % | 90,7 % (136/150) | **+6 / −0** | 7,1 | 5.407 (+18 %) |
+  | 6 đến 10, ngưỡng 0,7 | 93,3 % | 88,7 % | +3 / −0 | 6,7 | 5.124 (+12 %) |
+  | 4 đến 10, ngưỡng 0,5 | 92,7 % | 88,7 % | +6 / −3 | 5,8 | 4.413 (−4 %) |
+
+  Trần của nhóm 20 đoạn ứng viên là 143/150 câu (95,3 %), nên cách đề xuất lấy lại 6 trong 13 câu còn thiếu với 18 % token thêm, rẻ hơn tăng cố định lên 8 đoạn (cùng 6 câu, 32 % token thêm). Bản chạy lại "cố định 6" khớp đúng số đã lưu ngày 02/11 (92,0 / 86,67).
+- **Đối chiếu với đáp án đã chấm tay ngày 02/11 (127 đúng / 18 sai / 5 từ chối).** Trong 6 câu được thêm bằng chứng: 3 câu vốn đã trả lời đúng, **2 câu là câu bị từ chối và 1 câu trả lời sai**, cả ba vì không có trang bằng chứng nào trong 6 đoạn. Vậy lợi ích tối đa về độ đúng là 3 câu trên 150 (127 lên tối đa 130). Mặt trái: 79 trên 150 câu sẽ nhận thêm đoạn trích (trung bình thêm 1,1 đoạn), tức thêm nội dung thừa cho mô hình đọc; ảnh hưởng tới các câu đang đúng **chưa đo**.
+- **Vì sao mức 2, không phải 1.** Không chặn lỗi im lặng nào; lợi ích tối đa 2 điểm phần trăm và cần lời gọi trả tiền để xác nhận. Vẫn đáng làm vì sửa rất nhỏ (một hàm chọn và hai tham số cấu hình) và có số đo ủng hộ.
+- **Xong khi.** Có test cho hàm chọn; đo độ đúng câu trả lời trên 79 câu có ngữ cảnh thay đổi (79 lời gọi, thuộc DG-2): không câu đang đúng nào thành sai, và ít nhất 1 trong 3 câu trên thành đúng. Nếu không đạt thì giữ cố định 6 và ghi kết quả vào báo cáo.
+- **Mở rộng sau MVP.** Trần theo token thay cho trần theo số đoạn, như đường nhiều tài liệu.
+
+#### TC-9. Nhánh nhiều tài liệu: chỉ chấm lại các đoạn bảng khi câu tìm kiếm nêu tên báo cáo tài chính · Mức 2 (thêm 14/11)
+
+- **Làm gì.** Bộ lập kế hoạch viết câu tìm kiếm con kiểu "consolidated balance sheets inventories". Với câu tìm kiếm nào nêu tên một báo cáo tài chính (balance sheet, statement of income, statement of cash flows...), chỉ đưa các đoạn **là bảng** (`chunk_type == "table"`) trong 15 ứng viên đầu cho reranker; nếu không còn đoạn bảng nào thì giữ đoạn đầu tiên. Lượt tìm bằng câu hỏi gốc và câu con tả bằng lời (rủi ro, kiện tụng, mô tả kinh doanh) không đổi. Nơi sửa: `_rerank_items` trong `retrieval/hybrid_search.py` (một hàm lọc và một cờ cấu hình, mặc định tắt cho tới khi duyệt).
+- **Vì sao làm (ý "Self-query" của slide: rút ràng buộc về loại nguồn từ câu hỏi rồi lọc trước khi chấm lại).** Câu con của planner đã nói rõ nó tìm bảng; 25,2 % ứng viên của các câu con đó (2.014 trên 7.989) không phải bảng, trong khi chỉ 1,4 % đoạn bằng chứng trong ứng viên (8 trên 589) không phải bảng. Reranker tốn khoảng 5,5 giây trung vị trên 25,8 giây của một câu nhiều tài liệu (`m2b_run_current_v4_20q.json`), nên cắt cặp chấm là cắt thời gian chờ thật.
+- **Kết quả đo 14/11 (miễn phí, điểm reranker đã lưu, 192 câu nhiều tài liệu, `experiments/scripts/rag_improvement/d5_table_filter.py`; chạy lại production khớp 192/192).**
+
+  | Nhóm | Đủ bằng chứng hiện tại | Có lọc bảng | Câu được / mất | Cặp reranker mỗi câu |
+  |---|---|---|---|---|
+  | dev (112) | 90,2 % | 92,0 % | +2 / −0 | 59,8 → 49,7 (−17,0 %) |
+  | 4 bộ khó (80) | 78,8 % | 78,8 % | +0 / −0 | 82,8 → 71,8 (−13,3 %) |
+  | tất cả (192) | 85,4 % | 86,5 % | +2 / −0 | 69,4 → 58,9 (−15,1 %) |
+
+  Khoảng tin cậy 95 % của chênh lệch là [0,0; +2,6]: chưa phân biệt được với nhiễu về độ đủ bằng chứng, nhưng không có câu nào mất, và việc bớt cặp là chắc chắn (đếm trực tiếp).
+- **Giới hạn.** Phép đo chỉ bỏ đoạn khỏi 15 ứng viên đã có, không lấy thêm ứng viên bảng sâu hơn thế vào chỗ trống (nếu lấy thêm thì số cặp tiết kiệm nhỏ hơn và kết quả có thể đổi); 19 câu con có toàn bộ ứng viên là bảng nên không giảm gì. Định nghĩa "là bảng" của bộ đo (`has_tbl`) gần giống `chunk_type == "table"` của mã nhưng không giống hệt: kiểm lại trên dữ liệu thật trước khi bật. Chưa đo độ đúng câu trả lời (mức giảm ngữ cảnh gần như không có, chỉ bớt bớt ứng viên để chấm).
+- **Vì sao mức 2.** Không chặn lỗi im lặng; lợi ích là thời gian (khoảng 1 giây trên 26) và đủ bằng chứng có thể tăng. Rẻ để làm và không mất câu nào trong 192.
+- **Xong khi.** Test cho hàm lọc; chạy lại `check_production_q13af.py` với cờ tắt cho kết quả giống hệt, bật cho kết quả như bảng trên; thêm bước đo trong DG-2 (đầu việc 9).
+- **Mở rộng sau MVP.** Lọc theo mục của 10-K (Item 7, Item 8) khi câu hỏi nêu rõ; lấy thêm ứng viên bảng sâu hơn thay chỗ trống.
 
 ### Luồng VH: vận hành
 
@@ -251,6 +300,7 @@ Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày
 - **Vì sao mức 1.** Đúng điều 2 và 3: một đồ án về "số liệu có kiểm chứng" mà số liệu của chính nó không kiểm chứng được là điểm yếu dễ bị hỏi nhất; và mọi việc luồng TC cần bộ đo này để có bảng trước/sau.
 - **Cần sinh viên.** Đáp án của 200 câu nhiều tài liệu do sinh viên chấm, dự kiến xong cuối tuần sau (khoảng 22–23/11). Việc dựng khung `backend/evaluation/` (chép script, đặc tả đo, lệnh chạy) làm trước được với FinanceBench 150 câu; phần nhiều tài liệu chờ đáp án. Nếu chấm trễ, đo trên phần đã chấm xong thay vì chờ đủ 200.
 - **Xong khi.** Một lệnh in ra bảng chỉ số (độ đúng số liệu, tỷ lệ trích dẫn đúng, tỷ lệ từ chối đúng, thời gian, chi phí mỗi câu); phần không cần mô hình thật chạy được không tốn tiền.
+- **Thêm 14/11 (từ slide mục 8, "Generation Failure Patterns"): tự phân loại lỗi.** Với mỗi câu trả lời sai, bảng chỉ số ghi thêm một cột: các đoạn trích gửi đi **có** trang bằng chứng thì là lỗi của khâu viết câu trả lời (sửa prompt hoặc bước kiểm tra); **không có** thì là lỗi của khâu tìm kiếm. Cách phân loại này đã làm tay một lần trên FinanceBench (23 câu sai: 16 câu có trang bằng chứng, 7 câu không); đưa vào bộ đánh giá để mỗi lần đo đều có, không tốn thêm lời gọi nào. Điều kiện: dấu vết của câu hỏi phải lưu mã của từng đoạn trích đã gửi. Hiện `_previews` trong `chat/orchestrator.py` chỉ lưu tài liệu, trang, điểm và 300 ký tự đầu, **không lưu mã đoạn trích**, nên chưa dựng lại được đúng ngữ cảnh từ dấu vết; thêm một trường là đủ (cần duyệt sửa `backend/`).
 - **Mở rộng sau MVP.** Chạy 2 lần mỗi cấu hình để đo độ ổn định; bộ tiếng Việt; chạy tự động hằng tuần.
 
 #### DG-2. Một đợt đo có GPU và API · Mức 1, đang chờ GPU
@@ -261,6 +311,10 @@ Tổng mức 1 không kể báo cáo: khoảng **16 ngày công** trong 27 ngày
   3. Ca D03: tìm trên PDF thật với ba báo cáo.
   4. Bảng "sau": cùng bộ vàng, sau TC-1 đến TC-4.
   5. Nếu làm TC-6: đo dòng prompt đó.
+  6. (Thêm 14/11) Độ đúng câu trả lời cho TC-8: 79 câu FinanceBench có ngữ cảnh thay đổi khi chọn 6 đến 10 đoạn, so với đáp án đã chấm ngày 02/11 (79 lời gọi; câu nào có đáp án khác bản cũ thì phải chấm tay lại).
+  7. (Thêm 14/11) Reranker lớn hơn (Qwen3-Reranker-4B thay cho bản 0.6B) trên 192 câu nhiều tài liệu: cần sửa notebook của máy GPU để nạp mô hình khác, không gọi mô hình trả tiền. Lý do đáng thử: 15 trong 28 câu thiếu bằng chứng mất ở khâu chấm lại và chọn, không phải ở khâu tìm lần đầu (Phụ lục C).
+  8. (Thêm 14/11, tùy chọn) Mức suy nghĩ thấp (`reasoning_effort: low`) cho câu chỉ tra một con số: 30 câu FinanceBench đã dùng ở bài đo 12/11; chỉ dùng nếu đạt từ 24/30 trở lên (mức suy nghĩ cao đạt 27/30, tắt suy nghĩ đạt 12/30).
+  9. (Thêm 14/11) Đo trên máy GPU thật cho TC-9: thời gian của bước chấm lại với và không lọc bảng, và kiểm điểm reranker giống bản đã lưu (sai lệch tối đa khoảng 0,01).
 - **Vì sao gom một đợt.** Đường hầm tới máy GPU sống khoảng một giờ và địa chỉ đổi mỗi lần; hạn mức Kaggle đang hết. Mỗi lần xin địa chỉ mới là một lần gián đoạn.
 - **Vì sao mức 1.** Không có nó thì TC-3 mãi ở trạng thái tắt và báo cáo không có bảng trước/sau.
 - **Rủi ro lớn nhất của cả lộ trình.** Nếu tới 01/12 vẫn không có GPU: bảng trước/sau chỉ còn phần đo được không cần GPU (kiểm chứng trên câu trả lời đã lưu, bộ giả `run_l1.py`), TC-3 nộp ở trạng thái tắt kèm kết quả trên bộ giả. Cần phương án GPU thay thế (quyết định 3).
@@ -330,14 +384,16 @@ Nguyên tắc xếp: việc ngoại tuyến và việc mở khóa cho việc kh�
 |---|---|---|---|---|
 | 1 | 14 đến 20/11 | **VH-1** → **TC-2** → **TC-1** → **GD-1** | Chấm 200 câu nhiều tài liệu (xong khoảng 22–23/11). Dựng khung báo cáo (DA-2). | Sau VH-1; sau TC-1 |
 | 2 | 21 đến 27/11 | **DG-1** (khung với FinanceBench trước, 200 câu nhiều tài liệu khi chấm xong) → **TC-3** (phần code, cờ tắt) → **TC-4** | Viết chương thiết kế. Tìm nguồn GPU (quyết định 3). | Sau DG-1; sau TC-4 |
-| 3 | 28/11 đến 04/12 | **DG-2** (đợt đo) → **DA-1** → mức 2 theo thứ tự: TC-5, VH-2, GD-2, DG-3 | Viết chương đánh giá ngay khi có bảng. Tập dượt demo (DA-1). | Sau DG-2 |
+| 3 | 28/11 đến 04/12 | **DG-2** (đợt đo) → **DA-1** → mức 2 theo thứ tự: TC-9, TC-5, VH-2, GD-2, DG-3 | Viết chương đánh giá ngay khi có bảng. Tập dượt demo (DA-1). | Sau DG-2 |
 | 4 | 05 đến 10/12 | Chỉ sửa lỗi phát hiện khi demo thử. Đóng băng code ngày 08/12. | **DA-2**: hoàn thiện báo cáo, slide, quay video. DA-3. | 08/12 |
 
 **Phụ thuộc cần nhớ:** VH-1 trước VH-2 và VH-3. TC-2 trước DG-2. DG-1 trước DG-2. TC-3 (code) trước DG-2 (đo ngưỡng). TC-4 trước GD-4. Quyết định 2 trước DA-1.
 
 **Thứ tự cắt khi trễ.** Cắt từ trái sang phải; không bao giờ cắt việc mức 1:
 
-GD-4 → GD-3 → VH-5 → TC-7 → TC-6 → VH-3 → DG-4 → DA-3 → GD-2 → VH-2 → DG-3 → TC-5.
+GD-4 → GD-3 → VH-5 → TC-7 → TC-6 → VH-3 → DG-4 → DA-3 → GD-2 → VH-2 → DG-3 → TC-5 → TC-9 → TC-8.
+
+(TC-8 và TC-9 thêm 14/11. TC-8 đứng cuối vì sinh viên hoãn đường một tài liệu; TC-9 đứng sau TC-5 vì lợi ích chủ yếu là thời gian; hai vị trí này là đề xuất.)
 
 Nếu chính một việc mức 1 trễ: thu hẹp **phạm vi** của nó chứ không bỏ. TC-4 còn 8 chỉ tiêu thay vì 15 đến 20. TC-3 nộp ở trạng thái tắt kèm số đo. DG-1 còn 30 câu, bỏ phần ca dữ liệu thiếu. DA-1 dùng cách B.
 
@@ -356,6 +412,8 @@ Xếp theo mức gấp. Ba quyết định đầu chặn việc của tuần 1 v
 | 5 | **Đưa ca P0 vào `backend/tests/` cùng lúc với từng sửa (DG-3)** | Bạn đã nói "chưa làm vội". Nhưng sửa mà không có test hồi quy thì dễ hỏng lại. | Đổi thành: mỗi việc TC mang theo ca của chính nó. Không làm một đợt riêng. |
 | 6 | **LangGraph hay vòng lặp viết tay** (còn mở từ 13/11) | Không chặn MVP. | Để sau MVP. TC-3 là vòng lặp tối đa một lần, viết bằng code thường là đủ. Xét lại khi làm câu hỏi nhiều bước (mục 8, hướng 1). |
 | 7 | **Câu hỏi khái niệm tài chính trả lời từ kho tri thức** (còn mở, nghiêng 70 % có) và bản quyền giáo trình CFA | Không chặn MVP: TC-4 không cần kho tri thức. | Để sau MVP. Giữ chính sách từ chối nhất quán hiện tại. |
+| 8 | **TC-8 (một tài liệu, hoãn) và TC-9 (nhiều tài liệu): duyệt sửa `backend/`** (thêm 14/11) | TC-8 đo độ đúng cần 79 lời gọi trả tiền (sinh viên chạy sau). TC-9 chỉ cần duyệt sửa `_rerank_items` sau khi kiểm `chunk_type` trên dữ liệu thật. | TC-9 trước, TC-8 sau. Cả hai đo trong `experiments/` trước khi sửa mã. |
+| 9 | **Lưu mã đoạn trích vào dấu vết của câu hỏi** (thêm 14/11) | Cột "tự phân loại lỗi" của DG-1 cần biết chính xác đoạn nào đã gửi cho mô hình; hiện dấu vết chỉ lưu tài liệu, trang và 300 ký tự đầu. | Duyệt: thêm một trường, không đổi hành vi trả lời. |
 
 Các quyết định đã chốt ngày 13/11 và vẫn giữ: không đưa `docs/Version_3/` và `experiments/p0_suite/` vào git; giữ mô hình suy nghĩ cho bước trả lời và bước lập kế hoạch; giữ DeepSeek (đã thử một mô hình khác, không tốt hơn); không dùng Redis, không dùng cây tin nhắn, không dùng TanStack Query trước bảo vệ.
 
@@ -373,8 +431,8 @@ Mỗi hướng ghi rõ nó dựng trên việc nào của MVP, để thấy vì 
 | 4 | **So sánh rộng** | 5 đến 10 công ty, nhiều năm, GAAP và non-GAAP, nhiều đơn vị tiền tệ (nhóm P1 của `tối ưu.txt`). | Mở rộng phạm vi phân tích thật. | TC-3, TC-5 | Mỗi công ty thêm là thêm chỗ thiếu bằng chứng; cần TC-3 chạy ổn trước. |
 | 5 | **Tiếng Việt** | Đo câu hỏi tiếng Việt; bộ lập kế hoạch trả thêm câu hỏi dịch sang tiếng Anh cho nhánh nhiều tài liệu; tên công ty Việt. | Người dùng mục tiêu ban đầu hỏi bằng tiếng Việt. | DG-1 | Đã quyết "tiếng Anh trước" để giữ mốc đo. |
 | 6 | **Vận hành thật** | Triển khai công khai ổn định; giới hạn tần suất dùng chung nhiều tiến trình (Redis); thanh hạn mức token theo ngày; chặn gửi trùng; cờ suy giảm; dấu vết đầy đủ (mã băm prompt, điểm từng đoạn trích). | Cần khi có nhiều người dùng đồng thời. | VH-1, VH-3, VH-4 | Một tiến trình, ít người dùng thì chưa cần. |
-| 7 | **Tốc độ** | Câu trả lời dài mất khoảng 23 giây, phần lớn là mô hình suy nghĩ. Hướng thử: định dạng "tính trước, kết luận sau" khi tắt suy nghĩ; bộ nhớ đệm khớp chính xác. | Thời gian chờ là than phiền dễ gặp nhất. | DG-1 | Tắt suy nghĩ đã đo làm độ đúng giảm từ 27/30 xuống 12/30; mọi thay đổi ở đây phải đo lại. |
-| 8 | **Khâu nạp tài liệu** | Tiêu đề ngữ cảnh cho mỗi đoạn trích; thử bộ bóc tách nhanh hơn Docling (pdfplumber giai đoạn 2, xberg); nhận diện công ty đổi tên qua mã CIK của SEC; định tuyến theo mục của 10-K. | Docling mất 0,74 giây mỗi trang trên GPU; đoạn trích bảng thiếu tên công ty và năm. | DG-1 | Đổi khâu nạp là phải nạp lại và đo lại toàn bộ. |
+| 7 | **Tốc độ** | Câu trả lời dài mất khoảng 23 giây, phần lớn là mô hình suy nghĩ. Hướng thử: định dạng "tính trước, kết luận sau" khi tắt suy nghĩ; bộ nhớ đệm khớp chính xác. Thêm 14/11 (slide mục 7, "LLM Selection & Routing"): định tuyến theo độ khó, tức câu chỉ tra một con số dùng mức suy nghĩ thấp, câu so sánh hoặc tính toán giữ mức cao. | Thời gian chờ là than phiền dễ gặp nhất. | DG-1, DG-2 (đầu việc 8) | Tắt suy nghĩ đã đo làm độ đúng giảm từ 27/30 xuống 12/30; mức thấp chưa đo trên bộ 30 câu; bài thử nhỏ 12/11 (7 câu) cho thấy mức thấp không nhanh hơn. Mọi thay đổi ở đây phải đo lại. |
+| 8 | **Khâu nạp tài liệu** | Tiêu đề ngữ cảnh cho mỗi đoạn trích; thử bộ bóc tách nhanh hơn Docling (pdfplumber giai đoạn 2, xberg); nhận diện công ty đổi tên qua mã CIK của SEC; định tuyến theo mục của 10-K. | Docling mất 0,74 giây mỗi trang trên GPU; đoạn trích bảng thiếu tên công ty và năm. | DG-1 | Đổi khâu nạp là phải nạp lại và đo lại toàn bộ. Đo 14/11 (Phụ lục C.3, C.4): thêm tên mục, tên bảng, đơn vị vào đầu vào của reranker không có lợi, và đoạn bằng chứng thiếu đơn vị chỉ chiếm 4,1 %; riêng việc thêm tiêu đề vào văn bản được mã hóa vector thì chưa đo. |
 | 9 | **Hiểu câu hỏi** | Nhãn loại câu hỏi (tra số, so sánh, tính toán, diễn giải); chính sách "tìm rồi mới hỏi lại"; sáu trạng thái bằng chứng. | Hỏi lại đúng lúc, không hỏi thừa. | GD-2, TC-3 | Mô hình đang tự xử lý ổn các ca đã đo (A04). |
 
 ---
@@ -411,3 +469,72 @@ Giữ để tra ngược từ tài liệu khác. Quy ước: ✅ xong · 🚧 đ
 - `diagrams/`: sơ đồ use case tổng quan, kiến trúc, pipeline RAG, ERD, và `diagrams_viewer.html`. **Vẽ theo trạng thái 07/11**, chưa có lớp guard, SSE, trang quản trị (việc DA-3).
 - `use_cases/01` đến `06`: đặc tả use case theo sáu phân hệ (xác thực, nạp tài liệu, hỏi đáp, trích dẫn và kiểm chứng, sổ tay, quản trị).
 - `SYSTEM_ARCHITECTURE_V2.md`, `PILLAR_2_MONGODB_SPECIFICATION.md`: thiết kế V2. Kiến trúc đúng với code hiện tại là `ARCHITECTURE.md` ở thư mục gốc.
+
+## Phụ lục C. Đối chiếu với bộ slide `RAG_TECHNICAL.pdf`, mục 3 đến 8 (14/11)
+
+Bộ slide (79 trang, thư mục gốc) chia một hệ thống hỏi đáp trên tài liệu thành sáu khâu. Phụ lục này ghi, cho từng kỹ thuật slide nêu ở mục 3 đến 8: hệ thống đã có chưa (đối chiếu với mã ngày 14/11), đã đo gì, và kết luận. Mục đích: không đề xuất lại thứ đã có hoặc đã đo, và chỉ đưa vào danh sách việc những thứ có số đo ủng hộ.
+
+**Cách đọc số đo.** "Đủ bằng chứng" là tỷ lệ câu hỏi mà mọi đoạn bằng chứng chính của đáp án đều nằm trong các đoạn trích gửi cho mô hình viết. Hai bộ đo: **192 câu nhiều tài liệu** (112 câu dev và 80 câu của bốn bộ khó; mốc hiện tại 164/192 = 85,4 %) và **FinanceBench 150 câu** cho đường một tài liệu (mốc 130/150 = 86,7 %). Chênh 1 đến 3 câu trên 192 câu nằm trong nhiễu. Mọi phép đo dưới đây không gọi mô hình trả tiền; phép đo có ghi "GPU" dùng máy GPU từ xa để chấm điểm reranker.
+
+**Hai đường tìm kiếm.** *Đường một tài liệu* (người dùng chọn 1 tài liệu): một lời gọi mô hình viết 2 đến 5 câu tìm kiếm con; tìm theo nghĩa (dense) bằng câu hỏi và các câu con; gộp thứ hạng (RRF); 20 ứng viên; reranker chấm; gửi 6 đoạn. *Đường nhiều tài liệu*: bộ lập kế hoạch chọn tài liệu và viết một câu tìm kiếm cho mỗi cặp (tài liệu, mục cần tìm); mỗi lượt tìm kết hợp tìm theo nghĩa và theo từ khóa (BM25); reranker chấm 15 ứng viên đầu của mỗi lượt; giữ các đoạn có điểm từ một nửa điểm cao nhất của lượt; các lượt chia lượt nhau lấy chỗ (round robin) tới trần số đoạn và trần token.
+
+### C.1 Mục 3, Pre-Retrieval (xử lý câu hỏi và thu hẹp phạm vi trước khi tìm)
+
+| Kỹ thuật trong slide | Hệ thống hiện có | Số đo | Kết luận |
+|---|---|---|---|
+| Lọc theo metadata trước khi tìm (phòng ban, ngày, loại tài liệu, quyền) | Có. Mọi lượt tìm bị lọc theo sổ tay và theo các tài liệu người dùng chọn (`qdrant_retriever.build_payload_filter`). Với nhiều tài liệu, bộ lập kế hoạch chọn tài liệu theo công ty, kỳ và loại báo cáo ghi trong danh mục. | Tắt việc chọn tài liệu của bộ lập kế hoạch: −21,9 điểm đủ bằng chứng, số cặp reranker phải chấm tăng từ 69 lên 190 mỗi câu (`t1_retrieval.py`, 14/11). | Đã có, giữ. Chưa có lọc theo loại đoạn (bảng hay văn bản) hoặc theo mục của 10-K; không đề xuất lọc cứng vì đoán sai loại là mất bằng chứng. |
+| Chuẩn hóa câu hỏi: khoảng trắng, chính tả, thuật ngữ, từ viết tắt, ngôn ngữ | Một phần, do mô hình làm khi viết câu tìm kiếm: thêm các tên gọi khác của chỉ tiêu, mở từ viết tắt, dịch câu tiếng Việt sang tiếng Anh (đường một tài liệu). Không có bước sửa chính tả riêng. Câu hỏi gốc vẫn được dùng nguyên văn cho một lượt tìm và, ở đường một tài liệu, làm câu truy vấn của reranker. | Chưa đo với câu hỏi có lỗi chính tả. | Chưa có số đo nên chưa thành việc. Nếu đo: gõ sai có chủ đích trên FinanceBench 150, xem tỷ lệ đủ bằng chứng của đường một tài liệu (cần GPU và lời gọi viết lại câu tìm kiếm con). |
+| Biến đổi câu hỏi: viết lại, mở rộng, tách nhỏ, nhiều câu truy vấn, đưa ngữ cảnh hội thoại vào, dịch, HyDE (cho mô hình viết một câu trả lời giả rồi tìm bằng nó) | Có sáu trên bảy: tách và mở rộng (bộ lập kế hoạch, `decomposer.py`), nhiều câu truy vấn, ngữ cảnh hội thoại (`focus_state`, `rewrite_followup`), dịch. Không có HyDE. | Tắt câu tìm kiếm con: −35,4 điểm, module đóng góp nhiều nhất (`t1_retrieval.py`). | Giữ. HyDE không cần: câu tìm kiếm con viết theo nhãn dòng của báo cáo đã làm việc "nói bằng ngôn ngữ của tài liệu", mà không bịa ra con số. |
+| Hiểu câu hỏi, lập kế hoạch tìm, an toàn đầu vào (slide tổng quan) | Có: bộ định tuyến ý định, quy tắc về năm và kỳ, câu hỏi lại khi mơ hồ, lớp guard an toàn. | Đã đo ở đợt guard 12/11 (`docs/Version_3/plan_guardrails_h4.md`, mục 6.1); không đo lại hôm nay. | Giữ. |
+
+### C.2 Mục 4, Retrieval (tìm chứng cứ)
+
+| Kỹ thuật trong slide | Hệ thống hiện có | Số đo | Kết luận |
+|---|---|---|---|
+| Tìm theo nghĩa (dense), theo từ khóa (sparse, BM25), kết hợp cả hai (hybrid) | Đường nhiều tài liệu: kết hợp, 0,7 × dense + 0,3 × BM25 trên điểm đã chuẩn hóa. Đường một tài liệu: chỉ dense. | Nhiều tài liệu: tắt BM25 −3,6 điểm (có ý nghĩa thống kê). Một tài liệu, **đã đo từ 02/11** (`fb150_grid.py`, FinanceBench 150): chỉ dense đủ bằng chứng 86,7 %; thêm BM25 81,3 %; thêm trọng số từ vựng của BGE-M3 85,3 %. | Giữ cả hai đường như hiện tại. **Đính chính:** đề xuất "thêm BM25 cho đường một tài liệu" nêu sáng 14/11 là thừa, việc này đã đo và cho kết quả kém hơn. |
+| Hai cách gộp: theo thứ hạng (RRF) hoặc theo trọng số α; "đừng đoán α, hãy đo" | Cả hai: RRF ở đường một tài liệu, trọng số α = 0,7 ở đường nhiều tài liệu. | Quét α trên 192 câu (`d3_slide_checks.py`): số câu có đủ bằng chứng trong 15 ứng viên đầu là 181 (α = 0, chỉ BM25), 182 (0,3 đến 0,5), 179 (0,7 đang dùng), 175 (1,0, chỉ dense). | α không phải đòn bẩy (chênh 3 câu là nhiễu). Chỉ dense là kém nhất, khớp với slide. |
+| Mỗi loại dữ liệu cần một cấu hình (tin tức, luật, hồ sơ) | Báo cáo tài chính thuộc loại slide gọi là "cards": nhiều tên riêng, con số, bản ghi gần giống nhau, hợp với hybrid. | | Khớp thiết kế hiện tại. |
+
+### C.3 Mục 5, Post-Retrieval (chấm lại, lọc, chọn)
+
+| Kỹ thuật trong slide | Hệ thống hiện có | Số đo | Kết luận |
+|---|---|---|---|
+| Tìm rộng rồi chấm lại bằng mô hình đọc cả câu hỏi lẫn đoạn (reranker) | Có: Qwen3-Reranker-0.6B. | Tắt reranker: −20,3 điểm. Trong 28 câu thiếu bằng chứng, 15 câu có đủ bằng chứng trong ứng viên nhưng mất ở khâu chấm lại và chọn, 13 câu mất từ khâu tìm lần đầu. | Giữ. Khâu này còn nhiều chỗ cải thiện nhất: thử reranker 4B (DG-2, đầu việc 7). |
+| Số đoạn cố định, ngưỡng điểm, ngân sách token, số đoạn linh hoạt | Đường nhiều tài liệu: có cả ngưỡng tương đối, trần token và trần số đoạn theo số tài liệu. Đường một tài liệu: cố định 6 đoạn. | Một tài liệu, 14/11 (`d4_fb150_k.py`): 6 đến 10 đoạn theo ngưỡng 0,5 được 6 câu, không mất câu nào, thêm 18 % token. Nhiều tài liệu, 13/11 (`d2_cutoff.py`): cách chọn hiện tại nằm sát chỗ gãy, cắt thêm là mất bằng chứng. | **Việc mới TC-8** cho đường một tài liệu. Đường nhiều tài liệu giữ nguyên. |
+| MMR (chọn đoạn vừa liên quan vừa khác các đoạn đã chọn, để tránh trùng lặp) | Không có MMR. Thay vào đó các lượt tìm chia lượt lấy chỗ, nên mỗi mục cần tìm và mỗi tài liệu đều có phần. | 14/11 (`d4_mmr.py`, 192 câu): thay chia lượt bằng MMR mức nhẹ (λ = 0,7): −2,1 điểm (mất 4 câu, không được câu nào); mức mạnh (λ = 0,5): −5,7 điểm (mất 11 câu). Chỉ 3 trên 192 câu gửi hai đoạn trùng nguyên văn. | **Không làm.** Lý do: trong báo cáo tài chính, "giống nhau" không có nghĩa là "trùng lặp". Hai bảng cân đối kế toán của hai năm hoặc hai công ty gần như cùng chữ nhưng khác số, và đó chính là hai thứ câu hỏi so sánh cần. Ghi chú: trước 14/11 chưa có phép đo MMR nào được lưu trong kho; đây là lần đo đầu. |
+| Nén ngữ cảnh; mở rộng sang đoạn hoặc trang kề | Không có. | Mở rộng một trang mỗi bên (`d3_slide_checks.py`): lấy lại 13/40 mục thiếu nhưng thêm 16.175 token trung vị; cách "tìm lại theo thứ hạng" (TC-3) lấy lại cùng 13 mục với 4.978 token. | Không làm cả hai. Nén ngữ cảnh trái với quyết định không cắt đoạn bằng chứng. |
+| Đưa metadata của đoạn vào đầu vào của reranker (áp dụng ý "Metadata Integration" của mục 6 cho khâu chấm lại) | Không có: reranker chỉ đọc chữ của đoạn. | 14/11, GPU (`d4_header_rerank.py`, phần B; 14.531 cặp, 909 giây trên máy GPU từ xa; chạy lại production khớp 192/192 câu). Đặt một dòng "Section, Table, Unit" trước chữ của đoạn khi chấm. (a) Mọi trường đoạn có lưu: 84,4 % (162/192), mất 2 câu, không được câu nào, token gửi đi −5 %. (b) Chỉ các trường mà chữ của đoạn chưa có: 85,4 % (164/192), không được không mất, token −2,4 %, tỷ lệ đoạn gửi đi có bằng chứng 30,4 % so với 29,2 %. Bằng chứng đứng đầu lượt tìm của nó: 62,5 % (hiện tại), 62,0 % (a), 64,2 % (b). | **Không làm.** Không cứu được câu nào trong 15 câu mất ở khâu chấm lại; bản (a) còn mất 2 câu. Bản (b) chỉ bớt 2,4 % token, nằm trong nhiễu, không đáng một thay đổi trong `backend/`. Reranker đã đọc đủ từ chữ của đoạn; chỗ yếu của nó không nằm ở việc thiếu tên bảng. Đề xuất này nêu sáng 14/11, nay có số đo và bị loại. |
+
+### C.4 Mục 6, Augmentation (đóng gói đoạn trích vào prompt)
+
+| Kỹ thuật trong slide | Hệ thống hiện có | Số đo | Kết luận |
+|---|---|---|---|
+| Tách rõ chỉ dẫn, chứng cứ và câu hỏi | Có: chỉ dẫn ở phần hệ thống; các đoạn trích đánh số, mỗi đoạn có dòng tiêu đề; câu hỏi ở dòng cuối. | | Giữ. |
+| "Lost in the middle": mô hình chú ý đầu và cuối prompt hơn phần giữa, nên sắp đoạn quan trọng ra hai đầu | Ngữ cảnh xếp theo độ liên quan. Đoạn tìm lại (TC-3) nối vào cuối. | 13/11: trong 603 lần bằng chứng xuất hiện, 415 nằm ở một phần ba đầu, 140 ở giữa, 48 ở cuối. Ngữ cảnh trung vị 6.400 token. Ảnh hưởng tới câu trả lời chưa đo (cần lời gọi trả tiền). | Chưa thành việc: ngữ cảnh ngắn và bằng chứng đã dồn về đầu. Nếu đo thì đo trên các câu có bằng chứng ở giữa. |
+| Metadata đi kèm mỗi đoạn (nguồn, ngày, phiên bản) và quy tắc khi các nguồn mâu thuẫn | Tiêu đề mỗi đoạn có nhãn tài liệu (công ty, loại báo cáo, kỳ) và trang. Chưa in tên mục, tên bảng, đơn vị. Quy tắc mâu thuẫn đã có trong prompt: số liệu điều chỉnh ở báo cáo mới hơn thắng và phải nêu chênh lệch. | 14/11 (`d4_header_rerank.py`, phần A, miễn phí), trên các đoạn production gửi đi cho 192 câu: trong 417 đoạn bảng chứa bằng chứng, 17 đoạn (4,1 %) không có từ chỉ đơn vị (millions, thousands, billions) trong chính nó; chỉ 6 trong số đó có đơn vị ở một đoạn khác cùng trang, và chỉ 1 lần đoạn mang đơn vị đó không được gửi kèm. Tên bảng không có trong chữ của đoạn: 7/417 (1,7 %); tên mục: 44/417 (10,6 %). Tính trên mọi đoạn bảng gửi đi (1.395): 205 đoạn (14,7 %) không có từ chỉ đơn vị. | **Không thành việc.** Giả thuyết "bảng bị cắt theo dòng làm mất dòng đơn vị" có thật nhưng hiếm ở chỗ có bằng chứng: 15/192 câu có một đoạn bằng chứng như vậy, và chỉ 1/192 câu sửa được bằng cách lấy đơn vị từ cùng trang. Lưu ý thêm: trường `unit` lưu trong mỗi đoạn được đọc từ chính chữ của đoạn đó (`ingestion/chunker.py`), nên in nó vào tiêu đề không thêm thông tin nào. Đề xuất "in tên mục, tên bảng, đơn vị vào tiêu đề đoạn trích" nêu sáng 14/11 hạ xuống không ưu tiên. Chưa đo: 15 câu đó có bị trả lời sai đơn vị hay không (cần câu trả lời thật). |
+| Quyền truy cập: lọc trước khi tìm hoặc lọc sau khi sinh | Lọc trước khi tìm, theo sổ tay và tài liệu được chọn; đoạn lấy lại từ câu trả lời cũ cũng bị kiểm sổ tay (`_hydrate`). | Có test phân quyền trong `backend/tests/`. | Đã có, đúng cách slide khuyên. |
+| Ngân sách token: ngữ cảnh không quá 60 % cửa sổ của mô hình | Trần 8.192 token, nới theo số lượt tìm; nhỏ hơn rất nhiều so với cửa sổ của mô hình. | Trung vị 6.400 token, tối đa 12.119 (13/11). | Đạt. |
+
+### C.5 Mục 7, Generation (sinh câu trả lời)
+
+| Kỹ thuật trong slide | Hệ thống hiện có | Số đo | Kết luận |
+|---|---|---|---|
+| Chọn mô hình theo độ khó của câu hỏi (câu tra cứu dùng mô hình nhỏ, câu so sánh dùng mô hình mạnh) | Một mô hình (deepseek-flash, suy nghĩ mức cao) cho mọi lời gọi; riêng lớp guard tắt suy nghĩ. | 12/11: tắt suy nghĩ khi viết câu trả lời 12/30 đúng so với 27/30; tắt suy nghĩ ở bộ lập kế hoạch 87,5 xuống 82,5. Mức suy nghĩ thấp chưa đo trên bộ 30 câu. | Chưa làm. Ghi ở mục 8, hướng 7 và DG-2, đầu việc 8. |
+| Sinh câu trả lời bám chứng cứ, có trích dẫn; thiếu thì nói "không tìm thấy" | Có: chỉ dùng đoạn trích, số đoạn trong ngoặc vuông sau mỗi con số, trạng thái `answered` / `partial` / `not_found` / `clarify`. | FinanceBench 127/150 đúng (02/11). | Giữ. |
+
+### C.6 Mục 8, Post-Generation (kiểm tra và sửa câu trả lời trước khi hiển thị)
+
+| Kỹ thuật trong slide | Hệ thống hiện có | Số đo | Kết luận |
+|---|---|---|---|
+| Kiểm soát định dạng và an toàn đầu ra | Bảng Markdown, khối JSON `answer_meta`; `answer_check/policy.py` chặn lời khuyên đầu tư, lộ chỉ dẫn, tên thành phần nội bộ. | Đã đo ở đợt guard 12/11. | Có. |
+| Vòng tự sửa: mô hình tự chấm câu trả lời so với chứng cứ, không bám thì viết lại hoặc từ chối | Có, nhưng bước chấm làm bằng mã chứ không bằng mô hình: kiểm con số, trích dẫn, cột năm, phép tính, công thức; có lỗi thì viết lại đúng một lần; còn lỗi thì gắn cảnh báo dưới câu trả lời. | Bắt 78,6 % lỗi gán nhầm năm được cài; 6/6 báo cáo sai công thức là thật (TC-1, TC-4). | Giữ. Chỗ trống đã biết: câu khẳng định bằng chữ, không có con số, chưa được kiểm. Dùng mô hình chấm sẽ thêm một lời gọi cho mọi câu trả lời, nên để sau MVP. |
+| Bám chứng cứ nghiêm ngặt và từ chối có hướng dẫn bước tiếp theo | Có: nói rõ phần thiếu, nêu thông tin gần nhất tìm được; từ 14/11 có nút "tìm lại" theo từng tài liệu thay cho lưới an toàn (`fail_cases.md`, phần mã chưa commit). | 12/11: ngữ cảnh thiếu thì câu trả lời tự nhận thiếu 20/29 lần; ngữ cảnh đủ thì 0/11 lần báo nhầm. | Giữ. |
+| Các mẫu lỗi: nguồn mâu thuẫn, suy diễn quá đà, quên ràng buộc; quy tắc "ngữ cảnh có đáp án mà trả lời sai là lỗi khâu viết, không có là lỗi khâu tìm" | Quy tắc về số liệu điều chỉnh; cấm đoán số; yêu cầu ngôn ngữ đặt ngay ở dòng câu hỏi (cuối prompt, đúng lời khuyên của slide, đã đo là giữ được ngôn ngữ); nhiệt độ 0. | FinanceBench: 23 câu sai, 16 câu có trang bằng chứng trong ngữ cảnh, 7 câu không. | **Thêm vào DG-1** (tự phân loại lỗi). Cần dấu vết lưu mã đoạn trích. |
+
+### C.7 Tóm tắt: việc nào vào roadmap, việc nào không
+
+- **Vào roadmap:** TC-9 (lọc đoạn bảng ở nhánh nhiều tài liệu, ưu tiên); TC-8 (số đoạn linh hoạt cho đường một tài liệu, hoãn); cột tự phân loại lỗi trong DG-1; ba đầu việc 6 đến 8 của DG-2.
+- **Không làm, có số đo:** BM25 cho đường một tài liệu; chỉnh α; MMR; mở rộng trang kề; cắt số đoạn chặt hơn ở đường nhiều tài liệu; dòng tiêu đề (tên mục, tên bảng, đơn vị) cho reranker; in tên mục, tên bảng, đơn vị vào tiêu đề đoạn trích gửi cho mô hình viết.
+- **Còn lại để thử ở khâu chấm lại:** reranker lớn hơn (DG-2, đầu việc 7). Đây là hướng duy nhất chưa đo trong số các hướng nhắm vào 15 câu mất ở khâu này.
+- **Không làm, vì không hợp:** nén ngữ cảnh; HyDE; vòng lặp tự tìm lại nhiều lần (đã chốt tối đa một lần, qua nút bấm).
+- **Chưa đo nên chưa quyết:** câu hỏi gõ sai chính tả; sắp lại thứ tự đoạn trích; mô hình chấm câu khẳng định bằng chữ.
