@@ -18,7 +18,7 @@ from app.modules.chat import events
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.documents.document import DocumentRecord
 from app.modules.documents.catalog_edit import needs_confirmation
-from app.modules.generation.llm_client import REQUEST_USAGE, LLMUnavailableError
+from app.modules.generation.llm_client import REQUEST_USAGE, LLMTruncatedError, LLMUnavailableError
 from app.modules.query_router.input_policy import COMPARE_CUE, MSG, TERMINAL, Decision, SourceInfo, decide, detect_language, mentioned_sources, rewrite_followup
 from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_from_focus, focus_view
 from app.modules.query_router import guard
@@ -39,6 +39,10 @@ from app.modules.retrieval.hybrid_search import HybridSearchService
 
 class SourceSelectionError(DomainException):
     """The selected sources are unusable, or none was selected where a choice is needed. `code` says which (see error_codes)."""
+
+
+class Unfinished(str):
+    """The fixed apology (with the first excerpts) that stands in for an answer the model could not write: there is nothing to verify, repair or search more for in it."""
 
 
 @dataclass
@@ -203,7 +207,7 @@ class RAGWorkflowOrchestrator:
             flagged = [n for n, c in enumerate(retrieved, 1) if "suspicious_instruction" in (c.get("flags") or [])]
         citations = [CitationGenerator.from_retrieved_chunk(chk, citation_offset + idx + 1) for idx, chk in enumerate(retrieved)]
         t2 = time.perf_counter()
-        number_check, cite_check, issues = verify(answer, retrieved, docs)
+        number_check, cite_check, issues = verify("" if isinstance(answer, Unfinished) else answer, retrieved, docs)  # an apology is not checked: its page numbers are not figures
         first_issues, repaired = list(issues), False
         if issues and retrieved and settings.ANSWER_REPAIR_ENABLED:  # A2: one rewrite with the list of problems
             events.stage("checking")
@@ -663,10 +667,14 @@ class RAGWorkflowOrchestrator:
             if not fallback:
                 raise
             excerpts = "\n\n".join(f"**{'Trang' if vi else 'Page'} {c['page']}**\n> " + c["content"][:400].replace("\n", "\n> ") for c in chunks[:3])
+            cut = isinstance(exc, LLMTruncatedError)  # the model could not finish within its limit (never "the reports do not contain this"), not an outage
             if vi:
-                return ("Hệ thống chưa tạo được câu trả lời tự động lúc này. Các đoạn liên quan nhất trong báo cáo:\n\n"
-                        f"{excerpts}\n\n(Xem chi tiết tại phần trích dẫn nguồn đính kèm.)")
-            return f"No answer could be generated right now. The most relevant excerpts of the report:\n\n{excerpts}\n\n(See the attached source citations for details.)"
+                head = ("Xin lỗi, câu hỏi này vượt quá giới hạn xử lý của hệ thống nên chưa thể hoàn tất câu trả lời. Bạn có thể thử chia nhỏ câu hỏi (mỗi lần một chỉ tiêu hoặc một năm). Các đoạn liên quan nhất trong báo cáo:"
+                        if cut else "Hệ thống chưa tạo được câu trả lời tự động lúc này. Các đoạn liên quan nhất trong báo cáo:")
+                return Unfinished(f"{head}\n\n{excerpts}\n\n(Xem chi tiết tại phần trích dẫn nguồn đính kèm.)")
+            head = ("Sorry, this question is beyond what the system can finish within its processing limit, so no answer was completed. You can try splitting it into smaller questions (one metric or one year at a time). The most relevant excerpts of the report:"
+                    if cut else "No answer could be generated right now. The most relevant excerpts of the report:")
+            return Unfinished(f"{head}\n\n{excerpts}\n\n(See the attached source citations for details.)")
 
 
 def _previews(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

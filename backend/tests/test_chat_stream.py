@@ -126,7 +126,7 @@ async def test_every_attempt_of_a_call_asked_to_stream_is_a_stream_and_a_cut_one
 
     model.reply = reply
     assert await llm_client.chat_completion([{"role": "user", "content": "q"}], stream=True) == "Done."
-    assert [b.get("stream", False) for b in model.bodies] == [True, True] and attempts[1] == 2 * attempts[0]
+    assert [b.get("stream", False) for b in model.bodies] == [True, True] and attempts[1] == min(2 * attempts[0], settings.LLM_MAX_TOKENS_CEILING)
 
 
 async def test_every_answer_call_is_received_as_a_stream_the_second_writings_too(monkeypatch):

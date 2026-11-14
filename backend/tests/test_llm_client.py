@@ -1,5 +1,6 @@
 """chat_completion: token budget floor and retry of a reply cut by the budget (deepseek-flash reasoning counts against max_tokens)."""
 import httpx
+import pytest
 
 from app.core.config import settings
 from app.modules.generation import llm_client
@@ -40,13 +41,14 @@ async def test_reply_cut_by_the_budget_is_retried_with_a_larger_one(monkeypatch)
     seen = patch(monkeypatch, [("length", ""), ("stop", '{"plan": [{"query": "q", "doc_ids": ["d1"]}]}')])
     out = await llm_client.chat_completion([{"role": "user", "content": "q"}], max_tokens=1500)
     assert out.startswith('{"plan": [{')
-    assert seen == [settings.LLM_MIN_MAX_TOKENS, 2 * settings.LLM_MIN_MAX_TOKENS]
+    assert seen == [settings.LLM_MIN_MAX_TOKENS, min(2 * settings.LLM_MIN_MAX_TOKENS, settings.LLM_MAX_TOKENS_CEILING)]  # doubled, but never past the ceiling
 
 
 async def test_retry_stops_at_the_ceiling(monkeypatch):
     seen = patch(monkeypatch, [("length", "")] * 4)
-    assert await llm_client.chat_completion([{"role": "user", "content": "q"}]) == ""
-    assert seen[-1] == settings.LLM_MAX_TOKENS_CEILING and len(seen) == 3
+    with pytest.raises(llm_client.LLMTruncatedError):  # a reply still cut at the ceiling is an error, not an empty answer (tests/test_truncated_reply.py)
+        await llm_client.chat_completion([{"role": "user", "content": "q"}])
+    assert seen == [settings.LLM_MIN_MAX_TOKENS, settings.LLM_MAX_TOKENS_CEILING]  # one retry: 24,000 then the ceiling, 32,000 (twice 24,000 would pass it)
 
 
 def test_reasoning_tokens_nested_in_usage_are_counted_for_the_request():
@@ -104,7 +106,8 @@ async def test_an_answer_that_reasons_for_eleven_thousand_tokens_is_written_in_o
 
 async def test_the_budget_has_a_ceiling_that_bounds_a_runaway_reply(monkeypatch):
     """A larger budget is only a ceiling (the API bills the tokens generated), but a reply that never ends must still stop: at most three requests, none above the ceiling."""
-    assert settings.LLM_MIN_MAX_TOKENS <= settings.LLM_MAX_TOKENS_CEILING <= 64_000
+    assert settings.LLM_MIN_MAX_TOKENS <= settings.LLM_MAX_TOKENS_CEILING <= 32_000
     seen = sized(monkeypatch, needs=10 ** 9)
-    assert await llm_client.chat_completion([{"role": "user", "content": "q"}]) == ""
-    assert len(seen) <= 3 and max(seen) <= settings.LLM_MAX_TOKENS_CEILING
+    with pytest.raises(llm_client.LLMTruncatedError):
+        await llm_client.chat_completion([{"role": "user", "content": "q"}])
+    assert len(seen) <= 2 and max(seen) <= settings.LLM_MAX_TOKENS_CEILING  # at most two requests, 24,000 and 32,000 tokens: 56,000 in all, not 136,000

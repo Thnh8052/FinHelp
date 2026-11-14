@@ -72,9 +72,12 @@ class Settings(BaseSettings):
     # The budget is only a ceiling: the API bills the tokens generated (deepseek-flash accepts up to 384K), and the model does not reason longer because
     # the ceiling is higher. A cut reply is thrown away and asked again, so a ceiling that is too low costs more than a high one: at 8,000, 4 of 5 analysis
     # answers were cut and paid twice (about 8,000 wasted tokens, 35 to 40 s each); the longest complete reply measured was about 11,000 tokens.
-    # 24,000 holds twice that; the retries (24,000, 48,000, 64,000) stop a reply that never ends at 64,000 (about 0.08 dollar of output at peak price).
+    # 24,000 holds twice that, then one retry at 32,000 (14/11, owner's choice): the 784 stored answers never needed more than 16,000 tokens in one call and the two ~40k
+    # records of the dev database are sums of 5 calls (the split per call is not stored), so a longer ladder (48,000, 64,000) only paid for replies that never end:
+    # at most 56,000 tokens (about 0.07 dollar of output at peak price, about 4.5 minutes) instead of 136,000. A reply still cut at the ceiling is an error
+    # (LLMTruncatedError) that the answer shows as a sorry for the system's limit, never as "not found".
     LLM_MIN_MAX_TOKENS: int = 24000
-    LLM_MAX_TOKENS_CEILING: int = 64000
+    LLM_MAX_TOKENS_CEILING: int = 32000
 
     # Email Service (SendGrid)
     SENDGRID_API_KEY: Optional[str] = None

@@ -65,6 +65,22 @@ async def test_a_repair_that_works_still_replaces_the_answer(monkeypatch):
     assert len(calls) == 2 and "$25,785" in r["answer"] and r["verification"]["repaired"] and r["verification"]["passed"]
 
 
+async def test_the_apology_for_an_outage_is_not_verified_or_repaired(monkeypatch):
+    """The fixed apology shows the first excerpts and a page number ("Page 41"): the number check reads that number as an unverified figure of an answer, and the one repair then
+    asks the model again, to rewrite an apology (found 14/11 while fixing the cut replies)."""
+    orch, _ = _orchestrator([], monkeypatch)
+    calls = fake_model(orch, monkeypatch, LLMUnavailableError("llm_unavailable"))
+    chunks = [dict(c, page=41) for c in CHUNKS]  # a page number above 12 that the excerpts do not print
+
+    async def retrieve(query, notebook_id, scope, forced=None, net_others=False):
+        return orch_mod.RetrievalResult(scope, {"amd": "AMD", "nv": "NVIDIA"}, [], [], [dict(c) for c in chunks], "targets_planner")
+
+    monkeypatch.setattr(orch, "retrieve", retrieve)
+    r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
+    assert r["answer"].startswith("No answer could be generated right now") and "⚠️" not in r["answer"]
+    assert len(calls) == 1 and not r["verification"]["repaired"] and r["verification"]["passed"]
+
+
 async def test_the_first_answer_still_falls_back_to_the_apology_and_a_second_writing_can_ask_for_the_error(monkeypatch):
     orch, _ = _orchestrator([], monkeypatch)
     fake_model(orch, monkeypatch, LLMUnavailableError("llm_unavailable"))

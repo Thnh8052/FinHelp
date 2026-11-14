@@ -23,6 +23,11 @@ class LLMUnavailableError(DomainException):
     """The language-model service has no key, rejected the call, or stayed unreachable after retries."""
 
 
+class LLMTruncatedError(LLMUnavailableError):
+    """The reply was still cut by the token budget at its ceiling: the model reasoned or wrote past every budget it was given. Not an outage, but the call has no usable
+    result, so it is an error for every caller that already handles an unreachable model (an empty text used to be returned, and an answer turned it into "not found")."""
+
+
 def _record_usage(usage: Optional[Dict]) -> None:
     counts = {k: v for k, v in (usage or {}).items() if isinstance(v, int)} | {"calls": 1}
     reasoning = ((usage or {}).get("completion_tokens_details") or {}).get("reasoning_tokens")  # the API nests it; it is already inside completion_tokens
@@ -117,10 +122,13 @@ async def chat_completion(
                         choice = body["choices"][0]
                         content, finish = (choice["message"].get("content") or "").strip(), choice.get("finish_reason")
                 if status == 200:
-                    if finish == "length" and payload["max_tokens"] < settings.LLM_MAX_TOKENS_CEILING:
-                        logger.warning(f"LLM reply cut at max_tokens={payload['max_tokens']}; retrying with a larger budget")
-                        payload["max_tokens"] = min(payload["max_tokens"] * 2, settings.LLM_MAX_TOKENS_CEILING)
-                        continue
+                    if finish == "length":
+                        if payload["max_tokens"] < settings.LLM_MAX_TOKENS_CEILING:
+                            logger.warning(f"LLM reply cut at max_tokens={payload['max_tokens']}; retrying with a larger budget")
+                            payload["max_tokens"] = min(payload["max_tokens"] * 2, settings.LLM_MAX_TOKENS_CEILING)
+                            continue
+                        logger.warning(f"LLM reply still cut at max_tokens={payload['max_tokens']}, the ceiling: no usable result")
+                        raise LLMTruncatedError(Code.LLM_UNAVAILABLE)  # not the empty or half text: no caller may take it for an answer
                     return content
                 if status < 500 and status not in RETRYABLE_STATUS:
                     # Auth / bad-request errors do not heal by retrying.
