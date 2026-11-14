@@ -1,14 +1,13 @@
 """Prompt v4.1 = v4 with three corrections of places where v4 contradicts itself (docs/Version_3/prompt_v5_proposal.md, RAG_CHECKS_SPEC.md L18-L20).
 It is selectable with GENERATION_PROMPT="v4_1"; the default stays "v4" until v4.1 is measured on questions it was not designed with. No model: only the messages.
 
-  L20  a citation [n] in a table header leaves the data cells without one, and the column-year check (TC-1) only reads figures that carry a citation
+  L20  a citation [n] in a table header leaves the data cells without one
   L19  "one decimal for percentages and ratios" turns a current ratio of 0.76 into 0.8 and 0.87 into 0.9
   L18  the example cell `52 377 [1]` (space-grouped) contradicts "copy each figure exactly as printed" and is copied into the answers
 """
 import re
 
 from app.core.config import Settings, settings
-from app.modules.generation.answer_check.column_years import check_columns
 from app.modules.generation.generator import (
     LANGUAGE_VI_STRUCTURED,
     QUESTION_EN,
@@ -64,14 +63,6 @@ def test_no_table_template_of_v4_1_carries_a_citation_in_its_header_and_the_rule
     rule = next(line for line in SYSTEM_V4_1.splitlines() if "Concise headers" in line)
     assert "citation" in rule and "data cell" in rule and "never" in rule.lower()
     assert "Every data cell must contain ONLY the core number or concise entity name and its citation `[n]`" in SYSTEM_V4_1  # the cells keep their [n]
-
-
-def test_the_column_check_reads_a_table_with_the_citation_in_its_cells_and_not_one_with_it_in_the_header():
-    excerpt = {"content": "| Item | 2019 | 2018 | 2017 |\n| --- | --- | --- | --- |\n| Purchases of property | 700 | 680 | 666 |\n", "page": 1, "document_id": "d"}
-    header_style = "| Metric | FY2019 [1] | FY2018 [1] |\n| :--- | ---: | ---: |\n| Purchases of property | 666 | 680 |\n"  # what v4 asks for
-    cell_style = "| Metric | FY2019 | FY2018 |\n| :--- | ---: | ---: |\n| Purchases of property | 666 [1] | 680 [1] |\n"  # what v4.1 asks for
-    assert check_columns(header_style, [excerpt]) == []  # 666 is the 2017 figure under FY2019: nothing is read, nothing is said
-    assert [c["figure"] for c in check_columns(cell_style, [excerpt])] == ["666"]
 
 
 # ------------------------------------------------------------------ L19: ratios keep two decimals

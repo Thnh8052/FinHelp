@@ -1,7 +1,7 @@
 """P7: latency and cost of the answered questions, read from the traces stored with each assistant message (messages.trace_info).
 
 p50 / p95 seconds per stage (plan, search, generate, verify_repair, total), LLM calls and tokens per question, share of answers that
-needed the repair call or still carry a flag, share routed by targets / planner + safety net.
+needed the repair call or still carry a flag, share routed by targets / planner.
 
   .venv/Scripts/python.exe scripts/latency_report.py [--last 500]
 """

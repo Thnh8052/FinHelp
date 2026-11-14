@@ -169,9 +169,6 @@ class _FakeEmbedder:
     async def embed_queries(self, queries):
         return [[0.0] for _ in queries]
 
-    async def embed_queries_with_sparse(self, queries):
-        return [[0.0] for _ in queries], [{} for _ in queries]
-
 
 class _FakeRetriever:
     def __init__(self):
@@ -183,12 +180,14 @@ class _FakeRetriever:
 
 
 class _FakeChunks:
+    by_document = {"d1": {c: (f"text {c}", 100) for c in "abcd"}, "d2": {c: (f"text {c}", 100) for c in "xy"}, "d3": {}}  # {document: {chunk: (text, tokens)}}
+
     async def get_chunks_by_ids(self, ids):
         import types
         return [types.SimpleNamespace(chunk_id=i, document_id="d", page=1, section=None, chunk_type="text", content=f"text {i}", concept_ids=[]) for i in ids]
 
-    async def get_sparse_weights(self, ids):
-        return {i: ({}, 100) for i in ids}  # indexed before lexical weights: dense order
+    async def get_text_by_document(self, document_ids):
+        return {d: self.by_document[d] for d in document_ids if d in self.by_document}
 
 
 class _FakeReranker:
@@ -214,6 +213,9 @@ def _service(monkeypatch, top_k, rerank_top_n):
     monkeypatch.setattr(settings, "RERANK_ENABLED", True)
     svc = HybridSearchService.__new__(HybridSearchService)
     svc.embedder, svc.retriever, svc.chunk_repo, svc.reranker = _FakeEmbedder(), _FakeRetriever(), _FakeChunks(), _FakeReranker()
+    from app.modules.retrieval.term_cache import TERMS
+
+    TERMS.clear()  # the word counts are kept between questions: each test starts without them
     return svc
 
 
@@ -251,13 +253,25 @@ async def test_retrieve_multi_doc_survives_reranker_failure(monkeypatch):
     assert [c["chunk_id"] for c in chunks][:2] == ["a", "x"]
 
 
-def test_hybrid_order_mixes_dense_and_sparse_and_keeps_dense_without_weights(monkeypatch):
-    from app.modules.retrieval.hybrid_search import hybrid_order
+async def test_retrieve_multi_doc_first_stage_is_dense_plus_bm25_like_the_planned_path(monkeypatch):
+    """15/11: the path without a plan used dense + BGE-M3 lexical weights; on the 192 questions that was 81.2 compl against 85.4 for dense + BM25 (d6_scorer.py), no better than dense only."""
+    from app.modules.query_router.planner import PlanItem
 
-    hits = [{"chunk_id": "a", "score": 0.80}, {"chunk_id": "b", "score": 0.79}, {"chunk_id": "c", "score": 0.10}]
-    stats = {"a": ({"1": 0.1}, 10), "b": ({"7": 0.9}, 10), "c": ({}, 10)}
-    assert hybrid_order(hits, {"7": 1.0}, stats) == ["b", "a", "c"]  # b shares the query's term, a and b are near in dense
-    assert hybrid_order(hits, {"7": 1.0}, {k: ({}, 10) for k in stats}) == ["a", "b", "c"]
+    svc = _service(monkeypatch, top_k=3, rerank_top_n=0)
+
+    async def close_scores(vectors, notebook_id, document_id=None, limit=5, per_vector_documents=None):
+        return [[{"chunk_id": "a", "score": 0.80}, {"chunk_id": "b", "score": 0.79}, {"chunk_id": "c", "score": 0.10}]]
+
+    svc.retriever.search_vectors = close_scores
+    svc.chunk_repo.by_document = {"d1": {"a": ("other words", 100), "b": ("goodwill impairment", 100), "c": ("other words", 100)}}
+    chunks = await svc.retrieve_multi_doc([PlanItem("goodwill", ["d1"])], "nb", ["d1"])
+    assert [c["chunk_id"] for c in chunks] == ["b", "a", "c"]  # b shares the query's term and a and b are near in dense
+    svc.chunk_repo.by_document = {"d1": {k: ("other words", 100) for k in "abc"}}
+    from app.modules.retrieval.term_cache import TERMS
+
+    TERMS.clear()
+    chunks = await svc.retrieve_multi_doc([PlanItem("goodwill", ["d1"])], "nb", ["d1"])
+    assert [c["chunk_id"] for c in chunks] == ["a", "b", "c"]  # no term in common: the dense order
 
 
 def test_allocate_relative_threshold_round_robin_and_token_cap(monkeypatch):
@@ -340,13 +354,14 @@ def test_dense_bm25_order_lets_a_shared_term_win_over_a_close_dense_score():
     assert dense_bm25_order([{"chunk_id": None, "score": 1.0}], "q", {}) == []
 
 
-def test_planned_ceilings_grow_with_the_question_and_have_no_upper_limit():
+def test_planned_ceilings_chunks_follow_the_documents_and_tokens_are_one_bounded_cap():
     from app.modules.retrieval.hybrid_search import planned_ceilings
 
-    assert planned_ceilings(3, 2) == (12, 8192 + 2 * 1024)
-    assert planned_ceilings(9, 3) == (12, 18432)
-    assert planned_ceilings(9, 4)[0] == 16 and planned_ceilings(11, 5) == (20, 8192 + 14 * 1024)  # past the old 18,432 tokens
-    assert planned_ceilings(41, 10) == (40, 8192 + 74 * 1024)
+    assert planned_ceilings(2) == (12, 12288)  # the floor of 12 chunks
+    assert planned_ceilings(3) == (12, 12288)
+    assert planned_ceilings(5) == (20, 12288)  # 4 chunks a document
+    assert planned_ceilings(10) == (40, 12288)  # the tokens never grow with the question: one cap (d6_ceiling.py: same compl as the old growing cap on 192 questions)
+    assert settings.MULTIDOC_PLANNED_MAX_TOKENS == 12288
 
 
 def test_allocate_planned_limits_the_question_search_only_and_stops_at_both_ceilings():
@@ -394,16 +409,6 @@ async def test_retrieve_planned_has_no_cap_of_8_but_a_guard_and_survives_the_rer
     svc.reranker.score_pairs = boom
     chunks = await svc.retrieve_planned("q", [PlanItem("item", ["d1"])], "nb", ["d1"])
     assert [c["chunk_id"] for c in chunks] == ["a1", "a2", "a3", "a4"]  # the first-stage order still answers
-
-
-def test_safety_net_keeps_its_room_above_a_large_first_stream():
-    big = [{"content": "x" * 40000}]  # 10,000 tokens: more than the 8,192 of the older stream 1
-    chunk = {"chunk_id": "n"}
-    assert retrieval_step.extra_slots(big, [(chunk, 14000)]) == [chunk]  # 10,000 used, room 8,192 + 14,336 on top of the larger of the two
-    assert retrieval_step.extra_slots(big, [(chunk, 15000)]) == []
-    room = 8192 + 1024 * 14  # NET_EXTRA_SLOTS is 14 since the net of 12/11/2026 (it was 10: 18,432)
-    assert retrieval_step.extra_slots([{"content": "x"}], [(chunk, room - 500)]) == [chunk]  # the room above a small first stream
-    assert retrieval_step.extra_slots([{"content": "x"}], [(chunk, room + 500)]) == []
 
 
 # ---------------------------------------------------------------- source selection (user chooses the files, the system never guesses)
@@ -468,7 +473,7 @@ async def test_retrieve_never_widens_the_selection(monkeypatch):
 
     class FakeChunkRepo:
         async def get_chunks_by_document(self, document_id):
-            return []
+            raise AssertionError("no chunk of a document is read to choose documents (the route on the first pages' text is gone)")
 
     class FakeSearch:
 
@@ -520,13 +525,12 @@ async def test_retrieve_never_widens_the_selection(monkeypatch):
     found = await orch.retrieve("What was PepsiCo's revenue?", "nb", docs)  # R5: the catalog names PepsiCo
     assert found.routing == "r5" and seen["plan"] == [("What was PepsiCo's revenue?", ["d2"])]
     seen.clear()
-    found = await orch.retrieve("which is larger?", "nb", docs)  # nothing named, no first-page words: R4 over the selection
+    found = await orch.retrieve("which is larger?", "nb", docs)  # nothing named: R4 over the selection
     assert found.routing == "r4" and seen == {"by_content": (["d1", "d2"], [])}
 
 
 async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_without_documents(monkeypatch):
     from app.modules.query_router.planner import PlanItem
-    from app.modules.chat import orchestrator as orch_mod
 
     docs = [_doc("d1", "a.pdf", company_name="Coca-Cola", fiscal_year=2022, report_type="10-K", period_end="2022-12-31"),
             _doc("d2", "b.pdf", company_name="PepsiCo", fiscal_year=2022, report_type="10-K", period_end="2022-12-31"),
@@ -543,11 +547,6 @@ async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_with
             seen["plan"] = [(p.query, p.document_ids) for p in plan]
             return [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x" * 400, "chunk_type": "table", "score": 1.0}]
 
-        async def safety_net(self, question, plan_queries, notebook_id, document_ids, exclude, kept_document_ids=None):
-            seen["net"] = (plan_queries, document_ids, list(exclude))
-            big = {"chunk_id": "n2", "document_id": "d2", "page": 5, "content": "pepsi", "chunk_type": "table", "score": 0.9}
-            return [(big, 900), ({**big, "chunk_id": "n3", "document_id": "d3"}, 30000)]  # the second does not fit the token cap (8,192 + 14 x 1,024)
-
     async def plan_missing_pepsi(query, catalog):
         return [PlanItem("net revenues", ["d1"])]
 
@@ -555,14 +554,8 @@ async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_with
     monkeypatch.setattr(retrieval_step, "plan_multi_doc", plan_missing_pepsi)
     orch = _orchestrator(docs)
     orch.hybrid_search = FakeSearch()
-    monkeypatch.setattr(orch_mod.settings, "NET_ENABLED", False)
     await orch.retrieve(q, "nb", docs)
     assert seen["plan"] == [("net revenues", ["d1"]), (q, ["d2"])]  # FB3: PepsiCo 2022 named, not searched
-    monkeypatch.setattr(orch_mod.settings, "NET_ENABLED", True)
-    found = await orch.retrieve(q, "nb", docs)
-    assert seen["plan"] == [("net revenues", ["d1"])]  # the safety net replaces FB3
-    assert seen["net"] == (["net revenues"], ["d2", "d3"], []) and found.routing == "planner+net"  # L2: the net runs beside the main search, so it is not told what that found
-    assert [c["chunk_id"] for c in found.retrieved] == ["c1", "n2"]
 
     async def plan_without_documents(query, catalog):
         return [PlanItem("net revenues", [])]
@@ -572,9 +565,8 @@ async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_with
     assert seen["plan"] == [("net revenues", ["d1", "d2"])]  # the R5 documents, not the 2021 filing
 
 
-async def test_targeted_documents_skip_the_net_and_v1_retries_a_missing_one(monkeypatch):
+async def test_v1_retries_a_missing_targeted_document(monkeypatch):
     from app.modules.query_router.planner import PlanItem
-    from app.modules.chat import orchestrator as orch_mod
 
     docs = [_doc("d1", "a.pdf", company_name="Coca-Cola", fiscal_year=2022), _doc("d2", "b.pdf", company_name="PepsiCo", fiscal_year=2022),
             _doc("d3", "c.pdf", company_name="Apple", fiscal_year=2022)]
@@ -593,9 +585,6 @@ async def test_targeted_documents_skip_the_net_and_v1_retries_a_missing_one(monk
         async def retrieve_multi_doc(self, plan, notebook_id, scope_ids, limit=None):
             calls.append(([p.document_ids for p in plan], list(scope_ids), limit))
             return []
-
-        async def safety_net(self, *a):
-            raise AssertionError("no safety net when the documents are targeted")
 
     async def plan(query, catalog):
         assert [e.document_id for e in catalog] == ["d1", "d2"]  # the planner only sees the targeted documents
@@ -736,34 +725,3 @@ def test_extract_document_header_leaves_period_end_empty_when_the_date_is_not_pr
     h = extract_document_header([{"page_number": 1, "text": text}])
     assert h["report_type"] == "earnings release" and h["fiscal_year"] == 2022 and h["fiscal_quarter"] == 4
     assert h["period_end"] is None
-
-
-async def test_targeted_question_with_an_unknown_name_nets_the_other_documents(monkeypatch):
-    from app.modules.chat import orchestrator as orch_mod
-
-    docs = [_doc("d1", "a.pdf", company_name="Royal Bank of Canada", fiscal_year=2025), _doc("d2", "b.pdf", company_name="The Toronto-Dominion Bank", fiscal_year=2025)]
-    seen = {}
-
-    class FakeSearch:
-
-        async def prescore(self, *a):
-
-            return None
-
-        async def retrieve_research(self, query, sub_queries, notebook_id, document_id):
-            seen["single"] = document_id
-            return [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x", "chunk_type": "table", "score": 1.0}]
-
-        async def safety_net(self, question, plan_queries, notebook_id, document_ids, exclude, kept_document_ids=None):
-            seen["net"] = document_ids
-            return [({"chunk_id": "t1", "document_id": "d2", "page": 9, "content": "td net income", "chunk_type": "table", "score": 0.8}, 100)]
-
-    async def no_decompose(q):
-        return q, ["net income revenue"]
-
-    monkeypatch.setattr(retrieval_step, "decompose_query", no_decompose)
-    orch = _orchestrator(docs)
-    orch.hybrid_search = FakeSearch()
-    found = await orch.retrieve("net margin of RBC and of TD", "nb", docs, forced=["d1"], net_others=True)
-    assert seen == {"single": "d1", "net": ["d2"]} and found.routing == "targets_single+net"
-    assert [c["chunk_id"] for c in found.retrieved] == ["c1", "t1"] and found.retrieved[1]["document_label"].startswith("The Toronto-Dominion Bank")

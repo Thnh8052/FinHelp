@@ -278,6 +278,8 @@ export interface TranslationSchema {
     confirmBtn: string;
     currentSession: string;
     queryWith: string;
+    retryIn: string;
+    retryAll: string;
     sendBtn: string;
     removeTag: string;
     prevSuggestions: string;
@@ -662,6 +664,7 @@ export interface TranslationSchema {
     user_not_found: string;
     notebook_not_found: string;
     message_not_found: string;
+    retry_used: string;
     notebook_forbidden: string;
     sample_notebook_read_only: string;
     notebook_busy_delete: string;

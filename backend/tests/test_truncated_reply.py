@@ -65,7 +65,7 @@ async def test_a_question_whose_answer_cannot_be_finished_costs_one_attempt_and_
     calls = fake_model(orch, monkeypatch, LLMTruncatedError(CUT))
     chunks = [dict(c, page=41) for c in CHUNKS]  # a page number the excerpts do not print: it used to be read as an unverified figure of the apology
 
-    async def retrieve(query, notebook_id, scope, forced=None, net_others=False):
+    async def retrieve(query, notebook_id, scope, forced=None):
         return orch_mod.RetrievalResult(scope, {"amd": "AMD", "nv": "NVIDIA"}, [], [], [dict(c) for c in chunks], "targets_planner")
 
     monkeypatch.setattr(orch, "retrieve", retrieve)

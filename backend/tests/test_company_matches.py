@@ -123,9 +123,9 @@ def test_targets_are_forced_only_by_a_real_name():
     docs = [doc("gm", "General Motors Company", 2022), doc("pep", "PepsiCo, Inc.", 2022), doc("ms", "Microsoft Corporation", 2022)]
     assert decide_targets("What were general and administrative expenses in 2022?", docs, None, vi=False).document_ids == []
     pepsi = decide_targets("What was Pepsi's revenue in 2022?", docs, None, vi=False)
-    assert pepsi.document_ids == ["pep"] and not pepsi.uncertain
+    assert pepsi.document_ids == ["pep"]
     typo = decide_targets("Microsft revenue in 2022", docs, None, vi=False)
-    assert typo.document_ids == ["ms"] and typo.uncertain  # one letter off: the other documents keep the safety net
+    assert typo.document_ids == ["ms"]  # one letter off
 
 
 @pytest.mark.parametrize("question, forced", [

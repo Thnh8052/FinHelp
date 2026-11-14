@@ -71,13 +71,6 @@ class DenseEmbeddingService:
             logger.warning(f"Remote embedding unavailable: {type(exc).__name__}: {str(exc)[:120]}")
             raise ServiceUnavailableError(Code.SYSTEM_NOT_READY) from exc
 
-    async def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        if not texts:
-            return []
-        if settings.REMOTE_GPU_URL:
-            return await self._encode_remote(texts, settings.EMBEDDING_MAX_LENGTH, REMOTE_DOCUMENT_BATCH, False)
-        return (await run_on_gpu("embedder", self._encode, texts, settings.EMBEDDING_MAX_LENGTH, 8)).tolist()
-
     async def embed_documents_with_sparse(self, texts: List[str]) -> Tuple[List[List[float]], List[Dict[str, float]]]:
         """Dense vectors and BGE-M3 lexical weights ({token id: weight}) in one pass: the sparse half of the multi-document hybrid search."""
         if not texts:
@@ -93,14 +86,6 @@ class DenseEmbeddingService:
         if settings.REMOTE_GPU_URL:
             return await self._encode_remote(texts, settings.QUERY_MAX_LENGTH, 128, False)
         return (await run_on_gpu("embedder", self._encode, texts, settings.QUERY_MAX_LENGTH, 16)).tolist()
-
-    async def embed_queries_with_sparse(self, texts: List[str]) -> Tuple[List[List[float]], List[Dict[str, float]]]:
-        if not texts:
-            return [], []
-        if settings.REMOTE_GPU_URL:
-            return await self._encode_remote(texts, settings.QUERY_MAX_LENGTH, 128, True)
-        dense, sparse = await run_on_gpu("embedder", self._encode, texts, settings.QUERY_MAX_LENGTH, 16, True)
-        return dense.tolist(), sparse
 
     async def get_embedding(self, text: str) -> List[float]:
         """Single-query convenience kept for existing callers."""

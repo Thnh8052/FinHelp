@@ -10,7 +10,7 @@ import "./chat.css";
 
 interface ChatContainerProps {
   messages: ChatMessage[];
-  onSendMessage: (query: string, mentions?: string[]) => void;
+  onSendMessage: (query: string, mentions?: string[], retryOf?: string) => void;
   /** Report (or withdraw) wrong figures in a stored answer. */
   onFlagAnswer?: (messageId: string, flagged: boolean) => void;
   isLoading: boolean;
@@ -315,9 +315,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                           type="button"
                           className="chat-sample-btn"
                           disabled={isLoading}
-                          onClick={() => onSendMessage(msg.query!, a.document_ids?.length ? a.document_ids : [a.document_id])}
+                          onClick={() => onSendMessage(msg.query!, a.document_ids?.length ? a.document_ids : [a.document_id], a.kind ? msg.message_id : undefined)}
                         >
-                          {t.workspace.queryWith.replace("{label}", a.label)}
+                          {a.kind === "retry_all" ? t.workspace.retryAll
+                            : (a.kind === "retry_one" ? t.workspace.retryIn : t.workspace.queryWith).replace("{label}", a.label)}
                         </button>
                       ))}
                     </div>

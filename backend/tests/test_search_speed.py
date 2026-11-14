@@ -1,9 +1,6 @@
-"""L2 and L4 of docs/Version_3/plan_rag_improvements.md: word counts kept between questions (same chunks, one read per document) and the safety net run beside the main search."""
-import asyncio
+"""L2 of docs/Version_3/plan_rag_improvements.md: word counts kept between questions (same chunks, one read per document)."""
+from tests.test_multidoc import _planned
 
-from tests.test_multidoc import _doc, _orchestrator, _planned
-
-from app.modules.chat import retrieval_step
 from app.modules.query_router.planner import PlanItem
 from app.modules.retrieval.term_cache import TERMS, TermCountCache
 
@@ -39,39 +36,3 @@ def test_term_cache_forgets_the_least_recently_used_document_and_ignores_empty_o
     assert cache.get("big") is not None and cache.get("d1") is None
     cache.drop("big")
     assert cache._chunks == 0
-
-
-async def test_the_net_runs_beside_the_main_search_and_drops_what_the_main_search_holds(monkeypatch):
-    from app.modules.chat import orchestrator as orch_mod
-
-    docs = [_doc("d1", "a.pdf", company_name="Coca-Cola", fiscal_year=2022), _doc("d2", "b.pdf", company_name="PepsiCo", fiscal_year=2022)]
-    order = []
-
-    class FakeSearch:
-        async def prescore(self, *a):
-            return None
-
-        async def retrieve_planned(self, question, plan, notebook_id, scope_ids):
-            order.append("main start")
-            await asyncio.sleep(0.05)
-            order.append("main end")
-            return [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x" * 400, "chunk_type": "table", "score": 1.0}]
-
-        async def safety_net(self, question, plan_queries, notebook_id, document_ids, exclude, kept_document_ids=None):
-            order.append("net start")
-            await asyncio.sleep(0.01)
-            order.append("net end")
-            dup = {"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x", "chunk_type": "table", "score": 0.9}
-            new = {"chunk_id": "n2", "document_id": "d2", "page": 5, "content": "pepsi", "chunk_type": "table", "score": 0.8}
-            return [(dup, 100), (new, 100)]
-
-    async def plan_one(query, catalog):
-        return [PlanItem("net revenues", ["d1"])]
-
-    monkeypatch.setattr(retrieval_step, "plan_multi_doc", plan_one)
-    monkeypatch.setattr(orch_mod.settings, "NET_ENABLED", True)
-    orch = _orchestrator(docs)
-    orch.hybrid_search = FakeSearch()
-    found = await orch.retrieve("Compare Coca-Cola and PepsiCo revenue in 2022", "nb", docs)
-    assert order.index("net start") < order.index("main end")  # started before the main search finished
-    assert [c["chunk_id"] for c in found.retrieved] == ["c1", "n2"] and found.routing == "planner+net"

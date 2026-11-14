@@ -30,13 +30,6 @@ class ChunkRepository(BaseRepository):
         }
         return [doc_map[cid] for cid in chunk_ids if cid in doc_map]
 
-    async def get_sparse_weights(self, chunk_ids: List[str]) -> Dict[str, Tuple[Dict[str, float], int]]:
-        """{chunk_id: (lexical weights, token count)} without the text: the hybrid search scores every chunk of the searched documents."""
-        if not chunk_ids:
-            return {}
-        cursor = self.collection.find({"chunk_id": {"$in": chunk_ids}}, {"chunk_id": 1, "sparse_weights": 1, "token_count": 1, "_id": 0})
-        return {d["chunk_id"]: (d.get("sparse_weights") or {}, d.get("token_count") or 0) async for d in cursor}
-
     async def get_text_by_document(self, document_ids: List[str]) -> Dict[str, Dict[str, Tuple[str, int]]]:
         """{document_id: {chunk_id: (text, token count)}} of every chunk of the documents: BM25 reads the whole documents of a search."""
         out: Dict[str, Dict[str, Tuple[str, int]]] = {}

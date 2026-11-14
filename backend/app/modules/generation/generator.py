@@ -255,8 +255,7 @@ def _revise(text: str, *changes: Tuple[str, str]) -> str:
 
 
 # Prompt v4.1 (GENERATION_PROMPT="v4_1"): v4 with three corrections where v4 contradicts itself; every other line is v4's (tests/test_prompt_v4_1.py).
-#   L20  the table templates put the citation [n] in the header, so the data cells carry none and the column-year check (TC-1) reads nothing
-#        (measured 13/11: a figure of 2017 planted under FY2019 is caught in a table with citations in the cells, not in one with them in the header)
+#   L20  the table templates put the citation [n] in the header, so the data cells carry none (the column-year check TC-1 that read them was removed 15/11)
 #   L19  "one decimal for ratios" turns a current ratio of 0.76 into 0.8 and 0.87 into 0.9: percentages keep one decimal, ratios and multiples two
 #   L18  the example cell `52 377 [1]` writes a space-grouped figure under "copy each input figure exactly as printed", and answers copy it
 # Not the default until it is measured on questions it was not designed with.

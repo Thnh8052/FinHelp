@@ -119,8 +119,9 @@ class Settings(BaseSettings):
     # (query, document), 0.7 z(dense) + 0.3 z(BM25) over every chunk of its document -> top 20 -> Qwen3 order of the first 15 -> chunks >= 50% of
     # the search's best Qwen score; one more search with the question (dense over the planned documents, first MULTIDOC_QUESTION_POOL, Qwen3 by the
     # question, >= 50%, first MULTIDOC_QUESTION_KEEP) -> round robin. Chunks: max(MULTIDOC_MIN_CHUNKS, MULTIDOC_CHUNKS_PER_FILE x documents).
-    # Tokens: MULTIDOC_MAX_TOKENS + 1,024 x (max(MULTIDOC_MAX_CHUNKS, 2 x searches) + 2 - MULTIDOC_MAX_CHUNKS), no upper limit: a harder question may use more.
-    # Without a plan (R5, R4, V1 retry), `hybrid|item-rr15|rel50t8k`: the same with z(sparse) in place of z(BM25), no question search, 10 chunks / 8,192 tokens.
+    # Tokens: MULTIDOC_PLANNED_MAX_TOKENS, one cap (15/11: it was a formula growing with the searches, 8,192 + 1,024 per extra slot, no upper limit; measured on 192 questions the same
+    # evidence is complete with 12,288 as with the formula, tokens sent 6,455 against 6,424 on average, at most 12,119; 8,192 loses 5 questions).
+    # Without a plan (R5, R4, V1 retry): the same first stage (dense + BM25 since 15/11; it was z(BGE-M3 lexical weights) in place of z(BM25)), no question search, 10 chunks / 8,192 tokens.
     MULTIDOC_PER_ITEM_LIMIT: int = 20
     MULTIDOC_CANDIDATE_LIMIT: int = 4096  # dense hits per search: every chunk of <= 5 documents, so the z-scores see the whole documents
     MULTIDOC_DENSE_WEIGHT: float = 0.7
@@ -134,7 +135,8 @@ class Settings(BaseSettings):
     MULTIDOC_CHUNKS_PER_FILE: int = 4
     MULTIDOC_QUESTION_POOL: int = 15
     MULTIDOC_QUESTION_KEEP: int = 3
-    MULTIDOC_MAX_TOKENS: int = 8192
+    MULTIDOC_MAX_TOKENS: int = 8192  # without a plan (allocate)
+    MULTIDOC_PLANNED_MAX_TOKENS: int = 12288  # with a plan (planned_ceilings)
     # Catalog line read at upload (services/ingestion/catalog.py): the measured prompt through the DeepSeek API ("deepseek", no GPU,
     # runs while Docling parses the next file) or the local model through Ollama ("ollama"); off or unreachable -> rule header
     CATALOG_ENABLED: bool = True
@@ -147,28 +149,6 @@ class Settings(BaseSettings):
     # Paid fallback: the language model reads images of pages 1-2 when the local catalog is missing or its name / period is
     # unverified (a name only in a logo, no GPU / Ollama). One call per such document.
     CATALOG_VLM_ENABLED: bool = True
-    # Safety net (stream 2), for a planner that chose the wrong documents: every selected document the plan does not search gets its own lane.
-    # First stage per skipped document: dense + BM25 (as the main search) for [question x2, <= 3 plan queries x1], RRF, first NET_FIRST_STAGE of each query,
-    # pool NET_POOL. Qwen3 scores each pool chunk by the question and by each plan query; a chunk's score is (1 - NET_FUSION_ALPHA) x the question's
-    # + NET_FUSION_ALPHA x the highest of the plan queries' (the plan queries have no company name: they pull the statement tables up and the cover page down).
-    # Chunks scoring >= NET_GATE, best first, take up to NET_EXTRA_SLOTS extra slots (token cap + 1,024 a slot).
-    # The net only opens when dense_skip >= NET_OPEN_MIN_DENSE_GAP, dense_skip = the question's best dense similarity in the skipped documents minus its best in the documents
-    # the plan kept (None: always open). Measured 12/11/2026 on the dev split and the four hard sets (docs/Version_3/plan_rag_improvements.md 8.8-8.13), compl when the planner
-    # is wrong (dev k3 / k4 / k5, hard sets k3 / k4 / k5): this net 88.6 / 91.1 / 87.5 and 73.6 / 78.1 / 74.0; the net of 28/10 (gate 0.3, dense, the question only, 10 slots)
-    # 75.7 / 78.6 / 64.3 and 49.9 / 56.2 / 35.6; plan right: no change on dev, 81.2 against 80.0 on the hard sets; it opens in about half of the right-plan questions.
-    NET_ENABLED: bool = True
-    NET_GATE: float = 0.15
-    NET_EXTRA_SLOTS: int = 14
-    NET_POOL: int = 20
-    NET_FIRST_STAGE: int = 200
-    NET_FUSION_ALPHA: float = 0.4
-    NET_FUSION_QUERIES: int = 3
-    NET_OPEN_MIN_DENSE_GAP: Optional[float] = -0.06  # -0.10 opens the net in 51 % of right-plan dev questions, -0.06 in 30 % with the same end-to-end correctness (34 of 35 answers, plan 8.18); -0.03 loses answers
-    # Net called after the answer (docs/Version_3/plan_rag_improvements.md 8.16): when the first answer says it is only partial or that the excerpts do not hold the answer and the
-    # planner left documents out, the net searches them (no dense-gap gate) and the answer is written once more with the new excerpts (the better of the two is kept).
-    # Measured on 40 answers with no net: it flags 20 of 29 contexts that miss evidence (all 10 with every file wrong) and 0 of 11 complete ones; it cannot flag a question
-    # that names no company and has lost the other company's file, which the dense-gap gate before the answer is for.
-    LAZY_NET_ENABLED: bool = True
     # Evidence check (V1) on targeted documents: a document the question targets with no retrieved chunk gets one more search of its
     # own (at most V1_RETRY_CHUNKS chunks); still none -> the answer is told the source showed nothing.
     V1_RETRY_CHUNKS: int = 3
@@ -176,13 +156,6 @@ class Settings(BaseSettings):
     # between tries (chat/retrieval_step.py); still failing -> the SEARCH_UNAVAILABLE error (503) instead of INTERNAL_ERROR. 0 = no retry.
     SEARCH_RETRIES: int = 1
     SEARCH_RETRY_DELAY_SECONDS: float = 1.0
-    # TC-1 (answer_check/column_years.py): a figure an answer gives to a year must sit in that year's column of the table it is cited to; a figure printed
-    # only under other years is a problem for the one repair call, and is flagged under the answer if it stays. Off = nothing is checked.
-    COLUMN_CHECK_ENABLED: bool = True
-    # TC-4 (answer_check/formulas.py): a written step whose printed result is wrong (L25), and a right division on the wrong formula; slice 1 = a growth
-    # rate divided by the later period's value. On since 14/11 (owner's yes): on 317 stored answers it made 6 reports, all genuine wrong divisions, and none
-    # on the 247 answers written with thinking on. A report goes to the one repair like the other problems.
-    FORMULA_CHECK_ENABLED: bool = True
     MULTIDOC_CATALOG_LIMIT: int = 80  # more filings than this: skip the planner and search the whole notebook as before
     # Sources a question may use, and documents a notebook may hold: a guest 1, every signed-in account (admin too) 5.
     # The one place these numbers live: TIER_SPECS, the error messages and the web app (through /auth/me) all read them from here.

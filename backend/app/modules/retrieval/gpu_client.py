@@ -1,6 +1,6 @@
 """One HTTP client for the remote GPU worker (REMOTE_GPU_URL), kept alive between calls.
 
-A question calls the worker three to six times (intent, query vectors, Qwen scores, safety net). With a new client per call each call set up a new TLS connection through
+A question calls the worker three to six times (intent, query vectors, Qwen scores). With a new client per call each call set up a new TLS connection through
 the Cloudflare tunnel: measured 0.55 s a call against 0.26 s on a kept-alive connection (an /embed of one text: 0.57 s against 0.31 s). The client belongs to the event
 loop that created it (an httpx.AsyncClient cannot be shared between loops), so there is one per running loop.
 """

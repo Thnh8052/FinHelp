@@ -34,7 +34,7 @@ def _orchestrator(answers, monkeypatch):
     async def no_unlisted(query, scope):
         return []
 
-    async def retrieve(query, notebook_id, scope, forced=None, net_others=False):
+    async def retrieve(query, notebook_id, scope, forced=None):
         return RetrievalResult(scope, {"amd": AMD.label, "nv": NV.label}, [], [], [dict(c) for c in CHUNKS], "targets_planner")
 
     async def answer(query, chunks, notes=None, max_tokens=1200, fallback=True):
@@ -73,7 +73,7 @@ async def test_a_clean_answer_costs_no_second_call(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $25,785 million in 2024 [1]; NVIDIA $60,922 million [2]."], monkeypatch)
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
     assert len(calls) == 1 and r["verification"] == {"passed": True, "repaired": False, "unverified_figures": [], "first_issues": [],
-                                                    "citations": {"invalid": [], "wrong_company": [], "wrong_period": []}, "inputs": [], "columns": []}
+                                                    "citations": {"invalid": [], "wrong_company": [], "wrong_period": []}, "inputs": []}
     assert r["understood"].startswith("I understood the question as about")
 
 

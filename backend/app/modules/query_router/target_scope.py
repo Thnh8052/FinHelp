@@ -6,13 +6,13 @@
 2. Otherwise the companies the question names (catalog names: entity, aliases, initials, ticker; catalog_route.names) and its years
    go through target_resolver.resolve. Several documents for one target -> a default by rule (latest period; resolve already
    prefers the 10-K), stated in `understood`, with the other documents as `alternatives`. Never a blocking question.
-3. No company named: no decision here (the planner chooses among the selected documents, with the safety net).
+3. No company named: no decision here (the planner chooses among the selected documents).
 """
 import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
-from app.modules.query_router.catalog_route import QNUM, QPAIR, company_key, company_matches, names, question_years, words
+from app.modules.query_router.catalog_route import QNUM, QPAIR, company_key, company_matches, question_years
 from app.modules.query_router.target_resolver import Filing, Target, alignment_note, resolve
 
 FISCAL = re.compile(r"\bfy\s?\d{2,4}\b|\bfiscal\b|năm tài chính", re.I)
@@ -20,7 +20,6 @@ CALENDAR = re.compile(r"\bcalendar\b|năm dương lịch", re.I)
 # "a year earlier" / "prior year" next to a named year also needs the year before (the earlier report)
 RELATIVE = re.compile(r"\b(?:a|one) year (?:earlier|before|ago)\b|\b(?:previous|prior|preceding) (?:fiscal )?year\b|\bthe year before\b|"
                       r"\byear[- ]over[- ]year\b|\byoy\b|năm trước|cùng kỳ năm", re.I)
-ACRONYM = re.compile(r"[A-Z][A-Z&.]{1,5}")  # "TD", "RBC", "P&G": the shape of an abbreviated company name
 LINK = r"(?:and|or|vs\.?|versus|with|against|và|với|hay)"  # the words that list one company after another
 # a report type the question names: only that type of the company's documents, when it has one
 FORMS = {"8-K": re.compile(r"\b8-?K\b", re.I), "10-Q": re.compile(r"\b10-?Q\b", re.I), "10-K": re.compile(r"\b10-?K\b", re.I),
@@ -43,7 +42,6 @@ class TargetDecision:
     alternatives: List[Dict[str, str]] = field(default_factory=list)  # [{"document_id", "label"}] other documents that also match
     notes: List[str] = field(default_factory=list)  # for the answer prompt
     rule: str = "none"  # mentions | resolved | none
-    uncertain: bool = False  # the question also writes names no selected document's catalog carries: the other documents get the safety net
 
 
 def _named(question: str, docs: Sequence[ScopeDoc]) -> List[ScopeDoc]:
@@ -96,11 +94,6 @@ def _lists_an_unmatched_name(question: str, docs: Sequence[ScopeDoc]) -> bool:
                for t in _unmatched_names(question, docs))
 
 
-def _unknown_names(question: str, docs: Sequence[ScopeDoc]) -> bool:
-    known = set().union(*(names(d.card) for d in docs)) if docs else set()
-    return any(ACRONYM.fullmatch(t) and not (set(words(t)) & known) for t in _unmatched_names(question, docs))
-
-
 def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecision:
     named = _named(question, docs)
     if not named or _lists_an_unmatched_name(question, docs):  # "Pepsi and Coke": forcing Pepsi would hide Coke from the planner
@@ -143,9 +136,8 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
             chosen.append(ids[0])
     if not chosen:
         return TargetDecision()
-    typo = 4 in company_matches(question, [d.card for d in docs]).values()  # one letter off: the other documents keep the safety net
     # each alternative carries the whole set to ask with: the chosen documents with only the one it replaces swapped, so asking again keeps the other companies
-    out = TargetDecision(chosen, rule="resolved", uncertain=typo or _unknown_names(question, docs),
+    out = TargetDecision(chosen, rule="resolved",
                          alternatives=[{"document_id": i, "label": by_id[i].label,
                                         "document_ids": list(dict.fromkeys(i if c == replaces.get(i) else c for c in chosen))}
                                        for i in alternatives if i not in chosen])

@@ -6,6 +6,8 @@ export interface QueryRequest {
   query: string;
   document_ids: string[];
   mentions?: string[];
+  /** the answer a "search again" button asks for once more */
+  retry_of?: string;
 }
 
 export interface QueryResponse {

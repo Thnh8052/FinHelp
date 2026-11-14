@@ -1,7 +1,6 @@
-"""L22: a second writing of the answer (the one repair of the checks, the answer after the lazy net) is an extra. When the model cannot be reached for it,
+"""L22: a second writing of the answer (the one repair of the checks) is an extra. When the model cannot be reached for it,
 the answer already written stands. Before the fix, `_answer` turned the failure into the fixed apology text ("No answer could be generated right now...")
-and both callers accepted that text over the real answer: the repair because the apology has no more issues than the answer had (len(i2) <= len(issues)),
-the lazy net because a reply with no <answer_meta> block counts as "answered" in production's prompt (v4), which is not worse than "partial".
+and the caller accepted that text over the real answer, because the apology has no more issues than the answer had (len(i2) <= len(issues)).
 
 The real `_answer` runs here; only the model call is faked, and production's prompt setting is used."""
 import pytest
@@ -10,7 +9,6 @@ from app.core.config import settings
 from app.modules.chat import orchestrator as orch_mod
 from app.modules.generation.llm_client import LLMUnavailableError
 from app.modules.query_router.input_policy import Decision
-from tests.test_lazy_net import QUESTION, answer_with, orchestrator as lazy_orchestrator
 from tests.test_validation import CHUNKS, _orchestrator, _scope
 
 APOLOGY = "No answer could be generated right now"
@@ -48,16 +46,6 @@ async def test_a_repair_that_cannot_reach_the_model_leaves_the_answer_already_wr
     assert r["verification"]["repaired"] is False and not r["verification"]["passed"] and r["verification"]["first_issues"]
 
 
-async def test_a_lazy_net_rewrite_that_cannot_reach_the_model_keeps_the_first_answer(monkeypatch):
-    orch, seen = lazy_orchestrator(monkeypatch, [])
-    calls = fake_model(orch, monkeypatch, answer_with("partial"), LLMUnavailableError("llm_unavailable"))
-    r = await orch._answer_one(QUESTION, "nb", _scope(), Decision(lang="en"))
-    assert calls == [1, 2]  # the net found an excerpt, the answer was to be written again with it, and that failed
-    assert APOLOGY not in r["answer"] and "25,785" in r["answer"]
-    assert r["trace"]["lazy_net"]["kept"] == "first" and r["trace"]["lazy_net"]["rewrite_failed"] is True
-    assert r["retrieved_chunks_count"] == 1 and len(r["citations"]) == 1  # the first excerpts only: the second answer never existed
-
-
 async def test_a_repair_that_works_still_replaces_the_answer(monkeypatch):
     orch, _ = _orchestrator([], monkeypatch)
     calls = fake_model(orch, monkeypatch, "AMD revenue was $99,999 million [1].", "AMD revenue was $25,785 million [1].")
@@ -72,7 +60,7 @@ async def test_the_apology_for_an_outage_is_not_verified_or_repaired(monkeypatch
     calls = fake_model(orch, monkeypatch, LLMUnavailableError("llm_unavailable"))
     chunks = [dict(c, page=41) for c in CHUNKS]  # a page number above 12 that the excerpts do not print
 
-    async def retrieve(query, notebook_id, scope, forced=None, net_others=False):
+    async def retrieve(query, notebook_id, scope, forced=None):
         return orch_mod.RetrievalResult(scope, {"amd": "AMD", "nv": "NVIDIA"}, [], [], [dict(c) for c in chunks], "targets_planner")
 
     monkeypatch.setattr(orch, "retrieve", retrieve)

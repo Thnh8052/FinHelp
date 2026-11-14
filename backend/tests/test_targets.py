@@ -108,12 +108,11 @@ def test_a_named_report_type_is_preferred():
     assert decide_targets("In McDonald's 8-K of August 14, 2023, what was the coupon?", [er, k8], None, vi=False).document_ids == ["mcd8k"]
 
 
-def test_a_name_no_catalog_carries_turns_on_the_net_for_the_rest():
+def test_a_name_no_catalog_carries_does_not_stop_the_named_company_being_targeted():
     rbc = doc("rbc", "Royal Bank of Canada", 2025)
     td = doc("td", "The Toronto-Dominion Bank", 2025)
     t = decide_targets("What was RBC's net margin according to TD in fiscal 2025?", [rbc, td], None, vi=False)
-    assert t.document_ids == ["rbc"] and t.uncertain  # "TD" is no catalog name (no ticker confirmed): the TD report gets the safety net
-    assert not decide_targets("Compare revenue of NVIDIA and AMD in fiscal 2025", FIVE, None, vi=False).uncertain
+    assert t.document_ids == ["rbc"]  # "TD" is no catalog name (no ticker confirmed): only RBC is forced
 
 
 def test_a_second_name_no_catalog_carries_leaves_the_choice_to_the_planner():
@@ -131,7 +130,3 @@ def test_quarter_pairs_of_another_company_invent_no_comparative_assumption():
     t = decide_targets("Compare the revenue of Intel in Q1 2023 and Salesforce in Q2 fiscal 2024.", [q1, s2], None, vi=False)
     assert sorted(t.document_ids) == ["crm", "intc"] and "comparative" not in t.understood
 
-
-def test_capitalised_terms_that_are_no_acronym_do_not_turn_on_the_net():
-    k8 = doc("mcd8k", "McDonald's Corporation", 2023, form="8-K")
-    assert not decide_targets("In McDonald's 8-K, what was the principal of the Medium-Term Notes?", [k8, AMD25], None, vi=False).uncertain

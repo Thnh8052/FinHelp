@@ -93,6 +93,7 @@ class QueryRequest(BaseModel):
     document_id: Optional[str] = None  # one source (older clients)
     document_ids: Optional[List[str]] = None  # the sources selected by the user (at least one)
     mentions: Optional[List[str]] = None  # @file: selected documents the question is explicitly about (ids, never parsed from the text)
+    retry_of: Optional[str] = None  # sent by a "search again" button: the answer that fell short (docs/Version_2/fail_cases.md, S3)
 
 
 class CitationOut(BaseModel):
@@ -146,6 +147,36 @@ class _Admitted:
     orchestrator: RAGWorkflowOrchestrator
     history: List[dict]
     users: UserRepository
+    retry_of: Optional[MessageRecord] = None  # the answer a "search again" button asks for once more
+
+
+async def retried_message(chat_repo: Any, notebook_id: str, retry_of: Optional[str]) -> Optional[MessageRecord]:
+    """The answer of this notebook a "search again" click points to (None: an ordinary question); any other id is refused with 404. One click only:
+    an answer already searched again, or the answer of a click itself, is refused with 409."""
+    if not retry_of:
+        return None
+    messages = await chat_repo.get_messages(notebook_id)
+    found = next((m for m in messages if m.message_id == retry_of and m.role == "assistant"), None)
+    if found is None:
+        raise api_error(status_code=404, code=Code.MESSAGE_NOT_FOUND)
+    if (found.trace_info or {}).get("retry_of") or retry_of in _retried(messages):
+        raise api_error(status_code=409, code=Code.RETRY_USED)
+    return found
+
+
+def _retried(messages: List[MessageRecord]) -> set:
+    """The answers a "search again" click was already used on."""
+    return {(m.trace_info or {}).get("retry_of") for m in messages} - {None}
+
+
+def shown_messages(messages: List[MessageRecord]) -> List["MessageOut"]:
+    """The stored messages as the interface shows them: an answer already searched again keeps no "search again" button."""
+    used = _retried(messages)
+    out = [MessageOut.of(m) for m in messages]
+    for m in out:
+        if m.message_id in used:
+            m.alternatives = [a for a in m.alternatives if not a.get("kind")]
+    return out
 
 
 async def _admit(request: Request, req: "QueryRequest", user_id: Optional[str], db: AsyncIOMotorDatabase, qdrant: AsyncQdrantClient) -> _Admitted:
@@ -162,6 +193,8 @@ async def _admit(request: Request, req: "QueryRequest", user_id: Optional[str], 
     except SourceSelectionError as exc:
         raise api_error(status_code=422, code=exc.code, **exc.params)
 
+    retry_of = await retried_message(ChatRepository(db), req.notebook_id, req.retry_of)
+
     # 1. Các lượt trước (để hiểu câu hỏi nối tiếp như "còn lợi nhuận thì sao?")
     history = await load_history(db, req.notebook_id)
 
@@ -171,24 +204,28 @@ async def _admit(request: Request, req: "QueryRequest", user_id: Optional[str], 
         spend_guest_allowance(request, "question", settings.GUEST_DAILY_QUESTIONS)
     elif not await users.reserve_quota(user_id):
         raise api_error(status_code=429, code=Code.QUESTION_QUOTA_USED)
-    return _Admitted(nb, chosen, mentions, orchestrator, history, users)
+    return _Admitted(nb, chosen, mentions, orchestrator, history, users, retry_of)
 
 
 async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str]) -> dict:
     """3. Kích hoạt RAG Workflow Orchestrator; không có câu trả lời thì trả lại lượt đã giữ."""
     try:
-        return await adm.orchestrator.execute_query(
+        result = await adm.orchestrator.execute_query(
             query=req.query,
             notebook_id=req.notebook_id,
             document_ids=adm.chosen,
             history=adm.history,
             mentions=adm.mentions,
             focus_state=adm.nb.focus_state,
+            retry=adm.retry_of is not None,
         )
     except BaseException:  # a cancelled answer too
         if user_id is not None:
             await adm.users.consume_quota(user_id, messages=-1)
         raise
+    if adm.retry_of is not None:
+        result.setdefault("trace", {})["retry_of"] = adm.retry_of.message_id
+    return result
 
 
 async def _record(adm: _Admitted, req: "QueryRequest", user_id: Optional[str], db: AsyncIOMotorDatabase, result: dict) -> "QueryResponse":
@@ -328,7 +365,7 @@ async def get_messages(
 ):
     """Lấy các tin nhắn mới nhất của một notebook, theo đúng thứ tự hội thoại."""
     await require_notebook(db, notebook_id, user_id)
-    return [MessageOut.of(m) for m in await ChatRepository(db).get_messages(notebook_id)]
+    return shown_messages(await ChatRepository(db).get_messages(notebook_id))
 
 
 class FlagRequest(BaseModel):

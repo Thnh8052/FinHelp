@@ -7,7 +7,7 @@ value (that version caught 18-20% of planted wrong figures); rule B searches not
 A written calculation whose result is wrong is not rewritten by code (removed 14/11, see calculations.py): its result is simply not accepted, so the figure is
 reported as unverified and goes to the one repair.
 
-Log-only for now (Bedrock's advice: watch before blocking): the report goes into the trace, nothing is blocked or regenerated.
+The report goes into the trace; verification.verify turns each unverified figure into a problem for the one rewrite, and what stays unverified is flagged under the answer.
 """
 from typing import Any, Dict, List, Sequence, Tuple
 

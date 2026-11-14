@@ -5,7 +5,6 @@ text. Rules as measured on the SEC multidoc set (fallback_eval.py `r5c_fix`, `r5
 import re
 
 STOP = {"inc", "corp", "corporation", "company", "co", "ltd", "limited", "plc", "the", "holdings", "group", "and", "&", "of", "international", "incorporated"}
-COMMON = {"fy", "usd", "true", "false", "q1", "q2", "q3", "q4", "gaap", "eps", "ebitda", "capex", "sec", "ceo", "cfo"}
 YEAR = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")  # not \b: "FY2015" has no word boundary before the year
 QPAIR = re.compile(r"(q[1-4]|first|second|third|fourth)\s*(?:quarter)?\s*(?:of\s*)?(?:fiscal\s*(?:year\s*)?)?(?:fy)?\s*((?:19|20)\d{2})")
 QNUM = {"q1": 1, "q2": 2, "q3": 3, "q4": 4, "first": 1, "second": 2, "third": 3, "fourth": 4}
@@ -191,20 +190,6 @@ def r5(question, ws, cards):
     if any(years_of(cards.get(d, {})) & qy for d in named):
         return [d for d in named if years_of(cards.get(d, {})) & qy or not years_of(cards.get(d, {}))]
     return named
-
-
-def r5_text(question, ws, first_words, text_year):
-    """R5 on the filing text, no catalog: capitalised question words (not the first word) found on the first two pages of at least
-    one and at most a third of the filings, then the latest year heading the filing's tables. None: nothing found."""
-    caps = re.findall(r"[A-Za-z&]*[A-Z][A-Za-z&]*", question)[1:]
-    qwords = {w.lower() for w in caps if len(w) >= 3 and w.lower() not in COMMON}
-    distinct = {w for w in qwords if 0 < sum(w in first_words.get(d, ()) for d in ws) <= max(1, len(ws) // 3)}
-    named = [d for d in ws if distinct & first_words.get(d, set())]
-    qy = question_years(question)
-    yf = [d for d in ws if text_year.get(d) in qy]
-    if not named:
-        return yf or None
-    return [d for d in named if d in yf] or named
 
 
 def coverage(card):

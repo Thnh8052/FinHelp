@@ -130,7 +130,7 @@ async def test_every_attempt_of_a_call_asked_to_stream_is_a_stream_and_a_cut_one
 
 
 async def test_every_answer_call_is_received_as_a_stream_the_second_writings_too(monkeypatch):
-    """The repair, the answer after the lazy net and the policy rewrite are not shown piece by piece (no listener) but they write as long as the first answer."""
+    """The repair and the policy rewrite are not shown piece by piece (no listener) but they write as long as the first answer."""
     from app.modules.generation import generator
 
     seen = []

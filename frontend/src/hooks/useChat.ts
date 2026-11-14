@@ -24,7 +24,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
 
   const loginWarning = (detail: string) => showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
 
-  const sendMessage = async (queryText: string, mentions?: string[]) => {
+  const sendMessage = async (queryText: string, mentions?: string[], retryOf?: string) => {
     if (selectedDocIds.length === 0) {
       showToast(t.toasts.selectFiling, "warning");
       return;
@@ -37,7 +37,8 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       created_at: new Date().toISOString(),
     });
     setMessages((prev) => [
-      ...prev,
+      // one click only: the answer searched again loses its "search again" buttons (the server refuses a second click too)
+      ...(retryOf ? prev.map((m) => (m.message_id === retryOf ? { ...m, alternatives: (m.alternatives || []).filter((a) => !a.kind) } : m)) : prev),
       {
         message_id: `msg_user_${Date.now()}`,
         notebook_id: notebookId,
@@ -77,6 +78,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
           query: queryText,
           document_ids: Array.from(new Set([...(mentions || []), ...selectedDocIds])).slice(0, maxSources),
           mentions,
+          ...(retryOf ? { retry_of: retryOf } : {}),
         },
         {
           onStage: setStage,
