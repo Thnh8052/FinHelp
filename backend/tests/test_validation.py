@@ -37,7 +37,7 @@ def _orchestrator(answers, monkeypatch):
     async def retrieve(query, notebook_id, scope, forced=None, net_others=False):
         return RetrievalResult(scope, {"amd": AMD.label, "nv": NV.label}, [], [], [dict(c) for c in CHUNKS], "targets_planner")
 
-    async def answer(query, chunks, notes=None, max_tokens=1200):
+    async def answer(query, chunks, notes=None, max_tokens=1200, fallback=True):
         calls.append(notes)
         return answers[min(len(calls), len(answers)) - 1]
 

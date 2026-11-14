@@ -27,7 +27,7 @@ def orchestrator(monkeypatch, answers, net_chunks=(NV_CHUNK,), timings=None, rou
     async def retrieve(query, notebook_id, scope, forced=None, net_others=False):
         return RetrievalResult(scope, {"amd": AMD.label, "nv": NV.label}, [PlanItem("revenue", ["amd"])], ["revenue"], [dict(AMD_CHUNK)], routing, dict(timings or {}))
 
-    async def answer(query, chunks, notes=None, max_tokens=1200):
+    async def answer(query, chunks, notes=None, max_tokens=1200, fallback=True):
         seen["answers"].append([c["chunk_id"] for c in chunks])
         return answers[min(len(seen["answers"]), len(answers)) - 1]
 
