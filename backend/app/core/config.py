@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     # --- Research core (FinanceBench 118-121/150 configuration) -----------------------------------------
     # Ingestion: Docling (TableFormer ACCURATE) + postprocess in a subprocess, or "pymupdf" for a fast, lower-quality parse.
     PARSER_ENGINE: str = "docling"
+    # OCR fallback (spec L8; stage 1 of 14/11): Docling runs with do_ocr=False, so a scanned page gives no text. Pages it reads badly (a scan, garbled text, text it lost; ingestion/
+    # page_quality.py) are read again, those pages only, by an OCR backend named here (a key of page_quality.READERS; none exists until stage 2). Off until a backend is measured.
+    OCR_FALLBACK_ENABLED: bool = False
+    OCR_BACKEND: str = ""
+    OCR_FALLBACK_MAX_PAGES: int = 30  # at most this many pages of one document are sent to the backend: the rest keep Docling's text (time and money)
     DOCLING_MODE: str = "accurate"  # "accurate" | "fast"
     DOCLING_DEVICE: str = "auto"  # auto | cuda | cpu
     DOCLING_TIMEOUT_SECONDS: int = 3600

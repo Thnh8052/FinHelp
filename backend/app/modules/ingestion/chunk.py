@@ -18,6 +18,6 @@ class ChunkDocument(BaseSchema):
     token_count: Optional[int] = None
     sparse_weights: Dict[str, float] = Field(default_factory=dict, description="BGE-M3 lexical weights {token id: weight}; empty for chunks indexed before 2026-10-27")
     table_metadata: Optional[Dict[str, Any]] = None
-    flags: List[str] = Field(default_factory=list, description="'suspicious_instruction': the text addresses an assistant (kept, treated as data)")
+    flags: List[str] = Field(default_factory=list, description="'suspicious_instruction': the text addresses an assistant (kept, treated as data); 'ocr': the page was read by the OCR fallback (figures may be misread)")
     embedding_model: Optional[str] = None
     created_at: Any = Field(default_factory=get_utc_now)

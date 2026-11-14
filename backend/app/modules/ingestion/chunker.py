@@ -217,6 +217,7 @@ class FinancialChunkerService:
                             if table else None
                         ),
                         embedding_model=settings.DEFAULT_EMBEDDING_MODEL,
+                        flags=["ocr"] if page.get("ocr") else [],  # the page text came from the OCR fallback (page_quality.py)
                     )
                 )
         return chunks
