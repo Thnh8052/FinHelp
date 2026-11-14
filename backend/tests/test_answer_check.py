@@ -105,3 +105,25 @@ def test_a_figure_beside_a_word_that_only_starts_like_a_month_is_still_checked()
 def test_a_date_next_to_a_wrong_figure_does_not_hide_it():
     out = check_numbers("The year ended June 30, 2021 had net income of 7,777 million [1].", TABLE)
     assert out["unverified"] == ["7,777"]
+
+
+# ---------------------------------------------------------------- a multiple with its x glued to it ("5.99x") is a figure (L21: the scanner took it for part of a word, so a wrong one passed unseen)
+TURNOVER = [{"content": "| | 2019 | 2018 |\n|---|---:|---:|\n| Cost of products sold | 16,830 | 16,200 |\n| Inventories | 2,694 | 2,500 |"}]
+
+
+def test_a_multiple_with_the_x_glued_to_it_is_a_figure():
+    for text in ("The turnover was 6.25x.", "The turnover was 6.25X.", "Turnover: **6.25x**", "Turnover: 6.25x, up", "Turnover (6.25x)", "Turnover 6.25x\nnext line"):
+        assert [f["text"] for f in check_numbers(text, TURNOVER)["figures"]] == ["6.25"], text
+
+
+def test_a_wrong_multiple_is_caught_and_a_right_one_is_not_flagged():
+    assert check_numbers("Inventory turnover was 7.52x [1].", TURNOVER)["unverified"] == ["7.52"]
+    right = check_numbers("Cost of products sold of $16,830 million over inventories of $2,694 million gives a turnover of 6.25x [1].", TURNOVER)
+    assert right["unverified"] == [] and right["derived"] == 1  # the quotient of two figures the answer states
+    assert check_numbers("Turnover = 16,830 ÷ 2,694 = 6.25x [1].", TURNOVER)["unverified"] == []  # a written calculation that checks
+    assert check_numbers("Turnover = 16,830 ÷ 2,694 = 7.52x [1].", TURNOVER)["unverified"] == ["7.52"]  # one that does not, is not accepted
+
+
+def test_an_x_inside_a_word_or_a_product_or_a_count_is_not_a_multiple():
+    for text in ("The 6.25xyz code.", "A6.25x sample.", "Sized 6.25x3.5 inches.", "The 6.25xs.", "About 2x as much, a 10x jump."):
+        assert check_numbers(text, TURNOVER)["figures"] == [], text  # a word, a product of two sizes, or a small count: nothing to verify

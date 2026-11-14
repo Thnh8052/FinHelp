@@ -17,7 +17,7 @@ number, and the document locale is only consulted when a number is genuinely amb
 Accounting negatives "(1,234)" and "$ (1,234)", a leading "-" or "−", currency symbols before
 the number and "%" after it are recognised. Clause markers such as "(1) Includes ..." are not
 numbers; a bare "(5)" elsewhere is kept but flagged `is_reference`, because in PDF text a footnote
-reference on its own line and a small negative table value look identical. A number glued to letters ("3M", "4G", "10K") is ignored, except the "FY2025" form.
+reference on its own line and a small negative table value look identical. A number glued to letters ("3M", "4G", "10K") is ignored, except the "FY2025" form, a scale suffix ("$2,197M") and the x of a multiple ("5.99x").
 """
 
 from __future__ import annotations
@@ -41,6 +41,7 @@ DAY = re.compile(rf"\b{MONTH}\s+(\d{{1,2}})(?:st|nd|rd|th)?\b{_NOT_A_NUMBER_AFTE
 
 CURRENCY_SYMBOLS = "$₫€£¥"
 SCALE_SUFFIXES = ("bn", "mn", "M", "B", "K", "m", "k")
+MULTIPLE_SUFFIXES = ("x", "X")  # "5.99x": a ratio written as a multiple is a figure like any other (L21); "6.25x3.5" (a product) and "6.25xyz" (a word) are not, because a letter or digit follows
 MINUS_SIGNS = "-−"
 EN = "en"
 GROUP_SPACES = "    "  # space, no-break space, thin space, narrow no-break space: how financial statements group thousands ("89 913")
@@ -168,7 +169,7 @@ def find_amounts(text: str, locale: str = EN, space_groups: bool = False) -> Lis
         before = text[start - 1] if start > 0 else ""
         after = text[end] if end < length else ""
         glued_fy = text[max(0, start - 2):start] == "FY" and (start < 3 or not text[start - 3].isalnum())
-        scale_suffix = any(text.startswith(s, end) and not (end + len(s) < length and text[end + len(s)].isalnum()) for s in SCALE_SUFFIXES)
+        scale_suffix = any(text.startswith(s, end) and not (end + len(s) < length and text[end + len(s)].isalnum()) for s in SCALE_SUFFIXES + MULTIPLE_SUFFIXES)
         if (before and (before.isalnum() or before in "_.") and not glued_fy) or (after and (after.isalnum() or after == "_") and not scale_suffix):
             while index < length and (text[index].isalnum() or text[index] == "_"):
                 index += 1  # part of a word such as "3M", "4G", "A1B2"
