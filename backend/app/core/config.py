@@ -195,6 +195,8 @@ class Settings(BaseSettings):
     GPU_MEMORY_FRACTION: float = 0.85
 
     # Generation: prompt "v2" is the measured one (121/150). "v1" is the stricter, refusal-prone prompt (118/150).
+    # "v4_1" is v4 with three self-contradictions fixed (citation in table cells, two decimals for ratios, no space-grouped example cell);
+    # it stays off until measured on questions it was not designed with.
     GENERATION_PROMPT: str = "v4"
     # A2: an answer with a figure the excerpts do not show, a citation to no excerpt or to another company / period is rewritten once
     # with the list of problems; what is still wrong after that is flagged in the answer ("chưa kiểm chứng"), never silently kept.

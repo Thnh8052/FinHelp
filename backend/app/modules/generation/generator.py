@@ -246,9 +246,35 @@ Answer metadata
 After the answer, on a new line, write exactly one valid JSON block (with `short_answer` written in the language of the question). The app removes it before showing the answer.
 <answer_meta>{"status": "answered" | "partial" | "not_found" | "clarify", "short_answer": "<plain-text one-line summary in the question's language without markdown or unescaped quotes>", "citations": [<numbers of the excerpts you used>]}</answer_meta>"""
 
+def _revise(text: str, *changes: Tuple[str, str]) -> str:
+    """`text` with each (old, new) applied; an old string that is not there exactly once is an error, never a silent no-op."""
+    for old, new in changes:
+        assert text.count(old) == 1, old
+        text = text.replace(old, new)
+    return text
+
+
+# Prompt v4.1 (GENERATION_PROMPT="v4_1"): v4 with three corrections where v4 contradicts itself; every other line is v4's (tests/test_prompt_v4_1.py).
+#   L20  the table templates put the citation [n] in the header, so the data cells carry none and the column-year check (TC-1) reads nothing
+#        (measured 13/11: a figure of 2017 planted under FY2019 is caught in a table with citations in the cells, not in one with them in the header)
+#   L19  "one decimal for ratios" turns a current ratio of 0.76 into 0.8 and 0.87 into 0.9: percentages keep one decimal, ratios and multiples two
+#   L18  the example cell `52 377 [1]` writes a space-grouped figure under "copy each input figure exactly as printed", and answers copy it
+# Not the default until it is measured on questions it was not designed with.
+SYSTEM_V4_1 = _revise(
+    SYSTEM_V4,
+    ("`| Metric | Company | FY2024 (unit) [n] | FY2025 (unit) [n] | YoY change (%) |`", "`| Metric | Company | FY2024 (unit) | FY2025 (unit) | YoY change (%) |`"),
+    ("`| Metric | Company A FY2025 (CAD million) [1] | Company B FY2025 (USD million) [2] | Difference |`", "`| Metric | Company A FY2025 (CAD million) | Company B FY2025 (USD million) | Difference |`"),
+    ("Header cells must state ONLY metric/entity name, period, unit and citation `[n]`. NEVER write conversational phrases in headers",
+     "Header cells must state ONLY the metric or entity name, the period and the unit; NEVER a citation `[n]` (it goes in each data cell) and NEVER conversational phrases in headers"),
+    ("(e.g. `52 377 [1]`, `16 956 [2]`, `PwC [4]`)", "(a figure exactly as the report prints it, or a name such as `PwC [4]`)"),
+    ("(rounded to one decimal place for percentages and ratios unless asked otherwise)", "(rounded to one decimal place for percentages and two for ratios and multiples unless asked otherwise)"),
+    ("(one decimal for percentages and ratios unless asked otherwise)", "(one decimal for percentages and two for ratios and multiples unless asked otherwise)"),
+)
+
 META_OPEN, META_CLOSE = "<answer_meta>", "</answer_meta>"
 STATUSES = ("answered", "partial", "not_found", "clarify")
-STRUCTURED_PROMPTS = ("v3", "v4")
+V4_PROMPTS = ("v4", "v4_1")  # built the same way (notes header, language blocks, question line); only the system text differs
+STRUCTURED_PROMPTS = ("v3",) + V4_PROMPTS
 
 
 def _fallback_short_answer(text: str) -> str:
@@ -328,22 +354,22 @@ def is_refusal(answer: str) -> bool:
 def build_messages(context: str, question: str, multi_doc: bool = False, notes: Optional[List[str]] = None) -> List[Dict[str, str]]:
     is_vi = detect_language(question) == "vi"
     if settings.GENERATION_PROMPT in STRUCTURED_PROMPTS:
-        base_prompt = SYSTEM_V4 if settings.GENERATION_PROMPT == "v4" else SYSTEM_V3
-        system = base_prompt
+        v4 = settings.GENERATION_PROMPT in V4_PROMPTS
+        system = {"v3": SYSTEM_V3, "v4": SYSTEM_V4, "v4_1": SYSTEM_V4_1}[settings.GENERATION_PROMPT]
         if notes:
             notes_header = (
                 "\nNotes for this question (translate into the question's language when explaining to the user; do NOT output these notes in English if the question is in Vietnamese):\n"
-                if settings.GENERATION_PROMPT == "v4"
+                if v4
                 else "\nNotes for this question:\n"
             )
             system = system + notes_header + "\n".join(f"- {n}" for n in notes)
-        if is_vi and settings.GENERATION_PROMPT == "v4":
+        if is_vi and v4:
             system = system + "\n\n" + LANGUAGE_VI_STRUCTURED
             user_content = (
                 f"Excerpts from the selected reports:\n{context}\n\n"
                 f"Question (Vietnamese — trả lời hoàn toàn bằng tiếng Việt ngay từ câu đầu tiên): {question}"
             )
-        elif settings.GENERATION_PROMPT == "v4":
+        elif v4:
             user_content = f"Excerpts from the selected reports:\n{context}\n\n{QUESTION_EN}{question}"
         else:
             user_content = f"Excerpts from the selected reports:\n{context}\n\nQuestion: {question}"

@@ -248,6 +248,7 @@ Chuỗi: mỗi (truy vấn, tài liệu) được tìm bằng 0,7 z(dense) + 0,3
 - **L19.** Quy tắc "một chữ số thập phân cho phần trăm và hệ số" làm hệ số thanh toán 0,76 thành 0,8; mất ý nghĩa.
 - **L20.** Cho phép `[n]` ở tiêu đề bảng làm bộ kiểm cột năm không đọc được bảng (đo 13/11: 6 trên 11 câu của v4).
 - Bản nháp v5 xử lý L18 đến L20 nằm ở [prompt_v5_proposal.md](../Version_3/prompt_v5_proposal.md); chưa vào mã.
+- **Prompt v4.1 (14/11, đã vào mã, tắt):** `SYSTEM_V4_1` trong `generator.py` là v4 với đúng ba sửa cho L18 đến L20 (sáu dòng đổi, các dòng khác giống từng chữ; `tests/test_prompt_v4_1.py` ghim điều đó). Bật bằng `GENERATION_PROMPT=v4_1`; mặc định vẫn `v4`. (1) L20: hai mẫu bảng không còn `[n]` ở tiêu đề, quy tắc tiêu đề cấm trích dẫn, trích dẫn nằm ở ô dữ liệu. (2) L19: phần trăm một chữ số thập phân, hệ số và bội số hai chữ số. (3) L18: ô ví dụ không còn số có dấu cách, chỉ dặn "số đúng như báo cáo in". Chưa đo trên câu hỏi mới; chưa quyết kiểu số tiếng Việt (T5).
 
 ### 8.2 Lời gọi mô hình: [llm_client.py](../../backend/app/modules/generation/llm_client.py)
 
@@ -425,12 +426,12 @@ Ghi chú: mã không còn bước viết đè phép tính (mục 10.1).
 | Luật đầu vào | `test_input_policy.py`, `test_injection.py`, `test_targets.py`, `test_target_resolver.py`, `test_conversation_focus.py`, `test_company_matches.py`, `test_company_names.py` |
 | Guard và bộ định tuyến | `test_guard.py`, `test_intent_router.py` |
 | Tìm kiếm | `test_multidoc.py`, `test_safety_net.py`, `test_lazy_net.py`, `test_search_retry.py`, `test_search_speed.py`, `test_gpu_client.py`, `test_research_core.py` |
-| Sinh câu trả lời | `test_generator_v3.py`, `test_answer_language.py`, `test_llm_client.py`, `test_citation_generator.py` |
+| Sinh câu trả lời | `test_generator_v3.py`, `test_answer_language.py`, `test_prompt_v4_1.py`, `test_llm_client.py`, `test_citation_generator.py` |
 | Đầu ra | `test_calculations.py`, `test_column_years.py`, `test_answer_check.py`, `test_validation.py`, `test_output_policy.py`, `test_inputs.py` |
 | Cửa API và hạn mức | `test_acl.py`, `test_auth_security.py`, `test_chat_stream.py`, `test_error_codes.py`, `test_error_answers.py` |
 | Lỗi đã gặp ở production | `test_production_bugs.py` |
 
-Tổng 786 test qua (780 tại commit `6e53eae`, cộng 12 test của các sửa L1 đến L4, trừ các test của phần viết đè đã bỏ và cộng các test mới thay chúng).
+Tổng 794 test qua ngày 14/11 sau khi thêm prompt v4.1 (8 test mới trong `test_prompt_v4_1.py`; trước đó 786, trong đó 780 tại commit `6e53eae`, cộng 12 test của các sửa L1 đến L4, trừ các test của phần viết đè đã bỏ và cộng các test mới thay chúng).
 
 **Test mới ngày 14/11 (viết trước, đã thấy đỏ):** `test_calculations.py` (4: phần trăm trước dấu đóng ngoặc đúng và sai, "vs", tỷ lệ đổi thành phần trăm vẫn sửa khi lệch nhỏ); `test_answer_check.py` (3: ngày không phải số, từ giống tên tháng vẫn bị kiểm, ngày không che số sai); `test_column_years.py` (3: ngày dạng ISO, từ giống tên tháng, công thức trung bình); `test_llm_client.py` (2: câu dài 11.500 token viết trong một lời gọi, trần chặn câu không kết thúc).
 
@@ -448,8 +449,9 @@ Xếp theo mức nguy hại tới người dùng. "Cần duyệt" nghĩa là ph�
 | L3 | Ngày 13 đến 31 trong tháng bị coi là số cần kiểm | `numbers.py` `_figures`, `amounts.py` (`DAY`, `DATE`) | Gọi viết lại thừa | Dùng chung luật ngày | **Đã sửa 14/11**, chưa commit |
 | L4 | Số trong công thức trung bình bị báo nhầm cột năm | `column_years.py` (`COMPARES`) | Gọi viết lại thừa | Thêm "bình quân", "trung bình", "average" | **Đã sửa 14/11**, chưa commit |
 | L7 | Vòng viết lại không phân biệt báo đúng với báo nhầm và có thể làm tệ câu trả lời | `orchestrator._answer_one` dòng 211 đến 219 | Tốn thời gian, đôi khi mất cách tính tốt | Báo nhầm giảm sau L3, L4; xét giữ bản đầu khi chỉ còn lỗi "mềm" | Giảm một phần |
+| L22 | Lần viết lại một lần của bước kiểm hỏng (hết giờ 80 giây rồi cả bốn lần thử, hoặc lỗi API): `_answer` trả câu xin lỗi cố định thay vì ném lỗi, câu đó có không quá 1 lỗi nên qua điều kiện `len(i2) <= len(issues)` và thay câu trả lời thật | `orchestrator.py` dòng 210 đến 215 (`_within_policy` và lưới sau câu trả lời không bị: một bên bắt `LLMUnavailableError`, bên kia đòi có `answer_meta`) | Người dùng chờ đến khoảng 5 phút rồi nhận câu xin lỗi; vết ghi `repaired=True` nên trông như thành công | Khi lần viết lại hỏng thì giữ bản đầu và gắn cờ như thường lệ; có thể nới thời gian chờ của lời gọi viết câu trả lời. Phát hiện 14/11 bằng đọc mã và chạy lại phép so sánh (chưa gây ra một lần hết giờ thật); ước khoảng 6 % câu chạy bước viết lại | Chưa làm |
 | L21 | `check_numbers` không thấy số dính chữ như "5.99x" | `amounts.py` (`SCALE_SUFFIXES`) | Hệ số dạng bội số sai không bị kiểm | Nhận "x" làm hậu tố đơn vị, có test | Chưa làm |
-| L18 đến L20 | Prompt v4 mâu thuẫn về số, làm tròn hệ số, `[n]` ở tiêu đề | `generator.py` | Xem mục 8.1 | Bản nháp v5 | Chờ duyệt và đo |
+| L18 đến L20 | Prompt v4 mâu thuẫn về số, làm tròn hệ số, `[n]` ở tiêu đề | `generator.py` | Xem mục 8.1 | Bản nháp v5; ba sửa riêng nằm trong v4.1 | **v4.1 đã vào mã 14/11, tắt**; chờ đo trên câu hỏi mới rồi mới bật |
 | L5 | Số chấm nhóm nghìn trong tiếng Việt chưa đọc ở kiểm cột năm | `column_years.py` | Bỏ sót kiểm | Đọc qua `amounts._interpret` | Chưa làm |
 | L6 | `inputs.py` chỉ có tiếng Anh | `inputs.py` | Không tác dụng (cờ tắt) | Làm khi bật cờ | Hoãn |
 | L12 đến L14 | Luật chỉ biết tiếng Anh và Việt; guard mở cửa khi hỏng | `input_policy.py`, `guard.py` | Câu ngôn ngữ khác hoặc lúc DeepSeek chậm chỉ còn rất ít lớp bảo vệ | Chấp nhận trong MVP; ghi trong báo cáo | Giới hạn đã biết |
