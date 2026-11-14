@@ -179,6 +179,10 @@ class Settings(BaseSettings):
     # TC-1 (answer_check/column_years.py): a figure an answer gives to a year must sit in that year's column of the table it is cited to; a figure printed
     # only under other years is a problem for the one repair call, and is flagged under the answer if it stays. Off = nothing is checked.
     COLUMN_CHECK_ENABLED: bool = True
+    # TC-4 (answer_check/formulas.py): a written step whose printed result is wrong (L25), and a right division on the wrong formula; slice 1 = a growth
+    # rate divided by the later period's value. On since 14/11 (owner's yes): on 317 stored answers it made 6 reports, all genuine wrong divisions, and none
+    # on the 247 answers written with thinking on. A report goes to the one repair like the other problems.
+    FORMULA_CHECK_ENABLED: bool = True
     MULTIDOC_CATALOG_LIMIT: int = 80  # more filings than this: skip the planner and search the whole notebook as before
     # Sources a question may use, and documents a notebook may hold: a guest 1, every signed-in account (admin too) 5.
     # The one place these numbers live: TIER_SPECS, the error messages and the web app (through /auth/me) all read them from here.
