@@ -38,6 +38,7 @@ __pycache__/
 .venv/
 venv/
 env
+*.mhtml
 # Notebook GPU worker (Colab / Kaggle): chạy trên cloud, không đẩy lên repo
 colab_gpu_worker.ipynb
 kaggle_full_backend.ipynb
