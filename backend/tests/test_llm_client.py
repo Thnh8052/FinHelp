@@ -72,3 +72,39 @@ def test_search_parts_add_up_per_name_and_do_nothing_outside_a_request():
     finally:
         SEARCH_PARTS.reset(token)
     assert 0.7 <= parts["net"] <= 0.9
+
+
+# ---------------------------------------------------------------- the default budget (found 13/11: 4 of 5 analysis answers hit the 8,000 budget, the whole reply was thrown away and asked again)
+class SizedClient(FakeClient):
+    """A model that needs `needs` tokens of budget for this reply: with less it is cut during its reasoning, with enough it answers."""
+
+    def __init__(self, needs, seen):
+        super().__init__([], seen)
+        self.needs = needs
+
+    async def post(self, url, headers=None, json=None):
+        self.seen.append(json["max_tokens"])
+        cut = json["max_tokens"] < self.needs
+        return httpx.Response(200, json={"choices": [{"finish_reason": "length" if cut else "stop", "message": {"content": "" if cut else "the answer"}}]})
+
+
+def sized(monkeypatch, needs):
+    seen = []
+    monkeypatch.setattr(settings, "DEEPSEEK_API_KEY", "k")
+    monkeypatch.setattr(llm_client.httpx, "AsyncClient", lambda timeout: SizedClient(needs, seen))
+    return seen
+
+
+async def test_an_answer_that_reasons_for_eleven_thousand_tokens_is_written_in_one_call(monkeypatch):
+    """The longest complete reply measured (reasoning and answer) was about 11,000 tokens; a cut one wastes its whole budget and is paid for."""
+    seen = sized(monkeypatch, needs=11_500)
+    assert await llm_client.chat_completion([{"role": "user", "content": "q"}], max_tokens=1200) == "the answer"
+    assert len(seen) == 1
+
+
+async def test_the_budget_has_a_ceiling_that_bounds_a_runaway_reply(monkeypatch):
+    """A larger budget is only a ceiling (the API bills the tokens generated), but a reply that never ends must still stop: at most three requests, none above the ceiling."""
+    assert settings.LLM_MIN_MAX_TOKENS <= settings.LLM_MAX_TOKENS_CEILING <= 64_000
+    seen = sized(monkeypatch, needs=10 ** 9)
+    assert await llm_client.chat_completion([{"role": "user", "content": "q"}]) == ""
+    assert len(seen) <= 3 and max(seen) <= settings.LLM_MAX_TOKENS_CEILING

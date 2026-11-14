@@ -181,3 +181,26 @@ def test_an_opening_balance_under_the_year_it_opens_is_not_reported():
     assert not wrong("Amazon's opening inventory for FY2018 was 16,047 [1].", (BALANCE,))
     assert not wrong("Hàng tồn kho đầu năm 2018 của Amazon là 16 047 triệu USD [1].", (BALANCE,))
     assert wrong(table.format(opening="Accounts payable", closing="Ending inventory"), (BALANCE,))  # no opening word: 16,047 under FY2018 is still reported
+
+
+# ---------------------------------------------------------------- dates and "average" (found 13/11 on real answers)
+def test_the_day_of_an_iso_date_is_not_a_figure_of_the_column_check():
+    """"year ended 2018-12-31": the 31 is a day. It was read as a figure, and 31 is printed in the 2019 column (stores), so a right sentence was reported."""
+    assert not wrong("Net revenues for the year ended 2018-12-31 were 10,746 [1].", (CASH,))
+    assert not wrong("Net revenues for the year ended 31 December 2018 were 10,746 [1].", (CASH,))
+
+
+def test_a_word_that_only_starts_like_a_month_does_not_hide_a_figure_from_the_check():
+    """"declined 31" is not "Dec 31": the figure 31 is printed only in the 2019 column, so giving it to 2018 is reported."""
+    assert wrong("Stores for 2018: declined 31 [1].", (CASH,))
+    assert wrong("Stores for 2018: the market 31 [1].", (CASH,))
+
+
+def test_a_figure_inside_an_average_of_two_year_ends_is_not_checked_against_one_year():
+    """"ROE FY2018 = … / average equity ((9,362,114 + 8,459,869) / 2 …)": the 2017 closing balance is a legitimate input of FY2018."""
+    table = {"content": "| December 31, | 2018 | 2017 |\n|---|---|---|\n| Total equity | 9,362,114 | 8,459,869 |", "document_id": "d1", "page": 5}
+    for text in ("ROE FY2018 = 2,590,774 / average equity ((9,362,114 + 8,459,869) / 2 = 8,910,991.5) [1].",
+                 "ROE FY2018 = 2,590,774 / vốn chủ sở hữu bình quân ((9,362,114 + 8,459,869) / 2 = 8,910,991.5) [1].",
+                 "ROE FY2018 dùng vốn chủ sở hữu trung bình, gồm 8,459,869 của năm trước [1]."):
+        assert not wrong(text, (table,)), text
+    assert wrong("Total equity in FY2018 was 8,459,869 [1].", (table,))  # no cue word: still reported

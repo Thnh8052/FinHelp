@@ -2,18 +2,19 @@
 evaluated by code (plan v2, H1). Only numbers, + − × ÷, brackets and percents are evaluated, through Python's own parser: nothing the
 model writes is ever executed.
 
-fix()             corrects a printed result that is wrong when every number of its expression is trusted (printed in the excerpts,
-                  a standard constant, or the result of another correct step), everywhere the wrong value appears in the answer.
 written_results() the numbers that the answer's correct written calculations establish from trusted numbers (rule B of numbers.py).
 
-Measured in experiments/ before this module (plan v2 sections 8.6 and 8.10, t1_calc.py and numcheck_v2.py): on about 340 stored answers
-no correct figure was changed; 224 of 226 planted wrong results were restored; rule B lets no planted wrong result through.
+It only reads and verifies; it never rewrites a result. A rewrite (calculations.fix) existed until 14/11: measured on 317 stored answers it acted 0 times
+in 247 answers written with the model's thinking on (325 written steps), 7 times in 70 answers written with thinking off, and it changed right figures into wrong
+ones on 2 of 27 new answers (a percent closed by a bracket, "EPS = 2.09 vs 2.55 = -18.0%"). A wrong written result is now reported by the number check
+("unverified") and goes to the one repair. experiments/scripts/rag_improvement/_calculations_with_rewrite_14_11.py is the module as it was, for the measurement.
+Rule B lets no planted wrong result through, and without it 11 more answers of 317 are flagged (10 of 247 with thinking on).
 """
 import ast
 import operator
 import re
 from collections import Counter
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple
 
 from app.modules.generation.answer_check.amounts import EN, GROUP_SPACES, _interpret
 
@@ -116,96 +117,26 @@ def steps(text: str) -> List[Tuple[str, str, int]]:
     return out
 
 
-def is_calc(left: str, right: str = "", locale: str = EN) -> bool:
-    """A written calculation, or a ratio turned into a percent ("1.0150 → 101.5%": the result must be 100 x the ratio)."""
-    if len(NUMTOK.findall(left)) >= 2 and re.search(r"\d\s*[-+−–×x*/÷]\s*\(*[-−]?\$?\d", left.replace("**", "")):
-        return True
-    plain = left.replace("**", "").rstrip("…").strip().lstrip("-−")
-    ratio = canon(plain, locale) if NUMTOK.fullmatch(plain) else None
-    return bool(right) and ratio is not None and "." in ratio and float(ratio) < 10 and right.replace("**", "").rstrip("…").endswith("%")
+def is_calc(left: str) -> bool:
+    """A written calculation: two or more numbers joined by an operator ("554 ÷ 10,800"). A lone number is not one: "2.09 vs 2.55 = −18.0%" is a comparison."""
+    return len(NUMTOK.findall(left)) >= 2 and bool(re.search(r"\d\s*[-+−–×x*/÷]\s*\(*[-−]?\$?\d", left.replace("**", "")))
 
 
-def target(left: str, right: str, locale: str = EN):
-    """"ok" when the printed result is right, (value it should have, decimals) when it is wrong, None when the step cannot be read."""
+def holds(left: str, right: str, locale: str = EN) -> bool:
+    """Whether the printed result is right for its expression: within the rounding of the digits printed, a percent also as 100 x the ratio. False when it is wrong
+    or when either side cannot be read."""
     a, b = evaluate(left, locale), evaluate(right, locale)
     if a is None or b is None:
-        return None
+        return False
     value, printed = a[0], b[0]
     single = SINGLE.fullmatch(right)
-    if not single:  # "a + b ÷ c = d ÷ c": an equal step checks out (its numbers become trusted); a wrong one is never rewritten here
-        return "ok" if abs(value - printed) <= 0.002 * abs(printed) + 1e-9 else None
+    if not single:  # "a + b ÷ c = d ÷ c": an equal step (its numbers become trusted)
+        return abs(value - printed) <= 0.002 * abs(printed) + 1e-9
     decimals = len((canon(single.group(1), locale) or "").partition(".")[2])
     tol = max(0.5 * 10 ** -decimals + 1e-9, 0.002 * abs(printed))
-    # "**5.1%**": the bold markers are not part of the unit; "× 100" already makes a percent
-    pct = right.replace("**", "").rstrip("…").endswith("%") and "%" not in left and not re.search(r"(?:[×x]|(?<!\*)\*(?!\*))\s*100\b", left)
-    candidates = [value] + ([value * 100] if pct else [])
-    if any(abs(abs(c) - abs(printed)) <= tol for c in candidates):
-        return "ok"
-    best = min(candidates, key=lambda c: abs(abs(c) - abs(printed)))  # the reading (ratio or percent) closest to what was printed
-    return (abs(best) if printed >= 0 else -abs(best)), decimals
-
-
-def styled(value: float, like: str, decimals: int, locale: str = EN) -> str:
-    """`value` written as `like` is: same decimals, the same thousands and decimal marks (thousands marks also when the number is long), the same minus sign."""
-    number = NUMTOK.search(like).group(0)
-    run = "".join(ch for ch in number if ch not in GROUP_SPACES)
-    _, grouped, has_decimal = _interpret(run, locale)
-    marks = [ch for ch in run if ch in ",."]
-    point = marks[-1] if has_decimal else ("," if locale == VI else ".")
-    space = next((ch for ch in number if ch in GROUP_SPACES), "")
-    group = space or (marks[0] if grouped else "") or ((",." if point == "." else ".,")[0] if abs(value) >= 10000 else "")
-    text = f"{abs(value):,.{decimals}f}" if group else f"{abs(value):.{decimals}f}"
-    text = text.replace(",", "\0").replace(".", point).replace("\0", group)
-    neg = "−" if "−" in like else "-"
-    return (neg if value < 0 and not re.match(r"\(*[-−]", like) else "") + text
-
-
-def _known(expr: str, trusted: Set[float], locale: str = EN) -> bool:
-    values = [value_of(t, locale) for t in NUMTOK.findall(expr)]
-    return all(any(abs(v - x) <= 0.5 for x in trusted) or v <= SMALL or v in CONSTANTS for v in values)
-
-
-def _correction(left: str, right: str, known: Set[float], locale: str):
-    """"ok", the result as it should be printed, or None when this reading cannot judge the step (not a calculation, a number that is not trusted)."""
-    if not is_calc(left, right, locale) or not _known(left, known, locale):
-        return None
-    t = target(left, right, locale)
-    return t if t is None or t == "ok" else styled(t[0], right, t[1], locale)
-
-
-def fix(text: str, trusted: Set[float], rounds: int = 5) -> Tuple[str, List[Dict]]:
-    """(corrected text, [{"written", "was", "now", "only_here"}]). `trusted`: the excerpt numbers at every scale a printed figure may use.
-    A result is rewritten only when no reading of the step makes it right and every reading that can judge it writes the same correction."""
-    fixes: List[Dict] = []
-    readings = readings_of(text)
-    for _ in range(rounds):
-        found = steps(text)
-        known = {loc: set(trusted) for loc in readings}
-        for _ in range(3):  # numbers of correct steps built from trusted numbers become trusted
-            for left, right, _ in found:
-                for loc in readings:
-                    if _correction(left, right, known[loc], loc) == "ok":
-                        known[loc] |= {value_of(t, loc) for side in (left, right) for t in NUMTOK.findall(side)}  # each side on its own: "737" then "374,133" is not "737 374,133"
-        change = None
-        for left, right, start in found:
-            judged = {_correction(left, right, known[loc], loc) for loc in readings} - {None}
-            if len(judged) != 1 or "ok" in judged:
-                continue
-            token = NUMTOK.search(right).group(0)
-            change = (left, right, start + right.index(token), token, judged.pop())
-            break
-        if not change:
-            break
-        left, right, at, token, new = change
-        # the same figure printed as the result of another correct step: elsewhere it may be that other figure, so only this step changes
-        ambiguous = any(r2 != right or s2 != at - right.index(token) for l2, r2, s2 in found
-                        if NUMTOK.search(r2) and NUMTOK.search(r2).group(0) == token and any(is_calc(l2, "", loc) and target(l2, r2, loc) == "ok" for loc in readings))
-        if ambiguous:
-            text = text[:at] + new + text[at + len(token):]
-        else:  # the same value everywhere, but never a part of a longer number ("1 639" inside "21 639" or "1 639 000")
-            text = re.sub(rf"(?<![\d.,])(?<!\d{GROUP}){re.escape(token)}(?!\d|[.,]\d|{GROUP}\d{{3}}(?!\d))", lambda _: new, text)
-        fixes.append({"written": f"{left} = {right}", "was": token, "now": new, "only_here": ambiguous})
-    return text, fixes
+    # "**5.1%**": the bold markers are not part of the unit; "(… = 77.8%)": nor is a closing bracket; "× 100" already makes a percent
+    pct = right.replace("**", "").rstrip("…").rstrip(") ").endswith("%") and "%" not in left and not re.search(r"(?:[×x]|(?<!\*)\*(?!\*))\s*100\b", left)
+    return any(abs(abs(c) - abs(printed)) <= tol for c in [value] + ([value * 100] if pct else []))
 
 
 def written_results(text: str, ok: Set[float]) -> Set[float]:
@@ -224,7 +155,7 @@ def written_results(text: str, ok: Set[float]) -> Set[float]:
         grown = False
         for left, right, _ in found:
             for loc in readings:
-                if not is_calc(left, "", loc) or not trusted(left, loc) or target(left, right, loc) != "ok":
+                if not is_calc(left) or not trusted(left, loc) or not holds(left, right, loc):
                     continue
                 new = {abs(value_of(t, loc)) for t in NUMTOK.findall(right)} - ok
                 if new:

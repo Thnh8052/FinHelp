@@ -84,3 +84,24 @@ def test_derived_figure_uses_the_reading_that_matched():
 
 def test_columns_of_a_flattened_row_are_not_merged_for_the_excerpt():
     assert status("Cash was 3 650 million.", [{"content": "Cash and cash equivalents 3 650 3 484"}]) == {"3 650": "verified"}
+
+
+# ---------------------------------------------------------------- the day of a date is not a figure (found 13/11: "ended June 30, 2021" made a repair call over the figure 30)
+DATES = ["Microsoft's fiscal year ended June 30, 2021.", "Microsoft's fiscal year ended 30 June 2021.", "The year ended 2021-06-30 (FY2021).", "Oracle ended on May 31st, 2021.",
+         "Kết thúc ngày 30 tháng 6 năm 2021.", "Tại ngày 30/06/2021, báo cáo kết thúc.", "As of Dec. 31 the year closed.", "Năm tài chính kết thúc ngày 31/12."]
+
+
+def test_the_day_of_a_date_is_not_a_figure_to_verify():
+    for text in DATES:
+        assert check_numbers(text, TABLE)["figures"] == [], text
+
+
+def test_a_figure_beside_a_word_that_only_starts_like_a_month_is_still_checked():
+    for text, shown in (("Revenue decreased 25 million [1].", "25"), ("The market 30 percent share.", "30"), ("Margins declined 18 points.", "18"), ("Sales in marginal 45 stores.", "45")):
+        assert [f["text"] for f in check_numbers(text, TABLE)["figures"]] == [shown], text
+    assert check_numbers("In May 25% of stores closed.", TABLE)["unverified"] == ["25%"]  # a percent after a month name is a figure, not a day
+
+
+def test_a_date_next_to_a_wrong_figure_does_not_hide_it():
+    out = check_numbers("The year ended June 30, 2021 had net income of 7,777 million [1].", TABLE)
+    assert out["unverified"] == ["7,777"]

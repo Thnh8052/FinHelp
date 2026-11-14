@@ -22,9 +22,22 @@ reference on its own line and a small negative table value look identical. A num
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import List, Optional, Tuple
+
+# ---------------------------------------------------------------- dates: the day and the month of a date are not figures
+# Whole month names or the usual abbreviations, never a word that only starts like one ("decreased 25", "market 30", "marginal 45").
+MONTH = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?(?![a-z])")
+_NOT_A_NUMBER_AFTER = r"(?!\d|[.,]\d|\s*%)"  # "May 25% of stores" is a percent, not the 25th of May
+# the year of a date is not a fiscal year given to a figure: "December 31, 2017", "30 June 2021", "31/12/2017", "2021-06-30", "tháng 12 năm 2017"
+DATE = re.compile(rf"\b{MONTH}\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+((?:19|20)\d{{2}})\b|\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:of\s+)?{MONTH},?\s+((?:19|20)\d{{2}})\b"
+                  r"|\b\d{1,2}[/.-]\d{1,2}[/.-]((?:19|20)\d{2})\b|\b((?:19|20)\d{2})-\d{1,2}-\d{1,2}\b|\btháng\s+\d{1,2}(?:\s+năm\s+|/)((?:19|20)\d{2})\b", re.I)
+# the day (and the month number) of a date: "June 30", "Dec. 31", "30 June", "30/06/2021", "2021-06-30", "ngày 30", "30 tháng 6", "tháng 6"; one group each
+DAY = re.compile(rf"\b{MONTH}\s+(\d{{1,2}})(?:st|nd|rd|th)?\b{_NOT_A_NUMBER_AFTER}|\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?{MONTH}"
+                 r"|\b(\d{1,2}[/.-]\d{1,2})[/.-](?:19|20)\d{2}\b|\b(?:19|20)\d{2}-\d{1,2}-(\d{1,2})\b|\bngày\s+(\d{1,2})\b|\b(\d{1,2})\s+tháng\b|\btháng\s+(\d{1,2})\b", re.I)
+
 
 CURRENCY_SYMBOLS = "$₫€£¥"
 SCALE_SUFFIXES = ("bn", "mn", "M", "B", "K", "m", "k")

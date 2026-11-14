@@ -4,7 +4,8 @@ growth, a percent of an amount), or come out of a calculation the answer writes 
 "1,185 + 0 + 454 + 33 = 1,672", "365 × 43,762.5 ÷ 374,133 = 42.69", with the standard constants 365, 360, 100, 52, 53). Code only, no
 model. Derivations from any two excerpt numbers are not accepted: a table holds hundreds of numbers whose sums and ratios cover almost any
 value (that version caught 18-20% of planted wrong figures); rule B searches nothing, it only evaluates what the answer writes.
-correct_calculations() runs first (calculations.fix): a written calculation whose result is wrong is corrected in place, no model call.
+A written calculation whose result is wrong is not rewritten by code (removed 14/11, see calculations.py): its result is simply not accepted, so the figure is
+reported as unverified and goes to the one repair.
 
 Log-only for now (Bedrock's advice: watch before blocking): the report goes into the trace, nothing is blocked or regenerated.
 """
@@ -12,20 +13,21 @@ from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
 
-from app.modules.generation.answer_check.amounts import Amount, find_amounts
-from app.modules.generation.answer_check.calculations import CONSTANTS, fix, written_results
+from app.modules.generation.answer_check.amounts import DAY, Amount, find_amounts
+from app.modules.generation.answer_check.calculations import CONSTANTS, written_results
 
 META = "<answer_meta>"  # generator v3 appends a machine block; only the text before it is the answer
-SMALL = 12  # plain integers up to this are list markers, months, quarters or counts ("3 segments"): not checked
+SMALL = 12  # plain integers up to this are list markers, months, quarters or counts ("3 segments"): not checked; the day of a date is skipped by DAY
 SCALES = (1.0, 1e3, 1e6, 1e9, 1e-3, 1e-6, 1e-9)  # "$20.6 billion" against "20,604" (millions)
 PERCENT_SCALES = (1e-2, 1e2)  # "25%" against "0.25"
 
 
 def _figures(answer: str) -> List[Amount]:
     text = answer.split(META)[0]
+    days = [m.span(m.lastindex) for m in DAY.finditer(text)]  # "June 30", "30/06/2021", "2021-06-30", "ngày 30": the day of a date is not a figure
     out = []
     for a in find_amounts(text, space_groups=True):  # "89 913" is one figure
-        if a.is_year or a.is_reference or a.value is None:
+        if a.is_year or a.is_reference or a.value is None or any(s <= a.start < e for s, e in days):
             continue
         if text[a.start - 1:a.start] == "[" and text[a.end:a.end + 1] == "]":
             continue  # citation marker [3]
@@ -58,14 +60,6 @@ def _excerpt_numbers(chunks: Sequence[Dict[str, Any]]) -> List[float]:
 def _trusted(chunks: Sequence[Dict[str, Any]]) -> set:
     """The excerpt numbers at every scale a printed figure may use ("$20.6 billion" for 20,604 millions)."""
     return {round(v * s, 6) for v in _excerpt_numbers(chunks) for s in (1.0, 1e3, 1e6, 1e9, 1e-3, 1e-6)}
-
-
-def correct_calculations(answer: str, chunks: Sequence[Dict[str, Any]]) -> Tuple[str, List[Dict[str, Any]]]:
-    """(answer with the wrong results of its written calculations corrected, [{"written", "was", "now", "only_here"}]). Only a step whose
-    numbers all come from the excerpts (or from another correct step, or a standard constant) is touched."""
-    if not chunks:
-        return answer, []
-    return fix(answer, _trusted(chunks))
 
 
 def _tolerance(decimals: int) -> float:

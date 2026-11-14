@@ -69,8 +69,12 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://api.deepseek.com"
     # deepseek-flash reasons before answering and its reasoning counts against max_tokens: every call gets at least this budget,
     # and a reply cut by the budget is retried with a larger one (up to LLM_MAX_TOKENS_CEILING) instead of being read as empty.
-    LLM_MIN_MAX_TOKENS: int = 8000
-    LLM_MAX_TOKENS_CEILING: int = 32000
+    # The budget is only a ceiling: the API bills the tokens generated (deepseek-flash accepts up to 384K), and the model does not reason longer because
+    # the ceiling is higher. A cut reply is thrown away and asked again, so a ceiling that is too low costs more than a high one: at 8,000, 4 of 5 analysis
+    # answers were cut and paid twice (about 8,000 wasted tokens, 35 to 40 s each); the longest complete reply measured was about 11,000 tokens.
+    # 24,000 holds twice that; the retries (24,000, 48,000, 64,000) stop a reply that never ends at 64,000 (about 0.08 dollar of output at peak price).
+    LLM_MIN_MAX_TOKENS: int = 24000
+    LLM_MAX_TOKENS_CEILING: int = 64000
 
     # Email Service (SendGrid)
     SENDGRID_API_KEY: Optional[str] = None
