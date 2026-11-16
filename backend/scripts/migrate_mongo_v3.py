@@ -1,4 +1,4 @@
-"""One-off migration to the MongoDB V3 schema (docs/Version_2/PILLAR_2_MONGODB_SPECIFICATION.md). Safe to run twice.
+"""One-off migration to the MongoDB V3 schema (docs/Version_3/PILLAR_2_MONGODB_SPECIFICATION.md). Safe to run twice.
   python scripts/migrate_mongo_v3.py --dry-run     # show what would change, write nothing
   python scripts/migrate_mongo_v3.py               # apply, then create the V3 indexes
 """

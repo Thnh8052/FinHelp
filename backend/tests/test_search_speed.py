@@ -1,4 +1,4 @@
-"""L2 of docs/Version_3/plan_rag_improvements.md: word counts kept between questions (same chunks, one read per document)."""
+"""L2 of docs/Version_2/plans/plan_rag_improvements.md: word counts kept between questions (same chunks, one read per document)."""
 from tests.test_multidoc import _planned
 
 from app.modules.query_router.planner import PlanItem

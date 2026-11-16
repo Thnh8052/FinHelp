@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 from app.modules.documents.document import DocumentRecord
 from app.modules.chat.scope import document_label
 
-# Appended by code to an answer that found nothing (docs/Version_2/fail_cases.md, S2): never suggests a document outside the selected sources
+# Appended by code to an answer that found nothing (docs/Version_3/fail_cases.md, S2): never suggests a document outside the selected sources
 CHECK_SOURCES = {"vi": "Hãy kiểm tra lại các nguồn đã chọn hoặc tài liệu đã tải lên.",
                  "en": "Please check the selected sources or the uploaded documents."}
 # Appended to the answer of a "search again" click that still found nothing, or not enough (S3/S5): there is no further button

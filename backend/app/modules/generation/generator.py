@@ -108,7 +108,7 @@ LANGUAGE_VI = (
 )
 
 
-# On the question line of an English question (v4), the mirror of the Vietnamese marker below. Measured (docs/Version_3/plan_guardrails_h4.md 7.3): with the table templates in
+# On the question line of an English question (v4), the mirror of the Vietnamese marker below. Measured (docs/Version_2/plans/plan_guardrails_h4.md 7.3): with the table templates in
 # English, this line is what keeps the answer in English (0 of 14 and 0 of 8 answers with Vietnamese or Chinese text; without it 1 of 12 came out in Chinese).
 QUESTION_EN = "Question (English: answer entirely in English from the first word, including the opening sentence, table headers, notes and short_answer): "
 

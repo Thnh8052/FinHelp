@@ -93,7 +93,7 @@ class QueryRequest(BaseModel):
     document_id: Optional[str] = None  # one source (older clients)
     document_ids: Optional[List[str]] = None  # the sources selected by the user (at least one)
     mentions: Optional[List[str]] = None  # @file: selected documents the question is explicitly about (ids, never parsed from the text)
-    retry_of: Optional[str] = None  # sent by a "search again" button: the answer that fell short (docs/Version_2/fail_cases.md, S3)
+    retry_of: Optional[str] = None  # sent by a "search again" button: the answer that fell short (docs/Version_3/fail_cases.md, S3)
 
 
 class CitationOut(BaseModel):

@@ -1,4 +1,4 @@
-"""Bugs #2, #15, #17, #18, #19, #21, #22, #23, #25 and #27 of docs/Version_3/production_bugs.md (no database, no network, no email: everything outside the code under test is faked).
+"""Bugs #2, #15, #17, #18, #19, #21, #22, #23, #25 and #27 of docs/Version_2/bugs/production_bugs.md (no database, no network, no email: everything outside the code under test is faked).
 The daily quota of #16 is tested with the other quota rules in test_mongo_v3.py and test_acl.py."""
 import asyncio
 from datetime import datetime, timedelta, timezone

@@ -2,7 +2,7 @@
 
 Why a model and not more rules: written rules only catch the wordings they were written for (a second batch of new wordings was caught
 1 time in 21 by rules, 21 in 21 by this call), and the intent router (nearest example messages) caught 21 of 67 new messages that must be
-turned away. Measured in experiments/guardrail_eval/llm_guard_v2.py, 369 messages, DeepSeek with thinking off: docs/Version_3/plan_guardrails_h4.md
+turned away. Measured in experiments/guardrail_eval/llm_guard_v2.py, 369 messages, DeepSeek with thinking off: docs/Version_2/plans/plan_guardrails_h4.md
 section 6.1 (a legitimate question labelled with a blocking label: 1 of 234; a message to turn away labelled ok: 1 of 128; 7 of 7 crisis messages;
 95th percentile of a call 1.05 s).
 

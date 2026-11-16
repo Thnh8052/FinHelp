@@ -34,7 +34,7 @@ class Code:
     NOTEBOOK_BUSY_DELETE = "notebook_busy_delete"
     NOTEBOOK_DELETE_FAILED = "notebook_delete_failed"
     MESSAGE_NOT_FOUND = "message_not_found"
-    RETRY_USED = "retry_used"  # a "search again" button can be used once per answer (docs/Version_2/fail_cases.md, S3)
+    RETRY_USED = "retry_used"  # a "search again" button can be used once per answer (docs/Version_3/fail_cases.md, S3)
     GUEST_ALLOWANCE_USED = "guest_allowance_used"
     QUESTION_QUOTA_USED = "question_quota_used"
     # documents

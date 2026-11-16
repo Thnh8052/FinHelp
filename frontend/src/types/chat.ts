@@ -20,7 +20,7 @@ export interface ChatMessage {
   understood?: string;
   /** Tài liệu khác cũng khớp: bấm để hỏi lại với tài liệu đó. `document_ids`: cả bộ tài liệu để hỏi lại (chỉ đổi tài liệu này, giữ các công ty khác);
    * tin nhắn cũ không có trường này thì hỏi lại với riêng tài liệu đó. `kind`: nút "tìm kỹ hơn" dưới câu trả lời chưa đạt (một file / mọi nguồn đã chọn),
-   * chỉ bấm được một lần (docs/Version_2/fail_cases.md, S3). */
+   * chỉ bấm được một lần (docs/Version_3/fail_cases.md, S3). */
   alternatives?: { document_id: string; label: string; document_ids?: string[]; kind?: "retry_one" | "retry_all" }[];
   /** Câu hỏi đã gửi (để hỏi lại với tài liệu khác). */
   query?: string;

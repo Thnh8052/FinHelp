@@ -3,7 +3,7 @@ Quản Lý Kết Nối & Khởi Tạo Chỉ Mục MongoDB (MongoDB Lifecycle & I
 Tác giả: Vũ Thành - FinAnalyst AI
 
 1. Quản lý vòng đời kết nối Motor Async MongoDB.
-2. Tạo các chỉ mục theo đặc tả docs/Version_2/PILLAR_2_MONGODB_SPECIFICATION.md. Chỉ mục unique là ràng buộc dữ liệu, nên tạo
+2. Tạo các chỉ mục theo đặc tả docs/Version_3/PILLAR_2_MONGODB_SPECIFICATION.md. Chỉ mục unique là ràng buộc dữ liệu, nên tạo
    thất bại thì ứng dụng dừng khởi động thay vì âm thầm chạy thiếu ràng buộc.
 3. Cung cấp Dependency `get_database` cho FastAPI Router.
 """
