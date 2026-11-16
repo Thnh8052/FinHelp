@@ -137,6 +137,26 @@ class Settings(BaseSettings):
     MULTIDOC_QUESTION_KEEP: int = 3
     MULTIDOC_MAX_TOKENS: int = 8192  # without a plan (allocate)
     MULTIDOC_PLANNED_MAX_TOKENS: int = 12288  # with a plan (planned_ceilings)
+    # Evidence gate of the planned search (hybrid_search.retrieve_planned; setting "L15" of docs/Version_3/RAG_REDESIGN_SPEC.md section 5.8, approved 16/11): the plan may
+    # leave out a document the answer needs (5 of 192 gold questions). After the main vector search, code compares the best dense similarity of the question in each selected
+    # document the plan did NOT search with its best in the searched ones; a document whose gap is >= GATE_OPEN_GAP is opened. A notebook holds at most
+    # MAX_SELECTED_DOCS_USER (5) documents, so at most 4 are ever skipped: no cap of its own. Its GATE_POOL candidates come from the rank fusion of the question (weight 2) and the first GATE_PLAN_QUERIES plan queries, dense + BM25; the
+    # reranker scores each against the question and those queries IN THE MAIN SEARCH'S CALL, score = GATE_QUESTION_WEIGHT x question + the rest x best plan query; the
+    # GATE_MAX_CHUNKS best scores >= GATE_MIN_SCORE are appended after the main chunks while the context stays under GATE_MAX_TOKENS. No language-model call.
+    # Measured on 192 questions (experiments/scripts/mvp/gate_strong.py): a correct plan loses nothing (+2 questions), opens on about half, tokens +38 % / +26 %;
+    # with a required document dropped / swapped / all swapped the evidence is complete in 84 / 88 / 77 % (dev) and 72 / 78 / 71 % (hard) of the questions, 0 without it.
+    # Time added when it opens (gate_timing.py, 2 x T4 through the tunnel): 3.5 s median on a correct plan, 5.4 s when the plan was wrong (0.062 s per pair).
+    # A higher floor or fewer chunks falls under 70 % (gate_strong_floor.py). Worst case 4 documents opened = 240 pairs (about 15 s); predicted over 10 s in 52 of 737 wrong-plan
+    # units with a notebook of at most 5 (gate_five_docs.py).
+    GATE_ENABLED: bool = True
+    GATE_OPEN_GAP: float = -0.10
+    GATE_POOL: int = 15
+    GATE_FIRST_STAGE: int = 200  # ranks of each query that count in the fusion
+    GATE_PLAN_QUERIES: int = 3
+    GATE_QUESTION_WEIGHT: float = 0.6
+    GATE_MIN_SCORE: float = 0.15
+    GATE_MAX_CHUNKS: int = 14
+    GATE_MAX_TOKENS: int = 20480
     # Catalog line read at upload (services/ingestion/catalog.py): the measured prompt through the DeepSeek API ("deepseek", no GPU,
     # runs while Docling parses the next file) or the local model through Ollama ("ollama"); off or unreachable -> rule header
     CATALOG_ENABLED: bool = True
@@ -156,7 +176,6 @@ class Settings(BaseSettings):
     # between tries (chat/retrieval_step.py); still failing -> the SEARCH_UNAVAILABLE error (503) instead of INTERNAL_ERROR. 0 = no retry.
     SEARCH_RETRIES: int = 1
     SEARCH_RETRY_DELAY_SECONDS: float = 1.0
-    MULTIDOC_CATALOG_LIMIT: int = 80  # more filings than this: skip the planner and search the whole notebook as before
     # Sources a question may use, and documents a notebook may hold: a guest 1, every signed-in account (admin too) 5.
     # The one place these numbers live: TIER_SPECS, the error messages and the web app (through /auth/me) all read them from here.
     MAX_SELECTED_DOCS_GUEST: int = 1
@@ -186,7 +205,6 @@ class Settings(BaseSettings):
     # A2: an answer with a figure the excerpts do not show, a citation to no excerpt or to another company / period is rewritten once
     # with the list of problems; what is still wrong after that is flagged in the answer ("chưa kiểm chứng"), never silently kept.
     ANSWER_REPAIR_ENABLED: bool = True
-    ANSWER_INPUTS_REPAIR: bool = False  # H4: a wrong entry of the answer's `inputs` (value, line, period, excerpt) also triggers the one rewrite; off until measured on real answers
     # Guardrails. The intent router turns away small talk, off-topic requests, requests for advice... that the rules let through
     # (query_router/intent.py: one short encode on the embedding model, no language-model call). False = the rules alone, as measured before.
     INTENT_ROUTER_ENABLED: bool = True
@@ -194,7 +212,7 @@ class Settings(BaseSettings):
     OUTPUT_POLICY_ENABLED: bool = True
     # The guard (query_router/guard.py): one short language-model call per message, beside the search, gives the message one label; a message
     # with a safety label (crisis, harmful, personal data, attack on the instructions, politics, personal advice) is turned away before any
-    # answer is written. Measured in experiments/guardrail_eval/llm_guard_v2.py (docs/Version_3/plan_guardrails_h4.md section 6.1).
+    # answer is written. Measured in experiments/guardrail_eval/llm_guard_v2.py (docs/Version_2/plans/plan_guardrails_h4.md section 6.1).
     GUARD_ENABLED: bool = True
     # The label off_topic also turns a message away, only when the rules found nothing that ties it to a report ("two keys": 0 of 234 wrongly turned away).
     GUARD_OFF_TOPIC_ENABLED: bool = True

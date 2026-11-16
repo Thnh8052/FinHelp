@@ -1,4 +1,4 @@
-"""What a question gets when nothing is found (docs/Version_2/fail_cases.md)."""
+"""What a question gets when nothing is found (docs/Version_3/fail_cases.md)."""
 import types
 
 import pytest
@@ -86,8 +86,6 @@ async def test_s3_a_partial_answer_over_several_files_offers_each_file_skipped_f
 async def test_s3_an_unverified_answer_also_offers_the_buttons(monkeypatch):
     orch = answering(monkeypatch, "AMD net revenue was $99 million [1].\n" + META % ("answered", "[1]"), PLAN_AMD_ONLY)
     monkeypatch.setattr(settings, "ANSWER_REPAIR_ENABLED", False)
-    monkeypatch.setattr(orchestrator_module, "verify", lambda answer, retrieved, docs: ({"unverified": ["99"]}, {}, ["99 is not in the excerpts"]))
-    monkeypatch.setattr(orchestrator_module, "flag_unverified", lambda answer, n, c, lang: answer)
     r = await orch._answer_one("Which company had the higher revenue in 2024?", "nb", _scope(), Decision(lang="en"))
     assert [a["kind"] for a in r["alternatives"]] == ["retry_one", "retry_one", "retry_all"]
 

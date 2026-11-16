@@ -1,6 +1,6 @@
 """A2 after generation: citations point at real excerpts of the right company / period; one repair, then a visible flag."""
 from app.modules.documents.document import DocumentMetadata, DocumentRecord
-from app.modules.generation.answer_check.citations import check_citations, problems
+from app.modules.generation.answer_check.citations import check_citations
 from app.modules.query_router.input_policy import Decision
 from app.modules.query_router.target_resolver import Filing
 from app.modules.query_router.target_scope import ScopeDoc
@@ -24,7 +24,6 @@ def test_citation_to_no_excerpt_another_company_or_period_is_caught():
     assert out["invalid"] == [7]
     assert [w["n"] for w in out["wrong_company"]] == [2]
     assert out["wrong_period"][0]["year"] == 2019
-    assert len(problems({"unverified": ["$6.7 billion"]}, out)) == 4
 
 
 def _orchestrator(answers, monkeypatch):
@@ -34,7 +33,7 @@ def _orchestrator(answers, monkeypatch):
     async def no_unlisted(query, scope):
         return []
 
-    async def retrieve(query, notebook_id, scope, forced=None):
+    async def retrieve(query, notebook_id, scope, forced=None, **kwargs):
         return RetrievalResult(scope, {"amd": AMD.label, "nv": NV.label}, [], [], [dict(c) for c in CHUNKS], "targets_planner")
 
     async def answer(query, chunks, notes=None, max_tokens=1200, fallback=True):
@@ -72,8 +71,7 @@ async def test_what_stays_wrong_is_flagged_not_hidden(monkeypatch):
 async def test_a_clean_answer_costs_no_second_call(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $25,785 million in 2024 [1]; NVIDIA $60,922 million [2]."], monkeypatch)
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 1 and r["verification"] == {"passed": True, "repaired": False, "unverified_figures": [], "first_issues": [],
-                                                    "citations": {"invalid": [], "wrong_company": [], "wrong_period": []}, "inputs": []}
+    assert len(calls) == 1 and r["verification"] == {"passed": True, "repaired": False, "unverified_figures": [], "first_issues": []}
     assert r["understood"].startswith("I understood the question as about")
 
 

@@ -52,16 +52,3 @@ def check_citations(answer: str, chunks: Sequence[Dict[str, Any]], docs: Sequenc
                         out["wrong_period"].append({"n": n, "year": y, "sentence": short})
     return out
 
-
-def problems(numbers: Dict[str, Any], cites: Dict[str, Any]) -> List[str]:
-    """The issues as instructions for the one repair call (empty: the answer passes)."""
-    out = []
-    if numbers.get("unverified"):
-        out.append("these figures are not printed in the excerpts and do not follow from figures that are: " + ", ".join(numbers["unverified"]))
-    if cites["invalid"]:
-        out.append("these citation numbers point at no excerpt: " + ", ".join(f"[{n}]" for n in sorted(set(cites["invalid"]))))
-    for w in cites["wrong_company"]:
-        out.append(f"excerpt [{w['n']}] is from a different company than the sentence says: \"{w['sentence']}\"")
-    for w in cites["wrong_period"]:
-        out.append(f"excerpt [{w['n']}] does not cover {w['year']}: \"{w['sentence']}\"")
-    return out

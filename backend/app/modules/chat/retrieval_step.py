@@ -53,19 +53,24 @@ class RetrievalResult:
     missing: List[str] = field(default_factory=list)  # V1: targeted documents with no retrieved chunk even after the retry
 
 
-async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, notebook_id: str, scope: List[DocumentRecord], forced: Optional[List[str]] = None) -> RetrievalResult:
+async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, notebook_id: str, scope: List[DocumentRecord], forced: Optional[List[str]] = None, *,
+                             tagged: bool = False) -> RetrievalResult:
     """Retrieval only. One selected document: the measured single-filing path. Several: the planner writes one query per
     (selected document, item), and the results and a search with the question take equal slots (retrieve_planned); the planner
     choosing among the selected documents only maps queries to them, it never widens the scope. Any planner failure falls back to the measured path over the selection.
     `forced` (G3: the documents the question targets, by @file or by code): the search runs over those documents only, so the
-    planner only writes queries (one document: the single-filing path)."""
+    planner only writes queries (one document: the single-filing path).
+    `tagged`: the forced documents are the user's own @file tags. When code chose them instead (a company named in the question), the evidence gate of the planned
+    search may still look at the rest of the selection (hybrid_search.retrieve_planned, settings GATE_*); the user's tags are never widened."""
+    selected = [d.document_id for d in scope]
+    labels = {d.document_id: document_label(d) for d in scope}  # of the whole selection: a chunk the gate adds carries its source's name too
     targeted = [d for d in scope if d.document_id in set(forced or [])]
     scope = targeted or scope
     ids = [d.document_id for d in scope]
-    labels = {d.document_id: document_label(d) for d in scope}
+    wider = {"gate_document_ids": selected} if targeted and not tagged and len(selected) > len(ids) else {}
     plan: List[PlanItem] = []
     routing = ("targets_" if targeted else "") + ("single" if len(scope) == 1 else "planner")
-    multi = 2 <= len(scope) <= settings.MULTIDOC_CATALOG_LIMIT and settings.MULTIDOC_ENABLED
+    multi = len(scope) >= 2 and settings.MULTIDOC_ENABLED  # a notebook holds at most MAX_SELECTED_DOCS_USER (5) documents: no count above which the planner is skipped
     t0 = time.perf_counter()
     parts: Dict[str, float] = {}  # seconds in each part of the search (hybrid_search.part_done), kept in the trace as search_<part>
     SEARCH_PARTS.set(parts)
@@ -80,7 +85,7 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
         searched = {d for p in plan for d in (p.document_ids or ids)}
         plan += [PlanItem(query, [d]) for d in named if d not in searched]
         sub_queries = [p.query for p in plan]
-        retrieved = await search_with_retry(lambda: hybrid_search.retrieve_planned(query, plan, notebook_id, ids))
+        retrieved = await search_with_retry(lambda: hybrid_search.retrieve_planned(query, plan, notebook_id, ids, **wider))
     elif multi:
         # no plan (model down or no valid JSON): the routing without a language model, R5 on the catalog, then R4 (15/11: R5 on the first pages' text removed, it
         # never answered on 179 gold questions and read every chunk of every selected document to try)

@@ -5,14 +5,10 @@ when the model does not listen. A phrase the excerpts themselves contain is neve
 """
 import json
 import re
-from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from app.modules.generation.generator import META_CLOSE, META_OPEN, split_answer
-
-# What the checks found for the request being served (set by the orchestrator, None elsewhere): goes into its trace
-EVENTS: ContextVar[Optional[List[Dict[str, Any]]]] = ContextVar("output_policy_events", default=None)
 
 BLOCKED = {"vi": "Tôi chưa thể đưa ra câu trả lời phù hợp cho câu hỏi này. Bạn hãy thử diễn đạt lại, hoặc hỏi về số liệu và nội dung cụ thể trong các báo cáo đã chọn.",
            "en": "I could not produce a suitable answer to this question. Please rephrase it, or ask about specific figures or content of the selected reports."}
@@ -96,17 +92,9 @@ def check(answer: str, chunks: List[Dict[str, Any]], lang: str) -> List[Problem]
     return found
 
 
-def rewrite_note(problems: List[Problem]) -> str:
-    return "Your previous answer was not acceptable: " + "; ".join(p.fix for p in problems) + ". Write the answer again from the excerpts only, without these problems."
-
-
 def blocked(lang: str, structured: bool) -> str:
     """The reply shown instead of an answer that broke a hard rule twice; with the machine block of the structured prompts (status not_found:
     no source is shown and the conversation's topic does not move)."""
     text = BLOCKED["vi" if lang == "vi" else "en"]
     return text + ("\n" + META_OPEN + json.dumps({"status": "not_found", "short_answer": text, "citations": []}, ensure_ascii=False) + META_CLOSE if structured else "")
 
-
-def record(event: Dict[str, Any]) -> None:
-    if EVENTS.get() is not None:
-        EVENTS.get().append(event)

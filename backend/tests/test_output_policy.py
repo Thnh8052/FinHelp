@@ -101,26 +101,30 @@ def _answers(monkeypatch, *replies):
     return orch, calls
 
 
+async def _checked(orch, question):
+    return (await orch._write_checked(question, CHUNKS, [], [], "vi" if "Doanh" in question else "en"))[0]
+
+
 async def test_an_answer_that_breaks_a_rule_is_rewritten_once_with_the_reason(monkeypatch):
     orch, calls = _answers(monkeypatch, "Revenue grew [1], so you should buy the stock.", GOOD)
-    assert await orch._answer("What was the revenue?", CHUNKS) == GOOD
+    assert await _checked(orch, "What was the revenue?") == GOOD
     assert len(calls) == 2 and "investment recommendation" in calls[1][-1]
 
 
 async def test_an_answer_that_still_breaks_a_hard_rule_is_not_shown(monkeypatch):
     orch, calls = _answers(monkeypatch, "You should buy the stock [1].", "Honestly, you should buy the stock [1].")
-    assert await orch._answer("What was the revenue?", CHUNKS) == policy.BLOCKED["en"] and len(calls) == 2
+    assert await _checked(orch, "What was the revenue?") == policy.BLOCKED["en"] and len(calls) == 2
 
 
 async def test_a_soft_problem_the_rewrite_does_not_fix_keeps_the_first_answer(monkeypatch):
     first = "Revenues were $51,217 million in fiscal 2023 according to the report [1]."
     orch, calls = _answers(monkeypatch, first, "Revenues were $51,217 million in the fiscal year 2023 [1].")
-    assert await orch._answer("Doanh thu là bao nhiêu?", CHUNKS) == first and len(calls) == 2
+    assert await _checked(orch, "Doanh thu là bao nhiêu?") == first and len(calls) == 2
 
 
 async def test_a_clean_answer_costs_no_second_call(monkeypatch):
     orch, calls = _answers(monkeypatch, GOOD)
-    assert await orch._answer("What was the revenue?", CHUNKS) == GOOD and len(calls) == 1
+    assert await _checked(orch, "What was the revenue?") == GOOD and len(calls) == 1
 
 
 async def test_a_blocked_answer_shows_no_source_keeps_the_topic_and_is_in_the_trace(monkeypatch):
@@ -130,4 +134,4 @@ async def test_a_blocked_answer_shows_no_source_keeps_the_topic_and_is_in_the_tr
     state = {"document_ids": ["d2"], "fiscal_years": [2023], "metric": "revenue"}
     r = await orch.execute_query("What was Nike's revenue in FY2023?", "nb", document_ids=["d2"], focus_state=state)
     assert r["answer"] == policy.BLOCKED["en"] and r["citations"] == [] and "focus" not in r
-    assert r["trace"]["output_policy"] == [{"problems": ["advice"], "after_rewrite": ["advice"], "outcome": "blocked"}]
+    assert r["trace"]["review"]["outcome"] == "blocked" and [f["check"] for f in r["trace"]["review"]["first"]] == ["safety"]

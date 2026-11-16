@@ -162,3 +162,54 @@ def written_results(text: str, ok: Set[float]) -> Set[float]:
                     ok |= new
                     grown = True
     return ok
+
+
+# ------------------------------------------------------------------ wrong written results (review.py, check `arithmetic`)
+# A left side preceded by one of these is the tail of a longer expression the reader cut ("$700 million × (1 − 0.90)" read as "(1 − 0.90)").
+BEFORE_PART = set("×x*/÷+−–-([|{},.\0123456789")
+
+
+def _whole(body: str, left: str, rstart: int) -> bool:
+    """True when `left` is a whole expression: right before it there is no operator, bracket, absolute bar, LaTeX brace or digit (a list marker is fine)."""
+    start = body.rfind(left, 0, rstart)
+    if start < 0:
+        return False
+    before = body[:start].rstrip(" \t*")
+    if not before or before.endswith("\n"):
+        return True
+    line = before.rsplit("\n", 1)[-1]
+    if line.strip() in ("-", "•", "*") or re.fullmatch(r"\s*\d+\.", line):
+        return True
+    return before[-1] not in BEFORE_PART
+
+
+def _mixed_percent(left: str) -> bool:
+    """"495,761 × (1 − 24.7%)": a percent combined with plain numbers can mean 0.247 or 24.7, so the step is never judged."""
+    tokens = re.findall(r"\d[\d,.]*\s*%?", left.replace("**", ""))
+    return any(t.rstrip().endswith("%") for t in tokens) and not all(t.rstrip().endswith("%") for t in tokens)
+
+
+def wrong_steps(text: str) -> List[Tuple[str, str, str]]:
+    """[(left, right as printed, right result)]: written steps whose printed result is wrong under BOTH ways of reading numbers (English and Vietnamese
+    marks), with the result Python computes, written like the printed one (decimals, %). Only whole left sides without a percent mixed with plain
+    numbers are judged: anything the reader may have cut or misread is left alone. Measured 15/11 on 923 stored answers: 7 reports, all real slips."""
+    out = []
+    body = text.split("<answer_meta>")[0]
+    for left, right, rstart in steps(text):
+        if not is_calc(left) or not SINGLE.fullmatch(right) or _mixed_percent(left) or not _whole(body, left, rstart):
+            continue
+        if holds(left, right, EN) or holds(left, right, VI):
+            continue
+        a, b = evaluate(left, readings_of(text)[0]), evaluate(right, readings_of(text)[0])
+        if a is None or b is None:
+            continue
+        shown = right.replace("**", "").strip()
+        pct = shown.rstrip("…").rstrip(") ").endswith("%") and "%" not in left and not re.search(r"(?:[×x]|(?<!\*)\*(?!\*))\s*100\b", left)
+        value = min([a[0]] + ([a[0] * 100] if pct else []), key=lambda c: abs(abs(c) - abs(b[0])))
+        if b[0] < 0 < value:
+            value = -value
+        token = SINGLE.fullmatch(right).group(1)
+        decimals = max(1, len((canon(token, readings_of(text)[0]) or "").partition(".")[2]))
+        suffix = "%" if shown.rstrip("…").rstrip(") ").endswith("%") else ("x" if re.search(r"\d[xX]$", shown) else "")
+        out.append((left, shown, f"{value:,.{decimals}f}{suffix}"))
+    return out

@@ -27,13 +27,12 @@ from app.modules.query_router.intent import classify as classify_intent
 from app.modules.query_router.planner import PlanItem, unlisted_companies
 from app.modules.query_router.target_scope import TargetDecision, decide_targets
 from app.modules.generation.citation_generator import CitationGenerator
-from app.modules.generation.answer_check import policy
+from app.modules.generation.answer_check import policy, review
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
 from app.modules.generation.replies import CHECK_SOURCES, NO_DATA_ANSWER, RETRY_APOLOGY, sources_message, terminal, unlisted_message
 from app.modules.chat.retrieval_step import RetrievalResult, retrieve_for_scope, search_with_retry
 from app.modules.chat.scope import catalog_entry, document_label, scope_doc, source_info
 from app.modules.generation.answer_check.citations import cited_numbers
-from app.modules.generation.verification import flag_unverified, verify
 from app.modules.retrieval.hybrid_search import HybridSearchService
 
 
@@ -102,8 +101,8 @@ _REFUSAL_STOPS = frozenset({"refuse_advice", "refuse_sensitive", "refuse_instruc
 
 class RAGWorkflowOrchestrator:
     """One question, end to end (execute_query): plan_question (sources, rules, intent router, follow-up rewrite; may end the question here), retrieve_for_question
-    (which documents, the search: retrieval_step.retrieve_for_scope), then _answer_one: the answer from those excerpts only (generate_answer, the output policy), the
-    checks of its figures and citations (verification.verify), one rewrite when they find a problem, and a note under whatever stays unverified. The guard (query_router/guard.py)
+    (which documents, the search: retrieval_step.retrieve_for_scope), then _answer_one: the answer from those excerpts only (_answer writes it), the review of it
+    (_write_checked: answer_check/review.py, every check once, at most one rewrite, then kept, blocked or annotated). The guard (query_router/guard.py)
     runs beside all of it and turns a message away before any answer is written."""
 
     def __init__(self, db: AsyncIOMotorDatabase, qdrant: AsyncQdrantClient):
@@ -137,9 +136,9 @@ class RAGWorkflowOrchestrator:
         """Companies the question names that are not among the selected sources (answers come from the selected sources only)."""
         return await unlisted_companies(query, [catalog_entry(d) for d in scope])
 
-    async def retrieve(self, query: str, notebook_id: str, scope: List[DocumentRecord], forced: Optional[List[str]] = None) -> RetrievalResult:
-        """Retrieval only, over the selected documents (see retrieval_step.retrieve_for_scope)."""
-        return await retrieve_for_scope(self.hybrid_search, query, notebook_id, scope, forced)
+    async def retrieve(self, query: str, notebook_id: str, scope: List[DocumentRecord], forced: Optional[List[str]] = None, *, tagged: bool = False) -> RetrievalResult:
+        """Retrieval only, over the selected documents (see retrieval_step.retrieve_for_scope). `tagged`: `forced` are the user's @file tags (never widened)."""
+        return await retrieve_for_scope(self.hybrid_search, query, notebook_id, scope, forced, **({"tagged": True} if tagged else {}))
 
     async def retrieve_for_question(
         self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, mentions: Optional[List[str]] = None,
@@ -162,7 +161,7 @@ class RAGWorkflowOrchestrator:
                              + ". When you name them, say that the company / period comes from the user's input.")
         # the unlisted-company check (an LLM call when the question writes a name no source carries) runs while the search runs;
         # a refusal cancels the search and answers at once
-        search = asyncio.create_task(self.retrieve(query, notebook_id, scope, targets.document_ids))
+        search = asyncio.create_task(self.retrieve(query, notebook_id, scope, targets.document_ids, **({"tagged": True} if mentions else {})))
         search.add_done_callback(lambda t: t.cancelled() or t.exception())  # a cancelled or failed search is never left unread
         try:
             if announce and targets.understood:
@@ -207,36 +206,20 @@ class RAGWorkflowOrchestrator:
                          + ". Say that the figures of these sources could not be found in the documents; do not estimate them.")
         docs = [scope_doc(d) for d in scope]
         t0 = time.perf_counter()
-        answer = await self._answer(query, retrieved, notes)
-        t1 = time.perf_counter()
+        answer, checked = await self._write_checked(query, retrieved, notes, docs, decision.lang)
         citations = [CitationGenerator.from_retrieved_chunk(chk, citation_offset + idx + 1) for idx, chk in enumerate(retrieved)]
-        t2 = time.perf_counter()
-        number_check, cite_check, issues = verify("" if isinstance(answer, Unfinished) else answer, retrieved, docs)  # an apology is not checked: its page numbers are not figures
-        first_issues, repaired = list(issues), False
-        if issues and retrieved and settings.ANSWER_REPAIR_ENABLED:  # A2: one rewrite with the list of problems
-            events.stage("checking")
-            try:
-                again: Optional[str] = await self._answer(query, retrieved, notes + [
-                    "Your previous answer had these problems: " + "; ".join(issues) + ". Rewrite the answer from the excerpts only: correct or "
-                    "remove each of them; when a figure is not in the excerpts, say it was not found instead of giving a number."], fallback=False)
-            except LLMUnavailableError:  # the repair is an extra (L22): the answer already written stands, flagged below, not replaced by the apology
-                again = None
-            if again is not None:
-                n2, c2, i2 = verify(again, retrieved, docs)
-                if len(i2) <= len(issues):
-                    answer, number_check, cite_check, issues, repaired = again, n2, c2, i2, True
-        if issues:
-            answer = flag_unverified(answer, number_check, cite_check, decision.lang)
-        verification = {"passed": not issues, "repaired": repaired, "unverified_figures": number_check["unverified"], "citations": cite_check,
-                        "first_issues": first_issues, "inputs": number_check.get("inputs", [])}  # first_issues: what the first answer got wrong (why a repair was tried), kept for the trace
+        left = [f for f in checked["final"] if f.severity != review.NOTE]
+        verification = {"passed": not left, "repaired": checked["outcome"] == "rewritten",
+                        "unverified_figures": [f.text for f in left if f.check == "figure"],
+                        "first_issues": [f.note for f in checked["first"] if f.severity != review.NOTE]}  # why a rewrite was asked, kept for the trace
         text, meta = split_answer(answer)
         cited = cited_numbers(text)
-        timings = {**found.timings, "generate": round(t1 - t0, 2), "verify_repair": round(time.perf_counter() - t2, 2)}
+        timings = {**found.timings, "generate": checked["seconds_first"], "verify_repair": round(time.perf_counter() - t0 - checked["seconds_first"], 2)}
         # "The selected reports do not contain this": the conversation's topic stays where it was, and excerpts the answer does not use are not shown as its sources
         not_found = (meta or {}).get("status") == "not_found"
-        # Fell short (docs/Version_2/fail_cases.md): partial, not found, or figures still unverified. Never the apology or the output policy's refusal (also not_found).
+        # Fell short (docs/Version_3/fail_cases.md): partial, not found, or figures still unverified. Never the apology or the output policy's refusal (also not_found).
         # The added line goes after the machine block, which split_answer removes.
-        short = ((meta or {}).get("status") in ("partial", "not_found") or bool(issues)) and not isinstance(answer, Unfinished) and text not in policy.BLOCKED.values()
+        short = ((meta or {}).get("status") in ("partial", "not_found") or not verification["passed"]) and not isinstance(answer, Unfinished) and text not in policy.BLOCKED.values()
         lang = "vi" if decision.lang == "vi" else "en"
         if short and retry:  # the one click did not do better: no further button
             answer += "\n\n" + RETRY_APOLOGY[lang]
@@ -270,7 +253,7 @@ class RAGWorkflowOrchestrator:
                 "retrieved_pages": [c["page"] for c in retrieved],
                 "prompt": settings.GENERATION_PROMPT,
                 "decision": {"action": decision.action, "assumption": decision.assumption, "flags": decision.flags, "unlisted_companies": unlisted},
-                "number_check": number_check,
+                "review": checked["trace"],
                 "verification": verification,
                 "timings": timings,
             },
@@ -292,9 +275,9 @@ class RAGWorkflowOrchestrator:
         chunks = await self._overview_chunks(notebook_id, scope)
         notes =["Write an overview of EACH selected source, labelled with its company, document type and fiscal period: what the business is, the headline figures (revenue, net income, total assets) "
                  "when the excerpts show them, and notable points. Use only the excerpts and say which items you could not find."]
-        answer = await self._answer(query, chunks, notes, max_tokens=1800)
+        answer, checked = await self._write_checked(query, chunks, notes, [], decision.lang, max_tokens=1800, figures=False)
         return {"answer": answer, "intent": "overview", "citations": [CitationGenerator.from_retrieved_chunk(c, i + 1).model_dump() for i, c in enumerate(chunks)],
-                "retrieved_chunks_count": len(chunks), "charged": True, "trace": {"overview": True, "retrieved_pages": [c["page"] for c in chunks]}}
+                "retrieved_chunks_count": len(chunks), "charged": True, "trace": {"overview": True, "retrieved_pages": [c["page"] for c in chunks], "review": checked["trace"]}}
 
     async def _previous_chunks(self, scope: List[DocumentRecord], history: List[dict]) -> Tuple[List[str], List[Dict[str, Any]]]:
         """(chunk ids, excerpts) cited by the previous answer, kept to the selected sources."""
@@ -311,26 +294,23 @@ class RAGWorkflowOrchestrator:
         ids, chunks = await self._previous_chunks(scope, history)
         if not chunks:
             return terminal("ask_clarify", MSG["ask_clarify"][detect_language(query)])
-        answer = await self._answer(query, chunks, ["The user refers to the excerpts cited in the previous answer: answer about them."])
+        answer, checked = await self._write_checked(query, chunks, ["The user refers to the excerpts cited in the previous answer: answer about them."], [],
+                                                    detect_language(query), figures=False)
         return {"answer": answer, "intent": "previous_citations", "citations": [CitationGenerator.from_retrieved_chunk(c, i + 1).model_dump() for i, c in enumerate(chunks)],
-                "retrieved_chunks_count": len(chunks), "charged": True, "trace": {"previous_citations": ids}}
+                "retrieved_chunks_count": len(chunks), "charged": True, "trace": {"previous_citations": ids, "review": checked["trace"]}}
 
     async def execute_query(self, query: str, notebook_id: str, **kwargs) -> Dict[str, Any]:
         """The whole question, with its cost in the trace (P7): LLM calls and tokens of this request, total seconds, and what the
         user was shown as the understanding (kept with the message so a reloaded chat shows it again)."""
         usage: Counter = Counter()
-        checks: List[Dict[str, Any]] = []
-        token, checks_token = REQUEST_USAGE.set(usage), policy.EVENTS.set(checks)
+        token = REQUEST_USAGE.set(usage)
         t0 = time.perf_counter()
         try:
             result = await self._guarded(query, notebook_id, **kwargs)
         finally:
             REQUEST_USAGE.reset(token)
-            policy.EVENTS.reset(checks_token)
         trace = result.setdefault("trace", {})
         trace["llm"] = dict(usage)
-        if checks:
-            trace["output_policy"] = checks  # what the answer broke and what was done about it
         trace.setdefault("timings", {})["total"] = round(time.perf_counter() - t0, 2)
         trace["timings"].update(events.first_seen(t0))  # streamed chat: when the user first saw the understanding and the answer text
         if result.get("understood") or result.get("alternatives"):  # the buttons of an answer that fell short come without an understanding
@@ -596,29 +576,43 @@ class RAGWorkflowOrchestrator:
             result.setdefault("trace", {})["answer_meta"] = meta
         return result
 
-    async def _within_policy(self, answer: str, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]], max_tokens: int, lang: str) -> str:
-        """The answer as it may be shown (answer_check/policy.py): outside links removed; rewritten once when it breaks a rule; replaced by a
-        fixed reply when it breaks a hard rule (advice, its own instructions, an internal name, foul language) and the rewrite does too."""
+    async def _write_checked(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]], docs: List[Any], lang: str,
+                             max_tokens: int = 1200, figures: bool = True) -> Tuple[str, Dict[str, Any]]:
+        """The answer as it may be shown (answer_check/review.py): written once; every check runs once; at most ONE rewrite, told every problem found;
+        the rewrite is kept only when it is better (review.keep_rewrite); then a hard problem left means the fixed reply, other problems left mean a
+        "⚠️" line under the answer. A hard problem is always worth the rewrite; the others only with ANSWER_REPAIR_ENABLED. An apology (no model, cut
+        reply) and an answer without excerpts are not checked. A rewrite that cannot reach the model keeps the first answer (L22).
+        Returns (answer, {"first", "final": findings, "outcome": accepted | rewritten | kept | blocked, "trace", "seconds_first"})."""
+        lang = "vi" if lang == "vi" else "en"
+        t0 = time.perf_counter()
+        answer = await self._answer(query, chunks, notes, max_tokens)
+        seconds = round(time.perf_counter() - t0, 2)
+        if isinstance(answer, Unfinished) or not chunks:
+            return answer, {"first": [], "final": [], "outcome": "accepted", "trace": {"first": [], "after_rewrite": None, "outcome": "accepted"}, "seconds_first": seconds}
         answer = policy.clean(answer, chunks)
-        first = policy.check(answer, chunks, lang)
-        if not first:
-            return answer
-        try:
+        first = review.run_checks(answer, chunks, docs, lang, policy_checks=settings.OUTPUT_POLICY_ENABLED, figures=figures)
+        final, second, outcome = first, None, "accepted"
+        if review.has_hard(first) or (review.needs_rewrite(first) and settings.ANSWER_REPAIR_ENABLED):
             events.stage("checking")
-            again: Optional[str] = policy.clean(await generate_answer(query, chunks, list(notes or []) + [policy.rewrite_note(first)], max_tokens), chunks)
-            second = policy.check(again, chunks, lang)
-        except LLMUnavailableError:
-            again, second = None, first
-        hard = any(p.hard for p in first)
-        if again is not None and not any(p.hard for p in second) and (hard or len(second) < len(first)):
-            outcome, shown = "rewritten", again
-        elif hard:
-            outcome, shown = "blocked", policy.blocked(lang, settings.GENERATION_PROMPT in STRUCTURED_PROMPTS)
+            try:
+                again = policy.clean(await self._answer(query, chunks, list(notes or []) + [review.rewrite_note(first)], max_tokens, fallback=False), chunks)
+            except LLMUnavailableError:  # the rewrite is an extra (L22): the answer already written stands
+                again = None
+            if again is not None:
+                second = review.run_checks(again, chunks, docs, lang, policy_checks=settings.OUTPUT_POLICY_ENABLED, figures=figures)
+                if review.keep_rewrite(first, second):
+                    answer, final, outcome = again, second, "rewritten"
+                else:
+                    outcome = "kept"
+            else:
+                outcome = "kept"
+        if review.has_hard(final):
+            answer, outcome = policy.blocked(lang, settings.GENERATION_PROMPT in STRUCTURED_PROMPTS), "blocked"
+            logger.warning(f"Answer blocked: {[f.check for f in final if f.severity == review.HARD]}")
         else:
-            outcome, shown = "kept", answer  # only a soft problem, and the rewrite did no better
-        logger.warning(f"Output policy: {[p.kind for p in first]} -> {outcome}")
-        policy.record({"problems": [p.kind for p in first], "after_rewrite": [p.kind for p in second] if again is not None else None, "outcome": outcome})
-        return shown
+            answer = review.annotate(answer, final, lang)
+        trace = {"first": review.trace(first), "after_rewrite": review.trace(second) if second is not None else None, "outcome": outcome}
+        return answer, {"first": first, "final": final, "outcome": outcome, "trace": trace, "seconds_first": seconds}
 
     async def _answer(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]] = None, max_tokens: int = 1200, fallback: bool = True) -> str:
         """The answer, or when the model cannot be reached the fixed apology with the first excerpts. `fallback=False` is for a second writing (the repair): an answer already
@@ -629,8 +623,7 @@ class RAGWorkflowOrchestrator:
             return NO_DATA_ANSWER["vi" if vi else "en"]
         events.writing()
         try:
-            answer = await generate_answer(query, chunks, notes, max_tokens)
-            return await self._within_policy(answer, query, chunks, notes, max_tokens, "vi" if vi else "en") if settings.OUTPUT_POLICY_ENABLED else answer
+            return await generate_answer(query, chunks, notes, max_tokens)
         except LLMUnavailableError as exc:
             logger.warning(f"Answer generation unavailable: {exc.code}")
             if not fallback:

@@ -322,6 +322,7 @@ def _planned(monkeypatch, by_document, text, score):
     from app.modules.retrieval.hybrid_search import HybridSearchService
 
     monkeypatch.setattr(settings, "RERANK_ENABLED", True)
+    monkeypatch.setattr(settings, "GATE_ENABLED", False)  # these tests are about the main search; the evidence gate has its own (test_evidence_gate.py)
     svc = HybridSearchService.__new__(HybridSearchService)
     svc.embedder, svc.retriever, svc.chunk_repo, svc.reranker = _FakeEmbedder(), _PlannedRetriever(by_document), _PlannedChunks(text, by_document), _PlannedReranker(score)
     from app.modules.retrieval.term_cache import TERMS
@@ -488,7 +489,7 @@ async def test_retrieve_never_widens_the_selection(monkeypatch):
             seen["plan"] = [(p.query, p.document_ids) for p in plan]
             return [{"document_id": "d1", "page": 3, "content": "x", "chunk_type": "table", "score": 1.0}]
 
-        async def retrieve_planned(self, question, plan, notebook_id, scope_ids):
+        async def retrieve_planned(self, question, plan, notebook_id, scope_ids, **kwargs):
             seen["question"] = question
             return await self.retrieve_multi_doc(plan, notebook_id, scope_ids)
 
@@ -543,7 +544,7 @@ async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_with
 
             return None
 
-        async def retrieve_planned(self, question, plan, notebook_id, scope_ids):
+        async def retrieve_planned(self, question, plan, notebook_id, scope_ids, **kwargs):
             seen["plan"] = [(p.query, p.document_ids) for p in plan]
             return [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x" * 400, "chunk_type": "table", "score": 1.0}]
 
@@ -578,7 +579,7 @@ async def test_v1_retries_a_missing_targeted_document(monkeypatch):
 
             return None
 
-        async def retrieve_planned(self, question, plan, notebook_id, scope_ids):
+        async def retrieve_planned(self, question, plan, notebook_id, scope_ids, **kwargs):
             calls.append(([p.document_ids for p in plan], list(scope_ids), None))
             return [{"chunk_id": "c1", "document_id": "d1", "page": 1, "content": "x", "chunk_type": "table", "score": 1.0}]
 
