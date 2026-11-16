@@ -10,8 +10,8 @@ Bản này thay cách trình bày cũ (mã F-1 đến F12, G1 đến G3, đợt 
 
 Tài liệu liên quan:
 - [ARCHITECTURE.md](../../ARCHITECTURE.md): kiến trúc đúng với code.
-- [Version_3/PROJECT_PLAN.md](../Version_3/PROJECT_PLAN.md): kế hoạch tổng thể 09/11 và thiết kế vòng lặp "thiếu bằng chứng thì tìm lại".
-- [Version_3/report_p0_suite_2026-11-13.md](../Version_3/report_p0_suite_2026-11-13.md): bảng điểm bộ test P0. [Version_3/plan_p0_tests.md](../Version_3/plan_p0_tests.md): nhật ký làm bộ test.
+- [Version_3/PROJECT_PLAN.md](../Version_2/plans/PROJECT_PLAN.md): kế hoạch tổng thể 09/11 và thiết kế vòng lặp "thiếu bằng chứng thì tìm lại".
+- [Version_3/report_p0_suite_2026-11-13.md](../Version_2/reports/report_p0_suite_2026-11-13.md): bảng điểm bộ test P0. [Version_3/plan_p0_tests.md](../Version_2/plans/plan_p0_tests.md): nhật ký làm bộ test.
 - `tối ưu.txt` (thư mục gốc): danh sách ca kiểm thử hành vi, nguồn của khái niệm "P0".
 
 ---
@@ -485,7 +485,7 @@ Bộ slide (79 trang, thư mục gốc) chia một hệ thống hỏi đáp trê
 | Lọc theo metadata trước khi tìm (phòng ban, ngày, loại tài liệu, quyền) | Có. Mọi lượt tìm bị lọc theo sổ tay và theo các tài liệu người dùng chọn (`qdrant_retriever.build_payload_filter`). Với nhiều tài liệu, bộ lập kế hoạch chọn tài liệu theo công ty, kỳ và loại báo cáo ghi trong danh mục. | Tắt việc chọn tài liệu của bộ lập kế hoạch: −21,9 điểm đủ bằng chứng, số cặp reranker phải chấm tăng từ 69 lên 190 mỗi câu (`t1_retrieval.py`, 14/11). | Đã có, giữ. Chưa có lọc theo loại đoạn (bảng hay văn bản) hoặc theo mục của 10-K; không đề xuất lọc cứng vì đoán sai loại là mất bằng chứng. |
 | Chuẩn hóa câu hỏi: khoảng trắng, chính tả, thuật ngữ, từ viết tắt, ngôn ngữ | Một phần, do mô hình làm khi viết câu tìm kiếm: thêm các tên gọi khác của chỉ tiêu, mở từ viết tắt, dịch câu tiếng Việt sang tiếng Anh (đường một tài liệu). Không có bước sửa chính tả riêng. Câu hỏi gốc vẫn được dùng nguyên văn cho một lượt tìm và, ở đường một tài liệu, làm câu truy vấn của reranker. | Chưa đo với câu hỏi có lỗi chính tả. | Chưa có số đo nên chưa thành việc. Nếu đo: gõ sai có chủ đích trên FinanceBench 150, xem tỷ lệ đủ bằng chứng của đường một tài liệu (cần GPU và lời gọi viết lại câu tìm kiếm con). |
 | Biến đổi câu hỏi: viết lại, mở rộng, tách nhỏ, nhiều câu truy vấn, đưa ngữ cảnh hội thoại vào, dịch, HyDE (cho mô hình viết một câu trả lời giả rồi tìm bằng nó) | Có sáu trên bảy: tách và mở rộng (bộ lập kế hoạch, `decomposer.py`), nhiều câu truy vấn, ngữ cảnh hội thoại (`focus_state`, `rewrite_followup`), dịch. Không có HyDE. | Tắt câu tìm kiếm con: −35,4 điểm, module đóng góp nhiều nhất (`t1_retrieval.py`). | Giữ. HyDE không cần: câu tìm kiếm con viết theo nhãn dòng của báo cáo đã làm việc "nói bằng ngôn ngữ của tài liệu", mà không bịa ra con số. |
-| Hiểu câu hỏi, lập kế hoạch tìm, an toàn đầu vào (slide tổng quan) | Có: bộ định tuyến ý định, quy tắc về năm và kỳ, câu hỏi lại khi mơ hồ, lớp guard an toàn. | Đã đo ở đợt guard 12/11 (`docs/Version_3/plan_guardrails_h4.md`, mục 6.1); không đo lại hôm nay. | Giữ. |
+| Hiểu câu hỏi, lập kế hoạch tìm, an toàn đầu vào (slide tổng quan) | Có: bộ định tuyến ý định, quy tắc về năm và kỳ, câu hỏi lại khi mơ hồ, lớp guard an toàn. | Đã đo ở đợt guard 12/11 (`docs/Version_2/plans/plan_guardrails_h4.md`, mục 6.1); không đo lại hôm nay. | Giữ. |
 
 ### C.2 Mục 4, Retrieval (tìm chứng cứ)
 

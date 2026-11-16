@@ -1,6 +1,6 @@
 # Đặc tả kiểm soát đầu vào và đầu ra của luồng hỏi đáp RAG (FinHelp)
 
-> **Cập nhật:** 14/11/2026. Đối chiếu với mã tại commit `6e53eae` (nhánh `feat/f9-pdf-highlight`) cộng các sửa L1, L2a, L2b, L3, L4 làm ngày 14/11 (chưa commit, 786 test qua) và bỏ phần viết đè của bộ tính (mục 10.1). Mọi tên file, hàm, cờ cấu hình và con số dưới đây được đọc trực tiếp từ mã; chỗ nào chưa kiểm được thì ghi "(chưa kiểm)".
+> **Cập nhật:** 15/11/2026: khâu kiểm câu trả lời làm lại theo [RAG_REDESIGN_SPEC.md](RAG_REDESIGN_SPEC.md) (mục 1, 9, 10.5, 10.6, 11, 13, 14 đã sửa theo mã). Trước đó 14/11/2026. Đối chiếu với mã tại commit `6e53eae` (nhánh `feat/f9-pdf-highlight`) cộng các sửa L1, L2a, L2b, L3, L4 làm ngày 14/11 (chưa commit, 786 test qua) và bỏ phần viết đè của bộ tính (mục 10.1). Mọi tên file, hàm, cờ cấu hình và con số dưới đây được đọc trực tiếp từ mã; chỗ nào chưa kiểm được thì ghi "(chưa kiểm)".
 > **Mục đích:** một chỗ duy nhất trả lời "file nào làm việc gì, giới hạn nào đang đặt, vì sao đặt như vậy, và đang gây ra lỗi gì".
 > **Không nằm trong phạm vi:** nạp tài liệu (Docling, hậu xử lý, chia đoạn) chỉ nhắc ở mục 12 vì ảnh hưởng tới đầu vào của luồng hỏi đáp; giao diện; xác thực người dùng ngoài các giới hạn tốc độ.
 
@@ -41,16 +41,16 @@ Trình duyệt
             │     decide_targets (tài liệu nào) · kiểm công ty ngoài nguồn (có thể gọi mô hình) · retrieve_for_scope (kế hoạch + tìm kiếm)
             │
             └─ _answer_one
-                  _answer: chờ nhãn guard → generate_answer → _within_policy (policy.py)
-                  verify → (viết lại một lần) → flag_unverified
+                  _write_checked: _answer (chờ nhãn guard → generate_answer, chỉ viết) → review.run_checks (mọi bước kiểm một lượt)
+                  → nhiều nhất MỘT lần viết lại → giữ, chặn hoặc thêm dòng ⚠️ (answer_check/review.py, từ 15/11)
   │
   ▼
 [C] _record ─ chat.py: lưu tin nhắn, token, độ trễ, vết (trace); trả lại lượt nếu câu không tốn (terminal)
 ```
 
-**Thứ tự kiểm tra đầu ra (đúng như mã):** (1) `policy.clean` và `policy.check` ngay trong `_answer`; (2) lưới tìm sau câu trả lời; (3) `verify` (số, trích dẫn, cột năm); (4) nếu có lỗi: viết lại một lần, rồi chấm lại; (5) còn lỗi: thêm dòng cảnh báo dưới câu trả lời. Không có bước nào sửa chữ trong câu trả lời bằng mã (bước sửa phép tính đã bỏ 14/11).
+**Thứ tự kiểm tra đầu ra (đúng như mã, từ 15/11, [RAG_REDESIGN_SPEC.md](RAG_REDESIGN_SPEC.md) mục 4 và 11):** (1) `_answer` chỉ viết; (2) `policy.clean`; (3) `review.run_checks` chạy mọi bước kiểm **một lượt** và trả cùng một kiểu `Finding` (an toàn, ngôn ngữ, phép tính viết sai, số liệu, trích dẫn, trạng thái); (4) có phát hiện cứng, hoặc có phát hiện cần sửa và `ANSWER_REPAIR_ENABLED`: **một** lần viết lại với lời dặn gộp của mọi bước kiểm, rồi kiểm lại; (5) còn phát hiện cứng thì thay bằng câu từ chối cố định, còn phát hiện cần sửa thì thêm dòng cảnh báo. Không có bước nào sửa chữ trong câu trả lời bằng mã.
 
-**Một điều dễ hiểu nhầm:** chính bước viết lại ở (5) lại gọi `_answer`, nên nó đi qua `policy` một lần nữa (tối đa thêm một lần viết lại của policy).
+**Trước 15/11:** `policy` chạy bên trong `_answer`, và lần viết lại của bước kiểm số lại gọi `_answer`, nên một câu hỏi có thể sinh tới 4 bản câu trả lời. Nay tối đa 2.
 
 ---
 
@@ -174,8 +174,8 @@ Mã: [retrieval_step.py](../../backend/app/modules/chat/retrieval_step.py) (`ret
 | Tình huống | Đường | Chi tiết |
 |---|---|---|
 | Một tài liệu | `retrieve_research` | Mô hình viết tối đa `SUBQUERY_COUNT = 3` truy vấn từ khóa (`decomposer.decompose_query`; câu tiếng Việt được dịch sang tiếng Anh cùng lời gọi); dense RRF → nhóm `RETRIEVAL_POOL_SIZE = 20` → Qwen3 chấm lại → **`RETRIEVAL_TOP_K = 6` đoạn** |
-| 2 đến 80 tài liệu và `MULTIDOC_ENABLED` | Có kế hoạch (`plan_multi_doc`) | Một lời gọi mô hình viết mỗi (báo cáo, mục) một truy vấn; `retrieve_planned` (7.2) |
-| Hơn `MULTIDOC_CATALOG_LIMIT = 80` tài liệu | Bỏ bộ lập kế hoạch | Tìm trên cả notebook như cũ |
+| Từ 2 tài liệu (tối đa 5 mỗi notebook) và `MULTIDOC_ENABLED` | Có kế hoạch (`plan_multi_doc`) | Một lời gọi mô hình viết mỗi (báo cáo, mục) một truy vấn; `retrieve_planned` (7.2) |
+| ~~Hơn `MULTIDOC_CATALOG_LIMIT = 80` tài liệu~~ | **Đã xóa 16/11**: một notebook tối đa 5 tài liệu nên không bao giờ chạy | |
 | Bộ lập kế hoạch hỏng hoặc trả kế hoạch rỗng | R5, rồi R4 | Định tuyến không cần mô hình: khớp tên (và năm) trong danh mục; không khớp thì R4 tìm bằng câu hỏi trong mọi tài liệu đã chọn (hoặc những tài liệu có năm hợp với câu hỏi), giữ tài liệu có điểm Qwen tốt nhất ≥ nửa điểm cao nhất, hai tài liệu tốt nhất luôn ở lại. **Từ 15/11 không còn bước R5 trên văn bản hai trang đầu**: đo trên 179 câu vàng (`d7_fallback_routes.py`, giả định bộ lập kế hoạch hỏng ở mọi câu), R5 xử lý 169 câu (94 %, đủ tài liệu cần ở 166, đúng tập ở 155), 10 câu mô tả không nêu tên công ty đi tới R4 (cả 10 R4 tìm đủ tài liệu cần, trước khi cắt theo điểm Qwen), bước văn bản cứu 0 câu, và mỗi lần chạy nó đọc mọi đoạn của mọi tài liệu đã chọn (9.116 đoạn cho 10 câu) |
 | Có `@file` hoặc tên công ty rõ | Chỉ tìm trong tài liệu đó (`targets_`) | Bộ lập kế hoạch chỉ viết truy vấn |
 
@@ -259,7 +259,7 @@ Cách đọc bảng dưới: "Giá trị" là mặc định hiện tại, "Nhi�
 - **L18.** Prompt tự mâu thuẫn: dặn "chép số đúng như in" nhưng ví dụ ô bảng viết `52 377 [1]` (có dấu cách), nguồn của kiểu số "10 073" trong câu trả lời tiếng Việt.
 - **L19.** Quy tắc "một chữ số thập phân cho phần trăm và hệ số" làm hệ số thanh toán 0,76 thành 0,8; mất ý nghĩa.
 - **L20.** Cho phép `[n]` ở tiêu đề bảng làm bộ kiểm cột năm không đọc được bảng (đo 13/11: 6 trên 11 câu của v4).
-- Bản nháp v5 xử lý L18 đến L20 nằm ở [prompt_v5_proposal.md](../Version_3/prompt_v5_proposal.md); chưa vào mã.
+- Bản nháp v5 xử lý L18 đến L20 nằm ở [prompt_v5_proposal.md](prompt_v5_proposal.md); chưa vào mã.
 - **Prompt v4.1 (14/11, đã vào mã, tắt):** `SYSTEM_V4_1` trong `generator.py` là v4 với đúng ba sửa cho L18 đến L20 (sáu dòng đổi, các dòng khác giống từng chữ; `tests/test_prompt_v4_1.py` ghim điều đó). Bật bằng `GENERATION_PROMPT=v4_1`; mặc định vẫn `v4`. (1) L20: hai mẫu bảng không còn `[n]` ở tiêu đề, quy tắc tiêu đề cấm trích dẫn, trích dẫn nằm ở ô dữ liệu. (2) L19: phần trăm một chữ số thập phân, hệ số và bội số hai chữ số. (3) L18: ô ví dụ không còn số có dấu cách, chỉ dặn "số đúng như báo cáo in". Chưa đo trên câu hỏi mới; chưa quyết kiểu số tiếng Việt (T5).
 
 ### 8.2 Lời gọi mô hình: [llm_client.py](../../backend/app/modules/generation/llm_client.py)
@@ -313,7 +313,7 @@ Mỗi "câu trả lời" ở trên có thể tự nó cần tới 2 lần thử 
 
 ## 9. Kiểm tra đầu ra, bước 1: luật nội dung `policy.py`
 
-[policy.py](../../backend/app/modules/generation/answer_check/policy.py), được gọi trong `orchestrator._within_policy` (cờ `OUTPUT_POLICY_ENABLED = True`). Làm bằng mã, không bằng prompt: prompt cũng dặn những điều này, và mã là thứ còn đúng khi mô hình không nghe.
+[policy.py](../../backend/app/modules/generation/answer_check/policy.py), được gọi qua `review.run_checks` trong `orchestrator._write_checked` (cờ `OUTPUT_POLICY_ENABLED = True`; từ 15/11 `_within_policy` không còn). Làm bằng mã, không bằng prompt: prompt cũng dặn những điều này, và mã là thứ còn đúng khi mô hình không nghe.
 
 | Hàm | Nhiệm vụ | Ví dụ |
 |---|---|---|
@@ -331,7 +331,7 @@ Mỗi "câu trả lời" ở trên có thể tự nó cần tới 2 lần thử 
 | `wrong_language` | Mềm | Câu hỏi tiếng Việt mà câu trả lời không có chữ có dấu nào (hơn 40 ký tự); câu hỏi tiếng Anh mà có hơn 15 chữ có dấu; hoặc chữ Trung, Nhật, Hàn, Cyrillic mà đoạn trích không in | Câu tiếng Anh trả lời bằng tiếng Trung |
 | `no_source` | Mềm | Trạng thái `answered` hoặc `partial` mà không có `[n]` nào | |
 
-**Quy trình:** `clean` → `check`; không vi phạm thì giữ. Có vi phạm thì **một lần** yêu cầu viết lại (qua `generate_answer` kèm `rewrite_note`). Chấp nhận bản viết lại nếu không còn vi phạm cứng và (bản đầu có vi phạm cứng hoặc bản mới ít vi phạm hơn). Nếu không, vi phạm cứng thì thay bằng `blocked`; chỉ vi phạm mềm thì giữ bản đầu. Mọi kết quả ghi vào `trace.output_policy`.
+**Quy trình (từ 15/11, chung cho mọi bước kiểm, `answer_check/review.py`):** vi phạm cứng là phát hiện `safety` mức `hard`, sai ngôn ngữ là `language` mức cần sửa, không trích dẫn là `status` mức ghi chú. Lần viết lại duy nhất gộp lời dặn của mọi bước kiểm. Bản viết lại được nhận nếu không còn phát hiện cứng và (bản đầu có phát hiện cứng hoặc bản mới ít phát hiện hơn hẳn); còn phát hiện cứng thì thay bằng `blocked`. Kết quả ghi vào `trace.review` (`first`, `after_rewrite`, `outcome`: accepted, rewritten, kept, blocked); `trace.output_policy` và `trace.number_check` không còn.
 
 ---
 
@@ -388,21 +388,18 @@ Thư mục [answer_check/](../../backend/app/modules/generation/answer_check/). 
 - **L5.** Số nhóm hàng nghìn bằng dấu chấm ("12.421") trong câu trả lời tiếng Việt chưa được đọc ở bước này (chưa làm).
 - Không kiểm nhãn dòng (đúng chỉ tiêu, không chỉ đúng năm) và đơn vị cột (nghìn hay triệu).
 
-### 10.5 `inputs.py`: số mà mô hình khai đã lấy từ đâu (H4)
+### 10.5 `inputs.py`: ĐÃ GỠ 15/11/2026
 
-- **Nhiệm vụ:** kiểm danh sách `inputs` của `answer_meta` (giá trị, mục, kỳ, đoạn) với chính đoạn được nêu: số có in ở đó không, nhãn dòng có khớp, năm cột có khớp kỳ.
-- **Cờ:** `ANSWER_INPUTS_REPAIR = False`: **chỉ ghi vào vết**, không kích hoạt viết lại. Prompt v4 không còn xin trường `inputs`, nên thực tế luôn rỗng.
-- **Vấn đề L6:** chỉ có tiếng Anh (`STOP`, `_words`).
+Kiểm trường `inputs` của khối `answer_meta`; prompt v4 không còn xin trường này nên nó luôn rỗng, và cờ `ANSWER_INPUTS_REPAIR` tắt. Gỡ cùng cờ và `tests/test_inputs.py` (bản sao: `experiments/archive/removed_inputs_verification_2026-11-15/`).
 
-### 10.6 `verification.py` và vòng viết lại một lần
+### 10.6 `review.py` và lần viết lại duy nhất (thay `verification.py` từ 15/11)
 
-- `verify`: `problems(numbers, cites)` (số chưa kiểm chứng, trích dẫn sai) + vấn đề của `check_columns`. Mỗi vấn đề là một câu hướng dẫn cho lần viết lại.
-- **Vòng viết lại (`_answer_one`, cờ `ANSWER_REPAIR_ENABLED = True`):** có vấn đề và có đoạn trích thì viết lại **một lần** với danh sách vấn đề; chấm lại; nhận bản mới nếu `len(vấn đề mới) <= len(vấn đề cũ)`.
-- **Còn vấn đề:** `flag_unverified` thêm dòng "⚠️ Lưu ý: số chưa kiểm chứng được…" hoặc "số nằm ở cột năm khác…" hoặc "có trích dẫn không khớp nguồn" (hai ngôn ngữ), đặt trước khối `answer_meta`. Không im lặng giữ lại.
-- **Vết:** `trace.verification` (`passed`, `repaired`, `first_issues`, `citations`, `columns`), `trace.number_check`.
-- **Ví dụ vòng đầy đủ:** câu trả lời gán 666 cho FY2015; `check_columns` báo; viết lại; bản mới nói "không tìm thấy chi đầu tư FY2015 trong đoạn trích" (không còn vấn đề): nhận.
-- **Lần viết lại hỏng (L22, đã sửa 14/11):** nếu lời gọi mô hình của lần viết lại không tới được (hết giờ, lỗi API), câu trả lời đã viết được giữ và gắn cờ như thường; trước đó câu xin lỗi cố định của `_answer` thay vào chỗ câu trả lời thật. Cùng cách xử lý cho lần viết lại sau lưới tìm (mục 7.3): giữ câu trả lời đầu, vết ghi `rewrite_failed`.
-- **Vấn đề L7:** vòng viết lại **không phân biệt báo đúng hay báo nhầm**. Mỗi báo nhầm tốn thêm một lời gọi (có thể tới 3 lần thử vì L1) và tới 37 giây; lần viết lại có thể còn làm câu trả lời tệ đi (câu ROIC: bỏ cách tính, thay bằng lợi nhuận ròng chia tổng tài sản).
+- **Đặc tả và số đo:** [RAG_REDESIGN_SPEC.md](RAG_REDESIGN_SPEC.md) mục 4, 10 và 11.
+- **`run_checks`:** mọi bước kiểm trả `Finding(check, severity, text, note)`. Bước `arithmetic` mới (`calculations.wrong_steps`): một phép tính viết ra mà kết quả in ra sai theo cả hai cách đọc số; lời dặn nói luôn kết quả đúng. Chỉ xét vế trái đứng nguyên, không xét biểu thức trộn phần trăm với số thường (đo 15/11: 7 báo cáo trên 923 câu trả lời đã lưu, cả 7 là lỗi thật; 0 trên 705 câu suy nghĩ bật). Lời dặn của một số chưa kiểm chứng nêu kết quả gần nhất mà chính câu trả lời đã tính (ví dụ "phép tính của chính câu trả lời cho ra 69,8 %"); mã không bao giờ thay số.
+- **`_write_checked` (orchestrator):** nhiều nhất một lần viết lại cho mỗi câu trả lời (mỗi phần của câu hỏi nhiều phần). Phát hiện cứng luôn đáng viết lại; phát hiện cần sửa chỉ khi `ANSWER_REPAIR_ENABLED`. Lần viết lại hỏng thì giữ bản đầu (L22). Câu xin lỗi (`Unfinished`) không bị kiểm.
+- **Phần tóm tắt các tài liệu và câu hỏi về đoạn đã trích:** chỉ kiểm an toàn và ngôn ngữ (`figures=False`), như trước đây.
+- **`verification` trong kết quả:** `passed`, `repaired`, `unverified_figures`, `first_issues` (bỏ `citations` và `inputs`; danh sách đầy đủ nằm ở `trace.review`).
+- **Dòng cảnh báo (`review.annotate`):** số chưa kiểm chứng, phép tính viết ra cho kết quả khác, trích dẫn không khớp nguồn; hai ngôn ngữ.
 
 ### 10.7 Đoạn trích mang lệnh (tiêm lệnh gián tiếp)
 
@@ -436,8 +433,7 @@ Thư mục [answer_check/](../../backend/app/modules/generation/answer_check/). 
 | `GUARD_ENABLED`, `GUARD_OFF_TOPIC_ENABLED`, `GUARD_TIMEOUT_SECONDS` | `True`, `True`, 3,0 | Mục 5 |
 | `INTENT_ROUTER_ENABLED` | `True` | Mục 4 |
 | `OUTPUT_POLICY_ENABLED` | `True` | Mục 9 |
-| `ANSWER_REPAIR_ENABLED` | `True` | Vòng viết lại một lần |
-| `ANSWER_INPUTS_REPAIR` | `False` | Chỉ ghi vết |
+| `ANSWER_REPAIR_ENABLED` | `True` | Cho phép lần viết lại duy nhất vì phát hiện cần sửa (phát hiện cứng luôn được viết lại) |
 | `OCR_FALLBACK_ENABLED`, `OCR_BACKEND`, `OCR_FALLBACK_MAX_PAGES` | `False`, `""`, 30 | Giai đoạn 1 của OCR dự phòng (mục 12): bật, tên bộ đọc OCR đã đăng ký, số trang tối đa gửi cho một tài liệu. Chưa có bộ đọc nào đăng ký (giai đoạn 2) |
 | `MULTIDOC_ENABLED` | `True` | Bộ lập kế hoạch cho nhiều tài liệu |
 | `RERANK_ENABLED` | `True` | Chấm lại bằng Qwen3 |
@@ -476,7 +472,7 @@ Ghi chú: mã không còn bước viết đè phép tính (mục 10.1).
 | Sinh câu trả lời | `test_generator_v3.py`, `test_answer_language.py`, `test_prompt_v4_1.py`, `test_llm_client.py`, `test_citation_generator.py` |
 | Viết lại khi mô hình không dùng được (L22) | `test_repair_failure.py` (cùng `test_validation.py`, `test_lazy_net.py`) |
 | OCR dự phòng, giai đoạn 1 (L8) | `test_page_quality.py` |
-| Đầu ra | `test_calculations.py`, `test_answer_check.py`, `test_validation.py`, `test_output_policy.py`, `test_inputs.py` |
+| Đầu ra | `test_calculations.py`, `test_answer_check.py`, `test_validation.py`, `test_output_policy.py`, `test_review.py` (23 test, 15/11) |
 | Cửa API và hạn mức | `test_acl.py`, `test_auth_security.py`, `test_chat_stream.py`, `test_error_codes.py`, `test_error_answers.py` |
 | Lỗi đã gặp ở production | `test_production_bugs.py` |
 
@@ -497,15 +493,15 @@ Xếp theo mức nguy hại tới người dùng. "Cần duyệt" nghĩa là ph�
 | L1 | Trần token khởi đầu 8000 bỏ cả lần trả lời bị cắt | `config.py` (`LLM_MIN_MAX_TOKENS`, `LLM_MAX_TOKENS_CEILING`), `llm_client.py` | Mỗi câu nhiều suy nghĩ tốn thêm khoảng 8.000 token, 35 đến 40 giây, 0,0096 đô la | Nâng lên 24000, trần cuối 32000 (một lần hỏi lại; buổi sáng 14/11 từng đặt 64000, hạ lại vì chưa lần nào cần) | **Đã sửa 14/11** |
 | L3 | Ngày 13 đến 31 trong tháng bị coi là số cần kiểm | `numbers.py` `_figures`, `amounts.py` (`DAY`, `DATE`) | Gọi viết lại thừa | Dùng chung luật ngày | **Đã sửa 14/11**, chưa commit |
 | L4 | Số trong công thức trung bình bị báo nhầm cột năm | `column_years.py` (`COMPARES`) | Gọi viết lại thừa | Thêm "bình quân", "trung bình", "average" | Không còn: `column_years.py` đã gỡ 15/11 |
-| L7 | Vòng viết lại không phân biệt báo đúng với báo nhầm và có thể làm tệ câu trả lời | `orchestrator._answer_one` dòng 211 đến 219 | Tốn thời gian, đôi khi mất cách tính tốt | Báo nhầm giảm sau L3, L4; xét giữ bản đầu khi chỉ còn lỗi "mềm" | Giảm một phần |
+| L7 | Vòng viết lại không phân biệt báo đúng với báo nhầm và có thể làm tệ câu trả lời | `orchestrator._write_checked` | Tốn thời gian, đôi khi mất cách tính tốt | Báo nhầm giảm sau L3, L4; từ 15/11 bản viết lại chỉ được nhận khi ít phát hiện hơn hẳn, và lời dặn chỉ đúng chỗ | Giảm một phần |
 | L22 | Lần viết lại một lần của bước kiểm hỏng (hết giờ 80 giây rồi cả bốn lần thử, hoặc lỗi API): `_answer` trả câu xin lỗi cố định thay vì ném lỗi, câu đó có không quá 1 lỗi nên qua điều kiện `len(i2) <= len(issues)` và thay câu trả lời thật | `orchestrator.py`: bước viết lại một lần (dòng 210 đến 215) **và** lưới sau câu trả lời (`_search_more`): ở prompt v4 câu không có khối `answer_meta` được tính là `answered`, không tệ hơn `partial`, nên câu xin lỗi cũng thắng ở đó (14/11 tôi từng ghi nhầm là đường này không bị; test cho thấy có, và còn kích thêm một lần viết lại thứ ba). `_within_policy` không bị vì tự bắt `LLMUnavailableError` | Người dùng chờ đến khoảng 5 phút rồi nhận câu xin lỗi; vết ghi `repaired=True` nên trông như thành công | Khi lần viết lại hỏng thì giữ bản đầu và gắn cờ như thường lệ; có thể nới thời gian chờ của lời gọi viết câu trả lời. Phát hiện 14/11 bằng đọc mã và chạy lại phép so sánh (chưa gây ra một lần hết giờ thật); ước khoảng 6 % câu chạy bước viết lại | **Đã sửa 14/11:** `_answer(..., fallback=False)` ném lỗi; bước viết lại bắt nó và giữ câu trả lời đầu (lưới sau câu trả lời đã gỡ 15/11) (`tests/test_repair_failure.py`, 4 test; vết lưới có thêm `rewrite_failed`). **Hết giờ 80 giây của lời gọi không phát dòng chảy: đã sửa 14/11** (xem mục 8.2): mọi lời gọi viết câu trả lời nay được nhận ở dạng dòng chảy bên trong (`chat_completion(..., stream=True)`), kể cả lần viết lại và các lần thử lại sau khi bị cắt; chỉ lần thử đầu của câu trả lời đầu tiên mới phát từng mảnh cho trình duyệt |
 | L23 | Một lần trả lời vẫn bị cắt ở trần cuối (suy nghĩ chạy mãi): `chat_completion` trả chuỗi rỗng, `generate_answer` biến thành câu từ chối cố định kèm trạng thái `not_found` | `llm_client.py`, `generator.py` (`generate_answer`), `orchestrator.py` (`_answer`) | Người dùng chờ tới ba lần thử (lúc đó đến hơn 10 phút; nay tối đa hai lần) rồi nhận "báo cáo không có thông tin này", một khẳng định sai về tài liệu; nửa câu bị cắt cũng được trả như thể đủ. Bộ lập kế hoạch, kiểm công ty ngoài nguồn và viết lại câu nối tiếp còn hỏi lại 2 đến 3 lần trên chuỗi rỗng | `LLMTruncatedError`; lời xin lỗi nói đúng giới hạn hệ thống, không viết lại, không kiểm số; các nơi gọi khác đã bắt `LLMUnavailableError` nên chỉ hỏi một lần | **Đã sửa 14/11** (`tests/test_truncated_reply.py`, 8 test; một test trong `test_repair_failure.py`). Bậc 48.000 và 64.000 đã bỏ chiều 14/11 theo quyết định của sinh viên (trần cuối 32.000, mục 8.2); lần hỏi lại nhẹ hơn (tắt suy nghĩ) đã **bỏ ý định** vì tắt suy nghĩ đúng 12 trên 30 câu so với 27 trên 30: thà báo chưa hoàn tất còn hơn trả số có thể sai |
-| L25 | Từ khi bỏ viết đè (14/11), một bước tính viết ra có **kết quả sai** chỉ "không được luật B nhận"; nếu con số trùng một cách suy ra khác từ các số đã nêu thì vẫn qua ("(10,000 − 8,000) ÷ 8,000 = 20.0%" qua như mức giảm 20 % từ 10,000 xuống 8,000) | `numbers.py` (bước kiểm số), `calculations.py` | Câu trả lời ghi một đẳng thức sai mà không bị cảnh báo; thấy qua ca P0 E01 và E03 | Báo mọi bước tính viết ra có kết quả sai ở mọi cách đọc số (`formulas.py`, loại `arithmetic`) | Đã làm 14/11 (cờ `FORMULA_CHECK_ENABLED`), **đã gỡ 15/11 cùng TC-4: L25 mở lại** (ca P0 E01, E03 trượt) |
+| L25 | Từ khi bỏ viết đè (14/11), một bước tính viết ra có **kết quả sai** chỉ "không được luật B nhận"; nếu con số trùng một cách suy ra khác từ các số đã nêu thì vẫn qua ("(10,000 − 8,000) ÷ 8,000 = 20.0%" qua như mức giảm 20 % từ 10,000 xuống 8,000) | `numbers.py` (bước kiểm số), `calculations.py` | Câu trả lời ghi một đẳng thức sai mà không bị cảnh báo; thấy qua ca P0 E01 và E03 | Báo mọi bước tính viết ra có kết quả sai ở mọi cách đọc số (`formulas.py`, loại `arithmetic`) | Đã làm 14/11 (cờ `FORMULA_CHECK_ENABLED`), đã gỡ 15/11 cùng TC-4, rồi **sửa lại 15/11** bằng phát hiện `arithmetic` của `review.py` (P0 E01, E03 đạt lại; 420/420 lỗi cài vào ở nhóm suy nghĩ bật bị bắt, trước 275) |
 | L24 | Kế hoạch có hơn 40 cặp (truy vấn, tài liệu): chỉ 40 cặp đầu chạy, phần còn lại bị bỏ, chỉ có một dòng cảnh báo trong nhật ký; và lưới an toàn tính "tài liệu đã tìm" từ kế hoạch **trước** khi cắt | `hybrid_search.py` (`retrieve_planned`), `retrieval_step.py` | Một tài liệu chỉ nằm trong các cặp bị cắt không được tìm và lưới không cứu nó; cần từ 9 truy vấn nêu cả 5 tài liệu nên rất hiếm | Ghi số cặp bị cắt vào vết; tính tập tài liệu đã tìm sau khi cắt (mục 7.2) | Chưa làm, ưu tiên thấp (phần về lưới an toàn hết từ 15/11) |
 | L21 | `check_numbers` không thấy số dính chữ như "5.99x" | `amounts.py` (`MULTIPLE_SUFFIXES`) | Hệ số dạng bội số sai không bị kiểm | Nhận "x" làm hậu tố của bội số, có test | **Đã sửa 14/11** (bắt 2 câu sai thật trong 317; cài sai bội số nhỏ chỉ báo 42 %, như phần trăm 44 %) |
 | L18 đến L20 | Prompt v4 mâu thuẫn về số, làm tròn hệ số, `[n]` ở tiêu đề | `generator.py` | Xem mục 8.1 | Bản nháp v5; ba sửa riêng nằm trong v4.1 | **v4.1 đã vào mã 14/11, tắt**; chờ đo trên câu hỏi mới rồi mới bật |
 | L5 | Số chấm nhóm nghìn trong tiếng Việt chưa đọc ở kiểm cột năm | `column_years.py` | Bỏ sót kiểm | Đọc qua `amounts._interpret` | Không còn: `column_years.py` đã gỡ 15/11 |
-| L6 | `inputs.py` chỉ có tiếng Anh | `inputs.py` | Không tác dụng (cờ tắt) | Làm khi bật cờ | Hoãn |
+| L6 | `inputs.py` chỉ có tiếng Anh | `inputs.py` | Không tác dụng (cờ tắt) | | Không còn: `inputs.py` đã gỡ 15/11 |
 | L12 đến L14 | Luật chỉ biết tiếng Anh và Việt; guard mở cửa khi hỏng | `input_policy.py`, `guard.py` | Câu ngôn ngữ khác hoặc lúc DeepSeek chậm chỉ còn rất ít lớp bảo vệ | Chấp nhận trong MVP; ghi trong báo cáo | Giới hạn đã biết |
 | L10, L11 | Giới hạn tốc độ trong bộ nhớ một tiến trình; khách không được trả lại lượt | `shared/rate_limit.py`, `chat.py` | Quá hạn mức nếu nhiều tiến trình; khách mất lượt khi lỗi | Xem mục 8 của roadmap, hướng 6 | Sau MVP |
 | L15 đến L17 | Chỉ số "đủ bằng chứng" thưởng việc gửi nhiều; sai trang; kế hoạch bỏ sót mục | `hybrid_search.py`, `planner.py` | Số đo có thể ảo; câu thiếu vẫn trông đủ | TC-3 hướng 2 (tìm lại khi tự nhận thiếu); cải thiện xếp hạng | Đo xong, chưa làm |
@@ -518,6 +514,6 @@ Xếp theo mức nguy hại tới người dùng. "Cần duyệt" nghĩa là ph�
 ## Phụ lục. Nơi tìm số đo đã trích
 
 - Số đo tìm kiếm (điểm gãy, ngân sách, tìm lại): `experiments/scripts/rag_improvement/d2_cutoff.py`, `d2_budget.py`, `d2_retry.py`, `d2_year.py`; tổng hợp ở mục TC-3 của [DEV_ROADMAP_V2.md](DEV_ROADMAP_V2.md).
-- Số đo lưới an toàn (đã gỡ 15/11), lưới sau câu trả lời, ngưỡng: `docs/Version_3/plan_rag_improvements.md` mục 8.8 đến 8.21 (thư mục này bị git bỏ qua).
-- Số đo guard, bộ định tuyến, luật: `docs/Version_3/plan_guardrails_h4.md` mục 6.1.
-- Đợt đo bản nháp prompt v5 và các lỗi tìm được: [prompt_v5_proposal.md](../Version_3/prompt_v5_proposal.md) mục 8 và 9.
+- Số đo lưới an toàn (đã gỡ 15/11), lưới sau câu trả lời, ngưỡng: `docs/Version_2/plans/plan_rag_improvements.md` mục 8.8 đến 8.21 (thư mục này bị git bỏ qua).
+- Số đo guard, bộ định tuyến, luật: `docs/Version_2/plans/plan_guardrails_h4.md` mục 6.1.
+- Đợt đo bản nháp prompt v5 và các lỗi tìm được: [prompt_v5_proposal.md](prompt_v5_proposal.md) mục 8 và 9.
