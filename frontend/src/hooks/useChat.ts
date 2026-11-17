@@ -24,7 +24,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
 
   const loginWarning = (detail: string) => showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
 
-  const sendMessage = async (queryText: string, mentions?: string[], retryOf?: string) => {
+  const sendMessage = async (queryText: string, mentions?: string[], retryOf?: string, deeper?: boolean) => {
     if (selectedDocIds.length === 0) {
       showToast(t.toasts.selectFiling, "warning");
       return;
@@ -38,7 +38,13 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
     });
     setMessages((prev) => [
       // one click only: the answer searched again loses its "search again" buttons (the server refuses a second click too)
-      ...(retryOf ? prev.map((m) => (m.message_id === retryOf ? { ...m, alternatives: (m.alternatives || []).filter((a) => !a.kind) } : m)) : prev),
+      ...(retryOf
+        ? prev.map((m) =>
+            m.message_id === retryOf
+              ? { ...m, alternatives: (m.alternatives || []).filter((a) => !a.kind), actions: m.actions && { ...m.actions, chooser: [], search_more: null } }
+              : m
+          )
+        : prev),
       {
         message_id: `msg_user_${Date.now()}`,
         notebook_id: notebookId,
@@ -79,6 +85,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
           document_ids: Array.from(new Set([...(mentions || []), ...selectedDocIds])).slice(0, maxSources),
           mentions,
           ...(retryOf ? { retry_of: retryOf } : {}),
+          ...(retryOf && deeper ? { deeper: true } : {}),
         },
         {
           onStage: setStage,
@@ -96,6 +103,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
         citations: data.citations || [],
         understood: data.understood || "",
         alternatives: data.alternatives || [],
+        actions: data.actions,
         query: queryText,
         streaming: false,
         ...(data.message_id ? { message_id: data.message_id, user_rating: null } : {}),  // the stored answer: it can be reported

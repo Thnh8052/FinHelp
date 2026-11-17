@@ -8,6 +8,8 @@ export interface QueryRequest {
   mentions?: string[];
   /** the answer a "search again" button asks for once more */
   retry_of?: string;
+  /** with retry_of: the "search deeper" button (same sources, the excerpts already sent left out) */
+  deeper?: boolean;
 }
 
 export interface QueryResponse {
@@ -17,6 +19,7 @@ export interface QueryResponse {
   citations: CitationItem[];
   understood?: string;
   alternatives?: ChatMessage["alternatives"];
+  actions?: ChatMessage["actions"];
   /** the stored answer */
   message_id?: string;
 }

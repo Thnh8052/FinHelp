@@ -1110,6 +1110,70 @@
   margin-top: 8px;
 }
 
+/* Nút dưới câu trả lời (AnswerActions): tìm kỹ hơn, sửa câu hỏi, chọn nhiều tài liệu để hỏi lại */
+.chat-answer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chat-action-prominent {
+  font-weight: 600;
+  border-color: var(--accent-primary, #3b82f6) !important;
+  color: var(--text-primary, #e2e8f0);
+}
+
+.chat-action-subtle {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted, #94a3b8);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.chat-action-subtle:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.chat-chooser {
+  flex-basis: 100%;
+  font-size: 13px;
+}
+
+.chat-chooser summary {
+  cursor: pointer;
+  color: var(--text-muted, #94a3b8);
+}
+
+.chat-chooser fieldset {
+  border: none;
+  margin: 6px 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.chat-chooser .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.chat-chooser-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* @file: tài liệu được tag và gợi ý khi gõ @ */
 .chat-mentions {
   display: flex;

@@ -280,6 +280,11 @@ export interface TranslationSchema {
     queryWith: string;
     retryIn: string;
     retryAll: string;
+    changeSources: string;
+    askAgainWith: string;
+    chooseSourcesLegend: string;
+    searchDeeper: string;
+    editQuestion: string;
     sendBtn: string;
     removeTag: string;
     prevSuggestions: string;

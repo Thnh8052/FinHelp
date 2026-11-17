@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
+import { AnswerActions } from "./AnswerActions";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { citedFigures } from "../notebook/locateExcerpt";
 import { Flag } from "lucide-react";
@@ -10,7 +11,7 @@ import "./chat.css";
 
 interface ChatContainerProps {
   messages: ChatMessage[];
-  onSendMessage: (query: string, mentions?: string[], retryOf?: string) => void;
+  onSendMessage: (query: string, mentions?: string[], retryOf?: string, deeper?: boolean) => void;
   /** Report (or withdraw) wrong figures in a stored answer. */
   onFlagAnswer?: (messageId: string, flagged: boolean) => void;
   isLoading: boolean;
@@ -282,7 +283,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               )}
             </div>
           )}
-          {messages.map((msg) => {
+          {messages.map((msg, index) => {
             const isUser = msg.role === "user";
 
             return (
@@ -322,6 +323,17 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                         </button>
                       ))}
                     </div>
+                  )}
+                  {!isUser && msg.actions && !msg.streaming && (msg.query || messages[index - 1]?.role === "user") && (
+                    <AnswerActions
+                      actions={msg.actions}
+                      disabled={isLoading}
+                      onAsk={(sources, deeper) => onSendMessage(msg.query || messages[index - 1].content, sources, msg.message_id, deeper)}
+                      onEdit={() => {
+                        setInput(msg.query || messages[index - 1].content);
+                        textareaRef.current?.focus();
+                      }}
+                    />
                   )}
 
                   {/* Grounded Evidence Citations: only the excerpts the answer uses, each keeping its own [n] */}
