@@ -92,7 +92,7 @@ def _company_key(s: SourceInfo) -> str:
     return company_key(s.company or s.file_name)
 
 
-_YEAR = re.compile(r"(?<![\d.,$])(?:fy\s?)?((?:19|20)\d{2})(?![\d,]|\.\d)", re.I)
+_YEAR = re.compile(r"(?<![\d.,$])(?:fy\s?)?((?:19|20)\d{2})(?![\d]|[.,]\d)", re.I)  # "in 2016, how" is a year; "2019,5" is not
 
 
 def _years(question: str) -> List[int]:
@@ -406,6 +406,20 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
             avail = {g[0].company or g[0].file_name: sorted({s.fiscal_year for s in g}) for g in groups.values()}
             d.action, d.message, d.available = "period_unavailable", _period_message(lang, bad, avail), [f"FY{y}" for ys in avail.values() for y in ys]
             return d
+        # Each named company on its own: another company's report showing the year says nothing about this one. Only a company that shows NONE of
+        # the years asked is reported, since the question does not say which year goes with which company ("Lockheed in FY2019 and Boeing in
+        # FY2016"): checking every year against every company put a wrong note on 37 of 187 answerable gold v2 questions (input_layer_v2.py).
+        if named and len(groups) > 1:
+            for g in groups.values():
+                known = set().union(*(set(s.years_covered) | {s.fiscal_year} for s in g)) if all(s.years_covered for s in g) else None
+                lacks = [y for y in years if (y not in known if known is not None else all(y < s.fiscal_year - 4 for s in g))]
+                if lacks and len(lacks) == len(years):
+                    name, have = g[0].company or g[0].file_name, ", ".join(f"FY{s.fiscal_year}" for s in sorted(g, key=lambda s: s.fiscal_year))
+                    wanted = ", ".join(f"FY{y}" for y in lacks)
+                    d.notes.append(f"The selected reports of {name} ({have}) do not show {wanted}: say that {name}'s {wanted} figures are not in the selected "
+                                   f"sources, answer for the other companies, and never use another year's figure of {name} in its place.")
+                    if "period_missing" not in d.flags:
+                        d.flags.append("period_missing")
         if via_later:
             d.assumption = "prior_year_from_later_filing"
             d.notes.append("Some requested years are not the report's own fiscal year: take them from the comparative columns of the later report and say so.")

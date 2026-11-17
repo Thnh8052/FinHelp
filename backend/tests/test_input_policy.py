@@ -482,3 +482,52 @@ def test_period_rule_uses_the_years_heading_the_tables_when_every_source_has_the
     assert decide("What was Rogers' revenue in fiscal 2023?", [rogers24, rogers25], 2).action != "period_unavailable"  # comparative column
     unknown = SourceInfo("D C L Hearing Limited", "micro/abridged accounts", 2010, None, "DCL | FY2010")  # scan: no year read from tables
     assert decide("What was DCL Hearing's cash in 2008?", [unknown], 1).action != "period_unavailable"  # unknown coverage never refuses
+
+
+KO19 = SourceInfo("The Coca-Cola Company", "10-K", 2019, None, "Coca-Cola | FY2019", years_covered=[2019, 2018])
+PEP17 = SourceInfo("PepsiCo, Inc", "10-K", 2017, None, "PepsiCo | FY2017", years_covered=[2017, 2016, 2015])
+
+
+def test_a_named_company_without_the_year_gets_a_note_while_the_others_are_answered():
+    d = decide("Which had the higher gross margin in FY2017: Coca-Cola or PepsiCo?", [KO19, PEP17], 2)
+    assert d.action == "proceed"
+    note = next(n for n in d.notes if "2017" in n and "Coca-Cola" in n)
+    assert "PepsiCo" not in note and "FY2019" in note  # names only the company that lacks it, with what it has
+    assert "period_missing" in d.flags
+    vi = decide("Biên lợi nhuận gộp năm 2017 của Coca-Cola và PepsiCo là bao nhiêu?", [KO19, PEP17], 2)
+    assert vi.action == "proceed" and "period_missing" in vi.flags
+
+
+def test_no_note_when_the_named_company_shows_the_year_in_a_comparative_column():
+    ko19 = SourceInfo("The Coca-Cola Company", "10-K", 2019, None, "Coca-Cola | FY2019", years_covered=[2019, 2018, 2017])
+    d = decide("Which had the higher gross margin in FY2017: Coca-Cola or PepsiCo?", [ko19, PEP17], 2)
+    assert d.action == "proceed" and "period_missing" not in d.flags
+
+
+def test_years_that_belong_to_different_companies_get_no_note():
+    lmt19 = SourceInfo("Lockheed Martin Corporation", "10-K", 2019, None, "LMT | FY2019", years_covered=[2019, 2018, 2017])
+    ba16 = SourceInfo("The Boeing Company", "10-K", 2016, None, "BA | FY2016", years_covered=[2016, 2015, 2014])
+    d = decide("Compare the dividend payout ratio of Lockheed Martin in FY2019 and Boeing in FY2016.", [lmt19, ba16], 2)  # gold v2 mdg_b04_009
+    assert d.action == "proceed" and "period_missing" not in d.flags
+
+
+def test_a_year_before_a_comma_is_still_a_year_but_a_number_with_a_decimal_comma_is_not():
+    assert policy._years("Lockheed Martin in 2019 and Boeing in 2016, how many shares") == [2016, 2019]
+    assert policy._years("PepsiCo (year-end 2017, U.S. plans)") == [2017]
+    assert policy._years("a ratio of 2019,5") == [] and policy._years("$2,019,000") == []
+
+
+def test_every_named_company_without_the_year_is_still_refused():
+    assert decide("What was Coca-Cola's revenue in FY2015?", [KO19, PEP17], 2).action == "period_unavailable"
+
+
+def test_per_company_notes_only_when_companies_are_named():
+    d = decide("What was the revenue in FY2017?", [KO19, PEP17], 2)  # unnamed: the year of any source is enough
+    assert "period_missing" not in d.flags
+
+
+def test_unknown_coverage_of_a_named_company_only_counts_years_too_old():
+    nike = SourceInfo("NIKE, Inc", "10-K", 2019, None, "Nike | FY2019")  # no years read from its tables
+    assert "period_missing" not in decide("Compare Nike and PepsiCo revenue in FY2017.", [nike, PEP17], 2).flags
+    old = decide("Compare Nike and PepsiCo revenue in FY2012.", [nike, SourceInfo("PepsiCo, Inc", "10-K", 2012, None, "")], 2)
+    assert old.action == "proceed" and "period_missing" in old.flags and any("NIKE" in n and "2012" in n for n in old.notes)
