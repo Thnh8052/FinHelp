@@ -51,15 +51,26 @@ class RetrievalResult:
     retrieved: List[Dict[str, Any]]
     routing: str = "planner"  # [targets_]single | [targets_]planner | r5 | r4 (how the searched documents were chosen)
     timings: Dict[str, float] = field(default_factory=dict)  # seconds: plan (planner / decomposer), search
-    missing: List[str] = field(default_factory=list)  # V1: targeted documents with no retrieved chunk even after the retry
+    missing: List[str] = field(default_factory=list)  # targeted documents with no retrieved chunk
     hop: Dict[str, Any] = field(default_factory=dict)  # MULTIHOP_ENABLED: the dependent part and what the second step did (empty when there was none)
+    degraded: List[str] = field(default_factory=list)  # "plan_deadline", "rerank_skipped": a step dropped for time or failure (the answer shows "search more")
+
+
+async def within_deadline(call: Awaitable[T], fallback: T, degraded: List[str]) -> T:
+    """`call`, or `fallback` past PLAN_DEADLINE_SECONDS (the planner or the query split); a late call is noted in `degraded` as "plan_deadline"."""
+    try:
+        return await asyncio.wait_for(call, settings.PLAN_DEADLINE_SECONDS)
+    except asyncio.TimeoutError:
+        logger.warning(f"Planner past its {settings.PLAN_DEADLINE_SECONDS:.0f} s deadline: the question goes on without its plan")
+        degraded.append("plan_deadline")
+        return fallback
 
 
 async def second_step(hybrid_search: HybridSearchService, query: str, then: str, retrieved: List[Dict[str, Any]], notebook_id: str, scope: List[DocumentRecord],
                       ids: List[str]) -> Dict[str, Any]:
     """A two-step question (settings MULTIHOP_ENABLED): when the dependent part names an item to look up, the intermediate call settles the first step from the
     first excerpts and plans the second search; its new excerpts are appended after the first ones (whose numbers the result cites) while the context stays
-    within GATE_MAX_TOKENS (tokens counted as characters / 4). A bare comparison ("which was higher?") needs no second search."""
+    within MULTIDOC_PLANNED_MAX_TOKENS (tokens counted as characters / 4). A bare comparison ("which was higher?") needs no second search."""
     hop: Dict[str, Any] = {"then": then}
     if not needs_lookup(then):
         return {**hop, "skipped": "no item to look up"}
@@ -76,7 +87,7 @@ async def second_step(hybrid_search: HybridSearchService, query: str, then: str,
     added = 0
     for c in more:
         size = len(c["content"]) // 4
-        if c.get("chunk_id") in held or used + size > settings.GATE_MAX_TOKENS:
+        if c.get("chunk_id") in held or used + size > settings.MULTIDOC_PLANNED_MAX_TOKENS:
             continue
         retrieved.append(c)
         held.add(c.get("chunk_id"))
@@ -95,21 +106,20 @@ async def route_by_code(hybrid_search: HybridSearchService, query: str, notebook
     return await search_with_retry(lambda: hybrid_search.retrieve_by_content(query, notebook_id, ids, [d for d, y in text_years(scope).items() if y in years])), "r4"
 
 
-async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, notebook_id: str, scope: List[DocumentRecord], forced: Optional[List[str]] = None, *,
-                             tagged: bool = False) -> RetrievalResult:
+async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, notebook_id: str, scope: List[DocumentRecord], forced: Optional[List[str]] = None,
+                             exclude: Optional[set] = None) -> RetrievalResult:
     """Retrieval only. One selected document: the measured single-filing path. Several: the planner writes one query per
     (selected document, item), and the results and a search with the question take equal slots (retrieve_planned); the planner
     choosing among the selected documents only maps queries to them, it never widens the scope. Any planner failure falls back to the measured path over the selection.
     `forced` (G3: the documents the question targets, by @file or by code): the search runs over those documents only, so the
-    planner only writes queries (one document: the single-filing path).
-    `tagged`: the forced documents are the user's own @file tags. When code chose them instead (a company named in the question), the evidence gate of the planned
-    search may still look at the rest of the selection (hybrid_search.retrieve_planned, settings GATE_*); the user's tags are never widened."""
-    selected = [d.document_id for d in scope]
-    labels = {d.document_id: document_label(d) for d in scope}  # of the whole selection: a chunk the gate adds carries its source's name too
+    planner only writes queries (one document: the single-filing path). Nothing outside them is searched, whoever chose them (the evidence gate L15 is gone,
+    TRIED TK-55): a wrong choice shows in the "understood" line, whose buttons ask again with other documents.
+    `exclude`: chunks a "search deeper" click leaves out (the planned and the single-document searches; the routes without a plan search as usual)."""
+    left_out = {"exclude": exclude} if exclude else {}
+    labels = {d.document_id: document_label(d) for d in scope}
     targeted = [d for d in scope if d.document_id in set(forced or [])]
     scope = targeted or scope
     ids = [d.document_id for d in scope]
-    wider = {"gate_document_ids": selected} if targeted and not tagged and len(selected) > len(ids) else {}
     plan: List[PlanItem] = []
     routing = ("targets_" if targeted else "") + ("single" if len(scope) == 1 else "planner")
     multi = len(scope) >= 2 and settings.MULTIDOC_ENABLED  # a notebook holds at most MAX_SELECTED_DOCS_USER (5) documents: no count above which the planner is skipped
@@ -117,10 +127,11 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
     parts: Dict[str, float] = {}  # seconds in each part of the search (hybrid_search.part_done), kept in the trace as search_<part>
     SEARCH_PARTS.set(parts)
     then = ""
+    degraded: List[str] = []
     if multi and settings.MULTIHOP_ENABLED:
-        plan, then = await plan_with_then(query, [catalog_entry(d) for d in scope])
+        plan, then = await within_deadline(plan_with_then(query, [catalog_entry(d) for d in scope]), ([], ""), degraded)
     elif multi:
-        plan = await plan_multi_doc(query, [catalog_entry(d) for d in scope])
+        plan = await within_deadline(plan_multi_doc(query, [catalog_entry(d) for d in scope]), [], degraded)
     t_plan = time.perf_counter() - t0
     hop: Dict[str, Any] = {}
     if plan:
@@ -131,7 +142,7 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
         searched = {d for p in plan for d in (p.document_ids or ids)}
         plan += [PlanItem(query, [d]) for d in named if d not in searched]
         sub_queries = [p.query for p in plan]
-        retrieved = await search_with_retry(lambda: hybrid_search.retrieve_planned(query, plan, notebook_id, ids, **wider))
+        retrieved = await search_with_retry(lambda: hybrid_search.retrieve_planned(query, plan, notebook_id, ids, **left_out))
         if then:
             hop = await second_step(hybrid_search, query, then, retrieved, notebook_id, scope, ids)
     elif multi:
@@ -148,22 +159,17 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
     else:
         doc_filter = ids[0] if len(ids) == 1 else (ids or None)
         if len(ids) == 1 and detect_language(query) == "en":  # Qwen scores the question's pool while the LLM writes the sub-queries
-            (search_query, sub_queries), _ = await asyncio.gather(decompose_query(query),
+            (search_query, sub_queries), _ = await asyncio.gather(within_deadline(decompose_query(query), (query, []), degraded),
                                                                   hybrid_search.prescore(query, notebook_id, doc_filter))
         else:  # a Vietnamese question is searched in English: its pool is only known after the call
-            search_query, sub_queries = await decompose_query(query)  # English for a Vietnamese question; the answer keeps `query`
+            search_query, sub_queries = await within_deadline(decompose_query(query), (query, []), degraded)  # English for a Vietnamese question; the answer keeps `query`
         t_plan = time.perf_counter() - t0
-        retrieved = await search_with_retry(lambda: hybrid_search.retrieve_research(search_query, sub_queries, notebook_id, doc_filter))
-    missing: List[str] = []
-    if targeted and len(ids) > 1:  # V1: every targeted document must show up; one more search of its own, then say what is missing
-        for doc_id in [d for d in ids if not any(c["document_id"] == d for c in retrieved)]:
-            more = await search_with_retry(lambda: hybrid_search.retrieve_multi_doc([PlanItem(q, [doc_id]) for q in dict.fromkeys(sub_queries or [query])],
-                                                                                    notebook_id, [doc_id], limit=settings.V1_RETRY_CHUNKS))
-            retrieved += more
-            if not more:
-                missing.append(doc_id)
+        retrieved = await search_with_retry(lambda: hybrid_search.retrieve_research(search_query, sub_queries, notebook_id, doc_filter, **left_out))
+    # a targeted document with no chunk is named so the answer says so (V1's own search of it ran 0 times in 192 questions, TRIED KH-14: gone 17/11)
+    missing = [d for d in ids if not any(c["document_id"] == d for c in retrieved)] if targeted and len(ids) > 1 else []
     for chunk in retrieved:
         if chunk["document_id"] in labels:
             chunk["document_label"] = labels[chunk["document_id"]]
     timings = {"plan": round(t_plan, 2), "search": round(time.perf_counter() - t0 - t_plan, 2)} | {f"search_{k}": v for k, v in parts.items()}
-    return RetrievalResult(scope, labels, plan, sub_queries, retrieved, routing, timings, missing, hop)
+    degraded += ["rerank_skipped"] if parts.get("rerank_skipped") else []
+    return RetrievalResult(scope, labels, plan, sub_queries, retrieved, routing, timings, missing, hop, degraded)

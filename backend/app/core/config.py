@@ -129,41 +129,40 @@ class Settings(BaseSettings):
     # With a plan: not a limit of the method (the most measured is 9), a bound on what one question can make the GPU do, because the plan comes from a model reading user text.
     MULTIDOC_SEARCH_GUARD: int = 40
     MULTIDOC_RERANK_TOP_N: int = 15  # Qwen3 reorders each search's first N; 0 or 1 turns it off
-    MULTIDOC_REL_THRESHOLD: float = 0.5
+    # TK-49, chosen by the owner 17/11/2026 (docs/VERSION_4/TRIED.md TK-35, TK-44, TK-46, TK-49; CONFIG_DECISION_2026-11-17.md). On gold v2, 187 questions, the evidence is
+    # complete in 89.8 % against 76.5 % for the settings before it (+26 / -1); the answers were measured on the 13,900-token version (TK-48). Its parts:
+    # - the relative threshold 0.5 -> 0.2 (it was the first cause of lost evidence: a text chunk scored far below a table chunk of the same search);
+    # - MULTIDOC_QUESTION_LANE_PER_DOC: one more search with the question in every planned document (dense + BM25, like a plan query), before the question search over all of them;
+    # - RERANK_WINDOWS_*: a text chunk (no table) of more than RERANK_WINDOW_MIN_TOKENS stored tokens is also scored by windows of RERANK_WINDOW_WORDS words every
+    #   RERANK_WINDOW_STRIDE words, and keeps its best score (a fact buried in a chunk about something else); the chunk sent is the whole chunk. About +2.4 s of reranking a question;
+    # - one budget of MULTIDOC_PLANNED_MAX_TOKENS counted as the answer call counts them (MULTIDOC_TOKEN_UNIT "cl100k": cl100k of the text + EXCERPT_HEADER_TOKENS), no chunk
+    #   ceiling in practice (MULTIDOC_MIN_CHUNKS 60). 13,000 keeps the answer call's input under 16,000 real tokens
+    #   (2,782 tokens outside the excerpts at most, measured on 56 real calls); the real input of the heaviest questions is not yet measured.
+    MULTIDOC_REL_THRESHOLD: float = 0.2
     MULTIDOC_MAX_CHUNKS: int = 10
-    MULTIDOC_MIN_CHUNKS: int = 12
+    MULTIDOC_MIN_CHUNKS: int = 60
     MULTIDOC_CHUNKS_PER_FILE: int = 4
     MULTIDOC_QUESTION_POOL: int = 15
     MULTIDOC_QUESTION_KEEP: int = 3
+    MULTIDOC_QUESTION_LANE_PER_DOC: bool = True
     MULTIDOC_MAX_TOKENS: int = 8192  # without a plan (allocate)
-    MULTIDOC_PLANNED_MAX_TOKENS: int = 12288  # with a plan (planned_ceilings)
-    # Evidence gate of the planned search (hybrid_search.retrieve_planned; setting "L15" of docs/Version_3/RAG_REDESIGN_SPEC.md section 5.8, approved 16/11): the plan may
-    # leave out a document the answer needs (5 of 192 gold questions). After the main vector search, code compares the best dense similarity of the question in each selected
-    # document the plan did NOT search with its best in the searched ones; a document whose gap is >= GATE_OPEN_GAP is opened. A notebook holds at most
-    # MAX_SELECTED_DOCS_USER (5) documents, so at most 4 are ever skipped: no cap of its own. Its GATE_POOL candidates come from the rank fusion of the question (weight 2) and the first GATE_PLAN_QUERIES plan queries, dense + BM25; the
-    # reranker scores each against the question and those queries IN THE MAIN SEARCH'S CALL, score = GATE_QUESTION_WEIGHT x question + the rest x best plan query; the
-    # GATE_MAX_CHUNKS best scores >= GATE_MIN_SCORE are appended after the main chunks while the context stays under GATE_MAX_TOKENS. No language-model call.
-    # Measured on 192 questions (experiments/scripts/mvp/gate_strong.py): a correct plan loses nothing (+2 questions), opens on about half, tokens +38 % / +26 %;
-    # with a required document dropped / swapped / all swapped the evidence is complete in 84 / 88 / 77 % (dev) and 72 / 78 / 71 % (hard) of the questions, 0 without it.
-    # Time added when it opens (gate_timing.py, 2 x T4 through the tunnel): 3.5 s median on a correct plan, 5.4 s when the plan was wrong (0.062 s per pair).
-    # A higher floor or fewer chunks falls under 70 % (gate_strong_floor.py). Worst case 4 documents opened = 240 pairs (about 15 s); predicted over 10 s in 52 of 737 wrong-plan
-    # units with a notebook of at most 5 (gate_five_docs.py).
-    GATE_ENABLED: bool = True
-    GATE_OPEN_GAP: float = -0.10
-    GATE_POOL: int = 15
-    GATE_FIRST_STAGE: int = 200  # ranks of each query that count in the fusion
-    GATE_PLAN_QUERIES: int = 3
-    GATE_QUESTION_WEIGHT: float = 0.6
-    GATE_MIN_SCORE: float = 0.15
-    GATE_MAX_CHUNKS: int = 14
-    GATE_MAX_TOKENS: int = 20480
+    MULTIDOC_PLANNED_MAX_TOKENS: int = 13000  # with a plan (planned_ceilings)
+    MULTIDOC_TOKEN_UNIT: str = "cl100k"  # "cl100k": what the answer call reads; "stored": the BGE-M3 count stored with each chunk (before TK-46)
+    EXCERPT_HEADER_TOKENS: int = 25  # the "--- Excerpt [n] (Document: ..., Page: ...) ---" line of each chunk in the answer call
+    RERANK_WINDOWS_ENABLED: bool = True
+    RERANK_WINDOW_MIN_TOKENS: int = 600  # TK-56: 400 -> 600 = 167 -> 160 pairs a question, +1/-0 on gold v2
+    RERANK_WINDOW_WORDS: int = 200
+    RERANK_WINDOW_STRIDE: int = 150
+    # The evidence gate (L15) is gone (owner 17/11/2026, docs/VERSION_4/TRIED.md TK-55): on TK-49 it saved 1 of 187 gold questions when the planner was right
+    # and 1.2 / 4.9 / 4.3 points when it was wrong, for 35 more reranker pairs a question. A missed named document is repaired by R5, the rest by the user
+    # (the "understood" line and its buttons). Copies: experiments/archive/removed_gate_2026-11-17.
     # Multi-step questions (docs/VERSION_4/ROADMAP_V4.md 3.3; measured 17/11 in experiments/scripts/agentic). Both off by default: everything as before.
     # MULTIDOC_WHOLE_MESSAGE: over several sources a message of several questions is not cut at its question marks: the planner reads it whole (24 messages: evidence
     # of every part 23 against 22 when code cut it). Without a plan, code still cuts it and routes each part (R5, else R4) as the net.
     # MULTIHOP_ENABLED: over several sources a question whose second part needs the answer of the first ("which had the highest revenue, and what was its net
     # income?") is no longer refused. The planner (PROMPT_MULTIHOP) plans the first part and returns the dependent part; when that part names an item to look up,
     # one intermediate call (query_router/bridge.py) reads the first excerpts, states the result with citations and plans the second search; its new excerpts
-    # follow the first ones within GATE_MAX_TOKENS. At most two steps. Measured: 20 two-step questions, evidence of both steps 16, correct answers 17, intermediate
+    # follow the first ones within MULTIDOC_PLANNED_MAX_TOKENS. At most two steps. Measured: 20 two-step questions, evidence of both steps 16, correct answers 17, intermediate
     # result right 19; on gold v2 the prompt kept the evidence (147 of 187 against 143). The call takes 5.2 s median; past the deadline the first step counts as unsettled.
     MULTIDOC_WHOLE_MESSAGE: bool = False
     MULTIHOP_ENABLED: bool = False
@@ -180,13 +179,18 @@ class Settings(BaseSettings):
     # Paid fallback: the language model reads images of pages 1-2 when the local catalog is missing or its name / period is
     # unverified (a name only in a logo, no GPU / Ollama). One call per such document.
     CATALOG_VLM_ENABLED: bool = True
-    # Evidence check (V1) on targeted documents: a document the question targets with no retrieved chunk gets one more search of its
-    # own (at most V1_RETRY_CHUNKS chunks); still none -> the answer is told the source showed nothing.
-    V1_RETRY_CHUNKS: int = 3
+    # V1 (a targeted document with no chunk got one more search of its own) is gone: 0 runs in 192 questions (TRIED KH-14); the answer is still told what is missing.
     # A search that times out or loses its connection to the vector store is sent again this many times after the first try, with this pause
     # between tries (chat/retrieval_step.py); still failing -> the SEARCH_UNAVAILABLE error (503) instead of INTERNAL_ERROR. 0 = no retry.
     SEARCH_RETRIES: int = 1
     SEARCH_RETRY_DELAY_SECONDS: float = 1.0
+    # Deadlines (step 2 of docs/VERSION_4/CODE_MODEL_DECISIONS_2026-11-17.md). Past PLAN_DEADLINE_SECONDS the planner (or the single-document query split) is
+    # dropped and the question goes the way a failed planner goes (the longest of 200 stored planner calls took 17.0 s). Past max(RERANK_DEADLINE_SECONDS,
+    # RERANK_SECONDS_PER_PAIR x pairs) the reranker is dropped and the first-stage order answers (longest measured 25.5 s for 216 pairs; 0.15 s a pair is 3x the
+    # measured rate). Either is written in the result's `degraded`: the answer then shows the "search more" button prominently (TRIED TK-57: 89.3 -> 72.2 %).
+    PLAN_DEADLINE_SECONDS: float = 20.0
+    RERANK_DEADLINE_SECONDS: float = 30.0
+    RERANK_SECONDS_PER_PAIR: float = 0.15
     # Sources a question may use, and documents a notebook may hold: a guest 1, every signed-in account (admin too) 5.
     # The one place these numbers live: TIER_SPECS, the error messages and the web app (through /auth/me) all read them from here.
     MAX_SELECTED_DOCS_GUEST: int = 1

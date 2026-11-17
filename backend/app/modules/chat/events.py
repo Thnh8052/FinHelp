@@ -3,7 +3,7 @@
 The streamed route attaches a ChatStream to its request; everywhere else emit() and answer_sink() do nothing, so the plain
 /chat/query, the inspector and the evaluation scripts behave exactly as before. Events are (kind, data) pairs:
   stage      {"name": "understanding" | "searching" | "writing" | "checking"}   what the system is doing now (never which component)
-  understood {"text", "alternatives"}                                            how the question was understood, before the answer
+  understood {"text", "chooser"}                                               how the question was understood, before the answer
   delta      {"text"}                                                            the next piece of the answer as the model writes it
   done / error                                                                    sent by the route once the answer is recorded or failed
 """

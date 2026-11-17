@@ -1,3 +1,4 @@
+import asyncio
 import re
 import sys
 import time
@@ -38,6 +39,32 @@ def _z(x: np.ndarray) -> np.ndarray:
 
 
 _TERM = re.compile(r"[a-z0-9]+")
+_CL100K = None  # the tokenizer of excerpt_tokens, loaded on first use (tiktoken reads its file once, then from its cache)
+
+
+def excerpt_tokens(text: str, stored: int) -> int:
+    """The tokens one chunk costs in the answer call (TK-46): cl100k of its text + the excerpt header line; MULTIDOC_TOKEN_UNIT "stored": the BGE-M3 count stored with it."""
+    global _CL100K
+    if settings.MULTIDOC_TOKEN_UNIT != "cl100k":
+        return stored
+    if _CL100K is None:
+        import tiktoken
+
+        _CL100K = tiktoken.get_encoding("cl100k_base")
+    return len(_CL100K.encode(text, disallowed_special=())) + settings.EXCERPT_HEADER_TOKENS
+
+
+def windows(text: str, size: int, stride: int) -> List[str]:
+    """Overlapping windows of `size` words every `stride` words, the last one ending at the end of the text; a short text is one window, unchanged (TK-44)."""
+    words = text.split()
+    if len(words) <= size:
+        return [text]
+    out, i = [], 0
+    while True:
+        out.append(" ".join(words[i:i + size]))
+        if i + size >= len(words):
+            return out
+        i += stride
 
 
 def bm25_scores(query: str, counts: Sequence[Counter]) -> np.ndarray:
@@ -68,6 +95,19 @@ def planned_ceilings(documents: int) -> Tuple[int, int]:
     """(chunks, tokens) of a question with a plan: the chunks grow with the documents searched, the tokens are one cap. Replaced a token formula that grew with the number of
     searches without an upper limit (experiments/scripts/rag_improvement/d6_ceiling.py, 192 questions: the same compl, 85.4, as the formula; a cap of 8,192 loses 5 questions)."""
     return max(settings.MULTIDOC_MIN_CHUNKS, settings.MULTIDOC_CHUNKS_PER_FILE * documents), settings.MULTIDOC_PLANNED_MAX_TOKENS
+
+
+def rerank_deadline(pairs: int) -> float:
+    """Seconds the reranker gets for one call of `pairs` pairs (settings RERANK_DEADLINE_SECONDS, RERANK_SECONDS_PER_PAIR)."""
+    return max(settings.RERANK_DEADLINE_SECONDS, settings.RERANK_SECONDS_PER_PAIR * pairs)
+
+
+def _skipped_reranking(why: BaseException) -> None:
+    """The reranker failed or was too slow: the first-stage order answers, and the search's parts say so (retrieval_step reads it as degraded)."""
+    logger.warning(f"Reranking skipped, using first-stage order: {type(why).__name__}: {str(why)[:120]}")
+    parts = SEARCH_PARTS.get()
+    if parts is not None:
+        parts["rerank_skipped"] = 1
 
 
 def _near_best(ranking: List[str], scores: Dict[str, float]) -> List[str]:
@@ -105,48 +145,6 @@ def allocate(lanes: Sequence[Tuple[List[str], Dict[str, float]]], tokens: Dict[s
         out.append(cid)
         used += tokens.get(cid, 0)
     return out
-
-
-# ---------------------------------------------------------------- the evidence gate of the planned search (settings GATE_*, measured in experiments/scripts/mvp/gate_strong.py)
-def gate_open(gaps: Dict[str, float], cut: float) -> List[str]:
-    """The skipped documents to open: those whose dense gap (their best similarity to the question minus the best of the searched documents) is >= `cut`,
-    the largest gap first. No cap of its own: a notebook holds at most MAX_SELECTED_DOCS_USER (5) documents and the plan searches at least one, so at most 4 are skipped
-    (experiments/scripts/mvp/gate_five_docs.py: opening all of them is the best of 2 / 3 / 4)."""
-    return sorted((d for d, g in gaps.items() if g >= cut), key=lambda d: -gaps[d])
-
-
-def gate_pool(rankings: Sequence[Sequence[str]], size: int) -> List[str]:
-    """The candidates of one opened document: rank fusion of its rankings, the first one (the question's) counted twice, the others (plan queries) once."""
-    return rrf_merge([r[: settings.GATE_FIRST_STAGE] for r in rankings], [2.0] + [1.0] * (len(rankings) - 1))[:size] if rankings else []
-
-
-def gate_extra(pools: Sequence[Sequence[str]], qwen: Dict[Tuple[str, str], float], question: str, plan_queries: Sequence[str], held: set, tokens: Dict[str, int], used: int) -> List[str]:
-    """The chunks the gate adds: every candidate not already sent (`held`) is scored GATE_QUESTION_WEIGHT x P(yes | question) + the rest x its best P(yes | plan query)
-    (the question's score alone without plan queries); the GATE_MAX_CHUNKS best scores >= GATE_MIN_SCORE over all opened documents enter, best first, while the context
-    (`used` tokens already) stays within GATE_MAX_TOKENS: a chunk that does not fit is skipped and a later, shorter one may still enter. A candidate the reranker did not score
-    for the question is never added."""
-    w = settings.GATE_QUESTION_WEIGHT
-    score: Dict[str, float] = {}
-    for pool in pools:
-        for cid in pool:
-            if cid in held or (question, cid) not in qwen:
-                continue
-            others = [qwen[(q, cid)] for q in plan_queries if (q, cid) in qwen]
-            score[cid] = qwen[(question, cid)] if not others else w * qwen[(question, cid)] + (1 - w) * max(others)
-    out: List[str] = []
-    for cid in sorted((c for c, s in score.items() if s >= settings.GATE_MIN_SCORE), key=lambda c: -score[c])[: settings.GATE_MAX_CHUNKS]:
-        if used + tokens.get(cid, 0) > settings.GATE_MAX_TOKENS:
-            continue
-        out.append(cid)
-        used += tokens.get(cid, 0)
-    return out
-
-
-def _note(name: str, value: float) -> None:
-    """A fact of this question's search kept in its trace beside the seconds of each part (search_<name>)."""
-    parts = SEARCH_PARTS.get()
-    if parts is not None:
-        parts[name] = value
 
 
 class HybridSearchService:
@@ -191,6 +189,7 @@ class HybridSearchService:
                 "page": c.page,
                 "section": c.section,
                 "chunk_type": c.chunk_type,
+                "token_count": getattr(c, "token_count", 0) or 0,  # the stored BGE-M3 count (the windows of the reranker read it)
                 "score": scores.get(c.chunk_id, 0.0),
                 "content": c.content,
                 "flags": list(getattr(c, "flags", None) or []),
@@ -225,13 +224,16 @@ class HybridSearchService:
         return await self._hydrate(allocate(lanes, tokens, limit), scores)
 
     async def retrieve_planned(self, question: str, plan: List[PlanItem], notebook_id: str, scope_document_ids: List[str], *,
-                               gate_document_ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+                               exclude: Optional[set] = None) -> List[Dict[str, Any]]:
         """Q13af, the path of a question with a plan (settings, MULTIDOC_*): one search per (query, document) by dense + BM25, one more with the
-        question by dense over the planned documents, Qwen3 orders each by its own query, then allocate_planned. Then the evidence gate (settings GATE_*):
-        the documents of `gate_document_ids` (the whole selection when code narrowed the scope; default: the scope) that the plan does not search are looked at
-        once, and the best chunks of those close to the question are appended after the main ones; their pairs are scored in the main reranker call."""
+        question by dense over the planned documents, Qwen3 orders each by its own query, then allocate_planned. Only the documents the plan searches
+        are looked at (the evidence gate L15 is gone, TRIED TK-55). `exclude`: chunks a "search deeper" click leaves out (already sent): they are
+        removed from every candidate list before the reranker, so the same pipeline brings up the next ones."""
         t0 = time.perf_counter()
         searches = expand_plan(plan, scope_document_ids, sys.maxsize)
+        if settings.MULTIDOC_QUESTION_LANE_PER_DOC:  # TK-33: the question in every planned document, unless a search of the plan (R5) already asks it there
+            asked = {(s.query, tuple(s.document_ids)) for s in searches}
+            searches += [PlanItem(question, [d]) for d in dict.fromkeys(d for s in searches for d in s.document_ids) if (question, (d,)) not in asked]
         if len(searches) > settings.MULTIDOC_SEARCH_GUARD:
             logger.warning(f"Plan with {len(searches)} searches: only the first {settings.MULTIDOC_SEARCH_GUARD} run")
             searches = searches[: settings.MULTIDOC_SEARCH_GUARD]
@@ -250,67 +252,25 @@ class HybridSearchService:
             for h in hits:
                 scores[h["chunk_id"]] = max(h["score"], scores.get(h["chunk_id"], float("-inf")))
         rankings = [dense_bm25_order(hits, s.query, counts)[: settings.MULTIDOC_PER_ITEM_LIMIT] for hits, s in zip(ranked, searches)]
-        rankings.append([h["chunk_id"] for h in ranked[-1] if h.get("chunk_id")][: settings.MULTIDOC_QUESTION_POOL])
+        rankings.append([h["chunk_id"] for h in ranked[-1] if h.get("chunk_id") and h["chunk_id"] not in (exclude or ())][: settings.MULTIDOC_QUESTION_POOL])
+        if exclude:
+            rankings = [[c for c in r if c not in exclude] for r in rankings]
         t = part_done("bm25", t)
-        pools, plan_queries, gate_pairs = await self._gate_candidates(question, plan, dict(zip((item.query for item in items), vectors)), ranked[-1], documents,
-                                                                      gate_document_ids or scope_document_ids, notebook_id, counts, tokens, scores)
-        t = part_done("gate", t)
-        lanes, gate_scores = await self._qwen_lanes(items, rankings, scores, gate_pairs)
+        lanes, _ = await self._qwen_lanes(items, rankings, scores)
         t = part_done("rerank", t)
         max_chunks, max_tokens = planned_ceilings(len(documents))
         chosen = allocate_planned(lanes, tokens, max_chunks, max_tokens)
-        added = gate_extra(pools, gate_scores, question, plan_queries, set(chosen), tokens, sum(tokens.get(c, 0) for c in chosen)) if pools else []
-        if settings.GATE_ENABLED:
-            _note("gate_added", len(added))
-        opened = f", gate opened {len(pools)} documents and added {len(added)} chunks" if pools else ""
-        logger.info(f"Planned search, {len(items)} searches, {len(documents)} documents: {len(chosen)} chunks (ceiling {max_chunks} / {max_tokens} tokens){opened} in {time.perf_counter() - t0:.2f}s")
-        hydrated = await self._hydrate(chosen + added, scores)
+        logger.info(f"Planned search, {len(items)} searches, {len(documents)} documents: {len(chosen)} chunks (ceiling {max_chunks} / {max_tokens} tokens) in {time.perf_counter() - t0:.2f}s")
+        hydrated = await self._hydrate(chosen, scores)
         part_done("hydrate", t)
         return hydrated
-
-    async def _gate_candidates(self, question: str, plan: List[PlanItem], vector_of: Dict[str, List[float]], planned_hits: Sequence[Dict[str, Any]], documents: Sequence[str],
-                               selection: Sequence[str], notebook_id: str, counts: Dict[str, Counter], tokens: Dict[str, int], scores: Dict[str, float]
-                               ) -> Tuple[List[List[str]], List[str], List[Tuple[str, str]]]:
-        """(candidates of each opened document, the plan queries that also score them, the (query, chunk id) pairs for the reranker); three empty lists when the gate is off,
-        no selected document was left out of the plan, or none is close enough to the question. The look costs one top-1 vector search per skipped document; an opened
-        document costs one more search per query and the word counts of its chunks. `counts`, `tokens` and `scores` receive the opened documents' chunks."""
-        searched = set(documents)
-        skipped = [d for d in dict.fromkeys(selection) if d not in searched]
-        if not settings.GATE_ENABLED or not skipped:
-            return [], [], []
-        best = max((h["score"] for h in planned_hits), default=0.0)  # the question's best similarity in the searched documents (its search is dense, over all of them)
-        tops = await self.retriever.search_vectors([vector_of[question]] * len(skipped), notebook_id, list(selection), 1, per_vector_documents=[[d] for d in skipped])
-        gaps = {d: hits[0]["score"] - best for d, hits in zip(skipped, tops) if hits}
-        opened = gate_open(gaps, settings.GATE_OPEN_GAP)
-        if gaps:
-            _note("gate_gap", round(max(gaps.values()), 3))
-        _note("gate_open", len(opened))
-        if not opened:
-            return [], [], []
-        plan_queries = [q for q in dict.fromkeys(item.query for item in plan) if q != question][: settings.GATE_PLAN_QUERIES]
-        asked = [question] + plan_queries
-        hits = await self.retriever.search_vectors([vector_of[q] for _ in opened for q in asked], notebook_id, list(selection), settings.MULTIDOC_CANDIDATE_LIMIT,
-                                                   per_vector_documents=[[d] for d in opened for _ in asked])
-        more_counts, more_tokens = await self._term_counts(opened)
-        counts.update(more_counts)
-        tokens.update(more_tokens)
-        pools: List[List[str]] = []
-        for k in range(len(opened)):
-            mine = hits[k * len(asked):(k + 1) * len(asked)]
-            for found in mine:
-                for h in found:
-                    scores[h["chunk_id"]] = max(h["score"], scores.get(h["chunk_id"], float("-inf")))
-            pools.append(gate_pool([dense_bm25_order(found, q, counts) for found, q in zip(mine, asked)], settings.GATE_POOL))
-        pairs = [(q, cid) for pool in pools for cid in pool for q in asked]
-        _note("gate_pairs", len(pairs))
-        return pools, plan_queries, pairs
 
     async def _term_counts(self, documents: Sequence[str]) -> Tuple[Dict[str, Counter], Dict[str, int]]:
         """({chunk_id: word counts}, {chunk_id: token count}) of every chunk of the documents, counted once per document (term_cache.py)."""
         missing = [d for d in documents if TERMS.get(d) is None]
         if missing:
             for doc_id, chunks in (await self.chunk_repo.get_text_by_document(missing)).items():
-                TERMS.put(doc_id, {cid: (Counter(_TERM.findall(text.lower())), tok) for cid, (text, tok) in chunks.items()})
+                TERMS.put(doc_id, {cid: (Counter(_TERM.findall(text.lower())), excerpt_tokens(text, tok)) for cid, (text, tok) in chunks.items()})
         counts: Dict[str, Counter] = {}
         tokens: Dict[str, int] = {}
         for doc_id in documents:
@@ -361,30 +321,40 @@ class HybridSearchService:
     async def _qwen_lanes(self, plan: List[PlanItem], rankings: List[List[str]], scores: Dict[str, float], extra: Sequence[Tuple[str, str]] = ()
                           ) -> Tuple[List[Tuple[List[str], Dict[str, float]]], Dict[Tuple[str, str], float]]:
         """((ranking, Qwen scores of its head) per search, {(query, chunk id): Qwen score} of the `extra` pairs, scored in the same call); without the reranker
-        (off, or it fails) the first-stage order still answers and no extra pair has a score."""
+        (off, or it fails) the first-stage order still answers and no extra pair has a score. The product sends no extra pair since L15 was removed;
+        the measurement scripts in experiments/ still use it."""
         top_n = settings.MULTIDOC_RERANK_TOP_N
         if settings.RERANK_ENABLED and top_n > 1:
             try:
                 return await self._rerank_items(plan, rankings, scores, top_n, extra)
-            except RuntimeError as exc:  # e.g. GPU out of memory
-                logger.warning(f"Multi-document reranking skipped: {type(exc).__name__}: {str(exc)[:120]}")
+            except (RuntimeError, asyncio.TimeoutError) as exc:  # GPU out of memory, or past the deadline (rerank_deadline)
+                _skipped_reranking(exc)
         return [(r, {}) for r in rankings], {}
 
     async def _rerank_items(
         self, plan: List[PlanItem], rankings: List[List[str]], scores: Dict[str, float], top_n: int, extra: Sequence[Tuple[str, str]] = ()
     ) -> Tuple[List[Tuple[List[str], Dict[str, float]]], Dict[Tuple[str, str], float]]:
         """(ranking, Qwen scores of its head) per plan item: Qwen3 orders each item's first `top_n` against that item's query
-        (plain Qwen order, not fusion: item-rr15 83.9 vs item-fus15 83.1 on multi-doc dev). The `extra` (query, chunk id) pairs (the evidence gate's) are
+        (plain Qwen order, not fusion: item-rr15 83.9 vs item-fus15 83.1 on multi-doc dev). The `extra` (query, chunk id) pairs are
         scored in the same call and returned apart: one request to the reranker for the whole question."""
         wanted = list(dict.fromkeys([cid for ranking in rankings for cid in ranking[:top_n]] + [cid for _, cid in extra]))
-        text = {c["chunk_id"]: c["content"] for c in await self._hydrate(wanted, scores)}
+        hydrated = await self._hydrate(wanted, scores)
+        text = {c["chunk_id"]: c["content"] for c in hydrated}
         heads = [[cid for cid in ranking[:top_n] if cid in text] for ranking in rankings]
         more = [(q, cid) for q, cid in extra if cid in text]
         pairs = list(dict.fromkeys([(item.query, cid) for item, head in zip(plan, heads) for cid in head] + more))  # one batched call for all searches
-        score = dict(zip(pairs, await self.reranker.score_pairs([(q, text[cid]) for q, cid in pairs])))
+        # TK-44: a long text chunk of a search's head is also scored by windows against that search's query (extra pairs stay whole)
+        long_text = {c["chunk_id"] for c in hydrated if c["chunk_type"] != "table" and c["token_count"] > settings.RERANK_WINDOW_MIN_TOKENS} if settings.RERANK_WINDOWS_ENABLED else set()
+        win = {(item.query, cid): windows(text[cid], settings.RERANK_WINDOW_WORDS, settings.RERANK_WINDOW_STRIDE)
+               for item, head in zip(plan, heads) for cid in head if cid in long_text}
+        win_pairs = [(q, w) for (q, _), ws in win.items() for w in ws]
+        sent = [(q, text[cid]) for q, cid in pairs] + win_pairs
+        got = await asyncio.wait_for(self.reranker.score_pairs(sent), rerank_deadline(len(sent)))
+        score = dict(zip(pairs, got[: len(pairs)]))
+        win_score = dict(zip(win_pairs, got[len(pairs):]))
         out: List[Tuple[List[str], Dict[str, float]]] = []
         for item, ranking, head in zip(plan, rankings, heads):
-            qwen = {cid: score[(item.query, cid)] for cid in head}
+            qwen = {cid: max([score[(item.query, cid)]] + [win_score[(item.query, w)] for w in win.get((item.query, cid), [])]) for cid in head}
             out.append((sorted(head, key=lambda cid: -qwen[cid]) + [cid for cid in ranking if cid not in qwen], qwen))
         return out, {pair: score[pair] for pair in more}
 
@@ -394,8 +364,10 @@ class HybridSearchService:
         sub_queries: List[str],
         notebook_id: str,
         document_id: Optional[str] = None,
+        exclude: Optional[set] = None,
     ) -> List[Dict[str, Any]]:
-        """Research configuration: dense RRF over [question x2, sub-queries x1] -> pool 20 -> Qwen3 rerank fusion -> top 6."""
+        """Research configuration: dense RRF over [question x2, sub-queries x1] -> pool 20 -> Qwen3 rerank fusion -> top 6. `exclude`: chunks a
+        "search deeper" click leaves out (already sent), removed before the pool is cut."""
         queries = [question] + sub_queries[: settings.SUBQUERY_COUNT]
         vectors = await self.embedder.embed_queries(queries)
         ranked = await self.retriever.search_vectors(vectors, notebook_id, document_id, settings.FIRST_STAGE_LIMIT)
@@ -405,13 +377,16 @@ class HybridSearchService:
             for h in hits:
                 scores[h["chunk_id"]] = max(h["score"], scores.get(h["chunk_id"], float("-inf")))
         fused = rrf_merge([[h["chunk_id"] for h in hits] for hits in ranked], [2.0] + [1.0] * (len(queries) - 1))
+        if exclude:
+            fused = [c for c in fused if c not in exclude]
         pool = await self._hydrate(fused[: settings.RETRIEVAL_POOL_SIZE], scores)
 
         if settings.RERANK_ENABLED and len(pool) > 1:
             try:
-                rerank_scores = await self._score_cached(question, pool)
+                rerank_scores = await asyncio.wait_for(self._score_cached(question, pool), rerank_deadline(len(pool)))
                 pool = fuse_with_rerank(pool, rerank_scores)
-            except RuntimeError as exc:  # e.g. GPU out of memory even after the models took turns
+            except (RuntimeError, asyncio.TimeoutError) as exc:  # GPU out of memory even after the models took turns, or past the deadline
                 # An answer from the first-stage order (86.7 R@6 in the research) beats no answer.
-                logger.warning(f"Reranking skipped, using first-stage order: {type(exc).__name__}: {exc} | {memory_report()}")
+                _skipped_reranking(exc)
+                logger.warning(memory_report())
         return pool[: settings.RETRIEVAL_TOP_K]

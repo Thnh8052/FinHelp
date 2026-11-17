@@ -49,9 +49,14 @@ def _named(question: str, docs: Sequence[ScopeDoc]) -> List[ScopeDoc]:
     return [docs[i] for i in sorted(matches)]
 
 
-def _understood(docs: Sequence[ScopeDoc], vi: bool, extra: str = "") -> str:
-    listed = "; ".join(d.label for d in docs)
+def understood_line(labels: Sequence[str], vi: bool, extra: str = "") -> str:
+    """The line shown above an answer: the documents the question was understood to be about (chosen by code here, or by the planner)."""
+    listed = "; ".join(labels)
     return (f"Tôi hiểu câu hỏi về: {listed}." if vi else f"I understood the question as about: {listed}.") + (f" {extra}" if extra else "")
+
+
+def _understood(docs: Sequence[ScopeDoc], vi: bool, extra: str = "") -> str:
+    return understood_line([d.label for d in docs], vi, extra)
 
 
 def _hint(vi: bool) -> str:

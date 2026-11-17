@@ -236,8 +236,8 @@ async def test_retrieve_multi_doc_qwen_orders_each_item_and_keeps_chunks_near_it
 
     svc = _service(monkeypatch, top_k=2, rerank_top_n=4)
     chunks = await svc.retrieve_multi_doc([PlanItem("revenue", ["d1"]), PlanItem("assets", ["d2"])], "nb", ["d1", "d2"])
-    # item 1 Qwen scores a .1, b .9, c .5, d .3 -> keeps b, c (>= .45); item 2 x .1, y .9 -> keeps y
-    assert [c["chunk_id"] for c in chunks] == ["b", "y", "c"]
+    # item 1 Qwen scores a .1, b .9, c .5, d .3 -> keeps b, c, d (>= .2 x .9 = .18, TK-49); item 2 x .1, y .9 -> keeps y
+    assert [c["chunk_id"] for c in chunks] == ["b", "y", "c", "d"]
 
 
 async def test_retrieve_multi_doc_survives_reranker_failure(monkeypatch):
@@ -322,7 +322,6 @@ def _planned(monkeypatch, by_document, text, score):
     from app.modules.retrieval.hybrid_search import HybridSearchService
 
     monkeypatch.setattr(settings, "RERANK_ENABLED", True)
-    monkeypatch.setattr(settings, "GATE_ENABLED", False)  # these tests are about the main search; the evidence gate has its own (test_evidence_gate.py)
     svc = HybridSearchService.__new__(HybridSearchService)
     svc.embedder, svc.retriever, svc.chunk_repo, svc.reranker = _FakeEmbedder(), _PlannedRetriever(by_document), _PlannedChunks(text, by_document), _PlannedReranker(score)
     from app.modules.retrieval.term_cache import TERMS
@@ -358,11 +357,10 @@ def test_dense_bm25_order_lets_a_shared_term_win_over_a_close_dense_score():
 def test_planned_ceilings_chunks_follow_the_documents_and_tokens_are_one_bounded_cap():
     from app.modules.retrieval.hybrid_search import planned_ceilings
 
-    assert planned_ceilings(2) == (12, 12288)  # the floor of 12 chunks
-    assert planned_ceilings(3) == (12, 12288)
-    assert planned_ceilings(5) == (20, 12288)  # 4 chunks a document
-    assert planned_ceilings(10) == (40, 12288)  # the tokens never grow with the question: one cap (d6_ceiling.py: same compl as the old growing cap on 192 questions)
-    assert settings.MULTIDOC_PLANNED_MAX_TOKENS == 12288
+    assert planned_ceilings(2) == (60, 13000)  # TK-49: a floor of 60 chunks, so the token budget decides (TK-46)
+    assert planned_ceilings(5) == (60, 13000)
+    assert planned_ceilings(20) == (80, 13000)  # 4 chunks a document beyond 15 documents; the tokens never grow with the question: one cap
+    assert settings.MULTIDOC_PLANNED_MAX_TOKENS == 13000
 
 
 def test_allocate_planned_limits_the_question_search_only_and_stops_at_both_ceilings():
@@ -384,6 +382,9 @@ async def test_retrieve_planned_searches_each_document_and_adds_the_question_las
     by_document = {"d1": [("a1", 0.9), ("a2", 0.8), ("a3", 0.7)], "d2": [("b1", 0.9), ("b2", 0.8)], "d3": [("c1", 0.99)]}
     text = {"a1": "revenue a", "a2": "revenue aa", "a3": "other", "b1": "revenue b", "b2": "assets", "c1": "never"}
     best_for_question = {"a3": 0.9, "b2": 0.9}
+    # the mechanism before TK-49 (the TK-49 parts have their own tests in test_tk49_selection.py)
+    for name, value in (("MULTIDOC_QUESTION_LANE_PER_DOC", False), ("MULTIDOC_REL_THRESHOLD", 0.5), ("RERANK_WINDOWS_ENABLED", False)):
+        monkeypatch.setattr(settings, name, value)
     svc = _planned(monkeypatch, by_document, text, lambda q, t: {"revenue a": 0.9, "revenue aa": 0.1, "revenue b": 0.9}.get(t, 0.05) if q == "revenue" else best_for_question.get({v: k for k, v in text.items()}[t], 0.1))
     chunks = await svc.retrieve_planned("the question", [PlanItem("revenue", ["d1", "d2"])], "nb", ["d1", "d2", "d3"])
     assert svc.retriever.per_vector == [["d1"], ["d2"], ["d1", "d2"]]  # never d3: the question search stays on the planned documents
@@ -398,11 +399,11 @@ async def test_retrieve_planned_has_no_cap_of_8_but_a_guard_and_survives_the_rer
     text = {c: c for c, _ in by_document["d1"]}
     svc = _planned(monkeypatch, by_document, text, lambda q, t: 0.9)
     await svc.retrieve_planned("q", [PlanItem(f"item {i}", ["d1"]) for i in range(12)], "nb", ["d1"])
-    assert len(svc.retriever.per_vector) == 13  # 12 searches + the question
+    assert len(svc.retriever.per_vector) == 14  # 12 searches + the question in d1 (TK-49) + the question over the planned documents
 
     monkeypatch.setattr(settings, "MULTIDOC_SEARCH_GUARD", 3)
     await svc.retrieve_planned("q", [PlanItem(f"item {i}", ["d1"]) for i in range(12)], "nb", ["d1"])
-    assert len(svc.retriever.per_vector) == 4
+    assert len(svc.retriever.per_vector) == 4  # the guard keeps the first 3 searches (the question's own search in d1 comes after them) + the question
 
     async def boom(pairs):
         raise RuntimeError("CUDA out of memory")
@@ -566,7 +567,8 @@ async def test_plan_repaired_by_r5_fb3_adds_named_documents_and_fills_items_with
     assert seen["plan"] == [("net revenues", ["d1", "d2"])]  # the R5 documents, not the 2021 filing
 
 
-async def test_v1_retries_a_missing_targeted_document(monkeypatch):
+async def test_a_targeted_document_with_no_chunk_is_named_missing_without_a_search_of_its_own(monkeypatch):
+    # V1's own search of a targeted document with no chunk ran 0 times in 192 questions (TRIED KH-14) and is gone (owner 17/11); the note stays
     from app.modules.query_router.planner import PlanItem
 
     docs = [_doc("d1", "a.pdf", company_name="Coca-Cola", fiscal_year=2022), _doc("d2", "b.pdf", company_name="PepsiCo", fiscal_year=2022),
@@ -596,7 +598,7 @@ async def test_v1_retries_a_missing_targeted_document(monkeypatch):
     orch.hybrid_search = FakeSearch()
     found = await orch.retrieve("Compare revenue", "nb", docs, forced=["d1", "d2"])
     assert found.routing == "targets_planner" and calls[0][1] == ["d1", "d2"]
-    assert calls[1] == ([["d2"]], ["d2"], 3) and found.missing == ["d2"]  # V1: one retry inside d2, still nothing
+    assert len(calls) == 1 and found.missing == ["d2"]  # no second search; the answer is told d2 showed nothing
 
 
 # ---------------------------------------------------------------- one search per (query, document)

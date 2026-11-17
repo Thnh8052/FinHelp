@@ -10,6 +10,9 @@ CHECK_SOURCES = {"vi": "Hãy kiểm tra lại các nguồn đã chọn hoặc t�
 # Appended to the answer of a "search again" click that still found nothing, or not enough (S3/S5): there is no further button
 RETRY_APOLOGY = {"vi": "Xin lỗi, trong giới hạn hiện tại hệ thống chưa tìm được đủ thông tin này. " + CHECK_SOURCES["vi"],
                  "en": "Sorry, within its current limits the system could not find enough of this information. " + CHECK_SOURCES["en"]}
+# A step of the search was dropped for time or failure (retrieval_step degraded): said without naming any component, with the button to press
+DEGRADED_NOTE = {"vi": "Lần tìm này có thể chưa đầy đủ vì hệ thống đang chậm; bấm \"Tìm kỹ hơn\" để tìm lại đầy đủ.",
+                 "en": "This search may be incomplete because the system was slow; press \"Search deeper\" to search again in full."}
 NO_DATA_ANSWER = {"vi": "Không tìm thấy dữ liệu tài chính phù hợp trong tài liệu của notebook này. " + CHECK_SOURCES["vi"],
                   "en": "No matching financial data was found in this notebook's documents. " + CHECK_SOURCES["en"]}
 

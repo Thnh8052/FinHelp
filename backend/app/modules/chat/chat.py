@@ -15,7 +15,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Dict
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -94,6 +94,7 @@ class QueryRequest(BaseModel):
     document_ids: Optional[List[str]] = None  # the sources selected by the user (at least one)
     mentions: Optional[List[str]] = None  # @file: selected documents the question is explicitly about (ids, never parsed from the text)
     retry_of: Optional[str] = None  # sent by a "search again" button: the answer that fell short (docs/Version_3/fail_cases.md, S3)
+    deeper: bool = False  # with retry_of: the "search deeper" button (same documents, the excerpts already sent left out); without: the document chooser
 
 
 class CitationOut(BaseModel):
@@ -112,7 +113,8 @@ class QueryResponse(BaseModel):
     answer: str
     citations: List[CitationOut]
     understood: str = ""  # G3: how the question was understood (documents, assumptions), shown above the answer
-    alternatives: List[dict] = []  # other selected documents that also match: [{"document_id", "label"}]
+    alternatives: List[dict] = []  # buttons of answers stored before 17/11/2026 ([{"document_id", "label", "kind"?}]); new answers carry `actions`
+    actions: dict = {}  # {"chooser": [{"document_id", "label", "checked"}], "search_more": {"prominent"} | None, "edit_question"} (orchestrator.answer_actions)
     message_id: str = ""  # the stored answer: what a report of wrong figures points to
 
 
@@ -126,13 +128,15 @@ class MessageOut(BaseModel):
     citations: List[CitationOut]
     understood: str
     alternatives: List[dict]
+    actions: dict = {}
     created_at: Any
     user_rating: Optional[int] = None  # -1: the user reported wrong figures
 
     @classmethod
     def of(cls, message: MessageRecord) -> "MessageOut":
         trace = message.trace_info or {}
-        return cls(**message.model_dump(exclude={"trace_info"}), understood=trace.get("understood") or "", alternatives=trace.get("alternatives") or [])
+        return cls(**message.model_dump(exclude={"trace_info"}), understood=trace.get("understood") or "", alternatives=trace.get("alternatives") or [],
+                   actions=trace.get("actions") or {})
 
 
 # --- Endpoints ---
@@ -164,18 +168,26 @@ async def retried_message(chat_repo: Any, notebook_id: str, retry_of: Optional[s
     return found
 
 
+def deeper_of(message: MessageRecord) -> Dict[str, List[str]]:
+    """What a "search deeper" click on `message` leaves out (every excerpt it sent: the trace's chunk_ids, else its citations) and keeps (the ones it cited)."""
+    sent = [c.chunk_id for c in message.citations if c.chunk_id]
+    return {"exclude": list((message.trace_info or {}).get("chunk_ids") or sent), "keep": [c.chunk_id for c in message.citations if c.cited and c.chunk_id]}
+
+
 def _retried(messages: List[MessageRecord]) -> set:
     """The answers a "search again" click was already used on."""
     return {(m.trace_info or {}).get("retry_of") for m in messages} - {None}
 
 
 def shown_messages(messages: List[MessageRecord]) -> List["MessageOut"]:
-    """The stored messages as the interface shows them: an answer already searched again keeps no "search again" button."""
+    """The stored messages as the interface shows them: an answer already searched again keeps no "search again" button (one click)."""
     used = _retried(messages)
     out = [MessageOut.of(m) for m in messages]
     for m in out:
         if m.message_id in used:
             m.alternatives = [a for a in m.alternatives if not a.get("kind")]
+            if m.actions:
+                m.actions = {**m.actions, "chooser": [], "search_more": None}
     return out
 
 
@@ -218,6 +230,7 @@ async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str])
             mentions=adm.mentions,
             focus_state=adm.nb.focus_state,
             retry=adm.retry_of is not None,
+            **({"deeper": deeper_of(adm.retry_of)} if req.deeper and adm.retry_of is not None else {}),
         )
     except BaseException:  # a cancelled answer too
         if user_id is not None:
@@ -274,6 +287,7 @@ async def _record(adm: _Admitted, req: "QueryRequest", user_id: Optional[str], d
         citations=result["citations"],
         understood=result.get("understood", ""),
         alternatives=result.get("alternatives", []),
+        actions=result.get("actions", {}),
         message_id=answer_id,
     )
 

@@ -73,27 +73,27 @@ PLAN_AMD_ONLY = [PlanItem("revenue", ["amd"])]  # the planner left NVIDIA out
 PARTIAL = "AMD net revenue was $25,785 million in 2024 [1]. NVIDIA's figure was not found.\n" + META % ("partial", "[1]")
 
 
-async def test_s3_a_partial_answer_over_several_files_offers_each_file_skipped_first_and_all(monkeypatch):
+async def test_s3_a_partial_answer_over_several_files_offers_the_document_chooser_and_a_prominent_search_more(monkeypatch):
+    # 17/11 (CODE_MODEL_DECISIONS 4.2): one chooser where several files can be ticked replaces the one-file buttons
     orch = answering(monkeypatch, PARTIAL, PLAN_AMD_ONLY)
     r = await orch._answer_one("Which company had the higher revenue in 2024?", "nb", _scope(), Decision(lang="en"))
-    assert r["alternatives"] == [
-        {"document_id": "nv", "label": NV.label, "document_ids": ["nv"], "kind": "retry_one"},
-        {"document_id": "amd", "label": AMD.label, "document_ids": ["amd"], "kind": "retry_one"},
-        {"document_id": "all", "label": "", "document_ids": ["amd", "nv"], "kind": "retry_all"},
-    ]
+    assert r["alternatives"] == []
+    assert [(c["document_id"], c["checked"]) for c in r["actions"]["chooser"]] == [("amd", True), ("nv", False)]
+    assert r["actions"]["search_more"] == {"prominent": True}
 
 
-async def test_s3_an_unverified_answer_also_offers_the_buttons(monkeypatch):
+async def test_s3_an_unverified_answer_also_offers_them(monkeypatch):
     orch = answering(monkeypatch, "AMD net revenue was $99 million [1].\n" + META % ("answered", "[1]"), PLAN_AMD_ONLY)
     monkeypatch.setattr(settings, "ANSWER_REPAIR_ENABLED", False)
     r = await orch._answer_one("Which company had the higher revenue in 2024?", "nb", _scope(), Decision(lang="en"))
-    assert [a["kind"] for a in r["alternatives"]] == ["retry_one", "retry_one", "retry_all"]
+    assert r["actions"]["chooser"] and r["actions"]["search_more"] == {"prominent": True}
 
 
-async def test_s3_an_answered_question_offers_nothing(monkeypatch):
+async def test_s3_an_answered_question_where_the_planner_chose_one_of_two_companies_shows_the_chooser_quietly(monkeypatch):
     orch = answering(monkeypatch, "AMD net revenue was $25,785 million in 2024 [1].\n" + META % ("answered", "[1]"), PLAN_AMD_ONLY)
     r = await orch._answer_one("Which company had the higher revenue in 2024?", "nb", _scope(), Decision(lang="en"))
-    assert r["alternatives"] == []
+    assert r["alternatives"] == [] and r["actions"]["search_more"] == {"prominent": False}
+    assert [c["checked"] for c in r["actions"]["chooser"]] == [True, False] and r["understood"].startswith("I understood the question as about:")
 
 
 async def test_s3_one_selected_file_gets_no_s3_buttons(monkeypatch):
