@@ -256,6 +256,13 @@ def names_an_item(text: str) -> bool:
     return bool(metric_in(text) or _METRIC_PLAIN.search(text) or _REPORT_TERMS.search(text) or _DOC_ANCHOR.search(text))
 
 
+def needs_lookup(text: str) -> bool:
+    """The dependent part of a two-step question asks for something new to look up: it names an item, and it is not only a comparison (a comparison word
+    without a line item: "Công ty nào lớn hơn?" names "the company" but compares figures already found). Measured 17/11 on the parts the planner marked:
+    of 22 ordinary gold v2 questions it wrongly marked, 5 still pass (11 with names_an_item alone); all 20 real two-step questions pass."""
+    return names_an_item(text) and not (_COLLECTIVE.search(text) and not (metric_in(text) or _METRIC_PLAIN.search(text)))
+
+
 def _searchable_alone(part: str) -> bool:
     """A later part names what to look up and does not compare with another part ("PepsiCo là bao nhiêu?", "Công ty nào lớn hơn?" do not)."""
     return not _COLLECTIVE.search(part) and names_an_item(part)

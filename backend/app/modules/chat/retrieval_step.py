@@ -15,7 +15,7 @@ from app.modules.documents.document import DocumentRecord
 from app.modules.query_router.catalog_route import question_years, r5
 from app.modules.query_router.decomposer import decompose_query
 from app.modules.query_router.bridge import continue_plan
-from app.modules.query_router.input_policy import _split, detect_language, names_an_item
+from app.modules.query_router.input_policy import _split, detect_language, needs_lookup
 from app.modules.query_router.planner import PlanItem, plan_multi_doc, plan_with_then
 from app.modules.chat.scope import catalog_card, catalog_entry, document_label, text_years
 from app.modules.retrieval.hybrid_search import SEARCH_PARTS, HybridSearchService
@@ -61,7 +61,7 @@ async def second_step(hybrid_search: HybridSearchService, query: str, then: str,
     first excerpts and plans the second search; its new excerpts are appended after the first ones (whose numbers the result cites) while the context stays
     within GATE_MAX_TOKENS (tokens counted as characters / 4). A bare comparison ("which was higher?") needs no second search."""
     hop: Dict[str, Any] = {"then": then}
-    if not names_an_item(then):
+    if not needs_lookup(then):
         return {**hop, "skipped": "no item to look up"}
     labels = {d.document_id: document_label(d) for d in scope}
     for c in retrieved:  # the intermediate call reads each excerpt under its source's name, as the writer does

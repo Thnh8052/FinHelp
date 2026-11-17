@@ -47,6 +47,18 @@ def test_sequential_question_is_no_longer_refused_over_several_sources(flags):
     assert decide(SEQUENTIAL, [KO22], 1).action == "not_supported_yet"  # one source: the single-filing path has no planner, the refusal stays
 
 
+@pytest.mark.parametrize("then, asks", [
+    ("what was that company's worldwide headcount?", True),
+    ("số nhân viên của công ty có lợi nhuận ròng cao nhất", True),
+    ("total current assets at year-end for the company with the highest revenue", True),
+    ("Công ty nào lớn hơn?", False),  # UI test 17/11: "công ty" is report vocabulary, but the part only compares
+    ("Which company was higher?", False),
+    ("Which was highest?", False),
+])
+def test_a_dependent_part_that_only_compares_needs_no_second_step(then, asks):
+    assert policy.needs_lookup(then) is asks
+
+
 def test_names_an_item_tells_a_lookup_from_a_bare_comparison():
     assert policy.names_an_item("what was that company's worldwide headcount?")
     assert policy.names_an_item("lợi nhuận ròng năm 2021 của công ty đó là bao nhiêu?")
@@ -202,6 +214,13 @@ async def test_a_bare_comparison_in_then_makes_no_intermediate_call(flags, monke
     search = FakeSearch()
     found = await retrieval_step.retrieve_for_scope(search, "Which had higher revenue in 2022, Coca-Cola or PepsiCo? Which was higher?", "nb", _docs())
     assert len(search.planned) == 1 and found.hop.get("skipped") == "no item to look up"
+
+    async def plan_company(q, catalog):  # the UI test of 17/11: the comparison names "the company", still nothing new to look up
+        return [PlanItem("total revenues", ["d1", "d2"])], "Công ty nào lớn hơn?"
+
+    monkeypatch.setattr(retrieval_step, "plan_with_then", plan_company)
+    found = await retrieval_step.retrieve_for_scope(FakeSearch(), "Doanh thu Coca-Cola là bao nhiêu? PepsiCo là bao nhiêu? Công ty nào lớn hơn?", "nb", _docs())
+    assert found.hop.get("skipped") == "no item to look up"
 
 
 async def test_an_unsettled_first_step_keeps_the_first_search_only(flags, monkeypatch):
