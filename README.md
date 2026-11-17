@@ -110,9 +110,9 @@ backend/app/core/      cấu hình, bảo mật, mã lỗi
 backend/scripts/       công cụ một lần (khởi tạo chỉ mục, chuyển đổi MongoDB V3, kiểm tra kết nối R2...)
 backend/tests/         test backend
 frontend/src/          giao diện (features/, components/, locales/ en và vi)
-docs/Version_3/        tài liệu đang dùng (hợp đồng bàn giao, roadmap, đặc tả)
-docs/Version_2/        lưu trữ: kế hoạch, báo cáo, lỗi đã sửa, thiết kế ban đầu
+docs/VERSION_4/        tài liệu đang dùng (kiến trúc, roadmap, đặc tả, hợp đồng bàn giao, sơ đồ)
+docs/OLD_VER/          lưu trữ: Version_2, Version_3 và các tài liệu cũ
 docker-compose.yml     MongoDB và Qdrant cho môi trường phát triển
 ```
 
-Lộ trình và việc còn lại: [docs/Version_3/DEV_ROADMAP_V3.md](docs/Version_3/DEV_ROADMAP_V3.md); chi tiết từng việc ở [DEV_ROADMAP_V2.md](docs/Version_3/DEV_ROADMAP_V2.md).
+Lộ trình và việc còn lại: [docs/VERSION_4/ROADMAP_V4.md](docs/VERSION_4/ROADMAP_V4.md); chỉ mục tài liệu ở [docs/README.md](docs/README.md).

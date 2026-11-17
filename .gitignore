@@ -18,6 +18,8 @@ experiments/
 scratch/
 example/
 .claude/
+evidence_previews/
+new_chunking_experiments/
 # Các file cụ thể (Specific files)
 run.md
 version_control.md
