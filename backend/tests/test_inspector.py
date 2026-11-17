@@ -13,7 +13,6 @@ from app.modules.auth.user import UserRecord
 from app.modules.chat import inspector
 from app.modules.chat.chat import validate_question
 from app.modules.notebooks.notebook import NotebookRecord
-from app.modules.query_router.intent import Intent
 from app.shared.deps import get_current_user
 from tests.test_input_policy import HIST, NIKE_DOCS, _doc, _orchestrator
 
@@ -27,22 +26,6 @@ async def test_an_unconfirmed_document_stops_both_before_any_search(monkeypatch)
     chat = await orch.execute_query("What was the revenue?", "nb", document_ids=["u"])
     seen = await orch.inspect_question("What was the revenue?", "nb", document_ids=["u"])
     assert chat["intent"] == seen["decision"] == "ask_confirm_catalog" and seen["parts"] == []
-    assert not orch.hybrid_search.calls
-
-
-async def test_small_talk_the_router_blocks_is_not_searched_by_either(monkeypatch):
-    from app.modules.chat import orchestrator as orch_mod
-
-    async def router(question, embed, evidence=()):
-        return Intent("small_talk", 0.9, 0.5, True)
-
-    orch, _ = _orchestrator(NIKE_DOCS[1:], monkeypatch)
-    orch.hybrid_search.embedder = types.SimpleNamespace(embed_queries=None)
-    monkeypatch.setattr(settings, "INTENT_ROUTER_ENABLED", True)
-    monkeypatch.setattr(orch_mod, "classify_intent", router)
-    chat = await orch.execute_query("bạn ổn không ?", "nb", document_ids=["d2"])
-    seen = await orch.inspect_question("bạn ổn không ?", "nb", document_ids=["d2"])
-    assert chat["intent"] == seen["decision"] == "static_reply" and seen["intent"]["label"] == "small_talk"
     assert not orch.hybrid_search.calls
 
 

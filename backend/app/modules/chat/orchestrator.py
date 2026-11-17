@@ -6,13 +6,12 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-import httpx
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from qdrant_client import AsyncQdrantClient
 
 from app.core.config import settings
 from app.core.error_codes import Code
-from app.core.exceptions import DomainException, ServiceUnavailableError
+from app.core.exceptions import DomainException
 from app.core.logging import logger
 from app.modules.chat import events
 from app.modules.documents.document_repo import DocumentRepository
@@ -22,8 +21,6 @@ from app.modules.generation.llm_client import REQUEST_USAGE, LLMTruncatedError, 
 from app.modules.query_router.input_policy import COMPARE_CUE, MSG, TERMINAL, Decision, SourceInfo, decide, detect_language, mentioned_sources, rewrite_followup
 from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_from_focus, focus_view
 from app.modules.query_router import guard
-from app.modules.query_router.intent import ROUTES, Intent
-from app.modules.query_router.intent import classify as classify_intent
 from app.modules.query_router.bridge import writer_note
 from app.modules.query_router.planner import PlanItem, unlisted_companies
 from app.modules.query_router.target_scope import TargetDecision, decide_targets
@@ -60,7 +57,6 @@ class QuestionPlan:
     ready_count: int = 0
     decision: Optional[Decision] = None
     focus: Optional[Focus] = None
-    intent: Optional[Intent] = None
     followup: Optional[Dict[str, Any]] = None  # {"method": "focus" | "llm", "resolved": the rewrite}
     prefix: str = ""  # "I understood the question as ...", shown above the answer
     stop: Optional[Dict[str, Any]] = None  # a reply that ends the question here: nothing is searched
@@ -93,15 +89,15 @@ class GuardBlocked(Exception):
 
 
 GUARD: ContextVar = ContextVar("guard", default=None)
-# Fixed replies of the rules or the router, which the guard's label may overrule: for chat and off-topic replies any safety label ("I want to disappear
+# Fixed replies of the rules, which the guard's label may overrule: for chat and off-topic replies any safety label ("I want to disappear
 # forever" is not small talk), for a refusal only a crisis ("I cannot help with that request" is the wrong reply to a person in distress; two refusals that
-# only differ in kind stay as the rules or the router gave them)
+# only differ in kind stay as the rules gave them)
 _CHAT_STOPS = frozenset({"static_reply", "refuse_concept", "refuse_out_of_domain"})
 _REFUSAL_STOPS = frozenset({"refuse_advice", "refuse_sensitive", "refuse_instruction"})
 
 
 class RAGWorkflowOrchestrator:
-    """One question, end to end (execute_query): plan_question (sources, rules, intent router, follow-up rewrite; may end the question here), retrieve_for_question
+    """One question, end to end (execute_query): plan_question (sources, rules, follow-up rewrite; may end the question here), retrieve_for_question
     (which documents, the search: retrieval_step.retrieve_for_scope), then _answer_one: the answer from those excerpts only (_answer writes it), the review of it
     (_write_checked: answer_check/review.py, every check once, at most one rewrite, then kept, blocked or annotated). The guard (query_router/guard.py)
     runs beside all of it and turns a message away before any answer is written."""
@@ -349,7 +345,7 @@ class RAGWorkflowOrchestrator:
     async def _guarded(self, query: str, notebook_id: str, **kwargs) -> Dict[str, Any]:
         """_execute_query with the guard beside it. The guard's call starts with the question and takes about a second, as long as the plan and
         the first search steps: a label that turns the message away stops the search at once; otherwise the label is read just before the answer
-        is written (_cleared), so a question that passes waits for nothing. A fixed reply of the rules or the router to chat or an off-topic
+        is written (_cleared), so a question that passes waits for nothing. A fixed reply of the rules to chat or an off-topic
         request gives way to a safety label. GUARD_ENABLED False: no call, as before the guard."""
         if not settings.GUARD_ENABLED:
             return await self._execute_query(query, notebook_id, **kwargs)
@@ -390,22 +386,11 @@ class RAGWorkflowOrchestrator:
                 if not task.done():
                     task.cancel()
 
-    async def _intent(self, query: str, decision: Decision) -> Optional[Intent]:
-        """The intent of a question the rules did not settle (None: nothing to ask the router). The router failing changes nothing: the
-        question goes on to the search as it did before the router existed."""
-        if not settings.INTENT_ROUTER_ENABLED or decision.action in TERMINAL or decision.action in ("overview", "use_previous_citations"):
-            return None
-        try:
-            return await classify_intent(query, self.hybrid_search.embedder.embed_queries, decision.evidence)
-        except (RuntimeError, httpx.HTTPError, ServiceUnavailableError) as exc:
-            logger.warning(f"Intent router skipped: {type(exc).__name__}: {str(exc)[:120]}")
-            return None
-
     async def plan_question(
         self, query: str, notebook_id: str, document_id: Optional[str] = None, document_ids: Optional[List[str]] = None,
         history: Optional[List[dict]] = None, mentions: Optional[List[str]] = None, focus_state: Optional[Dict[str, Any]] = None,
     ) -> QuestionPlan:
-        """Every step before a search, in order: the sources, the catalog gate, the topic, the rules, the intent router, the follow-up
+        """Every step before a search, in order: the sources, the catalog gate, the topic, the rules, the follow-up
         rewrite (an LLM call when the topic cannot fill it). The chat (execute_query) and the admin inspector (inspect_question) both
         start here, so the inspector shows what the chat really does."""
         scope = await self.resolve_scope(notebook_id, document_ids, document_id)
@@ -425,13 +410,8 @@ class RAGWorkflowOrchestrator:
         tagged = {**focus_state, "document_ids": mentions} if mentions and focus_state else focus_state  # @file names the company: the topic only gives the item and year
         p.focus = focus = focus_view(tagged, [d.document_id for d in scope], p.infos)
         p.decision = decision = decide(query, p.infos, p.ready_count, history, focus)
-        # What the rules let through is still checked for what it is (small talk, an off-topic request, a request for advice...): turned
-        # away here, before a follow-up is rewritten or anything is searched
-        p.intent = intent = await self._intent(query, decision)
-        if intent and intent.blocked:
-            action, key = ROUTES[intent.label]
-            p.stop = terminal(action, MSG[key][decision.lang], {"decision": {"action": action}, "intent": intent.trace()})
-            return p
+        # What the rules let through is still checked for what it is (small talk, an off-topic request, a request for advice...) by the guard,
+        # beside the search (_guarded): the intent router that did it here was removed 17/11/2026 (TRIED.md DV-08)
         if decision.action == "rewrite_followup":  # "And the net income?" -> a standalone question, shown to the user
             filled = None if {"correction", "outside_name"} & set(decision.flags) else fill_from_focus(query, focus, p.infos, decision.lang)
             topic = [{"role": "current topic", "content": f"{', '.join(focus.companies)}; {focus.years}; {METRICS[focus.metric][1] if focus.metric else 'no item yet'}"}] if focus else []
@@ -491,7 +471,7 @@ class RAGWorkflowOrchestrator:
         out: Dict[str, Any] = {
             "query": query,
             "scope": [{"document_id": d.document_id, "label": document_label(d), "file_name": d.file_name} for d in p.scope],
-            "searched_query": p.query, "followup": p.followup, "intent": p.intent.trace() if p.intent else None, "parts": [],
+            "searched_query": p.query, "followup": p.followup, "parts": [],
         }
         if p.stop:  # the chat would answer this without searching
             out.update(decision=p.stop["intent"], message=p.stop["answer"], stop=p.stop["trace"])
@@ -572,8 +552,6 @@ class RAGWorkflowOrchestrator:
             result["focus"] = build_focus(result["focus_query"], result["focus_docs"], years, focus_state)
         if p.followup:
             result.setdefault("trace", {})["followup"] = p.followup
-        if p.intent:
-            result.setdefault("trace", {})["intent"] = p.intent.trace()
         if p.prefix:
             result["answer"] = p.prefix + result["answer"]
         result["answer"], meta = split_answer(result["answer"])  # prompt v3: the machine block goes to the trace, not to the user

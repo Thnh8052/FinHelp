@@ -13,7 +13,6 @@ def _measured_prompt(monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "GENERATION_PROMPT", "v2")
-    monkeypatch.setattr(settings, "INTENT_ROUTER_ENABLED", False)
     monkeypatch.setattr(settings, "OUTPUT_POLICY_ENABLED", False)
     monkeypatch.setattr(settings, "GUARD_ENABLED", False)
 
