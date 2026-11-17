@@ -24,6 +24,7 @@ from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_fro
 from app.modules.query_router import guard
 from app.modules.query_router.intent import ROUTES, Intent
 from app.modules.query_router.intent import classify as classify_intent
+from app.modules.query_router.bridge import writer_note
 from app.modules.query_router.planner import PlanItem, unlisted_companies
 from app.modules.query_router.target_scope import TargetDecision, decide_targets
 from app.modules.generation.citation_generator import CitationGenerator
@@ -201,6 +202,9 @@ class RAGWorkflowOrchestrator:
         ocr_flagged = [n for n, c in enumerate(retrieved, 1) if "ocr" in (c.get("flags") or [])]
         if ocr_flagged:
             notes.append(ocr_note(ocr_flagged))
+        two_step = writer_note(found.hop)  # MULTIHOP_ENABLED: the first step's result and its excerpts, to check and state before the second step
+        if two_step:
+            notes.append(two_step)
         if found.missing:
             notes.append("No excerpt was found in: " + "; ".join(labels.get(d, d) for d in found.missing)
                          + ". Say that the figures of these sources could not be found in the documents; do not estimate them.")
@@ -250,6 +254,7 @@ class RAGWorkflowOrchestrator:
                 "ocr_excerpts": ocr_flagged,
                 "plan": [{"query": p.query, "documents": [labels.get(d, d) for d in p.document_ids] or "all"} for p in plan],
                 "sub_queries": sub_queries,
+                **({"multihop": found.hop} if found.hop else {}),
                 "retrieved_pages": [c["page"] for c in retrieved],
                 "prompt": settings.GENERATION_PROMPT,
                 "decision": {"action": decision.action, "assumption": decision.assumption, "flags": decision.flags, "unlisted_companies": unlisted},

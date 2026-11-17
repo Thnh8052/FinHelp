@@ -157,6 +157,17 @@ class Settings(BaseSettings):
     GATE_MIN_SCORE: float = 0.15
     GATE_MAX_CHUNKS: int = 14
     GATE_MAX_TOKENS: int = 20480
+    # Multi-step questions (docs/VERSION_4/ROADMAP_V4.md 3.3; measured 17/11 in experiments/scripts/agentic). Both off by default: everything as before.
+    # MULTIDOC_WHOLE_MESSAGE: over several sources a message of several questions is not cut at its question marks: the planner reads it whole (24 messages: evidence
+    # of every part 23 against 22 when code cut it). Without a plan, code still cuts it and routes each part (R5, else R4) as the net.
+    # MULTIHOP_ENABLED: over several sources a question whose second part needs the answer of the first ("which had the highest revenue, and what was its net
+    # income?") is no longer refused. The planner (PROMPT_MULTIHOP) plans the first part and returns the dependent part; when that part names an item to look up,
+    # one intermediate call (query_router/bridge.py) reads the first excerpts, states the result with citations and plans the second search; its new excerpts
+    # follow the first ones within GATE_MAX_TOKENS. At most two steps. Measured: 20 two-step questions, evidence of both steps 16, correct answers 17, intermediate
+    # result right 19; on gold v2 the prompt kept the evidence (147 of 187 against 143). The call takes 5.2 s median; past the deadline the first step counts as unsettled.
+    MULTIDOC_WHOLE_MESSAGE: bool = False
+    MULTIHOP_ENABLED: bool = False
+    MULTIHOP_BRIDGE_TIMEOUT_SECONDS: float = 10.0
     # Catalog line read at upload (services/ingestion/catalog.py): the measured prompt through the DeepSeek API ("deepseek", no GPU,
     # runs while Docling parses the next file) or the local model through Ollama ("ollama"); off or unreachable -> rule header
     CATALOG_ENABLED: bool = True

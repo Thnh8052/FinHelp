@@ -218,6 +218,25 @@ def test_a_later_question_about_this_company_or_year_is_still_split():
     assert len(policy._split("What was Nike's revenue in FY2023? What was Nike's cost of sales for that year?")) == 2
 
 
+@pytest.mark.parametrize("question", [
+    "Doanh thu Coca-Cola là bao nhiêu? PepsiCo là bao nhiêu? Công ty nào lớn hơn?",  # part 2 names no item, part 3 compares
+    "Doanh thu Coca-Cola là bao nhiêu? Doanh thu PepsiCo có cao hơn không?",  # the later part compares with the first
+    "What was Coca-Cola's revenue in 2022? What about PepsiCo in 2022? Which one is larger?",
+])
+def test_a_later_part_that_cannot_be_searched_alone_keeps_the_message_whole(question):
+    """G7.1: cut apart, the later part is searched without the item or the companies it is about; whole, the planner sees every part."""
+    assert policy._split(question) == []
+    assert act(question, [KO22, PEP22]).action != "split_questions"
+
+
+@pytest.mark.parametrize("question", [
+    "Doanh thu Coca-Cola là bao nhiêu? Lợi nhuận ròng của PepsiCo là bao nhiêu?",
+    "What are Nike's risk factors? Who is the auditor of the company?",
+])
+def test_questions_that_each_name_their_item_are_still_split(question):
+    assert len(policy._split(question)) == 2
+
+
 def test_language_is_detected_for_the_messages():
     assert act("Doanh thu là bao nhiêu?", [KO22, PEP22]).lang == "vi"
     assert act("???", [NIKE23]).lang == "en"

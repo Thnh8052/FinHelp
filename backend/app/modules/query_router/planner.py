@@ -1,7 +1,7 @@
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from app.core.config import settings
 from app.core.logging import logger
@@ -81,6 +81,17 @@ Output ONLY JSON: {{"plan": [{{"query": "...", "doc_ids": ["...", "..."]}}, {{"q
 
 Question: {q}"""
 
+# Settings MULTIHOP_ENABLED: the same prompt with one more rule after "Several periods" and a "then" field, the configuration C2 measured 17/11
+# (experiments/scripts/agentic/make_plans.py, approved 17/11). The rule marks the part of a question that can only be looked up once another part is answered.
+_DEPENDENT = ("- Dependent part: when part of the question can only be looked up after another part is answered from the reports (for example a figure of \"the company "
+              "with the highest revenue\"), plan only the part that can be searched now, and copy the dependent part, in the user's words, into \"then\". Leave \"then\" "
+              "empty when no part depends on another.")
+_OUTPUT = 'Output ONLY JSON: {{"plan": [{{"query": "...", "doc_ids": ["...", "..."]}}, {{"query": "...", "doc_ids": ["..."]}}]}}'
+_head, _rule, _rest = PROMPT.partition("- Several periods:")
+_line, _nl, _after = _rest.partition("\n")
+PROMPT_MULTIHOP = (_head + _rule + _line + _nl + _DEPENDENT + "\n" + _after).replace(_OUTPUT, 'Output ONLY JSON: {{"plan": [{{"query": "...", "doc_ids": ["..."]}}], "then": "..."}}')
+assert PROMPT_MULTIHOP.count('"then"') >= 2, "the planner prompt changed: rebuild PROMPT_MULTIHOP"
+
 
 def expand_plan(plan: Sequence[PlanItem], scope_ids: Sequence[str], limit: int) -> List[PlanItem]:
     """One search per (item, document), so every selected document keeps its own slots even when the planner put several
@@ -91,7 +102,7 @@ def expand_plan(plan: Sequence[PlanItem], scope_ids: Sequence[str], limit: int) 
     return expanded if len(expanded) <= limit else list(plan)
 
 
-_cache: Dict[str, List[PlanItem]] = {}
+_cache: Dict[str, Tuple[List[PlanItem], str]] = {}
 _CACHE_MAX = 256
 
 
@@ -118,21 +129,29 @@ def parse_plan(raw: str, valid_ids: Sequence[str]) -> List[PlanItem]:
 def chose_nothing(raw: str) -> bool:
     """The reply is a valid empty plan: the model chose no report, which is not an error worth a second call."""
     try:
-        return json.loads(raw) == {"plan": []}
+        return json.loads(raw) in ({"plan": []}, {"plan": [], "then": ""})
     except (ValueError, TypeError):
         return False
 
 
-async def plan_multi_doc(question: str, catalog: Sequence[CatalogEntry]) -> List[PlanItem]:
-    """The searches of a question over several filings. The model sees short ids (doc01, doc02, ...), as in the study; the plan comes back with
-    the real ones. No valid plan after a second call, an empty plan or the model being down all return [], and the caller routes without a plan."""
+def _then(raw: str) -> str:
+    try:
+        then = json.loads(raw).get("then")
+    except (ValueError, AttributeError):
+        return ""
+    return then.strip() if isinstance(then, str) else ""
+
+
+async def _plan(question: str, catalog: Sequence[CatalogEntry], template: str) -> Tuple[List[PlanItem], str]:
+    """(plan, dependent part) of a question over several filings. The model sees short ids (doc01, doc02, ...), as in the study; the plan comes back with
+    the real ones. No valid plan after a second call, an empty plan or the model being down all return ([], ""), and the caller routes without a plan."""
     if not catalog:
-        return []
-    key = question + "\x00" + "\x00".join(sorted(e.line() for e in catalog))
+        return [], ""
+    key = str(template is PROMPT_MULTIHOP) + "\x00" + question + "\x00" + "\x00".join(sorted(e.line() for e in catalog))
     if key in _cache:
         return _cache[key]
     ids = {f"doc{i + 1:02d}": e for i, e in enumerate(catalog)}
-    prompt = PROMPT.format(catalog="\n".join(e.line(alias) for alias, e in ids.items()), q=question)
+    prompt = template.format(catalog="\n".join(e.line(alias) for alias, e in ids.items()), q=question)
     for _ in range(2):
         try:
             raw = await chat_completion(
@@ -140,17 +159,27 @@ async def plan_multi_doc(question: str, catalog: Sequence[CatalogEntry]) -> List
             )
         except LLMUnavailableError as exc:
             logger.warning(f"Multi-document planning skipped: {type(exc).__name__}")
-            return []
+            return [], ""
         plan = [PlanItem(p.query, [ids[d].document_id for d in p.document_ids]) for p in parse_plan(raw, list(ids))]
         if plan:
             if len(_cache) >= _CACHE_MAX:
                 _cache.pop(next(iter(_cache)))
-            _cache[key] = plan
-            return plan
+            _cache[key] = (plan, _then(raw))
+            return _cache[key]
         if chose_nothing(raw):
-            return []
+            return [], ""
     logger.warning("Multi-document planning skipped: no valid plan in the reply")
-    return []
+    return [], ""
+
+
+async def plan_multi_doc(question: str, catalog: Sequence[CatalogEntry]) -> List[PlanItem]:
+    """The searches of a question over several filings (the measured prompt)."""
+    return (await _plan(question, catalog, PROMPT))[0]
+
+
+async def plan_with_then(question: str, catalog: Sequence[CatalogEntry]) -> Tuple[List[PlanItem], str]:
+    """Settings MULTIHOP_ENABLED: the searches of the part that can be looked up now, and the dependent part ("" when none)."""
+    return await _plan(question, catalog, PROMPT_MULTIHOP)
 
 
 # ---------------------------------------------------------------- companies named in the question but not among the selected sources

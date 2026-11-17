@@ -11,6 +11,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Set
 
+from app.core.config import settings
 from app.core.logging import logger
 from app.modules.generation.llm_client import LLMUnavailableError, chat_completion
 from app.modules.query_router.catalog_route import company_key, company_matches
@@ -250,11 +251,22 @@ def _names_unknown(question: str, sources: Sequence[SourceInfo]) -> bool:
 _BACK_REF = re.compile(r"\b(this|that|these|those|it)\b(?!\s+(company|firm|report|filing|document|source|file|year|quarter|period)\b)", re.I)
 
 
+def names_an_item(text: str) -> bool:
+    """The text names something to look up in a report: a line item, the vocabulary of a filing, a page or table ("Which was higher?" does not)."""
+    return bool(metric_in(text) or _METRIC_PLAIN.search(text) or _REPORT_TERMS.search(text) or _DOC_ANCHOR.search(text))
+
+
+def _searchable_alone(part: str) -> bool:
+    """A later part names what to look up and does not compare with another part ("PepsiCo là bao nhiêu?", "Công ty nào lớn hơn?" do not)."""
+    return not _COLLECTIVE.search(part) and names_an_item(part)
+
+
 def _split(question: str) -> List[str]:
     parts = [p.strip() for p in re.split(r"(?<=[?？])\s+", question.strip()) if p.strip()]
     if len(parts) < 2 or len(question) > 400 or any(not p.endswith(("?", "？")) or len(p.split()) < 3 for p in parts):
         return []
-    if any(_BACK_REF.search(p) for p in parts[1:]):  # one pass keeps the context; split, the later part would search without it
+    # one pass keeps the context; split, a later part that points back or cannot be searched alone would search without it
+    if any(_BACK_REF.search(p) or not _searchable_alone(p) for p in parts[1:]):
         return []
     return parts[:3]
 
@@ -356,11 +368,12 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
         else:
             d.action, d.message = "ask_clarify", _msg("ask_clarify", lang)
         return d
-    # G: shape of the question
-    if _SEQUENTIAL.search(q):
+    # G: shape of the question. Over several sources the planner can read the shape itself (settings MULTIDOC_WHOLE_MESSAGE, MULTIHOP_ENABLED); one source has no planner
+    several = len(sources) >= 2
+    if _SEQUENTIAL.search(q) and not (settings.MULTIHOP_ENABLED and several):
         d.action, d.message = "not_supported_yet", _msg("not_supported_yet", lang)
         return d
-    parts = _split(q)
+    parts = [] if settings.MULTIDOC_WHOLE_MESSAGE and several else _split(q)
     if parts:
         d.action, d.sub_questions = "split_questions", parts
         return d
