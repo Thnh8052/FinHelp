@@ -57,7 +57,7 @@ async def test_the_first_answer_that_cannot_be_finished_says_sorry_for_the_limit
     vi = await orch._answer("Doanh thu của AMD là bao nhiêu?", chunks)
     assert vi.startswith("Xin lỗi, câu hỏi này vượt quá giới hạn xử lý của hệ thống") and "chia nhỏ" in vi and "Net revenue 2024 25,785" in vi
     fake_model(orch, monkeypatch, LLMUnavailableError(CUT))  # an outage keeps its own sentence
-    assert (await orch._answer("What was AMD's revenue?", chunks)).startswith("No answer could be generated right now")
+    assert (await orch._answer("What was AMD's revenue?", chunks)).startswith("Sorry, no answer could be generated right now")  # behavior check 17/11: it says sorry too
 
 
 async def test_a_question_whose_answer_cannot_be_finished_costs_one_attempt_and_is_not_repaired(monkeypatch):

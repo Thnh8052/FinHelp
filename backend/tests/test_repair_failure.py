@@ -11,7 +11,7 @@ from app.modules.generation.llm_client import LLMUnavailableError
 from app.modules.query_router.input_policy import Decision
 from tests.test_validation import CHUNKS, _orchestrator, _scope
 
-APOLOGY = "No answer could be generated right now"
+APOLOGY = "Sorry, no answer could be generated right now"
 
 
 @pytest.fixture(autouse=True)
@@ -65,7 +65,7 @@ async def test_the_apology_for_an_outage_is_not_verified_or_repaired(monkeypatch
 
     monkeypatch.setattr(orch, "retrieve", retrieve)
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert r["answer"].startswith("No answer could be generated right now") and "⚠️" not in r["answer"]
+    assert r["answer"].startswith("Sorry, no answer could be generated right now") and "⚠️" not in r["answer"]
     assert len(calls) == 1 and not r["verification"]["repaired"] and r["verification"]["passed"]
 
 

@@ -136,11 +136,12 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
     hop: Dict[str, Any] = {}
     if plan:
         # R5 repairs what the plan misses (planner_fallback/fallback_eval.py): an item without documents searches the documents
-        # the question names, and each named document the plan does not search gets a search with the question (FB3, add only).
+        # the question names, and each named document the plan does not search gets a search with the question (FB3, add only). So does each
+        # targeted document (@file, a ticked chooser box): the user said the question is about it (tests/test_tagged_documents.py).
         named = r5(query, ids, {d.document_id: catalog_card(d) for d in scope}) or []
         plan = [PlanItem(p.query, p.document_ids or named) for p in plan]
         searched = {d for p in plan for d in (p.document_ids or ids)}
-        plan += [PlanItem(query, [d]) for d in named if d not in searched]
+        plan += [PlanItem(query, [d]) for d in dict.fromkeys(named + (ids if targeted else [])) if d not in searched]
         sub_queries = [p.query for p in plan]
         retrieved = await search_with_retry(lambda: hybrid_search.retrieve_planned(query, plan, notebook_id, ids, **left_out))
         if then:

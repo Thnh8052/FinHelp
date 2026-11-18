@@ -95,6 +95,7 @@ class QueryRequest(BaseModel):
     mentions: Optional[List[str]] = None  # @file: selected documents the question is explicitly about (ids, never parsed from the text)
     retry_of: Optional[str] = None  # sent by a "search again" button: the answer that fell short (docs/Version_3/fail_cases.md, S3)
     deeper: bool = False  # with retry_of: the "search deeper" button (same documents, the excerpts already sent left out); without: the document chooser
+    again: bool = False  # with retry_of: the "try again" button after a model that could not be reached (same documents, same search, nothing left out)
 
 
 class CitationOut(BaseModel):
@@ -114,7 +115,7 @@ class QueryResponse(BaseModel):
     citations: List[CitationOut]
     understood: str = ""  # G3: how the question was understood (documents, assumptions), shown above the answer
     alternatives: List[dict] = []  # buttons of answers stored before 17/11/2026 ([{"document_id", "label", "kind"?}]); new answers carry `actions`
-    actions: dict = {}  # {"chooser": [{"document_id", "label", "checked"}], "search_more": {"prominent"} | None, "edit_question"} (orchestrator.answer_actions)
+    actions: dict = {}  # {"chooser": [{"document_id", "label", "checked"}], "search_more": {"prominent"} | None, "edit_question", "try_again"} (orchestrator.answer_actions)
     message_id: str = ""  # the stored answer: what a report of wrong figures points to
 
 
@@ -174,6 +175,18 @@ def deeper_of(message: MessageRecord) -> Dict[str, List[str]]:
     return {"exclude": list((message.trace_info or {}).get("chunk_ids") or sent), "keep": [c.chunk_id for c in message.citations if c.cited and c.chunk_id]}
 
 
+def uses_answer_documents(req: "QueryRequest") -> bool:
+    """A click that asks again over the documents of the clicked answer ("search deeper", "try again"), not over the ones it sends (the chooser's ticks)."""
+    return req.retry_of is not None and (req.deeper or req.again)
+
+
+def same_documents(message: MessageRecord, chosen: List[str], mentions: List[str]) -> Tuple[List[str], List[str]]:
+    """The sources and @ tags a "search deeper" click on `message` searches: the ones that answer was asked over (trace "asked"), whatever the sidebar
+    shows now; an answer stored before the trace kept them keeps the request's choice."""
+    asked = (message.trace_info or {}).get("asked") or {}
+    return (list(asked["document_ids"]), list(asked.get("mentions") or [])) if asked.get("document_ids") else (chosen, mentions)
+
+
 def _retried(messages: List[MessageRecord]) -> set:
     """The answers a "search again" click was already used on."""
     return {(m.trace_info or {}).get("retry_of") for m in messages} - {None}
@@ -187,7 +200,7 @@ def shown_messages(messages: List[MessageRecord]) -> List["MessageOut"]:
         if m.message_id in used:
             m.alternatives = [a for a in m.alternatives if not a.get("kind")]
             if m.actions:
-                m.actions = {**m.actions, "chooser": [], "search_more": None}
+                m.actions = {**m.actions, "chooser": [], "search_more": None, "try_again": False}
     return out
 
 
@@ -198,14 +211,15 @@ async def _admit(request: Request, req: "QueryRequest", user_id: Optional[str], 
     if not can_chat(nb, user_id):  # past require_notebook, only a read-only sample notebook is refused: signing in does not change that
         raise api_error(status_code=403, code=Code.SAMPLE_NOTEBOOK_READ_ONLY)
     chosen, mentions = validate_question(req.document_ids, req.document_id, req.mentions, req.query, signed_in=user_id is not None)
+    retry_of = await retried_message(ChatRepository(db), req.notebook_id, req.retry_of)
+    if uses_answer_documents(req) and retry_of is not None:  # the documents of the clicked answer, checked below like any choice
+        chosen, mentions = same_documents(retry_of, chosen, mentions)
     await ensure_documents_ready(db, req.notebook_id, chosen)
     orchestrator = RAGWorkflowOrchestrator(db, qdrant)
     try:  # a question without a usable source choice is refused before it costs quota or writes a message
         await orchestrator.resolve_scope(req.notebook_id, chosen)
     except SourceSelectionError as exc:
         raise api_error(status_code=422, code=exc.code, **exc.params)
-
-    retry_of = await retried_message(ChatRepository(db), req.notebook_id, req.retry_of)
 
     # 1. Các lượt trước (để hiểu câu hỏi nối tiếp như "còn lợi nhuận thì sao?")
     history = await load_history(db, req.notebook_id)
@@ -236,8 +250,9 @@ async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str])
         if user_id is not None:
             await adm.users.consume_quota(user_id, messages=-1)
         raise
+    result.setdefault("trace", {})["asked"] = {"document_ids": list(adm.chosen), "mentions": list(adm.mentions)}  # what "search deeper" searches again
     if adm.retry_of is not None:
-        result.setdefault("trace", {})["retry_of"] = adm.retry_of.message_id
+        result["trace"]["retry_of"] = adm.retry_of.message_id
     return result
 
 

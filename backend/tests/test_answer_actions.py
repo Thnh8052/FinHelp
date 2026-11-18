@@ -20,7 +20,7 @@ def found(scope, plan=(), degraded=(), retrieved=(CHUNK,)):
     return RetrievalResult(list(scope), {d.document_id: d.document_id.upper() for d in scope}, list(plan), [], list(retrieved), "planner", {}, degraded=list(degraded))
 
 
-def actions(selected, f, targets=TargetDecision(), status="answered", short=False, unfinished=False, retry=False):
+def actions(selected, f, targets=TargetDecision(), status="answered", short=False, unfinished="", retry=False):
     return answer_actions(selected, f, targets, status, short, unfinished, retry)
 
 
@@ -30,7 +30,7 @@ def chooser(a):
 
 def test_one_document_answered_gets_only_a_quiet_search_more():
     a = actions([CVS], found([CVS]))
-    assert a == {"chooser": [], "search_more": {"prominent": False}, "edit_question": False}
+    assert a == {"chooser": [], "search_more": {"prominent": False}, "edit_question": False, "try_again": False}
 
 
 def test_one_document_short_gets_a_prominent_search_more():
@@ -63,8 +63,20 @@ def test_a_degraded_search_makes_search_more_prominent():
         assert actions([CVS, JNJ], found([CVS, JNJ], degraded=[why]))["search_more"] == {"prominent": True}
 
 
-def test_a_failed_writer_gets_a_prominent_search_more():
-    assert actions([CVS], found([CVS]), status=None, unfinished=True)["search_more"] == {"prominent": True}
+def test_a_writer_that_could_not_be_reached_offers_try_again_not_search_more():
+    # "search deeper" leaves out every excerpt already sent, the best ones included: after an outage the same search is asked again (behavior check 17/11)
+    a = actions([CVS], found([CVS]), status=None, unfinished="outage")
+    assert a["try_again"] is True and a["search_more"] is None and a["edit_question"] is False
+
+
+def test_a_reply_cut_at_the_limit_offers_editing_the_question():
+    # its apology asks to split the question: more excerpts would only make it longer
+    a = actions([CVS], found([CVS]), status=None, unfinished="cut")
+    assert a["edit_question"] is True and a["search_more"] is None and a["try_again"] is False
+
+
+def test_an_answer_offers_no_try_again():
+    assert actions([CVS], found([CVS]))["try_again"] is False and actions([CVS], found([CVS]), retry=True)["try_again"] is False
 
 
 def test_a_request_for_clarification_offers_the_chooser_and_editing_the_question():
@@ -73,8 +85,8 @@ def test_a_request_for_clarification_offers_the_chooser_and_editing_the_question
 
 
 def test_a_click_gets_no_more_clicks_and_editing_the_question_when_it_still_falls_short():
-    assert actions([CVS, JNJ], found([CVS, JNJ]), status="partial", short=True, retry=True) == {"chooser": [], "search_more": None, "edit_question": True}
-    assert actions([CVS, JNJ], found([CVS, JNJ]), retry=True) == {"chooser": [], "search_more": None, "edit_question": False}
+    assert actions([CVS, JNJ], found([CVS, JNJ]), status="partial", short=True, retry=True) == {"chooser": [], "search_more": None, "edit_question": True, "try_again": False}
+    assert actions([CVS, JNJ], found([CVS, JNJ]), retry=True) == {"chooser": [], "search_more": None, "edit_question": False, "try_again": False}
 
 
 def test_nothing_searched_offers_no_search_more():

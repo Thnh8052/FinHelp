@@ -28,7 +28,7 @@ from app.modules.query_router.target_scope import TargetDecision, decide_targets
 from app.modules.generation.citation_generator import CitationGenerator
 from app.modules.generation.answer_check import policy, review
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
-from app.modules.generation.replies import CHECK_SOURCES, DEGRADED_NOTE, NO_DATA_ANSWER, RETRY_APOLOGY, sources_message, terminal, unlisted_message
+from app.modules.generation.replies import CHECK_SOURCES, DEGRADED_NOTE, NO_DATA_ANSWER, RETRY_APOLOGY, RETRY_FIGURES_APOLOGY, excerpt_preview, sources_message, terminal, unlisted_message
 from app.modules.chat.retrieval_step import RetrievalResult, retrieve_for_scope, search_with_retry
 from app.modules.chat.scope import catalog_entry, document_label, scope_doc, source_info
 from app.modules.generation.answer_check.citations import cited_numbers
@@ -46,7 +46,14 @@ def ocr_note(numbers: List[int]) -> str:
 
 
 class Unfinished(str):
-    """The fixed apology (with the first excerpts) that stands in for an answer the model could not write: there is nothing to verify, repair or search more for in it."""
+    """The fixed apology (with the first excerpts) that stands in for an answer the model could not write: there is nothing to verify, repair or search more for in it.
+    This one: the model could not be reached (an outage): the same question is asked again unchanged ("try again")."""
+    kind = "outage"
+
+
+class CutShort(Unfinished):
+    """The model could not finish within its limit: the apology asks to split the question ("edit question"); more excerpts would only make it longer."""
+    kind = "cut"
 
 
 @dataclass
@@ -229,14 +236,16 @@ class RAGWorkflowOrchestrator:
         # The added line goes after the machine block, which split_answer removes.
         short = ((meta or {}).get("status") in ("partial", "not_found") or not verification["passed"]) and not isinstance(answer, Unfinished) and text not in policy.BLOCKED.values()
         lang = "vi" if decision.lang == "vi" else "en"
-        if short and retry:  # the one click did not do better: no further button
-            answer += "\n\n" + RETRY_APOLOGY[lang]
+        status = (meta or {}).get("status")
+        unfinished = answer.kind if isinstance(answer, Unfinished) else ""  # read before a line is added: "+=" makes a plain str
+        # One added line, naming the problem that happened (tests/test_failure_replies.py)
+        if found.degraded:  # a step was dropped: the slow system is the cause, not the sources, even after a click
+            answer += "\n\n" + DEGRADED_NOTE[lang]
+        elif short and retry:  # the one click did not do better: no further button
+            answer += "\n\n" + (RETRY_APOLOGY if status in ("partial", "not_found") else RETRY_FIGURES_APOLOGY)[lang]
         elif short and not_found:  # S2
             answer += "\n\n" + CHECK_SOURCES[lang]
-        if found.degraded and not retry:
-            answer += "\n\n" + DEGRADED_NOTE[lang]
-        status = (meta or {}).get("status")
-        actions = answer_actions(scope, found, targets, status, short, isinstance(answer, Unfinished), retry)
+        actions = answer_actions(scope, found, targets, status, short, unfinished, retry)
         understood = targets.understood
         if not understood and len(scope) > 1 and plan:  # the planner chose: say which documents (CODE_MODEL_DECISIONS 2.2, option C)
             understood = understood_line([labels.get(d, d) for d in dict.fromkeys(d for p in plan for d in (p.document_ids or [x.document_id for x in found.scope]))],
@@ -253,7 +262,7 @@ class RAGWorkflowOrchestrator:
             # list positions (a question of its own: with an offset the [n] of this part restart at 1)
             "citations": [{**c.model_dump(), **({"cited": idx + 1 in cited} if citation_offset == 0 else {})} for idx, c in enumerate(citations)],
             "retrieved_chunks_count": len(retrieved),
-            "charged": bool(retrieved),  # B7: no excerpt, no answer written (NO_DATA_ANSWER): the question is not counted
+            "charged": bool(retrieved) and not unfinished,  # B7: no excerpt, no answer written (NO_DATA_ANSWER); nor an apology for a model that failed or was cut
             "understood": understood,
             "alternatives": [],  # older answers kept their buttons here; new ones carry `actions`
             "actions": actions,
@@ -632,15 +641,21 @@ class RAGWorkflowOrchestrator:
             logger.warning(f"Answer generation unavailable: {exc.code}")
             if not fallback:
                 raise
-            excerpts = "\n\n".join(f"**{'Trang' if vi else 'Page'} {c['page']}**\n> " + c["content"][:400].replace("\n", "\n> ") for c in chunks[:3])
+            excerpts = "\n\n".join(f"**{'Trang' if vi else 'Page'} {c['page']}**\n" + quoted(excerpt_preview(c["content"])) for c in chunks[:3])
             cut = isinstance(exc, LLMTruncatedError)  # the model could not finish within its limit (never "the reports do not contain this"), not an outage
+            kind = CutShort if cut else Unfinished
             if vi:
                 head = ("Xin lỗi, câu hỏi này vượt quá giới hạn xử lý của hệ thống nên chưa thể hoàn tất câu trả lời. Bạn có thể thử chia nhỏ câu hỏi (mỗi lần một chỉ tiêu hoặc một năm). Các đoạn liên quan nhất trong báo cáo:"
-                        if cut else "Hệ thống chưa tạo được câu trả lời tự động lúc này. Các đoạn liên quan nhất trong báo cáo:")
-                return Unfinished(f"{head}\n\n{excerpts}\n\n(Xem chi tiết tại phần trích dẫn nguồn đính kèm.)")
+                        if cut else "Xin lỗi, hệ thống chưa tạo được câu trả lời lúc này. Bạn có thể thử lại sau ít phút. Các đoạn liên quan nhất trong báo cáo:")
+                return kind(f"{head}\n\n{excerpts}\n\n(Xem chi tiết tại phần trích dẫn nguồn đính kèm.)")
             head = ("Sorry, this question is beyond what the system can finish within its processing limit, so no answer was completed. You can try splitting it into smaller questions (one metric or one year at a time). The most relevant excerpts of the report:"
-                    if cut else "No answer could be generated right now. The most relevant excerpts of the report:")
-            return Unfinished(f"{head}\n\n{excerpts}\n\n(See the attached source citations for details.)")
+                    if cut else "Sorry, no answer could be generated right now. You can try again in a moment. The most relevant excerpts of the report:")
+            return kind(f"{head}\n\n{excerpts}\n\n(See the attached source citations for details.)")
+
+
+def quoted(preview: str) -> str:
+    """A text excerpt as a quote; a table excerpt (excerpt_preview) stays a table: a quoted table is shown as raw pipes."""
+    return preview if preview.startswith("|") or "\n|" in preview else "> " + preview
 
 
 def kept_then_new(kept: List[Dict[str, Any]], new: List[Dict[str, Any]], budget: int, count: Callable[[Dict[str, Any]], int]) -> List[Dict[str, Any]]:
@@ -659,14 +674,16 @@ def kept_then_new(kept: List[Dict[str, Any]], new: List[Dict[str, Any]], budget:
     return out
 
 
-def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets: TargetDecision, status: Optional[str], short: bool, unfinished: bool,
+def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets: TargetDecision, status: Optional[str], short: bool, unfinished: str,
                    retry: bool) -> Dict[str, Any]:
     """The buttons under an answer (docs/VERSION_4/CODE_MODEL_DECISIONS_2026-11-17.md 4.2; tests/test_answer_actions.py). `chooser`: every selected document,
     the ones the answer used ticked, several may be ticked (they become @ tags of a new search); `search_more`: a full search again that leaves out what
-    was sent, prominent when the answer fell short or a step was dropped; `edit_question`: put the question back in the box. One click only: an answer
-    to a click offers neither, and the question box when it still fell short."""
+    was sent, prominent when the answer fell short or a step was dropped; `edit_question`: put the question back in the box; `try_again`: the same question
+    again, nothing left out. `unfinished` ("" | "outage" | "cut", Unfinished.kind): a model that could not be reached gets try_again (search_more would
+    leave out the best excerpts), a reply cut at the limit gets edit_question (its apology asks to split the question); neither gets search_more.
+    One click only: an answer to a click offers none of them, but the question box when it still fell short or was cut."""
     if retry:
-        return {"chooser": [], "search_more": None, "edit_question": short}
+        return {"chooser": [], "search_more": None, "edit_question": short or unfinished == "cut", "try_again": False}
     ids = [d.document_id for d in scope]
     planned = [d for d in dict.fromkeys(d for p in found.plan for d in (p.document_ids or [x.document_id for x in found.scope]))]
     used = targets.document_ids or planned or [d.document_id for d in found.scope]
@@ -675,8 +692,8 @@ def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets:
         targets.rule == "none" and bool(found.plan) and len({company[d] for d in used if d in company}) < len(set(company.values())))
     show = len(scope) > 1 and (chose_for_user or short or status == "clarify")
     chooser = [{"document_id": d.document_id, "label": found.labels.get(d.document_id) or document_label(d), "checked": d.document_id in used} for d in scope] if show else []
-    search_more = {"prominent": bool(short or found.degraded or unfinished)} if (found.retrieved or unfinished) and ids else None
-    return {"chooser": chooser, "search_more": search_more, "edit_question": status == "clarify"}
+    search_more = {"prominent": bool(short or found.degraded)} if found.retrieved and ids and not unfinished else None
+    return {"chooser": chooser, "search_more": search_more, "edit_question": status == "clarify" or unfinished == "cut", "try_again": unfinished == "outage"}
 
 
 def _previews(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

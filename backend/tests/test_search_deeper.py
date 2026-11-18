@@ -120,3 +120,43 @@ def test_the_kept_excerpts_come_first_and_the_new_ones_fit_the_budget():
     new = [{"chunk_id": "k", "content": "dup", "token_count": 1}] + [{"chunk_id": f"n{i}", "content": "b " * 10, "token_count": 10} for i in range(5)]
     out = kept_then_new(kept, new, budget=30, count=lambda c: c["token_count"])
     assert [c["chunk_id"] for c in out] == ["k", "n0", "n1"]  # the duplicate is dropped, the budget stops the rest
+
+
+# ------------------------------------------------------------------ the documents of a click (UI check 17/11: a click followed the sidebar, not the answer)
+def test_an_answer_records_the_documents_it_was_asked_over():
+    class Orchestrator:
+        async def execute_query(self, **kw):
+            return {"answer": "x", "intent": "retrieval_rag", "citations": [], "trace": {}}
+
+    import asyncio
+
+    adm = chat_api._Admitted(types.SimpleNamespace(focus_state={}), ["d1", "d2"], ["d2"], Orchestrator(), [], None)
+    result = asyncio.run(chat_api._answered(adm, chat_api.QueryRequest(notebook_id="nb", query="q", document_ids=["d1", "d2"], mentions=["d2"]), "u1"))
+    assert result["trace"]["asked"] == {"document_ids": ["d1", "d2"], "mentions": ["d2"]}
+
+
+def test_a_deeper_click_searches_the_documents_of_the_clicked_answer_not_the_current_selection():
+    clicked = MessageRecord(message_id="m2", notebook_id="nb", role="assistant", content="...",
+                            trace_info={"asked": {"document_ids": ["d1", "d2"], "mentions": ["d1", "d2"]}})
+    assert chat_api.same_documents(clicked, ["d1"], []) == (["d1", "d2"], ["d1", "d2"])
+    older = clicked.model_copy(update={"trace_info": {}})  # stored before the trace kept them: the request's choice stands
+    assert chat_api.same_documents(older, ["d1"], []) == (["d1"], [])
+
+
+def test_a_try_again_click_asks_the_same_documents_and_leaves_nothing_out():
+    import asyncio
+
+    seen = {}
+
+    class Orchestrator:
+        async def execute_query(self, **kw):
+            seen.update(kw)
+            return {"answer": "x", "intent": "retrieval_rag", "citations": [], "trace": {}}
+
+    clicked = MessageRecord(message_id="m2", notebook_id="nb", role="assistant", content="...", trace_info={"chunk_ids": ["a1"]})
+    adm = chat_api._Admitted(types.SimpleNamespace(focus_state={}), ["d1"], [], Orchestrator(), [], None, retry_of=clicked)
+    req = chat_api.QueryRequest(notebook_id="nb", query="q", document_ids=["d1"], retry_of="m2", again=True)
+    asyncio.run(chat_api._answered(adm, req, "u1"))
+    assert seen["retry"] is True and seen.get("deeper") is None  # the same search, nothing left out
+    assert chat_api.uses_answer_documents(req) and chat_api.uses_answer_documents(req.model_copy(update={"again": False, "deeper": True}))
+    assert not chat_api.uses_answer_documents(req.model_copy(update={"again": False}))  # a chooser click asks the ticked documents
