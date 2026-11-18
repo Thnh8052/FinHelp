@@ -13,6 +13,7 @@ Mỗi notebook là một đoạn chat.
 
 import asyncio
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, List, Literal, Optional, Tuple, Dict
@@ -255,16 +256,31 @@ async def _admit(request: Request, req: "QueryRequest", user_id: Optional[str], 
     return _Admitted(nb, chosen, mentions, orchestrator, history, users, retry_of)
 
 
+_UNDERSTOOD_LINE = re.compile(r"(?:Tôi hiểu câu hỏi là|I understood the question as): “.*?”\n\n", re.S)
+
+
+def follow_up_of(req: "QueryRequest", message: Optional[MessageRecord]) -> Optional[dict]:
+    """The trace of how the clicked answer understood its question ({"method", "resolved"}), when that question was a follow-up ("And the net income?")
+    and the click asks the same question again ("search deeper", "try again", "search all sources"). Such a click must ask the question as it was
+    understood then: sent as the original words, the follow-up is understood a second time against the conversation as it is now, many turns later,
+    and another question gets searched (system test 18/11, B1)."""
+    if message is None or not uses_answer_documents(req):
+        return None
+    followup = (message.trace_info or {}).get("followup") or {}
+    return followup if followup.get("resolved") else None
+
+
 async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str]) -> dict:
     """3. Kích hoạt RAG Workflow Orchestrator; không có câu trả lời thì trả lại lượt đã giữ."""
+    followup = follow_up_of(req, adm.retry_of)
     try:
         result = await adm.orchestrator.execute_query(
-            query=req.query,
+            query=followup["resolved"] if followup else req.query,
             notebook_id=req.notebook_id,
             document_ids=adm.chosen,
-            history=adm.history,
+            history=[] if followup else adm.history,  # a standalone question needs no conversation (as after the first understanding: decide(resolved, ..., []))
             mentions=adm.mentions,
-            focus_state=adm.nb.focus_state,
+            focus_state={} if followup else adm.nb.focus_state,
             retry=adm.retry_of is not None,
             ui_lang=req.ui_lang,
             **({"deeper": deeper_of(adm.retry_of)} if req.deeper and adm.retry_of is not None else {}),
@@ -274,6 +290,11 @@ async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str])
             await adm.users.consume_quota(user_id, messages=-1)
         raise
     result.setdefault("trace", {})["asked"] = {"document_ids": list(adm.chosen), "mentions": list(adm.mentions)}  # what "search deeper" searches again
+    if followup:  # the answer says how the question was understood, as the first one did
+        result["trace"]["followup"] = followup
+        said = _UNDERSTOOD_LINE.match(adm.retry_of.content)
+        if said:
+            result["answer"] = said.group(0) + result["answer"]
     if adm.retry_of is not None:
         result["trace"]["retry_of"] = adm.retry_of.message_id
         result["trace"]["click"] = ("deeper" if req.deeper else "again" if req.again else "everywhere" if req.everywhere else "chooser")  # the interface marks the click and its answer

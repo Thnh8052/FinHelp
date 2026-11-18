@@ -160,3 +160,58 @@ def test_a_try_again_click_asks_the_same_documents_and_leaves_nothing_out():
     assert seen["retry"] is True and seen.get("deeper") is None  # the same search, nothing left out
     assert chat_api.uses_answer_documents(req) and chat_api.uses_answer_documents(req.model_copy(update={"again": False, "deeper": True}))
     assert not chat_api.uses_answer_documents(req.model_copy(update={"again": False}))  # a chooser click asks the ticked documents
+
+
+# ------------------------------------------------------------------ a click asks the question as it was understood (system test 18/11, B1)
+# "Còn Amazon năm 2020 thì sao?" was first understood as one standalone question; the click sent the original words again and the follow-up was
+# understood a second time against the conversation as it was NOW (many turns later), so "search deeper" answered another question.
+RESOLVED = "Amazon vận hành bao nhiêu kho vào cuối năm 2020?"
+PREFIX = f"Tôi hiểu câu hỏi là: “{RESOLVED}”\n\n"
+
+
+def _clicked_follow_up():
+    return MessageRecord(message_id="m2", notebook_id="nb", role="assistant", content=PREFIX + "Amazon có 110 kho.",
+                         trace_info={"chunk_ids": ["a1"], "followup": {"method": "llm", "resolved": RESOLVED}})
+
+
+async def _click(**flags):
+    seen = {}
+
+    class Orchestrator:
+        async def execute_query(self, **kw):
+            seen.update(kw)
+            return {"answer": "Câu trả lời mới.", "intent": "retrieval_rag", "citations": [], "trace": {}}
+
+    later_turns = [{"role": "user", "content": "chuyện khác"}, {"role": "assistant", "content": "trả lời khác"}]
+    adm = chat_api._Admitted(types.SimpleNamespace(focus_state={"topic": "later"}), ["d1"], [], Orchestrator(), later_turns, None, retry_of=_clicked_follow_up())
+    req = chat_api.QueryRequest(notebook_id="nb", query="Còn Amazon năm 2020 thì sao?", document_ids=["d1"], retry_of="m2", **flags)
+    return seen, await chat_api._answered(adm, req, "u1")
+
+
+async def test_deeper_again_and_everywhere_ask_the_resolved_question_without_the_conversation_of_now():
+    for flag in ("deeper", "again", "everywhere"):
+        seen, result = await _click(**{flag: True})
+        assert seen["query"] == RESOLVED, flag  # not the original words
+        assert seen["history"] == [] and seen["focus_state"] == {}, flag  # nothing that could turn it into a follow-up of the conversation of now
+        assert result["trace"]["followup"] == {"method": "llm", "resolved": RESOLVED}, flag
+        assert result["answer"] == PREFIX + "Câu trả lời mới.", flag  # the answer still says how the question was understood, as the first one did
+
+
+async def test_the_chooser_click_keeps_the_question_and_the_conversation():
+    seen, result = await _click()
+    assert seen["query"] == "Còn Amazon năm 2020 thì sao?" and seen["history"] and seen["focus_state"] == {"topic": "later"}
+    assert "followup" not in result["trace"] and result["answer"] == "Câu trả lời mới."
+
+
+async def test_an_answer_that_was_not_a_follow_up_is_asked_as_it_was():
+    seen = {}
+
+    class Orchestrator:
+        async def execute_query(self, **kw):
+            seen.update(kw)
+            return {"answer": "x", "intent": "retrieval_rag", "citations": [], "trace": {}}
+
+    plain = MessageRecord(message_id="m2", notebook_id="nb", role="assistant", content="...", trace_info={"chunk_ids": ["a1"]})
+    adm = chat_api._Admitted(types.SimpleNamespace(focus_state={"topic": "t"}), ["d1"], [], Orchestrator(), [{"role": "user", "content": "h"}], None, retry_of=plain)
+    await chat_api._answered(adm, chat_api.QueryRequest(notebook_id="nb", query="What was revenue?", document_ids=["d1"], retry_of="m2", deeper=True), "u1")
+    assert seen["query"] == "What was revenue?" and seen["history"] == [{"role": "user", "content": "h"}] and seen["focus_state"] == {"topic": "t"}
