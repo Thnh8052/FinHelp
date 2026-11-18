@@ -56,3 +56,6 @@ report_w12/
 
 # File build của TypeScript
 *.tsbuildinfo
+
+# local review pages, kept out of the repository
+review_gold_200.html
