@@ -35,11 +35,13 @@ export interface ChatMessage {
 /** Nút dưới câu trả lời (backend orchestrator.answer_actions; docs/VERSION_4/CODE_MODEL_DECISIONS_2026-11-17.md mục 4.2).
  * `chooser`: mọi tài liệu đã chọn, tài liệu câu trả lời đã dùng được đánh dấu sẵn; chọn được nhiều tài liệu rồi hỏi lại (chúng thành thẻ @).
  * `search_more`: tìm lại đủ các bước, bỏ qua các đoạn đã gửi; `prominent` khi câu trả lời hụt hoặc hệ thống phải bỏ bớt một bước.
- * `edit_question`: đưa câu hỏi về ô nhập để sửa. Mỗi câu trả lời chỉ bấm được một lần (chooser hoặc search_more). */
+ * `edit_question`: đưa câu hỏi về ô nhập để sửa. `try_again`: hỏi lại y nguyên (sau khi hệ thống chưa tạo được câu trả lời).
+ * Mỗi câu trả lời chỉ bấm được một lần (chooser, search_more hoặc try_again). */
 export interface AnswerActions {
   chooser?: { document_id: string; label: string; checked: boolean }[];
   search_more?: { prominent: boolean } | null;
   edit_question?: boolean;
+  try_again?: boolean;
 }
 
 export type ChatStage = "understanding" | "searching" | "writing" | "checking";

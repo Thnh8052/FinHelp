@@ -1094,13 +1094,17 @@
 }
 
 
-/* Cách hệ thống hiểu câu hỏi (tài liệu, giả định) và tài liệu khác cũng khớp */
+/* Cách hệ thống hiểu câu hỏi (tài liệu, giả định): một dải ngữ cảnh nhỏ phía trên câu trả lời */
 .chat-understood {
   font-size: 12px;
+  line-height: 1.5;
   color: var(--text-muted);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
   border-left: 2px solid var(--accent-primary);
-  padding: 2px 0 2px 8px;
-  margin-bottom: 8px;
+  border-radius: 0 6px 6px 0;
+  padding: 6px 12px;
+  margin-bottom: 12px;
 }
 
 .chat-alternatives {
@@ -1110,53 +1114,149 @@
   margin-top: 8px;
 }
 
-/* Nút dưới câu trả lời (AnswerActions): tìm kỹ hơn, sửa câu hỏi, chọn nhiều tài liệu để hỏi lại */
-.chat-answer-actions {
+/* Chân câu trả lời: tách khỏi phần chữ bằng một đường kẻ; hàng nguồn, rồi một thanh thao tác */
+.chat-message-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-citations-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-citations-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.chat-citations-list {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  gap: 6px;
+}
+
+/* Nút của câu trả lời (AnswerActions) bên trái, sao chép / báo sai bên phải; khung đổi tài liệu xuống dòng cuối */
+.chat-message-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin-top: 8px;
 }
 
-.chat-action-prominent {
-  font-weight: 600;
-  border-color: var(--accent-primary, #3b82f6) !important;
-  color: var(--text-primary, #e2e8f0);
+.chat-message-toolbar .chat-message-actions {
+  order: 5;
+  margin: 0 0 0 auto;
+  opacity: 1;
 }
 
-.chat-action-subtle {
-  background: none;
-  border: none;
-  padding: 4px 0;
+.chat-answer-actions {
+  display: contents;
+}
+
+.chat-answer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-medium);
+  background-color: transparent;
+  color: var(--text-secondary);
   font: inherit;
-  font-size: 13px;
-  color: var(--text-muted, #94a3b8);
-  text-decoration: underline;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background-color var(--transition), border-color var(--transition), color var(--transition);
 }
 
-.chat-action-subtle:disabled {
+.chat-answer-btn:hover:not(:disabled) {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.chat-answer-btn.is-prominent {
+  background-color: rgba(37, 99, 235, 0.16);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.chat-answer-btn:disabled {
   cursor: default;
-  opacity: 0.6;
+  opacity: 0.5;
+}
+
+.chat-answer-btn:focus-visible,
+.chat-action-btn:focus-visible,
+.chat-chooser summary:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 .chat-chooser {
+  order: 10;
   flex-basis: 100%;
   font-size: 13px;
 }
 
 .chat-chooser summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
   cursor: pointer;
-  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.chat-chooser summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-chooser summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--transition);
+}
+
+.chat-chooser[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.chat-chooser summary:hover {
+  color: var(--text-primary);
+}
+
+.chat-chooser[open] {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 12px 12px;
 }
 
 .chat-chooser fieldset {
   border: none;
-  margin: 6px 0;
+  margin: 8px 0 12px;
   padding: 0;
   display: grid;
-  gap: 4px;
+  gap: 8px;
 }
 
 .chat-chooser .sr-only {
@@ -1171,7 +1271,15 @@
 .chat-chooser-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.chat-chooser-row input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent-primary);
 }
 
 /* @file: tài liệu được tag và gợi ý khi gõ @ */
@@ -1229,13 +1337,19 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  overflow-x: auto;
-  max-width: 320px;
+  min-width: 0;
+  overflow: hidden;
+  max-width: 420px;
 }
 
 .chat-source-tag {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: 12px;
   background-color: rgba(37, 99, 235, 0.15);
   border: 1px solid rgba(59, 130, 246, 0.3);
@@ -1332,13 +1446,10 @@
 }
 
 /* Highlighted Bold Figure / Metric */
+/* Chữ đậm của câu trả lời: chỉ đậm và sáng hơn chữ thường, không tô nền (nền kẻ dưới làm câu kết luận dài trông như bị sơn) */
 .markdown-highlight-bold {
-  color: #ffffff;
-  font-weight: 700;
-  background: linear-gradient(180deg, transparent 65%, rgba(59, 130, 246, 0.25) 65%);
-  padding: 0 3px;
-  border-radius: 3px;
-  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  font-weight: 650;
 }
 
 /* Financial Table Container */

@@ -284,6 +284,7 @@ export interface TranslationSchema {
     askAgainWith: string;
     chooseSourcesLegend: string;
     searchDeeper: string;
+    tryAgain: string;
     editQuestion: string;
     sendBtn: string;
     removeTag: string;

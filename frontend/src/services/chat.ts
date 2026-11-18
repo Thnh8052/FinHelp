@@ -10,6 +10,8 @@ export interface QueryRequest {
   retry_of?: string;
   /** with retry_of: the "search deeper" button (same sources, the excerpts already sent left out) */
   deeper?: boolean;
+  /** with retry_of: the "try again" button (same sources, the same search, nothing left out) */
+  again?: boolean;
 }
 
 export interface QueryResponse {

@@ -11,7 +11,7 @@ import "./chat.css";
 
 interface ChatContainerProps {
   messages: ChatMessage[];
-  onSendMessage: (query: string, mentions?: string[], retryOf?: string, deeper?: boolean) => void;
+  onSendMessage: (query: string, mentions?: string[], retryOf?: string, mode?: "deeper" | "again") => void;
   /** Report (or withdraw) wrong figures in a stored answer. */
   onFlagAnswer?: (messageId: string, flagged: boolean) => void;
   isLoading: boolean;
@@ -237,11 +237,19 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           <span className="chat-sources-label">{t.workspace.activeScope}</span>
           <div className="chat-sources-tags">
             {mentionOptions && mentionOptions.length > 0 ? (
-              mentionOptions.map((opt) => (
-                <span key={opt.document_id} className="chat-source-tag">
-                  {opt.label}
-                </span>
-              ))
+              <>
+                {/* Two tags at most, each shortened with "…" (full name on hover); the rest as "+N": a scrolling strip cut the second name in half */}
+                {mentionOptions.slice(0, 2).map((opt) => (
+                  <span key={opt.document_id} className="chat-source-tag" title={opt.label}>
+                    {opt.label}
+                  </span>
+                ))}
+                {mentionOptions.length > 2 && (
+                  <span className="chat-source-tag" title={mentionOptions.slice(2).map((o) => o.label).join("\n")}>
+                    +{mentionOptions.length - 2}
+                  </span>
+                )}
+              </>
             ) : (
               <span className="chat-source-tag muted">{t.workspace.noFilingsSelected}</span>
             )}
@@ -324,76 +332,80 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                       ))}
                     </div>
                   )}
-                  {!isUser && msg.actions && !msg.streaming && (msg.query || messages[index - 1]?.role === "user") && (
-                    <AnswerActions
-                      actions={msg.actions}
-                      disabled={isLoading}
-                      onAsk={(sources, deeper) => onSendMessage(msg.query || messages[index - 1].content, sources, msg.message_id, deeper)}
-                      onEdit={() => {
-                        setInput(msg.query || messages[index - 1].content);
-                        textareaRef.current?.focus();
-                      }}
-                    />
-                  )}
+                  {/* Footer of an answer, set apart from its text: the sources it cites, then one toolbar (answer buttons left, copy / report right) */}
+                  {!isUser && !msg.streaming && (
+                    <div className="chat-message-footer">
+                      {/* Grounded Evidence Citations: only the excerpts the answer uses, each keeping its own [n] */}
+                      {(() => {
+                        const used = (msg.citations || [])
+                          .map((cite, idx) => ({ cite, index: idx + 1 }))
+                          .filter(({ cite }) => cite.cited !== false);
+                        if (used.length === 0) return null;
+                        return (
+                          <div className="chat-citations-container">
+                            <span className="chat-citations-title">
+                              {t.workspace.sourceCitationsTitle} ({used.length})
+                            </span>
+                            <div className="chat-citations-list">
+                              {used.map(({ cite, index }) => (
+                                <CitationBadge
+                                  key={cite.citation_id}
+                                  citation={cite}
+                                  index={index}
+                                  onClick={() => onSelectCitation({ ...cite, figures: citedFigures(msg.content, index) })}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
-                  {/* Grounded Evidence Citations: only the excerpts the answer uses, each keeping its own [n] */}
-                  {(() => {
-                    const used = (msg.citations || [])
-                      .map((cite, idx) => ({ cite, index: idx + 1 }))
-                      .filter(({ cite }) => cite.cited !== false);
-                    if (used.length === 0) return null;
-                    return (
-                      <div className="chat-citations-container">
-                        <div className="chat-citations-title">
-                          {t.workspace.sourceCitationsTitle} ({used.length}):
-                        </div>
-                        <div className="chat-citations-list">
-                          {used.map(({ cite, index }) => (
-                            <CitationBadge
-                              key={cite.citation_id}
-                              citation={cite}
-                              index={index}
-                              onClick={() => onSelectCitation({ ...cite, figures: citedFigures(msg.content, index) })}
-                            />
-                          ))}
+                      <div className="chat-message-toolbar">
+                        {msg.actions && (msg.query || messages[index - 1]?.role === "user") && (
+                          <AnswerActions
+                            actions={msg.actions}
+                            disabled={isLoading}
+                            onAsk={(sources, mode) => onSendMessage(msg.query || messages[index - 1].content, sources, msg.message_id, mode)}
+                            onEdit={() => {
+                              setInput(msg.query || messages[index - 1].content);
+                              textareaRef.current?.focus();
+                            }}
+                          />
+                        )}
+                        <div className="chat-message-actions">
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(msg.content, msg.message_id)}
+                            className={`chat-action-btn chat-copy-btn ${copiedMsgId === msg.message_id ? "copied" : ""}`}
+                            title={t.common.copy}
+                          >
+                            {copiedMsgId === msg.message_id ? (
+                              <>
+                                <CheckIcon size={12} color="#10b981" />
+                                <span className="chat-copied-text">{t.common.copied}</span>
+                              </>
+                            ) : (
+                              <>
+                                <CopyIcon size={12} />
+                                <span>{t.common.copy}</span>
+                              </>
+                            )}
+                          </button>
+                          {/* only an answer with sources has figures to report (not a refusal, a greeting or a fixed reply) */}
+                          {onFlagAnswer && msg.user_rating !== undefined && (msg.citations?.length ?? 0) > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => onFlagAnswer(msg.message_id, msg.user_rating !== -1)}
+                              aria-pressed={msg.user_rating === -1}
+                              className={`chat-action-btn chat-flag-btn ${msg.user_rating === -1 ? "flagged" : ""}`}
+                              title={t.workspace.reportWrongHint}
+                            >
+                              <Flag size={12} aria-hidden />
+                              <span>{msg.user_rating === -1 ? t.workspace.reportedWrong : t.workspace.reportWrong}</span>
+                            </button>
+                          )}
                         </div>
                       </div>
-                    );
-                  })()}
-
-                  {/* Actions: Copy */}
-                  {!isUser && !msg.streaming && (
-                    <div className="chat-message-actions">
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(msg.content, msg.message_id)}
-                        className={`chat-action-btn chat-copy-btn ${copiedMsgId === msg.message_id ? "copied" : ""}`}
-                        title={t.common.copy}
-                      >
-                        {copiedMsgId === msg.message_id ? (
-                          <>
-                            <CheckIcon size={12} color="#10b981" />
-                            <span className="chat-copied-text">{t.common.copied}</span>
-                          </>
-                        ) : (
-                          <>
-                            <CopyIcon size={12} />
-                            <span>{t.common.copy}</span>
-                          </>
-                        )}
-                      </button>
-                      {onFlagAnswer && msg.user_rating !== undefined && (
-                        <button
-                          type="button"
-                          onClick={() => onFlagAnswer(msg.message_id, msg.user_rating !== -1)}
-                          aria-pressed={msg.user_rating === -1}
-                          className={`chat-action-btn chat-flag-btn ${msg.user_rating === -1 ? "flagged" : ""}`}
-                          title={t.workspace.reportWrongHint}
-                        >
-                          <Flag size={12} aria-hidden />
-                          <span>{msg.user_rating === -1 ? t.workspace.reportedWrong : t.workspace.reportWrong}</span>
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>

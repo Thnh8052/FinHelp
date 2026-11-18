@@ -24,7 +24,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
 
   const loginWarning = (detail: string) => showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
 
-  const sendMessage = async (queryText: string, mentions?: string[], retryOf?: string, deeper?: boolean) => {
+  const sendMessage = async (queryText: string, mentions?: string[], retryOf?: string, mode?: "deeper" | "again") => {
     if (selectedDocIds.length === 0) {
       showToast(t.toasts.selectFiling, "warning");
       return;
@@ -41,7 +41,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       ...(retryOf
         ? prev.map((m) =>
             m.message_id === retryOf
-              ? { ...m, alternatives: (m.alternatives || []).filter((a) => !a.kind), actions: m.actions && { ...m.actions, chooser: [], search_more: null } }
+              ? { ...m, alternatives: (m.alternatives || []).filter((a) => !a.kind), actions: m.actions && { ...m.actions, chooser: [], search_more: null, try_again: false } }
               : m
           )
         : prev),
@@ -85,7 +85,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
           document_ids: Array.from(new Set([...(mentions || []), ...selectedDocIds])).slice(0, maxSources),
           mentions,
           ...(retryOf ? { retry_of: retryOf } : {}),
-          ...(retryOf && deeper ? { deeper: true } : {}),
+          ...(retryOf && mode ? { [mode]: true } : {}),
         },
         {
           onStage: setStage,
