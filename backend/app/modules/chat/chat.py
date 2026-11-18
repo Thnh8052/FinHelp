@@ -13,7 +13,6 @@ Mỗi notebook là một đoạn chat.
 
 import asyncio
 import json
-import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, List, Literal, Optional, Tuple, Dict
@@ -256,9 +255,6 @@ async def _admit(request: Request, req: "QueryRequest", user_id: Optional[str], 
     return _Admitted(nb, chosen, mentions, orchestrator, history, users, retry_of)
 
 
-_UNDERSTOOD_LINE = re.compile(r"(?:Tôi hiểu câu hỏi là|I understood the question as): “.*?”\n\n", re.S)
-
-
 def follow_up_of(req: "QueryRequest", message: Optional[MessageRecord]) -> Optional[dict]:
     """The trace of how the clicked answer understood its question ({"method", "resolved"}), when that question was a follow-up ("And the net income?")
     and the click asks the same question again ("search deeper", "try again", "search all sources"). Such a click must ask the question as it was
@@ -281,6 +277,7 @@ async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str])
             history=[] if followup else adm.history,  # a standalone question needs no conversation (as after the first understanding: decide(resolved, ..., []))
             mentions=adm.mentions,
             focus_state={} if followup else adm.nb.focus_state,
+            **({"asked_as": followup["resolved"]} if followup else {}),  # the understood line says which question is asked again (D5)
             retry=adm.retry_of is not None,
             ui_lang=req.ui_lang,
             **({"deeper": deeper_of(adm.retry_of)} if req.deeper and adm.retry_of is not None else {}),
@@ -290,11 +287,8 @@ async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str])
             await adm.users.consume_quota(user_id, messages=-1)
         raise
     result.setdefault("trace", {})["asked"] = {"document_ids": list(adm.chosen), "mentions": list(adm.mentions)}  # what "search deeper" searches again
-    if followup:  # the answer says how the question was understood, as the first one did
+    if followup:
         result["trace"]["followup"] = followup
-        said = _UNDERSTOOD_LINE.match(adm.retry_of.content)
-        if said:
-            result["answer"] = said.group(0) + result["answer"]
     if adm.retry_of is not None:
         result["trace"]["retry_of"] = adm.retry_of.message_id
         result["trace"]["click"] = ("deeper" if req.deeper else "again" if req.again else "everywhere" if req.everywhere else "chooser")  # the interface marks the click and its answer

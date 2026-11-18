@@ -55,6 +55,22 @@ def understood_line(labels: Sequence[str], vi: bool, extra: str = "") -> str:
     return (f"Tôi hiểu câu hỏi về: {listed}." if vi else f"I understood the question as about: {listed}.") + (f" {extra}" if extra else "")
 
 
+_ABOUT = {True: "Tôi hiểu câu hỏi về: ", False: "I understood the question as about: "}
+
+
+def merge_understood(asked: str, understood: str, vi: bool) -> str:
+    """One line for how the question was understood: the standalone question a follow-up was rewritten into (or that a click asks again), then the
+    documents and assumptions of `understood` (understood_line). Said once, above the answer, not again inside it (system test 18/11, D5)."""
+    if not asked:
+        return understood
+    head = f"Tôi hiểu câu hỏi là: “{asked}”" if vi else f"I understood the question as: “{asked}”"
+    if not understood:
+        return head + "."
+    if understood.startswith(_ABOUT[vi]):
+        return head + (", về: " if vi else ", about: ") + understood[len(_ABOUT[vi]):]
+    return f"{head}. {understood}"
+
+
 def _understood(docs: Sequence[ScopeDoc], vi: bool, extra: str = "") -> str:
     return understood_line([d.label for d in docs], vi, extra)
 
@@ -152,7 +168,8 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
     out.notes.append(f"The question is about these sources: {'; '.join(by_id[i].label for i in chosen)}. Answer for them.")
     if assumptions:
         out.notes.append("State the assumption in one short sentence at the start: " + "; ".join(assumptions) + ".")
-        out.notes.append(_hint(vi))
+        if out.alternatives:  # "tag the right file" only when another file can be tagged; not for a year read from the comparative column of the only report (D5)
+            out.notes.append(_hint(vi))
     if note:
         out.notes.append("Say how the fiscal years were aligned: " + note)
     return out

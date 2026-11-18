@@ -392,7 +392,7 @@ async def test_follow_up_is_rewritten_shown_and_answered(monkeypatch):
 
     monkeypatch.setattr(orch_mod, "rewrite_followup", rewrite)
     r = await orch.execute_query("And the net income?", "nb", document_ids=["d2"], history=HIST)
-    assert r["answer"].startswith("I understood the question as: “What was Nike's net income in FY2023?”")
+    assert r["understood"].startswith("I understood the question as: “What was Nike's net income in FY2023?”")  # once, above the answer (D5 18/11)
     assert seen["answers"][0][0] == "What was Nike's net income in FY2023?"
 
     async def fails(q, history):

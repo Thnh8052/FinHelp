@@ -24,7 +24,7 @@ from app.modules.query_router import guard
 from app.modules.query_router.bridge import writer_note
 from app.modules.query_router.planner import PlanItem, unlisted_companies
 from app.modules.query_router.catalog_route import company_key
-from app.modules.query_router.target_scope import TargetDecision, decide_targets, understood_line
+from app.modules.query_router.target_scope import TargetDecision, decide_targets, merge_understood, understood_line
 from app.modules.generation.citation_generator import CitationGenerator
 from app.modules.generation.answer_check import policy, review
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
@@ -148,7 +148,7 @@ class RAGWorkflowOrchestrator:
 
     async def retrieve_for_question(
         self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, mentions: Optional[List[str]] = None,
-        announce: bool = False, exclude: Optional[set] = None,
+        announce: bool = False, exclude: Optional[set] = None, asked: str = "",
     ) -> QuestionRetrieval:
         """The search for one question the input policy let through: the filings it is forced to (@file, a named company), the notes
         for the answer, and the excerpts. A question only about companies outside the selected sources is refused, unsearched.
@@ -170,9 +170,10 @@ class RAGWorkflowOrchestrator:
         search = asyncio.create_task(self.retrieve(query, notebook_id, scope, targets.document_ids, **({"exclude": exclude} if exclude else {})))
         search.add_done_callback(lambda t: t.cancelled() or t.exception())  # a cancelled or failed search is never left unread
         try:
-            if announce and targets.understood:
+            shown = merge_understood(asked, targets.understood, decision.lang == "vi")
+            if announce and shown:
                 await self._cleared()  # the understanding is shown only for a message the guard lets through (a refusal must not follow it on the screen); the search is already running
-                events.emit("understood", text=targets.understood, chooser=[])  # the chooser comes with the answer (answer_actions)
+                events.emit("understood", text=shown, chooser=[])  # the chooser comes with the answer (answer_actions)
             unlisted = await self.find_unlisted(query, scope)
         except BaseException:
             search.cancel()
@@ -191,11 +192,12 @@ class RAGWorkflowOrchestrator:
     # ------------------------------------------------------------------ input policy (docs/RESEARCH_NOTES_MULTIDOC.md, table F)
     async def _answer_one(
         self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, citation_offset: int = 0,
-        mentions: Optional[List[str]] = None, retry: bool = False, deeper: Optional[Dict[str, List[str]]] = None,
+        mentions: Optional[List[str]] = None, retry: bool = False, deeper: Optional[Dict[str, List[str]]] = None, asked: str = "",
     ) -> Dict[str, Any]:
         """The measured path for one question the input policy let through, with its notes for the answer. `retry`: the question was sent again by a
-        "search again" button; an answer that still falls short gets an apology and no button (one click only)."""
-        searched = await self.retrieve_for_question(query, notebook_id, scope, decision, mentions, announce=citation_offset == 0,
+        "search again" button; an answer that still falls short gets an apology and no button (one click only). `asked`: the standalone question a
+        follow-up was understood as, shown at the head of the understood line."""
+        searched = await self.retrieve_for_question(query, notebook_id, scope, decision, mentions, announce=citation_offset == 0, asked=asked,
                                                     **({"exclude": set(deeper["exclude"])} if deeper else {}))
         if searched.refusal:
             return searched.refusal
@@ -256,6 +258,7 @@ class RAGWorkflowOrchestrator:
         if not understood and len(scope) > 1 and plan:  # the planner chose: say which documents (CODE_MODEL_DECISIONS 2.2, option C)
             understood = understood_line([labels.get(d, d) for d in dict.fromkeys(d for p in plan for d in (p.document_ids or [x.document_id for x in found.scope]))],
                                          decision.lang == "vi")
+        understood = merge_understood(asked, understood, decision.lang == "vi")
         if not_found and not cited:
             citations = []
         focus_docs = [] if not_found else targets.document_ids or [c.document_id for n, c in enumerate(citations, 1) if n in cited] or [c.document_id for c in citations]
@@ -553,8 +556,11 @@ class RAGWorkflowOrchestrator:
         retry: bool = False,
         deeper: Optional[Dict[str, List[str]]] = None,
         ui_lang: Optional[str] = None,
+        asked_as: str = "",
     ) -> Dict[str, Any]:
+        """`asked_as`: a click asks a follow-up again as it was first understood (chat.follow_up_of): that question is shown in the understood line."""
         p = await self.plan_question(query, notebook_id, document_id, document_ids, history, mentions, focus_state, ui_lang)
+        asked = p.followup["resolved"] if p.followup else asked_as  # shown once, in the understood line above the answer (D5)
         if GUARD.get() is not None and p.decision:
             GUARD.get().evidence = list(p.decision.evidence)  # the second key of the guard's off_topic label
             GUARD.get().ruled = True
@@ -588,13 +594,13 @@ class RAGWorkflowOrchestrator:
                       "charged": charged, "trace": {"decision": {"action": "split_questions", "sub_questions": decision.sub_questions}, "parts": traced},
                       "focus_docs": last_part.get("focus_docs"), "focus_query": last_part.get("focus_query")}
         else:  # proceed, answer_per_source_and_ask
-            result = await self._answer_one(query, notebook_id, scope, decision, mentions=mentions, retry=retry, deeper=deeper)
+            result = await self._answer_one(query, notebook_id, scope, decision, mentions=mentions, retry=retry, deeper=deeper, asked=asked)
         if result.get("focus_docs"):  # a searched question moves the focus; refusals, greetings and lists of sources do not
             years = {d.document_id: d.metadata.fiscal_year for d in scope}
             result["focus"] = build_focus(result["focus_query"], result["focus_docs"], years, focus_state)
         if p.followup:
             result.setdefault("trace", {})["followup"] = p.followup
-        if p.prefix:
+        if p.prefix and not (asked and asked in (result.get("understood") or "")):  # a reply with no understood line (a fixed one, a refusal) says it itself
             result["answer"] = p.prefix + result["answer"]
         result["answer"], meta = split_answer(result["answer"])  # prompt v3: the machine block goes to the trace, not to the user
         if meta is not None:

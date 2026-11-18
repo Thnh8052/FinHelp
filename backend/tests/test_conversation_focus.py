@@ -118,7 +118,7 @@ async def test_a_follow_up_is_answered_without_the_model_and_moves_the_focus(mon
     orch, seen = _orchestrator(NIKE_DOCS, monkeypatch)
     monkeypatch.setattr(orch_mod, "rewrite_followup", never)
     r = await orch.execute_query("còn lợi nhuận ròng?", "nb", document_ids=["d1", "d2"], history=[{"role": "assistant", "content": "a"}], focus_state=STATE)
-    assert seen["answers"][0][0] == "Lợi nhuận ròng của NIKE năm 2023 là bao nhiêu?" and r["answer"].startswith("Tôi hiểu câu hỏi là: “Lợi nhuận ròng của NIKE năm 2023")
+    assert seen["answers"][0][0] == "Lợi nhuận ròng của NIKE năm 2023 là bao nhiêu?" and r["understood"].startswith("Tôi hiểu câu hỏi là: “Lợi nhuận ròng của NIKE năm 2023")  # D5 18/11
     assert r["trace"]["followup"]["method"] == "focus"
     assert r["focus"]["metric"] == "net_income" and r["focus"]["fiscal_years"] == [2023]
 

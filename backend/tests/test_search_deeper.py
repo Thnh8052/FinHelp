@@ -194,13 +194,14 @@ async def test_deeper_again_and_everywhere_ask_the_resolved_question_without_the
         assert seen["query"] == RESOLVED, flag  # not the original words
         assert seen["history"] == [] and seen["focus_state"] == {}, flag  # nothing that could turn it into a follow-up of the conversation of now
         assert result["trace"]["followup"] == {"method": "llm", "resolved": RESOLVED}, flag
-        assert result["answer"] == PREFIX + "Câu trả lời mới.", flag  # the answer still says how the question was understood, as the first one did
+        assert seen["asked_as"] == RESOLVED, flag  # shown in the understood line above the new answer, as for the first one (D5)
+        assert result["answer"] == "Câu trả lời mới.", flag  # not repeated inside the answer
 
 
 async def test_the_chooser_click_keeps_the_question_and_the_conversation():
     seen, result = await _click()
     assert seen["query"] == "Còn Amazon năm 2020 thì sao?" and seen["history"] and seen["focus_state"] == {"topic": "later"}
-    assert "followup" not in result["trace"] and result["answer"] == "Câu trả lời mới."
+    assert "followup" not in result["trace"] and result["answer"] == "Câu trả lời mới." and "asked_as" not in seen
 
 
 async def test_an_answer_that_was_not_a_follow_up_is_asked_as_it_was():
@@ -215,3 +216,4 @@ async def test_an_answer_that_was_not_a_follow_up_is_asked_as_it_was():
     adm = chat_api._Admitted(types.SimpleNamespace(focus_state={"topic": "t"}), ["d1"], [], Orchestrator(), [{"role": "user", "content": "h"}], None, retry_of=plain)
     await chat_api._answered(adm, chat_api.QueryRequest(notebook_id="nb", query="What was revenue?", document_ids=["d1"], retry_of="m2", deeper=True), "u1")
     assert seen["query"] == "What was revenue?" and seen["history"] == [{"role": "user", "content": "h"}] and seen["focus_state"] == {"topic": "t"}
+    assert "asked_as" not in seen
