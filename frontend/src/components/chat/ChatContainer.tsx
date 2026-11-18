@@ -396,7 +396,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                           >
                             {copiedMsgId === msg.message_id ? (
                               <>
-                                <CheckIcon size={12} color="#10b981" />
+                                <CheckIcon size={12} color="var(--positive)" />
                                 <span className="chat-copied-text">{t.common.copied}</span>
                               </>
                             ) : (

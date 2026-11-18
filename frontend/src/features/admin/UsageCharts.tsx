@@ -6,11 +6,11 @@ import { useLanguage } from "../../context/LanguageContext";
 import type { DayUsage } from "./types";
 import { EmptyState, useFormat } from "./ui";
 
-/* Validated with the dataviz palette checker on the card surface #0e1526 (dark): CVD ΔE 19.6, both >= 3:1 */
-const PROMPT = "#3987e5";
-const COMPLETION = "#199e70";
-const GRID = "rgba(255,255,255,0.06)";
-const AXIS = "#8291a8";
+/* Series colours: checked on the dark card surface (CVD ΔE 19.6, both >= 3:1) and still >= 3:1 on the white light card, so they are the same in both themes */
+export const PROMPT = "#3987e5"; // theme-ok
+const COMPLETION = "#199e70"; // theme-ok
+const GRID = "var(--border-subtle)";
+const AXIS = "var(--text-dim)";
 
 interface Row extends DayUsage {
   label: string;
@@ -113,9 +113,9 @@ export const UsageCharts: React.FC<{ series: DayUsage[]; tokensOnly?: boolean }>
             <CartesianGrid vertical={false} stroke={GRID} />
             <XAxis dataKey="label" {...axisProps} minTickGap={16} />
             <YAxis {...axisProps} width={44} tickFormatter={(v: number) => fmt.compact(v)} />
-            <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }} content={<ChartTooltip names={names} />} />
-            <Bar dataKey="prompt_tokens" stackId="t" fill={PROMPT} stroke="#0e1526" strokeWidth={1} />
-            <Bar dataKey="completion_tokens" stackId="t" fill={COMPLETION} stroke="#0e1526" strokeWidth={1} radius={[4, 4, 0, 0]} />
+            <Tooltip cursor={{ fill: "var(--bg-hover)" }} content={<ChartTooltip names={names} />} />
+            <Bar dataKey="prompt_tokens" stackId="t" fill={PROMPT} stroke="var(--bg-card)" strokeWidth={1} />
+            <Bar dataKey="completion_tokens" stackId="t" fill={COMPLETION} stroke="var(--bg-card)" strokeWidth={1} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -129,7 +129,7 @@ export const UsageCharts: React.FC<{ series: DayUsage[]; tokensOnly?: boolean }>
                 <CartesianGrid vertical={false} stroke={GRID} />
                 <XAxis dataKey="label" {...axisProps} minTickGap={16} />
                 <YAxis {...axisProps} width={44} allowDecimals={false} />
-                <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }} content={<ChartTooltip names={names} />} />
+                <Tooltip cursor={{ fill: "var(--bg-hover)" }} content={<ChartTooltip names={names} />} />
                 <Bar dataKey="questions" fill={PROMPT} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

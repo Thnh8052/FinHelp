@@ -63,7 +63,7 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
   if (!documentId) return null;
 
   const unverified = new Set(data?.metadata.catalog_unverified || []);
-  const flag = (field: string) => (unverified.has(field) ? { borderColor: "#f59e0b" } : undefined);
+  const flag = (field: string) => (unverified.has(field) ? { borderColor: "var(--warn-solid)" } : undefined);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

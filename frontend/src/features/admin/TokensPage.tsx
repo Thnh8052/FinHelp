@@ -2,7 +2,7 @@ import React from "react";
 import { Activity, Coins, Cpu, Users } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 import { useAdminData } from "./AdminLayout";
-import { UsageCharts } from "./UsageCharts";
+import { PROMPT, UsageCharts } from "./UsageCharts";
 import { Card, CardHeader, EmptyState, KpiCard, Skeleton, Table, fill, useFormat } from "./ui";
 
 export const TokensPage: React.FC = () => {
@@ -72,7 +72,7 @@ export const TokensPage: React.FC = () => {
                         <span className="font-mono text-xs text-fg-2">{fmt.number(u.total_tokens)}</span>
                       </div>
                       <div className="mt-1.5 h-1 rounded-full bg-white/5" aria-hidden>
-                        <div className="h-full rounded-full bg-[#3987e5]" style={{ width: `${pct}%` }} />
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: PROMPT }} />
                       </div>
                     </div>
                   </li>

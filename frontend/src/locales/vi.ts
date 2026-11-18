@@ -21,6 +21,8 @@ export const vi: TranslationSchema = {
     retry: "Thử lại",
     language: "Ngôn ngữ",
     languageSelection: "Chọn ngôn ngữ",
+    switchToLight: "Chuyển sang giao diện sáng",
+    switchToDark: "Chuyển sang giao diện tối",
     closeNotification: "Đóng thông báo",
   },
   nav: {

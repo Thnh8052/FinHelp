@@ -119,7 +119,7 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                   <div className="history-card-main">
                     <MessageSquareIcon
                       size={15}
-                      color={isActive ? "#60a5fa" : "#64748b"}
+                      color={isActive ? "var(--accent-text)" : "var(--text-dim)"}
                       className="history-card-icon"
                     />
                     <div className="history-card-info">

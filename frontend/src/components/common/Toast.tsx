@@ -41,11 +41,11 @@ export const Toast: React.FC<ToastProps> = ({ toast, onClose }) => {
     switch (type) {
       case "warning":
       case "error":
-        return <AlertCircleIcon size={16} color="#f87171" />;
+        return <AlertCircleIcon size={16} color="var(--danger)" />;
       case "success":
-        return <CheckIcon size={16} color="#34d399" />;
+        return <CheckIcon size={16} color="var(--positive-text)" />;
       default:
-        return <InfoCircleIcon size={16} color="#60a5fa" />;
+        return <InfoCircleIcon size={16} color="var(--accent-text)" />;
     }
   };
 

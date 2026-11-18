@@ -239,7 +239,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
     return (
       <div className="pdf-viewer-empty-state">
         <div className="pdf-empty-icon-box">
-          <FileTextIcon size={24} color="var(--text-dim, #94a3b8)" />
+          <FileTextIcon size={24} color="var(--text-dim)" />
         </div>
         <p className="pdf-empty-title">{t.sourceViewer.noFilingSelected}</p>
         <p className="pdf-empty-sub">{t.sourceViewer.noFilingSubtext}</p>
@@ -271,7 +271,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
                 className={`pdf-doc-tab-btn ${isTabActive ? "active" : ""}`}
                 title={doc.file_name}
               >
-                <FileTextIcon size={12} color={isTabActive ? "#ffffff" : "var(--text-dim, #94a3b8)"} />
+                <FileTextIcon size={12} color={isTabActive ? "var(--on-accent)" : "var(--text-dim)"} />
                 <span className="pdf-tab-text">{doc.file_name}</span>
               </button>
             );

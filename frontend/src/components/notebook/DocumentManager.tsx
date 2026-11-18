@@ -120,7 +120,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       {/* 1. Header Panel */}
       <div className="doc-drawer-header">
         <div className="doc-drawer-title-box">
-          <FileTextIcon size={15} color="var(--accent-primary, #2563eb)" />
+          <FileTextIcon size={15} color="var(--accent-primary)" />
           <span className="doc-drawer-title">{t.sourcesDrawer.title}</span>
           <span className="doc-drawer-badge">{documents.length} {t.sourcesDrawer.filesCount}</span>
         </div>
@@ -165,7 +165,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           />
 
           <div className="doc-dropzone-icon">
-            <UploadCloudIcon size={18} color="var(--accent-primary, #2563eb)" />
+            <UploadCloudIcon size={18} color="var(--accent-primary)" />
           </div>
           <p className="doc-dropzone-text">
             {isBusy ? t.workspace.placeholderProcessing : t.sourcesDrawer.dropzoneIdle}
@@ -269,7 +269,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                           className="doc-btn-open-pdf"
                           title={t.sourcesDrawer.openInReader}
                         >
-                          <FileTextIcon size={12} color="#60a5fa" />
+                          <FileTextIcon size={12} color="var(--accent-text)" />
                           <span>{t.sourcesDrawer.viewPdf}</span>
                         </button>
                       )}

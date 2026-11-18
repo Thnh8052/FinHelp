@@ -21,6 +21,8 @@ export const en: TranslationSchema = {
     retry: "Retry",
     language: "Language",
     languageSelection: "Language selection",
+    switchToLight: "Switch to light mode",
+    switchToDark: "Switch to dark mode",
     closeNotification: "Close notification",
   },
   nav: {

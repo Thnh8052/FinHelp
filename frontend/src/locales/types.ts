@@ -23,6 +23,8 @@ export interface TranslationSchema {
     retry: string;
     language: string;
     languageSelection: string;
+    switchToLight: string;
+    switchToDark: string;
     closeNotification: string;
   };
   nav: {

@@ -118,7 +118,7 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
             }}
             className="dropdown-action-item"
           >
-            <ShieldIcon size={14} color="#3b82f6" />
+            <ShieldIcon size={14} color="var(--accent-strong)" />
             <span>{t.userDropdown.adminDashboard}</span>
           </button>
         )}
