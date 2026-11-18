@@ -71,6 +71,13 @@ check("the very first snapshot (nothing before it): jump to the end", () => {
   assert.equal(scrollAfterChange(null, snap("a", [user("u1")]), false).to, "bottom");
 });
 
+check("D7: older messages put before the first one (the reader asked for them): stay, the pin is unchanged", () => {
+  const page = [user("u3"), answer("a3"), user("u4"), answer("a4")];
+  const more = [user("u1"), answer("a1"), user("u2"), answer("a2"), ...page];
+  assert.deepEqual(scrollAfterChange(snap("a", page), snap("a", more), false), { to: "stay", pinned: false });
+  assert.deepEqual(scrollAfterChange(snap("a", page), snap("a", more), true), { to: "stay", pinned: true });
+});
+
 // ---------------------------------------------------------------- when the reader counts as being at the end
 check("at the end: pinned", () => {
   assert.equal(pinnedAfterScroll(false, { gap: 0, top: 500, lastTop: 400 }), true);

@@ -3,7 +3,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { ApiError, errorText, signInHelps } from "../services/api";
 import { chatService } from "../services/chat";
 import { AskMode, ChatMessage, ChatStage, ClickKind } from "../types/chat";
-import { doneAnswering, loadedMessages, messagesOf, moveStage, MessagesByChat, putMessages, startAnswering, StageByChat } from "./chatStore";
+import { doneAnswering, hasOlderPage, loadedMessages, MESSAGE_PAGE, messagesOf, moveStage, MessagesByChat, olderMessages, pageCursor, putMessages, startAnswering, StageByChat } from "./chatStore";
 import { ShowToast } from "./useToast";
 
 interface ChatOptions {
@@ -36,10 +36,31 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
   };
   const putIn = (chatId: string, update: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => setByChat((all) => putMessages(all, chatId, update));
 
-  /** The messages the server has for a chat that was just opened. */
+  /** The messages the server has for a chat that was just opened: its newest page (D7: a long chat is read MESSAGE_PAGE messages at a time). */
   const showMessages = (chatId: string, fromServer: ChatMessage[]) => {
     const marks = answeringRef.current;
     setByChat((all) => loadedMessages(all, chatId, fromServer, marks));
+    setOlderIn((o) => ({ ...o, [chatId]: hasOlderPage(fromServer, MESSAGE_PAGE) }));
+  };
+
+  // "Show earlier messages": the page before the oldest message shown
+  const [olderIn, setOlderIn] = useState<Record<string, boolean>>({});
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const hasOlder = !!olderIn[notebookId];
+  const loadOlder = async () => {
+    const chatId = notebookId;
+    const before = pageCursor(messages);
+    if (before === null || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const page = await chatService.getMessages(chatId, { limit: MESSAGE_PAGE, before });
+      setByChat((all) => olderMessages(all, chatId, page));
+      setOlderIn((o) => ({ ...o, [chatId]: hasOlderPage(page, MESSAGE_PAGE) }));
+    } catch {
+      showToast(t.workspace.connectionFailed, "error");
+    } finally {
+      setLoadingOlder(false);
+    }
   };
 
   const loginWarning = (detail: string) => showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
@@ -174,5 +195,5 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
     }
   };
 
-  return { messages, showMessages, isLoading, stage, sendMessage, flagAnswer };
+  return { messages, showMessages, isLoading, stage, sendMessage, flagAnswer, hasOlder, loadingOlder, loadOlder };
 }

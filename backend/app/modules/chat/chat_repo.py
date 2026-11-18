@@ -5,7 +5,7 @@ Tác giả: Vũ Thành - FinAnalyst AI
 Mỗi notebook là một đoạn chat: tin nhắn gắn trực tiếp với notebook_id và được đánh số thứ tự bằng message_index.
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 from app.infrastructure.database import collections
@@ -21,10 +21,18 @@ class ChatRepository(BaseRepository):
         super().__init__(db, collections.MESSAGES_COLLECTION)
         self.notebooks = db[collections.NOTEBOOKS_COLLECTION]
 
-    async def get_messages(self, notebook_id: str, limit: int = 500) -> List[MessageRecord]:
-        """The latest `limit` messages, oldest first."""
-        docs = await self.find_many({"notebook_id": notebook_id}, sort_by=[("message_index", -1)], limit=limit)
+    async def get_messages(self, notebook_id: str, limit: int = 500, before: Optional[int] = None) -> List[MessageRecord]:
+        """The latest `limit` messages, oldest first; with `before`, the latest ones whose message_index is lower (the page before it)."""
+        query: Dict[str, Any] = {"notebook_id": notebook_id}
+        if before is not None:
+            query["message_index"] = {"$lt": before}
+        docs = await self.find_many(query, sort_by=[("message_index", -1)], limit=limit)
         return [MessageRecord(**doc) for doc in reversed(docs)]
+
+    async def retry_marks(self, notebook_id: str) -> Dict[str, str]:
+        """{answer clicked: which button} over the whole chat: a page of messages cannot know it, the click's answer may be on a newer page."""
+        docs = await self.find_many({"notebook_id": notebook_id, "trace_info.retry_of": {"$exists": True}}, limit=10_000)
+        return {d["trace_info"]["retry_of"]: (d["trace_info"].get("click") or "retry") for d in docs}
 
     async def append_message(self, message: MessageRecord) -> str:
         """Number the message with the notebook's atomic counter; the same update marks the notebook as just used."""

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { AskMode, ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
 import { SourceCard } from "./SourceCard";
@@ -33,6 +33,10 @@ interface ChatContainerProps {
   isProcessing?: boolean;
   /** Tài liệu nguồn đã chọn, để tag bằng @ (câu hỏi chỉ về các tài liệu được tag). */
   mentionOptions?: MentionOption[];
+  /** D7: a long chat shows its newest page; older messages come with "show earlier messages". */
+  hasOlder?: boolean;
+  isLoadingOlder?: boolean;
+  onLoadOlder?: () => void;
 }
 
 const STAGES: ChatStage[] = ["understanding", "searching", "writing", "checking"];
@@ -54,6 +58,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   hasSources = true,
   isProcessing = false,
   mentionOptions = [],
+  hasOlder = false,
+  isLoadingOlder = false,
+  onLoadOlder,
 }) => {
   const { t } = useLanguage();
   const [input, setInput] = useState("");
@@ -203,6 +210,23 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     if (step.to === "top") streamRef.current?.scrollTo({ top: 0 });
     else if (step.to === "bottom") scrollToBottom();
   }, [messages, chatKey]);
+
+  // Older messages put above: the reader keeps seeing what was on screen (the list grows upwards by the height they add)
+  const olderAnchor = useRef<{ height: number; top: number } | null>(null);
+  const loadOlderHere = () => {
+    const s = streamRef.current;
+    if (s) olderAnchor.current = { height: s.scrollHeight, top: s.scrollTop };
+    onLoadOlder?.();
+  };
+  useLayoutEffect(() => {
+    const s = streamRef.current;
+    if (!olderAnchor.current || !s || s.scrollHeight === olderAnchor.current.height) return;
+    s.scrollTop = s.scrollHeight - olderAnchor.current.height + olderAnchor.current.top;
+    olderAnchor.current = null;
+  }, [messages]);
+  useEffect(() => {
+    olderAnchor.current = null;  // another chat: nothing to keep
+  }, [chatKey]);
 
   // A growing question box (or a panel opening) shrinks the list: if it was at its end it stays at its end, so the last lines are not pushed out of view
   useEffect(() => {
@@ -356,6 +380,11 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       >
         {showStart && startScreen(pickQuestion)}
         <div className="chat-messages-column">
+          {hasOlder && onLoadOlder && (
+            <button type="button" className="chat-load-older" onClick={loadOlderHere} disabled={isLoadingOlder}>
+              {isLoadingOlder ? t.workspace.loadingOlder : t.workspace.loadOlder}
+            </button>
+          )}
           {messages.map((msg, index) => {
             const isUser = msg.role === "user";
             // Only the excerpts the answer uses, each keeping its own [n]

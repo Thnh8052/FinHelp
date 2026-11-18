@@ -151,6 +151,8 @@ export interface TranslationSchema {
     inputShortcuts: string;
     sourceCitationsTitle: string;
     citationOpen: string;
+    loadOlder: string;
+    loadingOlder: string;
     citationUnknown: string;
     /** What the system is doing now (the streamed chat says so), never which component does it. */
     loadingStages: { understanding: string; searching: string; writing: string; checking: string };

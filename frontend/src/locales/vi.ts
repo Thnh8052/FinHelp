@@ -149,6 +149,8 @@ export const vi: TranslationSchema = {
     inputShortcuts: "Enter để gửi · Shift + Enter xuống dòng · @ để gắn thẻ báo cáo",
     sourceCitationsTitle: "Nguồn",
     citationOpen: "Xem nguồn ở trang {page}",
+    loadOlder: "Xem tin nhắn cũ hơn",
+    loadingOlder: "Đang tải…",
     citationUnknown: "Trích dẫn nguồn [{n}]",
     loadingStages: { understanding: "Đang đọc câu hỏi...", searching: "Đang tìm trong tài liệu...", writing: "Đang phân tích số liệu và soạn câu trả lời...", checking: "Đang kiểm tra lại câu trả lời..." },
     loadingSlow: "Câu hỏi này cần thêm chút thời gian, vui lòng chờ...",

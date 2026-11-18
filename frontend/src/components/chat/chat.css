@@ -74,6 +74,34 @@
 
 
 
+/* D7: a long chat shows its newest page; this button brings the page before it */
+.chat-load-older {
+  align-self: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-medium);
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat-load-older:hover:not(:disabled) {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.chat-load-older:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.chat-load-older:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
 .chat-message-row {
   display: flex;
   flex-direction: column;

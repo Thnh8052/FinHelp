@@ -26,7 +26,25 @@ export const loadedMessages = (all: MessagesByChat, chatId: string, fromServer: 
   return { ...kept, [chatId]: chatId in answering ? messagesOf(all, chatId) : fromServer };
 };
 
-export const startAnswering =(st: StageByChat, chatId: string): StageByChat => ({ ...st, [chatId]: "understanding" });
+/** D7: a page of older messages goes before the ones a chat shows (one already shown is not repeated). Only for a chat whose list is kept. */
+export const olderMessages = (all: MessagesByChat, chatId: string, older: ChatMessage[]): MessagesByChat => {
+  if (!(chatId in all)) return all;
+  const shown = new Set(all[chatId].map((m) => m.message_id));
+  return { ...all, [chatId]: [...older.filter((m) => !shown.has(m.message_id)), ...all[chatId]] };
+};
+
+/** The message_index to ask for the page before (the oldest message shown); null when the oldest one was never stored with a position. */
+export const pageCursor = (messages: Pick<ChatMessage, "message_id" | "message_index">[]): number | null =>
+  typeof messages[0]?.message_index === "number" ? messages[0].message_index : null;
+
+/** How many messages a page holds: even, so a page never splits a question from its answer (they are stored together). */
+export const MESSAGE_PAGE = 30;
+
+/** A full page whose oldest message is not the chat's first: there may be older ones. */
+export const hasOlderPage = (page: Pick<ChatMessage, "message_id" | "message_index">[], size: number): boolean =>
+  page.length >= size && (pageCursor(page) ?? 0) > 0;
+
+export const startAnswering = (st: StageByChat, chatId: string): StageByChat => ({ ...st, [chatId]: "understanding" });
 
 /** A stage event of an answer that already finished is ignored: it must not bring the chat back to "answering". */
 export const moveStage = (st: StageByChat, chatId: string, stage: ChatStage): StageByChat => (chatId in st ? { ...st, [chatId]: stage } : st);

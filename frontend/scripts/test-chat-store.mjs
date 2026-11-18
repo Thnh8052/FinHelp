@@ -3,7 +3,7 @@
 //
 //   node scripts/test-chat-store.mjs
 import assert from "node:assert/strict";
-import { doneAnswering, loadedMessages, messagesOf, moveStage, putMessages, startAnswering } from "../src/hooks/chatStore.ts";
+import { doneAnswering, hasOlderPage, loadedMessages, MESSAGE_PAGE, messagesOf, moveStage, olderMessages, pageCursor, putMessages, startAnswering } from "../src/hooks/chatStore.ts";
 
 let failed = 0;
 const check = (name, fn) => {
@@ -79,6 +79,30 @@ check("coming back to A after it finished shows the server's list, which has the
   const serverNow = [msg("a1", "a"), msg("q2", "a"), msg("final", "a", "assistant", "full")];
   const after = loadedMessages({ a: live }, "a", serverNow, {});
   assert.equal(after.a, serverNow);
+});
+
+// ---------------------------------------------------------------- D7: a long chat is read a page at a time
+check("older messages go before the ones shown, without repeating one", () => {
+  const all = { a: [msg("m3", "a"), msg("m4", "a", "assistant")] };
+  const after = olderMessages(all, "a", [msg("m1", "a"), msg("m2", "a", "assistant"), msg("m3", "a")]);
+  assert.deepEqual(messagesOf(after, "a").map((m) => m.message_id), ["m1", "m2", "m3", "m4"]);
+});
+check("older messages of a chat left behind are dropped (it is read again when opened)", () => {
+  const after = olderMessages({ b: [msg("b1", "b")] }, "a", [msg("m1", "a")]);
+  assert.deepEqual(Object.keys(after), ["b"]);
+});
+check("the page before the oldest message starts below its message_index; none without one", () => {
+  assert.equal(pageCursor([{ message_id: "x", message_index: 30 }, { message_id: "y", message_index: 31 }]), 30);
+  assert.equal(pageCursor([{ message_id: "msg_user_1" }]), null);  // a question asked in this visit: nothing older is known to be stored
+  assert.equal(pageCursor([]), null);
+});
+
+check("a full page that does not start at the chat's first message may have older ones; a short page or one from 0 has none", () => {
+  const page = (from, n) => Array.from({ length: n }, (_, i) => ({ message_id: `m${from + i}`, message_index: from + i }));
+  assert.equal(hasOlderPage(page(30, 30), 30), true);
+  assert.equal(hasOlderPage(page(0, 30), 30), false);  // exactly one page: the button would load nothing
+  assert.equal(hasOlderPage(page(10, 12), 30), false);
+  assert.equal(MESSAGE_PAGE % 2, 0);  // a question and its answer are stored together: an even page never splits them
 });
 
 // ---------------------------------------------------------------- which chats are being answered, and at which stage

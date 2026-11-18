@@ -15,8 +15,8 @@ import asyncio
 import json
 import uuid
 from dataclasses import dataclass
-from typing import Any, List, Literal, Optional, Tuple, Dict
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Annotated, Any, List, Literal, Optional, Tuple, Dict
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
@@ -134,6 +134,7 @@ class MessageOut(BaseModel):
     alternatives: List[dict]
     actions: dict = {}
     created_at: Any
+    message_index: int = 0  # 0, 1, 2... in the chat: the interface asks for the page before its oldest message (D7)
     user_rating: Optional[int] = None  # -1: the user reported wrong figures
     click: str = ""  # this answer was asked by a button: "deeper" | "again" | "chooser" | "everywhere" | "retry" (older, kind unknown) (tests/test_click_marks.py)
     clicked: str = ""  # a button was used on this answer: which one (its answer follows)
@@ -212,11 +213,12 @@ def _retried(messages: List[MessageRecord]) -> set:
     return {(m.trace_info or {}).get("retry_of") for m in messages} - {None}
 
 
-def shown_messages(messages: List[MessageRecord]) -> List["MessageOut"]:
-    """The stored messages as the interface shows them: an answer already searched again keeps no "search again" button (one click)."""
-    used = _retried(messages)
+def shown_messages(messages: List[MessageRecord], marks: Optional[Dict[str, str]] = None) -> List["MessageOut"]:
+    """The stored messages as the interface shows them: an answer already searched again keeps no "search again" button (one click).
+    `marks` ({answer clicked: button}, ChatRepository.retry_marks): known from the whole chat when `messages` is one page of it."""
+    clicks = marks if marks is not None else {(m.trace_info or {}).get("retry_of"): click_of(m.trace_info or {}) for m in messages if (m.trace_info or {}).get("retry_of")}
+    used = set(clicks) | _retried(messages)
     out = [MessageOut.of(m) for m in messages]
-    clicks = {(m.trace_info or {}).get("retry_of"): click_of(m.trace_info or {}) for m in messages if (m.trace_info or {}).get("retry_of")}
     for m in out:
         if m.message_id in used:
             m.clicked = clicks.get(m.message_id, "")
@@ -428,12 +430,16 @@ async def stream_user_query(
 @router.get("/messages/{notebook_id}", response_model=List[MessageOut])
 async def get_messages(
     notebook_id: str,
+    limit: Annotated[int, Query(ge=1, le=500)] = 500,
+    before: Annotated[Optional[int], Query(ge=0)] = None,
     user_id: Optional[str] = Depends(get_optional_user_id),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
-    """Lấy các tin nhắn mới nhất của một notebook, theo đúng thứ tự hội thoại."""
+    """Lấy các tin nhắn mới nhất của một notebook, theo đúng thứ tự hội thoại. `limit` + `before` (message_index của tin cũ nhất đang hiện): một trang
+    (D7 18/11: chat dài được tải từng 30 tin). Nút đã bấm được biết từ cả đoạn chat."""
     await require_notebook(db, notebook_id, user_id)
-    return shown_messages(await ChatRepository(db).get_messages(notebook_id))
+    repo = ChatRepository(db)
+    return shown_messages(await repo.get_messages(notebook_id, limit=limit, before=before), await repo.retry_marks(notebook_id))
 
 
 class FlagRequest(BaseModel):

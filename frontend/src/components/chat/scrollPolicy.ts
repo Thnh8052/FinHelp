@@ -8,12 +8,17 @@ export interface ScrollSnapshot {
   count: number;
   /** the newest question: a new one means the reader just asked something */
   lastUserId: string;
+  /** the first and last messages: a new first one with the same last one means older messages were put before (D7, "show earlier messages") */
+  firstId?: string;
+  lastId?: string;
 }
 
 export const snapshotOf = (chatKey: string, messages: { message_id: string; role: string }[]): ScrollSnapshot => ({
   chatKey,
   count: messages.length,
   lastUserId: [...messages].reverse().find((m) => m.role === "user")?.message_id ?? "",
+  firstId: messages[0]?.message_id ?? "",
+  lastId: messages[messages.length - 1]?.message_id ?? "",
 });
 
 export interface ScrollStep {
@@ -30,6 +35,8 @@ export interface ScrollStep {
 export function scrollAfterChange(prev: ScrollSnapshot | null, next: ScrollSnapshot, pinned: boolean): ScrollStep {
   if (next.count === 0) return { to: "top", pinned: false };
   if (!prev || prev.chatKey !== next.chatKey || prev.count === 0) return { to: "bottom", pinned: true };
+  // older messages put before the first one: the list keeps what the reader sees (ChatContainer holds the position), nothing jumps
+  if (next.count > prev.count && next.firstId !== prev.firstId && next.lastId === prev.lastId) return { to: "stay", pinned };
   if (next.lastUserId !== prev.lastUserId) return { to: "bottom", pinned: true };
   return { to: pinned ? "bottom" : "stay", pinned };
 }

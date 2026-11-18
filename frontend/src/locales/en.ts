@@ -149,6 +149,8 @@ export const en: TranslationSchema = {
     inputShortcuts: "Enter to send · Shift + Enter for a new line · @ to tag a report",
     sourceCitationsTitle: "Sources",
     citationOpen: "View source at page {page}",
+    loadOlder: "Show earlier messages",
+    loadingOlder: "Loading…",
     citationUnknown: "Source citation [{n}]",
     loadingStages: { understanding: "Reading your question...", searching: "Searching the documents...", writing: "Analyzing the figures and writing the answer...", checking: "Checking the answer..." },
     loadingSlow: "This question needs a little more time, please wait...",
