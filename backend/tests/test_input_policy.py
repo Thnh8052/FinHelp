@@ -532,3 +532,16 @@ def test_unknown_coverage_of_a_named_company_only_counts_years_too_old():
     assert "period_missing" not in decide("Compare Nike and PepsiCo revenue in FY2017.", [nike, PEP17], 2).flags
     old = decide("Compare Nike and PepsiCo revenue in FY2012.", [nike, SourceInfo("PepsiCo, Inc", "10-K", 2012, None, "")], 2)
     assert old.action == "proceed" and "period_missing" in old.flags and any("NIKE" in n and "2012" in n for n in old.notes)
+
+
+@pytest.mark.parametrize("question, intent", [
+    ("What was Nike's revenue in FY2012?", "period_unavailable"), ("Doanh thu của Nike năm 2012 là bao nhiêu?", "period_unavailable"),
+    ("What did the latest 10-Q report for Nike's net income?", "form_unavailable"), ("Báo cáo 10-Q gần nhất ghi lợi nhuận ròng của Nike là bao nhiêu?", "form_unavailable"),
+])
+async def test_a_missing_period_offers_to_edit_the_question(monkeypatch, question, intent):
+    """18/11: "the selected sources do not cover FY2015" came with only Copy: the user could not fix the question in one click."""
+    orch, _ = _orchestrator(NIKE_DOCS, monkeypatch)
+    r = await orch.execute_query(question, "nb", document_ids=["d1", "d2"])
+    assert r["intent"] == intent
+    assert r["actions"] == {"chooser": [], "search_more": None, "edit_question": True, "try_again": False}
+    assert r["trace"]["actions"] == r["actions"]  # kept for a reloaded chat

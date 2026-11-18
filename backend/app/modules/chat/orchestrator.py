@@ -236,7 +236,7 @@ class RAGWorkflowOrchestrator:
         text, meta = split_answer(answer)
         cited = cited_numbers(text)
         timings = {**found.timings, "generate": checked["seconds_first"], "verify_repair": round(time.perf_counter() - t0 - checked["seconds_first"], 2)}
-        # "The selected reports do not contain this": the conversation's topic stays where it was, and excerpts the answer does not use are not shown as its sources
+        # "The selected reports do not contain this": excerpts the answer does not use are not shown as its sources
         not_found = (meta or {}).get("status") == "not_found"
         # Fell short (docs/Version_3/fail_cases.md): partial, not found, or figures still unverified. Never the apology or the output policy's refusal (also not_found).
         # The added line goes after the machine block, which split_answer removes.
@@ -261,7 +261,9 @@ class RAGWorkflowOrchestrator:
         understood = merge_understood(asked, understood, decision.lang == "vi")
         if not_found and not cited:
             citations = []
-        focus_docs = [] if not_found else targets.document_ids or [c.document_id for n, c in enumerate(citations, 1) if n in cited] or [c.document_id for c in citations]
+        # found nothing: the topic moves only to the documents the question named ("and Amazon?" that Amazon's report does not answer is still about Amazon, 18/11)
+        # (a blocked answer, the fixed reply to one that broke a safety rule, never moves it)
+        focus_docs = [] if unfinished == "blocked" else targets.document_ids if not_found else targets.document_ids or [c.document_id for n, c in enumerate(citations, 1) if n in cited] or [c.document_id for c in citations]
         return {
             "answer": answer,
             "intent": "retrieval_rag",
@@ -456,7 +458,10 @@ class RAGWorkflowOrchestrator:
         # beside the search (_guarded): the intent router that did it here was removed 17/11/2026 (TRIED.md DV-08)
         if decision.action == "rewrite_followup":  # "And the net income?" -> a standalone question, shown to the user
             filled = None if {"correction", "outside_name"} & set(decision.flags) else fill_from_focus(query, focus, p.infos, decision.lang)
-            topic = [{"role": "current topic", "content": f"{', '.join(focus.companies)}; {focus.years}; {METRICS[focus.metric][1] if focus.metric else 'no item yet'}"}] if focus else []
+            # the period of each selected report: a newly named company is asked about its own period, not the topic's (18/11)
+            reports = "; ".join(f"{s.company} FY{s.fiscal_year}" for s in p.infos if s.company and s.fiscal_year)
+            topic = [{"role": "current topic", "content": f"{', '.join(focus.companies)}; {focus.years}; {METRICS[focus.metric][1] if focus.metric else 'no item yet'}"
+                      + (f". Selected reports: {reports}" if reports else "")}] if focus else []
             rewritten = filled or await rewrite_followup(query, history + topic)
             if not rewritten:
                 p.stop = terminal("ask_clarify", MSG["ask_clarify"][decision.lang])
@@ -471,6 +476,8 @@ class RAGWorkflowOrchestrator:
         if decision.action in TERMINAL:
             message = sources_message(scope, decision.lang) if decision.action == "list_sources" else decision.message
             p.stop = terminal(decision.action, p.prefix + message, {"decision": {"action": decision.action, "available": decision.available}})
+            if decision.action in ("period_unavailable", "form_unavailable"):  # the reply asks for another period or form: the question goes back in the box (18/11)
+                p.stop["actions"] = {"chooser": [], "search_more": None, "edit_question": True, "try_again": False}
         return p
 
     async def _split_parts(self, decision: Decision, infos: List[SourceInfo], ready_count: int) -> List[Tuple[str, Decision]]:
@@ -597,7 +604,7 @@ class RAGWorkflowOrchestrator:
             result = await self._answer_one(query, notebook_id, scope, decision, mentions=mentions, retry=retry, deeper=deeper, asked=asked)
         if result.get("focus_docs"):  # a searched question moves the focus; refusals, greetings and lists of sources do not
             years = {d.document_id: d.metadata.fiscal_year for d in scope}
-            result["focus"] = build_focus(result["focus_query"], result["focus_docs"], years, focus_state)
+            result["focus"] = build_focus(result["focus_query"], result["focus_docs"], years, p.infos)
         if p.followup:
             result.setdefault("trace", {})["followup"] = p.followup
         if p.prefix and not (asked and asked in (result.get("understood") or "")):  # a reply with no understood line (a fixed one, a refusal) says it itself
