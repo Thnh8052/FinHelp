@@ -16,7 +16,7 @@ CHUNKS = [{"chunk_id": "a", "document_id": "amd", "page": 50, "content": "Net re
 
 def test_good_citations_pass():
     out = check_citations("AMD revenue was $25,785 million in 2024 [1]. NVIDIA reported $60,922 million [2].", CHUNKS, [AMD, NV])
-    assert out == {"invalid": [], "wrong_company": [], "wrong_period": []}
+    assert out == {"invalid": [], "wrong_company": [], "wrong_period": [], "wrong_figure": []}
 
 
 def test_citation_to_no_excerpt_another_company_or_period_is_caught():
@@ -96,6 +96,6 @@ async def test_a_tagged_question_naming_an_unlisted_company_is_answered_for_the_
 
 def test_each_citation_is_checked_against_the_clause_it_closes():
     two = "Intel revenue was $11,715 million in 2024 [1]; NVIDIA reported $60,922 million for fiscal 2023 [2]."
-    assert check_citations(two, CHUNKS, [AMD, NV]) == {"invalid": [], "wrong_company": [], "wrong_period": []}
+    assert check_citations(two, CHUNKS, [AMD, NV]) == {"invalid": [], "wrong_company": [], "wrong_period": [], "wrong_figure": []}
     swapped = "AMD revenue was $25,785 million [2]; NVIDIA reported $60,922 million [1]."
     assert [w["n"] for w in check_citations(swapped, CHUNKS, [AMD, NV])["wrong_company"]] == [2, 1]

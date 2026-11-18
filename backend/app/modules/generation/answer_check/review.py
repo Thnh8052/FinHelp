@@ -7,7 +7,8 @@ Checks (each reuses the module that measures it):
   language   policy.py: answer not in the question's language                                          repairable: kept in the trace, no line
   arithmetic calculations.wrong_steps: a written step whose printed result is wrong                    repairable: the "⚠️" line
   figure     numbers.check_numbers: a figure neither printed in the excerpts nor derived from them     repairable: the "⚠️" line lists it
-  citation   citations.check_citations: [n] to no excerpt, to another company or period               repairable: the "⚠️" line
+  citation   citations.check_citations: [n] to no excerpt, to another company or period, or [n]       repairable: the "⚠️" line
+             after a figure only another excerpt prints
   status     policy.py: an answered status with no [n] at all                                         note: kept in the trace only
 The notes of the findings (what was wrong, the right result) stay for the trace. Measured on 923 stored answers: every planted wrong written result is
 caught; 42 answers have a repairable finding (4 of them graded correct), see experiments/scripts/system_test_18_11.
@@ -83,6 +84,8 @@ def run_checks(answer: str, chunks: Sequence[Dict[str, Any]], docs: Sequence[Any
         found.append(Finding("citation", REPAIRABLE, f"[{w['n']}]", f"excerpt [{w['n']}] is from a different company than the sentence says: \"{w['sentence']}\""))
     for w in cites["wrong_period"]:
         found.append(Finding("citation", REPAIRABLE, f"[{w['n']}]", f"excerpt [{w['n']}] does not cover {w['year']}: \"{w['sentence']}\""))
+    for w in cites["wrong_figure"]:
+        found.append(Finding("citation", REPAIRABLE, f"[{w['n']}]", f"the figure {w['figure']} is not in excerpt [{w['n']}] but in another one: \"{w['sentence']}\""))
     return found
 
 

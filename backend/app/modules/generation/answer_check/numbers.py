@@ -10,20 +10,21 @@ reported as unverified and goes to the one repair.
 The report goes into the trace; verification.verify turns each unverified figure into a problem for the one rewrite, and what stays unverified is flagged under the answer.
 """
 import re
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Set, Tuple
 
 import numpy as np
 
 from app.modules.generation.answer_check.amounts import DAY, Amount, find_amounts
-from app.modules.generation.answer_check.calculations import CONSTANTS, written_results
+from app.modules.generation.answer_check.calculations import CONSTANTS, NUMTOK, SINGLE, exact, is_calc, readings_of, steps, value_of, written_results
 
 META = "<answer_meta>"  # generator v3 appends a machine block; only the text before it is the answer
 SMALL = 12  # plain integers up to this are list markers, months, quarters or counts ("3 segments"): not checked; the day of a date is skipped by DAY
 SCALES = (1.0, 1e3, 1e6, 1e9, 1e-3, 1e-6, 1e-9)  # "$20.6 billion" against "20,604" (millions)
 PERCENT_SCALES = (1e-2, 1e2)  # "25%" against "0.25"
-# a page, note or item number and a short fiscal year are references, not figures: "(Note 21, page 113)", "page 68/92", "pages 108-109", "trang 113", "FY22"
+# a page, note or item number, an accounting standard and a short fiscal year are references, not figures: "(Note 21, page 113)", "page 68/92",
+# "pages 108-109", "trang 113", "ASC 606", "FY22"
 # (18/11: 19 figure findings of 923 stored answers, 16 of them on answers graded correct)
-REFERENCE_BEFORE = re.compile(r"(?:\b(?:pages?|pp?\.|trang|notes?|items?|thuyết minh|mục)\s*(?:\d+\s*(?:[-–/,&]|and|và|to|đến)\s*)*|\bFY\s*'?|\bQ)$", re.I)
+REFERENCE_BEFORE = re.compile(r"(?:\b(?:pages?|pp?\.|trang|notes?|items?|thuyết minh|mục|asc|asu|topic)\s*(?:\d+\s*(?:[-–/,&]|and|và|to|đến)\s*)*|\bFY\s*'?|\bQ)$", re.I)
 YEAR_PERCENT = re.compile(r"(?:19|20)\d\d\s+%")  # "Full Year 2022 % change": a year heading a column of changes
 
 
@@ -98,20 +99,40 @@ def _derived(pool: np.ndarray):
     return np.sort(additive), np.sort(ratio[np.isfinite(ratio)])
 
 
+def _printed(chunks: Sequence[Dict[str, Any]]) -> np.ndarray:
+    return np.unique(np.array(_excerpt_numbers(chunks), dtype=float))
+
+
+def _match(f: Amount, printed: np.ndarray):
+    """The reading of `f` that `printed` (excerpt numbers) holds, at any scale a figure may use, or None."""
+    scales = SCALES + (PERCENT_SCALES if f.is_percent else ())
+    return next((v for v, decimals in _readings(f) if len(printed) and any(_near(printed, v * s, _tolerance(decimals) * s) for s in scales)), None)
+
+
 def check_numbers(answer: str, chunks: Sequence[Dict[str, Any]], passes: int = 3) -> Dict[str, Any]:
     """{"checked", "verified", "derived", "written", "unverified": [figure as printed], "figures": [{"text", "status"}]}."""
+    figures, status, _ = _statuses(answer, chunks, passes)
+    return {
+        "checked": len(figures),
+        "verified": status.count("verified"),
+        "derived": status.count("derived"),
+        "written": status.count("written"),
+        "unverified": [f.raw for f, s in zip(figures, status) if s == "unverified"],
+        "figures": [{"text": f.raw, "status": s} for f, s in zip(figures, status)],
+    }
+
+
+def _statuses(answer: str, chunks: Sequence[Dict[str, Any]], passes: int = 3) -> Tuple[List[Amount], List[str], List[float]]:
+    """(figures, the status of each: verified | derived | written | unverified, the value each was checked with)."""
     figures = _figures(answer)
     readings = [_readings(f) for f in figures]
     status = ["unverified"] * len(figures)
     used = [r[0][0] for r in readings]  # the reading that matched (the printed one until one does): it feeds the derived figures
-    printed = np.unique(np.array(_excerpt_numbers(chunks), dtype=float))
+    printed = _printed(chunks)
     for k, f in enumerate(figures):
-        scales = SCALES + (PERCENT_SCALES if f.is_percent else ())
-        for v, decimals in readings[k]:
-            tol = _tolerance(decimals)
-            if len(printed) and any(_near(printed, v * s, tol * s) for s in scales):
-                status[k], used[k] = "verified", v
-                break
+        v = _match(f, printed)
+        if v is not None:
+            status[k], used[k] = "verified", v
     for _ in range(passes):  # a derived figure may feed the next one: average assets, then ROA from it
         pool = np.unique(np.array([u for u, s in zip(used, status) if s != "unverified"], dtype=float))
         if len(pool) < 1:
@@ -136,11 +157,56 @@ def check_numbers(answer: str, chunks: Sequence[Dict[str, Any]], passes: int = 3
         for k in range(len(figures)):
             if status[k] == "unverified" and any(_near(ok, v, _tolerance(d)) or (figures[k].is_percent and _near(pct, v, _tolerance(d))) for v, d in readings[k]):
                 status[k] = "written"
-    return {
-        "checked": len(figures),
-        "verified": status.count("verified"),
-        "derived": status.count("derived"),
-        "written": status.count("written"),
-        "unverified": [f.raw for f, s in zip(figures, status) if s == "unverified"],
-        "figures": [{"text": f.raw, "status": s} for f, s in zip(figures, status)],
-    }
+    return figures, status, used
+
+
+# ------------------------------------------------------------------ a figure and the excerpt its citation points at (citations.check_citations)
+def _results(answer: str) -> Set[float]:
+    """The printed results of the answer's right written steps ("25,785 − 22,680 = 3,105": 3,105)."""
+    out: Set[float] = set()
+    for left, right, _ in steps(answer):
+        if is_calc(left) and SINGLE.fullmatch(right):
+            for loc in readings_of(answer):
+                if exact(left, right, loc) is not None:
+                    out |= {abs(value_of(t, loc)) for t in NUMTOK.findall(right)}
+    return out
+
+
+def _computed(f: Amount, value: float, status: List[str], used: List[float], results: Set[float]) -> bool:
+    """Whether the answer computes `f` itself: a standard constant, the result of a right written step, or (a percent or a figure under 1,000) a pair of
+    its other checked figures. An amount of 1,000 or more is explained by a written step only: pairs of an answer's figures (a total and its parts)
+    cover many amounts by chance."""
+    readings = _readings(f)
+    if any(abs(v - c) < 1e-9 for v, _ in readings for c in CONSTANTS) or any(abs(v - r) <= _tolerance(d) for v, d in readings for r in results):
+        return True
+    if not f.is_percent and abs(value) >= 1000:
+        return False
+    own = {round(v, 9) for v, _ in readings}
+    pool = np.unique(np.array([u for u, s in zip(used, status) if s != "unverified" and round(u, 9) not in own], dtype=float))
+    if not len(pool):
+        return False
+    additive, ratio = _derived(pool)
+    return any(any(_near(additive, v * s, _derived_tolerance(d) * s) for s in SCALES) or _near(ratio, v, _tolerance(d)) for v, d in readings)
+
+
+def figures_off_their_citation(answer: str, chunks: Sequence[Dict[str, Any]], runs: Sequence[Tuple[str, List[int]]]) -> List[Tuple[int, str, str]]:
+    """[(n, figure as printed, clause)]: a figure written before a run of citations ("[1]", "[1][2]", "[1, 2]") that none of those excerpts prints while
+    another excerpt does ("Its revenue was $60,922 million [1]" with 60,922 in [2] only): the citation points at the wrong excerpt. A figure printed in
+    no excerpt is the number check's, and a figure the answer computes (_computed) needs no excerpt of its own.
+    Measured 19/11 (experiments/scripts/system_test_18_11/cited_figures.py, 770 production-like stored answers + 80 dev chat answers): no answer
+    graded correct reported; every planted move of a citation whose clause holds a figure taken from the reports caught (786/786)."""
+    runs = [(clause, [n for n in ns if 1 <= n <= len(chunks)]) for clause, ns in runs]
+    runs = [(clause, ns) for clause, ns in runs if ns and clause.strip()]
+    if not runs:
+        return []
+    _, status, used = _statuses(answer, chunks)
+    excerpts, results, out = [_printed([c]) for c in chunks], _results(answer), []
+    for clause, ns in runs:
+        cited = _printed([chunks[n - 1] for n in ns])
+        for f in _figures(clause):
+            if _match(f, cited) is not None:
+                continue
+            value = next((v for k, e in enumerate(excerpts, 1) if k not in ns for v in [_match(f, e)] if v is not None), None)
+            if value is not None and not _computed(f, value, status, used, results):
+                out.append((ns[0], f.raw, " ".join(clause.split())[-160:]))
+    return out
