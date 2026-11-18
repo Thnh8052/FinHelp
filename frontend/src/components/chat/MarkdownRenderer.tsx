@@ -6,13 +6,12 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { CitationItem } from "../../types/chat";
 import { citedFigures } from "../notebook/locateExcerpt";
+import { cellTone, isLongHeader, isNumericCell } from "./cellTone";
+import { useLanguage } from "../../context/LanguageContext";
 
 // A single $ stays plain text: answers are full of amounts such as "$1,234 and $5,678", which must never be read as a formula.
 const REMARK_PLUGINS = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as React.ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
 const REHYPE_PLUGINS = [[rehypeKatex, { strict: "ignore" }]] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
-
-// A table cell that holds only a figure and its citations: "177,866 [5]", "+30.9%", "(1,204) [2][3]"
-const NUMERIC_CELL = /^[+\-−–$€£(]*\d[\d.,\s]*[%)xX]?(\s*\[\d+\])*$/;
 
 // A table header: title, an optional unit in brackets, then citations: "Prior fiscal year (USD million) [2][5]"
 const HEADER_TEXT = /^(.*?)\s*(\([^)]*\))?\s*((?:\[\d+\]\s*)*)$/;
@@ -39,6 +38,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   citations = [],
   onSelectCitation,
 }) => {
+  const { t } = useLanguage();
   // Helper to render text with clickable citation badges [n]
   const renderTextWithCitations = (text: string) => {
     if (!text || typeof text !== "string") return text;
@@ -63,8 +63,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           className="inline-citation-pill"
           title={
             targetCitation
-              ? `View source at Page ${targetCitation.page}`
-              : `Source citation [${citeNum}]`
+              ? t.workspace.citationOpen.replace("{page}", String(targetCitation.page))
+              : t.workspace.citationUnknown.replace("{n}", String(citeNum))
           }
           onClick={(e) => {
             e.stopPropagation();
@@ -150,37 +150,17 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           tbody: ({ children }) => <tbody className="financial-tbody">{children}</tbody>,
           tr: ({ children }) => <tr className="financial-tr">{children}</tr>,
           th: ({ children, style }) => (
-            <th className="financial-th" style={style}>
+            <th className={isLongHeader(HEADER_TEXT.exec(getPlainText(children).trim())?.[1] ?? "") ? "financial-th th-long" : "financial-th"} style={style}>
               {renderHeader(children)}
             </th>
           ),
           td: ({ children, style }) => {
             const plainText = getPlainText(children).trim();
-            const isDashOrNA =
-              plainText === "—" ||
-              plainText === "-" ||
-              plainText === "–" ||
-              plainText.toLowerCase() === "n/a";
-            const isDeltaNegative =
-              plainText.startsWith("-") ||
-              plainText.startsWith("−") ||
-              plainText.toLowerCase().includes("decrease") ||
-              plainText.toLowerCase().includes("decline") ||
-              plainText.toLowerCase().includes("giảm");
-            const isDeltaPositive =
-              plainText.startsWith("+") ||
-              (plainText.includes("%") &&
-                !plainText.startsWith("-") &&
-                !plainText.startsWith("−") &&
-                !plainText.toLowerCase().includes("decrease") &&
-                !plainText.toLowerCase().includes("decline") &&
-                !plainText.toLowerCase().includes("giảm"));
+            const tone = cellTone(plainText);
 
             let cellClass = "financial-td";
-            if (NUMERIC_CELL.test(plainText)) cellClass += " cell-num"; // figures stay on one line with their citation; names and sentences wrap
-            if (isDashOrNA) cellClass += " cell-empty";
-            else if (isDeltaNegative) cellClass += " delta-negative";
-            else if (isDeltaPositive) cellClass += " delta-positive";
+            if (isNumericCell(plainText)) cellClass += " cell-num"; // figures stay on one line with their citation; names and sentences wrap
+            if (tone) cellClass += tone === "empty" ? " cell-empty" : ` delta-${tone}`; // only a signed figure is coloured (cellTone.ts)
 
             return (
               <td className={cellClass} style={style}>

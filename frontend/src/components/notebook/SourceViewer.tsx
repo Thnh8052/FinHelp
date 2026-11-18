@@ -220,6 +220,12 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
     };
   }, [pdfDoc, pageView, currentPage, activeCitation, citationHere]);
 
+  // A page (or report) is read from its top: turning to it must not keep the position of the page before. When the page holds the cited lines,
+  // the effect below brings the first of them into view once they are marked.
+  useEffect(() => {
+    viewportRef.current?.scrollTo({ top: 0 });
+  }, [currentPage, currentDoc?.document_id]);
+
   // The first marked line is brought into view (a page is taller than the panel)
   useEffect(() => {
     const first = marks && marks.page === currentPage ? marks.figures[0] ?? marks.boxes[0] : undefined; // the stated figure first, else the first line of the excerpt

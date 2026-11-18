@@ -54,6 +54,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* never a sideways scroll: a long word is broken inside its box (below), a wide table scrolls inside its own frame */
+  overflow-x: hidden;
   padding: 24px 28px;
   display: flex;
   flex-direction: column;
@@ -63,6 +65,7 @@
 .chat-messages-column {
   width: 100%;
   max-width: 704px;
+  min-width: 0; /* a flex item is as wide as its widest word unless told otherwise: one long URL stretched the whole chat */
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -98,6 +101,7 @@
   color: var(--text-primary);
   font-size: 14px;
   line-height: 1.7;
+  overflow-wrap: anywhere; /* a question or answer with a very long word (a URL, a string of digits) wraps inside the bubble */
 }
 
 .chat-message-bubble.user {
@@ -1187,6 +1191,9 @@ button.chat-scope-chip:hover {
   scrollbar-color: var(--border-strong) var(--bg-sunken);
   width: 100%;
   -webkit-overflow-scrolling: touch;
+  /* a table keeps its words whole and scrolls sideways in this frame, instead of breaking words to fit */
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .table-responsive-container::-webkit-scrollbar {
@@ -1240,6 +1247,11 @@ button.chat-scope-chip:hover {
 
 .financial-th:not(:first-child) {
   min-width: 104px;
+}
+
+/* A long header ("Change in operating margin 2015–2020") in a narrow column became a tall strip of short lines: its column keeps this width and the frame scrolls sideways instead */
+.financial-th.th-long {
+  min-width: 11rem;
 }
 
 /* The second column usually names the company or the period: room for "Costco Wholesale Corporation" on two lines */

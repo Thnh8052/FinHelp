@@ -11,6 +11,11 @@
     "test:setup": "node scripts/test-setup.cjs",
     "test:auth": "node scripts/test-auth.cjs",
     "test:highlight": "node scripts/test-highlight.mjs",
+    "test:scroll": "node scripts/test-scroll.mjs",
+    "test:chatstore": "node scripts/test-chat-store.mjs",
+    "test:selection": "node scripts/test-selection.mjs",
+    "test:celltone": "node scripts/test-cell-tone.mjs",
+    "test:ui": "node scripts/test-scroll.mjs && node scripts/test-chat-store.mjs && node scripts/test-selection.mjs && node scripts/test-cell-tone.mjs",
     "inspect:zip": "node scripts/inspect-zip.cjs",
     "backend": "cd ../backend && .venv\\Scripts\\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload",
     "backend:dev": "cd ../backend && .venv\\Scripts\\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --env-file .env.dev"
