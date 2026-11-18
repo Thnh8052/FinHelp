@@ -297,7 +297,10 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
     lang = detect_language(q)
     if lang == "en" and len(_words(q)) <= 2:  # "alo", "haha", "ok", "?": too short to tell, so the user's previous turn, else the interface
         earlier = next((h for h in reversed(history) if h.get("role") == "user"), None)
-        lang = detect_language(str(earlier.get("content", ""))) if earlier else ui_lang if ui_lang in ("vi", "en") else lang
+        said = str(earlier.get("content", "")) if earlier else ""
+        # a previous turn too short to show a language of its own ("abcd", "?") says nothing either: the interface decides (V21 of the 18/11 check)
+        shown = said and not (detect_language(said) == "en" and len(_words(said)) <= 2)
+        lang = detect_language(said) if shown else ui_lang if ui_lang in ("vi", "en") else lang
     d = Decision(lang=lang)
 
     # A: sources

@@ -19,7 +19,7 @@ from app.infrastructure.database.qdrant import QdrantManager
 from app.modules.ingestion.pipeline import IngestionPipeline
 from app.modules.notebooks.purge import purge_expired_guests
 from app.modules.retrieval import gpu_client
-from app.modules.retrieval.warmup import warm_chunk_tokenizer, warm_models
+from app.modules.retrieval.warmup import warm_chunk_tokenizer, warm_guard, warm_models
 from app.shared.health import check_services
 from app.shared.security_headers import SecurityHeaders
 from app.shared.unexpected_errors import UnexpectedErrors
@@ -68,9 +68,11 @@ async def lifespan(app: FastAPI):
 
     await warm_chunk_tokenizer()
     warmup = asyncio.create_task(warm_models())  # the first question should not pay the model load
+    guard_warmup = asyncio.create_task(warm_guard())  # nor the slow first guard call (behavior check 18/11)
     housekeeping = asyncio.create_task(_housekeeping())
     yield
     warmup.cancel()
+    guard_warmup.cancel()
     housekeeping.cancel()
 
     logger.info("Shutting down DATN Finance backend application...")

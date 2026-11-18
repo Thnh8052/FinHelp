@@ -85,6 +85,7 @@ class _GuardState:
     """The guard's call for the message being served (query_router/guard.py), read at the one place before any answer is written."""
     task: "asyncio.Future[guard.Verdict]"
     evidence: List[str] = field(default_factory=list)  # what the rules found tying the message to the reports (set once they ran): the second key of off_topic
+    ruled: bool = False  # the rules ran and `evidence` is known: a chat label can then stop the search at once
     cleared: bool = False  # the label was read and the message may be answered
 
 
@@ -386,7 +387,10 @@ class RAGWorkflowOrchestrator:
         work = asyncio.ensure_future(self._execute_query(query, notebook_id, **kwargs))
         try:
             await asyncio.wait({work, state.task}, return_when=asyncio.FIRST_COMPLETED)
-            if state.task.done() and not work.done() and state.task.result().label in guard.SAFETY:
+            early = state.task.result() if state.task.done() and not work.done() else None
+            # a safety label stops the search at once; so does a chat label (small talk, a question about the assistant, an off-topic request) once
+            # the rules found nothing tying the message to the reports: it used to wait for the whole search (behavior check 18/11, E18: 6 s)
+            if early is not None and (early.label in guard.SAFETY or (state.ruled and early.label in guard.CHAT and early.blocks(state.evidence))):
                 state.cleared = True
                 work.cancel()
                 await asyncio.gather(work, return_exceptions=True)
@@ -550,6 +554,7 @@ class RAGWorkflowOrchestrator:
         p = await self.plan_question(query, notebook_id, document_id, document_ids, history, mentions, focus_state, ui_lang)
         if GUARD.get() is not None and p.decision:
             GUARD.get().evidence = list(p.decision.evidence)  # the second key of the guard's off_topic label
+            GUARD.get().ruled = True
         if p.stop:
             return p.stop
         events.stage("searching")
