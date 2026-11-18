@@ -127,3 +127,41 @@ def test_a_wrong_multiple_is_caught_and_a_right_one_is_not_flagged():
 def test_an_x_inside_a_word_or_a_product_or_a_count_is_not_a_multiple():
     for text in ("The 6.25xyz code.", "A6.25x sample.", "Sized 6.25x3.5 inches.", "The 6.25xs.", "About 2x as much, a 10x jump."):
         assert check_numbers(text, TURNOVER)["figures"] == [], text  # a word, a product of two sizes, or a small count: nothing to verify
+
+
+# ------------------------------------------------------------------ rounding of figures the answer derives (system test 18/11, D1)
+# An answer wrote "0.1417" for the change between margins printed as 3.3299 and 3.1883: the printed numbers give 0.1416, the unrounded margins give
+# 0.1417. The check called it unverified and the whole answer was written again (53.6 s). Two rounded numbers can be one unit of their last digit off.
+MARGINS = [{"content": "| | 2020 | 2015 |\n|---|---:|---:|\n| Operating margin (%) | 3.1883 | 3.3299 |"}]
+
+
+def test_a_difference_of_two_rounded_figures_may_be_one_unit_of_the_last_digit_off():
+    s = status("The margin was 3.3299 in 2015 and 3.1883 in 2020: it changed by 0.1417 points [1].", MARGINS)
+    assert s["0.1417"] == "derived"  # 3.3299 - 3.1883 = 0.1416 from the printed numbers
+    assert status("The margin was 3.3299 in 2015 and 3.1883 in 2020: it changed by 0.1416 points [1].", MARGINS)["0.1416"] == "derived"
+
+
+def test_a_difference_two_units_off_is_still_unverified():
+    s = status("The margin was 3.3299 in 2015 and 3.1883 in 2020: it changed by 0.1418 points [1].", MARGINS)
+    assert s["0.1418"] == "unverified"
+    assert status("The margin was 3.3299 in 2015 and 3.1883 in 2020: it changed by 0.1414 points [1].", MARGINS)["0.1414"] == "unverified"
+
+
+def test_a_whole_number_difference_must_still_be_exact():
+    # amounts printed in millions are exact table values: their difference has no rounding in it (2,321 - 2,197 = 124)
+    assert status("Operating income rose from $2,197M to $2,321M: +$124M.")["$124"] == "derived"
+    assert status("Operating income rose from $2,197M to $2,321M: +$125M.")["$125"] == "unverified"
+    assert status("Operating income rose from $2,197M to $2,321M: +$123M.")["$123"] == "unverified"
+
+
+def test_one_decimal_figures_keep_half_a_unit():
+    # at one decimal a whole unit (0.1) is wide: 55.1 matched the average of two other figures (55.0) by chance, and planted wrong figures
+    # (13.5, 25.3, 56.9) slipped through the same way in the replay of 923 stored answers
+    table = [{"content": "| Cost of sales (%) | 53.8 | 56.2 |"}]
+    assert status("Cost of sales was 53.8% and 56.2%; the figure was 55.1%.", table)["55.1%"] == "unverified"
+
+
+def test_a_whole_number_read_as_three_decimals_keeps_half_a_unit():
+    # "36,701" can be read as 36.701 (Vietnamese marks): that reading must not get the wider tolerance and match 36,700 = 34,300 + 2,400 at another scale
+    table = [{"content": "| Revenue | 34,300 | Other | 2,400 |"}]
+    assert status("Revenue was 34,300 and other income 2,400, in all 36,701.", table)["36,701"] == "unverified"

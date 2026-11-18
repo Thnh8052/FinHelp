@@ -67,6 +67,15 @@ def _tolerance(decimals: int) -> float:
     return 0.5 * 10.0 ** -decimals + 1e-9
 
 
+def _derived_tolerance(decimals: int, primary: bool = True) -> float:
+    """The tolerance for a figure that is a sum, difference, average or product of two figures: when the answer prints two or more decimals, its
+    operands are rounded numbers too (margins, ratios, per-share amounts), and the result of the printed operands can be one unit of the last digit
+    away from the result of the unrounded ones (3.3299 - 3.1883 = 0.1416 printed, 0.1417 unrounded). Half a unit otherwise: a whole number in
+    millions is an exact table value; at one decimal a whole unit (0.1) is so wide that figures matched other derived values by chance (replay of
+    923 stored answers, 18/11: planted wrong figures 13.5, 25.3, 56.9 got through); and the second reading of "36,701" as 36.701 is not a decimal."""
+    return 2 * _tolerance(decimals) - 1e-9 if decimals >= 2 and primary else _tolerance(decimals)
+
+
 def _near(sorted_values: np.ndarray, value: float, tol: float) -> bool:
     i = int(np.searchsorted(sorted_values, value))
     return any(0 <= j < len(sorted_values) and abs(sorted_values[j] - value) <= tol for j in (i - 1, i))
@@ -104,9 +113,9 @@ def check_numbers(answer: str, chunks: Sequence[Dict[str, Any]], passes: int = 3
         changed = False
         for k in range(len(figures)):
             if status[k] == "unverified":
-                for v, decimals in readings[k]:
-                    tol = _tolerance(decimals)
-                    if any(_near(additive, v * s, tol * s) for s in SCALES) or _near(ratio, v, tol):
+                for n, (v, decimals) in enumerate(readings[k]):
+                    tol, tol_add = _tolerance(decimals), _derived_tolerance(decimals, primary=n == 0)
+                    if any(_near(additive, v * s, tol_add * s) for s in SCALES) or _near(ratio, v, tol):
                         status[k], used[k], changed = "derived", v, True
                         break
         if not changed:
