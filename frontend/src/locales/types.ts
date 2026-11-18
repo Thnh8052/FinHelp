@@ -285,6 +285,11 @@ export interface TranslationSchema {
     chooseSourcesLegend: string;
     searchDeeper: string;
     tryAgain: string;
+    clickAsk: Record<"deeper" | "again" | "chooser" | "retry", string>;
+    clickAskN: string;
+    clickStage: Record<"deeper" | "again" | "chooser" | "retry", string>;
+    clickResult: Record<"deeper" | "again" | "chooser" | "retry", string>;
+    clickedNote: Record<"deeper" | "again" | "chooser" | "retry", string>;
     editQuestion: string;
     sendBtn: string;
     removeTag: string;

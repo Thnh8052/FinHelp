@@ -30,6 +30,12 @@ export interface ChatMessage {
   user_rating?: number | null;
   /** Câu trả lời đang được viết (chat dạng stream): chưa có trích dẫn, chưa sao chép được. */
   streaming?: boolean;
+  /** Câu hỏi / câu trả lời do một nút gửi lại (tìm kỹ hơn, thử lại, hỏi lại với tài liệu đã chọn): giao diện gắn nhãn để không trông như câu trùng. */
+  click?: ClickKind | "";
+  /** Câu trả lời đã được bấm một nút (câu trả lời mới ở bên dưới). */
+  clicked?: ClickKind | "";
+  /** Số tài liệu đã đánh dấu khi bấm "Hỏi lại" (chỉ có trong phiên đang mở). */
+  clickCount?: number;
 }
 
 /** Nút dưới câu trả lời (backend orchestrator.answer_actions; docs/VERSION_4/CODE_MODEL_DECISIONS_2026-11-17.md mục 4.2).
@@ -37,6 +43,8 @@ export interface ChatMessage {
  * `search_more`: tìm lại đủ các bước, bỏ qua các đoạn đã gửi; `prominent` khi câu trả lời hụt hoặc hệ thống phải bỏ bớt một bước.
  * `edit_question`: đưa câu hỏi về ô nhập để sửa. `try_again`: hỏi lại y nguyên (sau khi hệ thống chưa tạo được câu trả lời).
  * Mỗi câu trả lời chỉ bấm được một lần (chooser, search_more hoặc try_again). */
+export type ClickKind = "deeper" | "again" | "chooser" | "retry";  // retry: stored before 18/11/2026, which button is unknown
+
 export interface AnswerActions {
   chooser?: { document_id: string; label: string; checked: boolean }[];
   search_more?: { prominent: boolean } | null;

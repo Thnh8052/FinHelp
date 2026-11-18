@@ -65,6 +65,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   // Once the answer shows up the waiting line goes away, unless the system checks it again (the text may then be replaced)
   const isWriting = messages.some((m) => m.streaming && m.content);
   const showWaiting = isLoading && (!isWriting || stageName === "checking");
+  // a button asked the question again: the wait says what is being done instead of the plain stages
+  const lastQuestion = [...messages].reverse().find((m) => m.role === "user");
+  const waitingClick = isLoading && lastQuestion?.click ? lastQuestion.click : "";
 
   // "@" vừa gõ ở cuối ô nhập: hiện danh sách tài liệu nguồn để chọn
   const mentionQuery = /(?:^|\s)@([^\s@]*)$/.exec(input)?.[1];
@@ -80,7 +83,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   };
   const labelOf = (id: string) => mentionOptions.find((o) => o.document_id === id)?.label || id;
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamRef = useRef<HTMLDivElement>(null);
   const promptsTrackRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
@@ -160,7 +163,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // only the message list scrolls: scrollIntoView also scrolled the outer chat box (overflow hidden is still scrollable by code), which hid the header
+    const stream = streamRef.current;
+    stream?.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -269,7 +274,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       </div>
 
       {/* Messages Stream */}
-      <div className="chat-messages-stream">
+      <div className="chat-messages-stream" ref={streamRef}>
         <div className="chat-messages-column">
           {messages.length === 0 && !isLoading && (
             <div className="chat-empty-state">
@@ -306,6 +311,15 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
                 {/* Message Box */}
                 <div className={`chat-message-bubble ${isUser ? "user" : "assistant"}`}>
+                  {(() => {
+                    // which button asked this question / answer again (a reloaded question takes it from its answer)
+                    const click = isUser ? msg.click || messages[index + 1]?.click : msg.click;
+                    if (!click) return null;
+                    const label = isUser
+                      ? click === "chooser" && msg.clickCount ? t.workspace.clickAskN.replace("{n}", String(msg.clickCount)) : t.workspace.clickAsk[click]
+                      : t.workspace.clickResult[click];
+                    return <div className={`chat-click-mark ${isUser ? "on-question" : "on-answer"}`}>↻ {label}</div>;
+                  })()}
                   {!isUser && msg.understood && <div className="chat-understood">{msg.understood}</div>}
                   {isUser ? (
                     <div className="chat-message-text">{msg.content}</div>
@@ -360,6 +374,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                         );
                       })()}
 
+                      {msg.clicked && <div className="chat-clicked-note" role="note">{t.workspace.clickedNote[msg.clicked]}</div>}
                       <div className="chat-message-toolbar">
                         {msg.actions && (msg.query || messages[index - 1]?.role === "user") && (
                           <AnswerActions
@@ -419,12 +434,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               <span className="chat-sender-label">{t.workspace.aiLabel}</span>
               <div className="chat-loading-bubble">
                 <div className="chat-loading-spinner" />
-                <span role="status">{isSlow ? t.workspace.loadingSlow : t.workspace.loadingStages[stageName]}</span>
+                <span role="status">
+                  {isSlow ? t.workspace.loadingSlow : waitingClick && (stageName === "understanding" || stageName === "searching") ? t.workspace.clickStage[waitingClick] : t.workspace.loadingStages[stageName]}
+                </span>
               </div>
             </div>
           )}
 
-          <div ref={messagesEndRef} />
         </div>
       </div>
 

@@ -11,7 +11,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow: clip; /* hidden could still be scrolled by code (scrollIntoView, focus), sliding the header out of view */
   position: relative;
 }
 
@@ -1112,6 +1112,33 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+/* Câu hỏi / câu trả lời do một nút gửi lại: nhãn nhỏ phía trên, để không trông như câu trùng */
+.chat-click-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent-primary);
+  background-color: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-bottom: 8px;
+}
+
+.chat-click-mark.on-question {
+  color: #93c5fd;
+}
+
+/* Câu trả lời đã được bấm: thay chỗ các nút đã dùng */
+.chat-clicked-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 /* Chân câu trả lời: tách khỏi phần chữ bằng một đường kẻ; hàng nguồn, rồi một thanh thao tác */

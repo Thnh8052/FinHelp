@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { ApiError, errorText, signInHelps } from "../services/api";
 import { chatService } from "../services/chat";
-import { ChatMessage, ChatStage } from "../types/chat";
+import { ChatMessage, ChatStage, ClickKind } from "../types/chat";
 import { ShowToast } from "./useToast";
 
 interface ChatOptions {
@@ -36,12 +36,15 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       content,
       created_at: new Date().toISOString(),
     });
+    // a question asked again by a button is marked as such (on the question, while waiting, on its answer, on the answer clicked)
+    const click: ClickKind | undefined = retryOf ? mode ?? "chooser" : undefined;
+    const clickMark = click ? { click } : {};
     setMessages((prev) => [
       // one click only: the answer searched again loses its "search again" buttons (the server refuses a second click too)
       ...(retryOf
         ? prev.map((m) =>
             m.message_id === retryOf
-              ? { ...m, alternatives: (m.alternatives || []).filter((a) => !a.kind), actions: m.actions && { ...m.actions, chooser: [], search_more: null, try_again: false } }
+              ? { ...m, clicked: click, alternatives: (m.alternatives || []).filter((a) => !a.kind), actions: m.actions && { ...m.actions, chooser: [], search_more: null, try_again: false } }
               : m
           )
         : prev),
@@ -51,6 +54,8 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
         role: "user",
         content: queryText,
         created_at: new Date().toISOString(),
+        ...clickMark,
+        ...(click === "chooser" && mentions?.length ? { clickCount: mentions.length } : {}),
       },
     ]);
     setIsLoading(true);
@@ -62,7 +67,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       setMessages((prev) =>
         prev.some((m) => m.message_id === streamId)
           ? prev.map((m) => (m.message_id === streamId ? { ...m, ...patch } : m))
-          : [...prev, { message_id: streamId, notebook_id: notebookId, role: "assistant", content: "", created_at: new Date().toISOString(), streaming: true, ...patch }]
+          : [...prev, { message_id: streamId, notebook_id: notebookId, role: "assistant", content: "", created_at: new Date().toISOString(), streaming: true, ...clickMark, ...patch }]
       );
     let frame = 0;
     const draw = () => {
@@ -72,7 +77,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       setMessages((prev) =>
         prev.some((m) => m.message_id === streamId)
           ? prev.map((m) => (m.message_id === streamId ? { ...m, content: m.content + text } : m))
-          : [...prev, { message_id: streamId, notebook_id: notebookId, role: "assistant", content: text, created_at: new Date().toISOString(), streaming: true }]
+          : [...prev, { message_id: streamId, notebook_id: notebookId, role: "assistant", content: text, created_at: new Date().toISOString(), streaming: true, ...clickMark }]
       );
     };
     pending.current = "";
