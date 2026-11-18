@@ -20,7 +20,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
   const [isLoading, setIsLoading] = useState(false);
   const [stage, setStage] = useState<ChatStage | null>(null);
   const pending = useRef("");  // pieces not drawn yet: drawn once per frame, not once per piece
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   const loginWarning = (detail: string) => showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
 
@@ -84,6 +84,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
           query: queryText,
           document_ids: Array.from(new Set([...(mentions || []), ...selectedDocIds])).slice(0, maxSources),
           mentions,
+          ui_lang: lang,
           ...(retryOf ? { retry_of: retryOf } : {}),
           ...(retryOf && mode ? { [mode]: true } : {}),
         },

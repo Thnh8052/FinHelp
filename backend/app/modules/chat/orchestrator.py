@@ -237,7 +237,9 @@ class RAGWorkflowOrchestrator:
         short = ((meta or {}).get("status") in ("partial", "not_found") or not verification["passed"]) and not isinstance(answer, Unfinished) and text not in policy.BLOCKED.values()
         lang = "vi" if decision.lang == "vi" else "en"
         status = (meta or {}).get("status")
-        unfinished = answer.kind if isinstance(answer, Unfinished) else ""  # read before a line is added: "+=" makes a plain str
+        # read before a line is added ("+=" makes a plain str). "blocked": the fixed reply that replaced an answer breaking a safety rule twice (advice...):
+        # searching more would not change what the model writes, and the reply asks to rephrase
+        unfinished = answer.kind if isinstance(answer, Unfinished) else "blocked" if checked["outcome"] == "blocked" else ""
         # One added line, naming the problem that happened (tests/test_failure_replies.py)
         if found.degraded:  # a step was dropped: the slow system is the cause, not the sources, even after a click
             answer += "\n\n" + DEGRADED_NOTE[lang]
@@ -262,7 +264,7 @@ class RAGWorkflowOrchestrator:
             # list positions (a question of its own: with an offset the [n] of this part restart at 1)
             "citations": [{**c.model_dump(), **({"cited": idx + 1 in cited} if citation_offset == 0 else {})} for idx, c in enumerate(citations)],
             "retrieved_chunks_count": len(retrieved),
-            "charged": bool(retrieved) and not unfinished,  # B7: no excerpt, no answer written (NO_DATA_ANSWER); nor an apology for a model that failed or was cut
+            "charged": bool(retrieved) and not unfinished,  # B7: no excerpt, no answer written (NO_DATA_ANSWER); nor an apology for a model that failed or was cut, nor a blocked answer
             "understood": understood,
             "alternatives": [],  # older answers kept their buttons here; new ones carry `actions`
             "actions": actions,
@@ -305,7 +307,7 @@ class RAGWorkflowOrchestrator:
                  "when the excerpts show them, and notable points. Use only the excerpts and say which items you could not find."]
         answer, checked = await self._write_checked(query, chunks, notes, [], decision.lang, max_tokens=1800, figures=False)
         return {"answer": answer, "intent": "overview", "citations": [CitationGenerator.from_retrieved_chunk(c, i + 1).model_dump() for i, c in enumerate(chunks)],
-                "retrieved_chunks_count": len(chunks), "charged": True, "trace": {"overview": True, "retrieved_pages": [c["page"] for c in chunks], "review": checked["trace"]}}
+                "retrieved_chunks_count": len(chunks), "charged": checked["outcome"] != "blocked", "trace": {"overview": True, "retrieved_pages": [c["page"] for c in chunks], "review": checked["trace"]}}
 
     async def _previous_chunks(self, scope: List[DocumentRecord], history: List[dict]) -> Tuple[List[str], List[Dict[str, Any]]]:
         """(chunk ids, excerpts) cited by the previous answer, kept to the selected sources."""
@@ -325,7 +327,7 @@ class RAGWorkflowOrchestrator:
         answer, checked = await self._write_checked(query, chunks, ["The user refers to the excerpts cited in the previous answer: answer about them."], [],
                                                     detect_language(query), figures=False)
         return {"answer": answer, "intent": "previous_citations", "citations": [CitationGenerator.from_retrieved_chunk(c, i + 1).model_dump() for i, c in enumerate(chunks)],
-                "retrieved_chunks_count": len(chunks), "charged": True, "trace": {"previous_citations": ids, "review": checked["trace"]}}
+                "retrieved_chunks_count": len(chunks), "charged": checked["outcome"] != "blocked", "trace": {"previous_citations": ids, "review": checked["trace"]}}
 
     async def execute_query(self, query: str, notebook_id: str, **kwargs) -> Dict[str, Any]:
         """The whole question, with its cost in the trace (P7): LLM calls and tokens of this request, total seconds, and what the
@@ -418,6 +420,7 @@ class RAGWorkflowOrchestrator:
     async def plan_question(
         self, query: str, notebook_id: str, document_id: Optional[str] = None, document_ids: Optional[List[str]] = None,
         history: Optional[List[dict]] = None, mentions: Optional[List[str]] = None, focus_state: Optional[Dict[str, Any]] = None,
+        ui_lang: Optional[str] = None,
     ) -> QuestionPlan:
         """Every step before a search, in order: the sources, the catalog gate, the topic, the rules, the follow-up
         rewrite (an LLM call when the topic cannot fill it). The chat (execute_query) and the admin inspector (inspect_question) both
@@ -438,7 +441,7 @@ class RAGWorkflowOrchestrator:
         history = history or []
         tagged = {**focus_state, "document_ids": mentions} if mentions and focus_state else focus_state  # @file names the company: the topic only gives the item and year
         p.focus = focus = focus_view(tagged, [d.document_id for d in scope], p.infos)
-        p.decision = decision = decide(query, p.infos, p.ready_count, history, focus)
+        p.decision = decision = decide(query, p.infos, p.ready_count, history, focus, ui_lang)
         # What the rules let through is still checked for what it is (small talk, an off-topic request, a request for advice...) by the guard,
         # beside the search (_guarded): the intent router that did it here was removed 17/11/2026 (TRIED.md DV-08)
         if decision.action == "rewrite_followup":  # "And the net income?" -> a standalone question, shown to the user
@@ -542,8 +545,9 @@ class RAGWorkflowOrchestrator:
         focus_state: Optional[Dict[str, Any]] = None,
         retry: bool = False,
         deeper: Optional[Dict[str, List[str]]] = None,
+        ui_lang: Optional[str] = None,
     ) -> Dict[str, Any]:
-        p = await self.plan_question(query, notebook_id, document_id, document_ids, history, mentions, focus_state)
+        p = await self.plan_question(query, notebook_id, document_id, document_ids, history, mentions, focus_state, ui_lang)
         if GUARD.get() is not None and p.decision:
             GUARD.get().evidence = list(p.decision.evidence)  # the second key of the guard's off_topic label
         if p.stop:
@@ -679,11 +683,15 @@ def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets:
     """The buttons under an answer (docs/VERSION_4/CODE_MODEL_DECISIONS_2026-11-17.md 4.2; tests/test_answer_actions.py). `chooser`: every selected document,
     the ones the answer used ticked, several may be ticked (they become @ tags of a new search); `search_more`: a full search again that leaves out what
     was sent, prominent when the answer fell short or a step was dropped; `edit_question`: put the question back in the box; `try_again`: the same question
-    again, nothing left out. `unfinished` ("" | "outage" | "cut", Unfinished.kind): a model that could not be reached gets try_again (search_more would
+    again, nothing left out. `unfinished` ("" | "outage" | "cut", Unfinished.kind, | "blocked"): a model that could not be reached gets try_again (search_more would
     leave out the best excerpts), a reply cut at the limit gets edit_question (its apology asks to split the question); neither gets search_more.
+    "blocked" (an answer replaced by the fixed reply for breaking a safety rule) gets only edit_question: the reply asks to rephrase.
     One click only: an answer to a click offers none of them, but the question box when it still fell short or was cut."""
+    rephrase = unfinished in ("cut", "blocked")
     if retry:
-        return {"chooser": [], "search_more": None, "edit_question": short or unfinished == "cut", "try_again": False}
+        return {"chooser": [], "search_more": None, "edit_question": short or rephrase, "try_again": False}
+    if unfinished == "blocked":
+        return {"chooser": [], "search_more": None, "edit_question": True, "try_again": False}
     ids = [d.document_id for d in scope]
     planned = [d for d in dict.fromkeys(d for p in found.plan for d in (p.document_ids or [x.document_id for x in found.scope]))]
     used = targets.document_ids or planned or [d.document_id for d in found.scope]
@@ -693,7 +701,7 @@ def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets:
     show = len(scope) > 1 and (chose_for_user or short or status == "clarify")
     chooser = [{"document_id": d.document_id, "label": found.labels.get(d.document_id) or document_label(d), "checked": d.document_id in used} for d in scope] if show else []
     search_more = {"prominent": bool(short or found.degraded)} if found.retrieved and ids and not unfinished else None
-    return {"chooser": chooser, "search_more": search_more, "edit_question": status == "clarify" or unfinished == "cut", "try_again": unfinished == "outage"}
+    return {"chooser": chooser, "search_more": search_more, "edit_question": status == "clarify" or rephrase, "try_again": unfinished == "outage"}
 
 
 def _previews(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

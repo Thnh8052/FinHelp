@@ -58,6 +58,9 @@ _VI_WORDS = re.compile(r"\b(là|của|và|không|bao nhiêu|thế nào|công ty|
 _VI_PLAIN = re.compile(r"\b(khong|bao nhieu|doanh thu|loi nhuan|cong ty|la gi|cam on|xin chao|the nao|tai san|cho toi|bao cao|tom tat|ban la|ban co|hom nay|giup toi)\b")
 
 
+MIN_QUESTION_CHARS, MAX_QUESTION_CHARS = 5, 5000  # owner's choice 18/11/2026; the chat endpoint refuses a longer one before anything is stored
+
+
 def detect_language(text: str) -> str:
     low = text.lower()
     return "vi" if any(ch in _VI_CHARS for ch in low) or _VI_WORDS.search(low) or _VI_PLAIN.search(low) else "en"
@@ -286,13 +289,15 @@ def _leans_on_focus(q: str, words_: Sequence[str], named: Set[int], outsiders: b
     return len(words_) <= 6 and (metric or bool(_RELATIVE_PERIOD.search(q))) and not (named or outsiders or years or _DOC_ANCHOR.search(q))
 
 
-def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, history: Optional[Sequence[dict]] = None, focus: Optional[Focus] = None) -> Decision:
+def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, history: Optional[Sequence[dict]] = None, focus: Optional[Focus] = None,
+           ui_lang: Optional[str] = None) -> Decision:
+    """`ui_lang`: the interface language, for a message too short to show its own ("?") on a chat with no earlier question."""
     q = (question or "").strip()
     history = history or []
     lang = detect_language(q)
-    if lang == "en" and len(_words(q)) <= 2:  # "alo", "haha", "ok": too short to tell, so the language of the user's previous turn
+    if lang == "en" and len(_words(q)) <= 2:  # "alo", "haha", "ok", "?": too short to tell, so the user's previous turn, else the interface
         earlier = next((h for h in reversed(history) if h.get("role") == "user"), None)
-        lang = detect_language(str(earlier.get("content", ""))) if earlier else lang
+        lang = detect_language(str(earlier.get("content", ""))) if earlier else ui_lang if ui_lang in ("vi", "en") else lang
     d = Decision(lang=lang)
 
     # A: sources
@@ -301,7 +306,7 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
         d.message = _msg(d.action, lang)
         return d
     # B: hygiene
-    if len(q) < 2 or len(q) > 4000:
+    if len(q) < MIN_QUESTION_CHARS or len(q) > MAX_QUESTION_CHARS:
         d.action, d.message = "reject_input", _msg("reject_input", lang)
         return d
     if not any(ch.isalpha() for ch in q):

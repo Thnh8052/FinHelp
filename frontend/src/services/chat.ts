@@ -12,6 +12,8 @@ export interface QueryRequest {
   deeper?: boolean;
   /** with retry_of: the "try again" button (same sources, the same search, nothing left out) */
   again?: boolean;
+  /** the interface language: the reply to a message too short to show its own ("?") */
+  ui_lang?: "vi" | "en";
 }
 
 export interface QueryResponse {

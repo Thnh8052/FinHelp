@@ -155,7 +155,7 @@ async def test_a_refused_question_does_not_move_the_focus(monkeypatch):
     assert "focus" not in r
 
 
-async def _ask(monkeypatch, nb, result, query="q"):
+async def _ask(monkeypatch, nb, result, query="q", seen=None, **extra):
     """The chat endpoint with everything around it replaced: what was written, in order."""
     import types
 
@@ -179,6 +179,8 @@ async def _ask(monkeypatch, nb, result, query="q"):
 
     async def answered(self, **kw):
         assert kw["focus_state"] == nb.focus_state
+        if seen is not None:
+            seen.update(kw)
         return result
 
     async def none(*a, **k):
@@ -192,7 +194,7 @@ async def _ask(monkeypatch, nb, result, query="q"):
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "__init__", lambda self, db, qdrant: None)
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "resolve_scope", none)
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
-    response = await chat_api.handle_user_query(None, chat_api.QueryRequest(notebook_id="nb", query=query, document_ids=["d1"]), "u", None, None)
+    response = await chat_api.handle_user_query(None, chat_api.QueryRequest(notebook_id="nb", query=query, document_ids=["d1"], **extra), "u", None, None)
     return order, response
 
 
@@ -224,8 +226,8 @@ async def test_a_question_that_is_too_long_is_refused_before_anything_is_stored(
     from app.modules.notebooks.notebook import NotebookRecord
 
     with pytest.raises(HTTPException) as refused:
-        await _ask(monkeypatch, NotebookRecord(notebook_id="nb", owner_id="u"), {}, "x" * 4001)
-    assert refused.value.status_code == 422 and refused.value.detail == {"code": "question_too_long", "params": {"max": 4000}}
+        await _ask(monkeypatch, NotebookRecord(notebook_id="nb", owner_id="u"), {}, "x" * 5001)
+    assert refused.value.status_code == 422 and refused.value.detail == {"code": "question_too_long", "params": {"max": 5000}}
 
 
 async def _value(v):

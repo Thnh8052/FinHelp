@@ -194,3 +194,10 @@ def test_s3_a_reloaded_chat_shows_no_search_again_button_on_an_answer_already_se
     answered = MessageRecord(message_id="m2", notebook_id="nb", role="assistant", content="...", trace_info={"alternatives": buttons})
     shown = chat_api.shown_messages([ASKED, answered, RETRIED])
     assert shown[1].alternatives == [{"document_id": "nv", "label": "NVIDIA"}]  # an alternative of the router stays
+
+
+@pytest.mark.parametrize("lang,scope_words", [("vi", "các nguồn đã chọn"), ("en", "the selected sources")])
+def test_the_no_excerpt_reply_names_the_selected_sources_not_the_notebook(lang, scope_words):
+    # owner's check 18/11/2026: only the selected sources are searched, never every document of the notebook
+    first = NO_DATA_ANSWER[lang].split(". ")[0]
+    assert scope_words in first and "notebook" not in NO_DATA_ANSWER[lang]

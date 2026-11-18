@@ -77,3 +77,28 @@ async def test_a_reply_cut_at_the_limit_offers_editing_the_question_and_costs_no
 async def test_a_failed_writer_on_a_slow_system_still_offers_try_again(monkeypatch):
     r = await run(monkeypatch, "en", raises=LLMUnavailableError("LLM_UNAVAILABLE"), degraded=["rerank_skipped"])
     assert r["actions"]["try_again"] is True and r["charged"] is False
+
+
+ADVICE = "AMD net revenue was $25,785 million in 2024 [1]. You should buy AMD shares now.\n" + META % ("answered", "[1]")
+
+
+@pytest.mark.parametrize("lang", ["en", "vi"])
+async def test_an_answer_blocked_for_advice_offers_no_search_and_costs_nothing(monkeypatch, lang):
+    # owner's check 18/11/2026: the fixed "could not produce a suitable answer" reply had "Search deeper" and used a question
+    from app.core.config import settings
+    from app.modules.generation.answer_check import policy
+
+    monkeypatch.setattr(settings, "OUTPUT_POLICY_ENABLED", True)
+    r = await run(monkeypatch, lang, ADVICE)
+    assert r["answer"].startswith(policy.BLOCKED[lang])
+    assert r["actions"]["search_more"] is None and r["actions"]["chooser"] == [] and r["actions"]["try_again"] is False
+    assert r["actions"]["edit_question"] is True  # the reply asks to rephrase
+    assert r["charged"] is False
+
+
+async def test_a_blocked_answer_to_a_click_also_costs_nothing(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "OUTPUT_POLICY_ENABLED", True)
+    r = await run(monkeypatch, "en", ADVICE, retry=True)
+    assert r["actions"]["search_more"] is None and r["actions"]["edit_question"] is True and r["charged"] is False

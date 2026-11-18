@@ -15,7 +15,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple, Dict
+from typing import Any, List, Literal, Optional, Tuple, Dict
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -38,10 +38,11 @@ from app.modules.auth.user_repo import UserRepository
 from app.modules.chat.chat_models import MessageRecord
 from app.modules.notebooks.notebook import UNTITLED, shown_title, title_from_question
 from app.modules.chat.orchestrator import RAGWorkflowOrchestrator, SourceSelectionError
+from app.modules.query_router.input_policy import MAX_QUESTION_CHARS
 
 router = APIRouter(prefix="/chat", tags=["Chat & RAG"])
 
-MAX_QUERY_CHARS = 4000
+MAX_QUERY_CHARS = MAX_QUESTION_CHARS
 
 
 def selected_ids(document_ids: Optional[List[str]], document_id: Optional[str]) -> List[str]:
@@ -96,6 +97,7 @@ class QueryRequest(BaseModel):
     retry_of: Optional[str] = None  # sent by a "search again" button: the answer that fell short (docs/Version_3/fail_cases.md, S3)
     deeper: bool = False  # with retry_of: the "search deeper" button (same documents, the excerpts already sent left out); without: the document chooser
     again: bool = False  # with retry_of: the "try again" button after a model that could not be reached (same documents, same search, nothing left out)
+    ui_lang: Optional[Literal["vi", "en"]] = None  # the interface language: the reply to a message too short to show its own ("?")
 
 
 class CitationOut(BaseModel):
@@ -244,6 +246,7 @@ async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str])
             mentions=adm.mentions,
             focus_state=adm.nb.focus_state,
             retry=adm.retry_of is not None,
+            ui_lang=req.ui_lang,
             **({"deeper": deeper_of(adm.retry_of)} if req.deeper and adm.retry_of is not None else {}),
         )
     except BaseException:  # a cancelled answer too

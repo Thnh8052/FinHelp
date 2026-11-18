@@ -20,8 +20,9 @@ RETRY_FIGURES_APOLOGY = {"vi": "Xin lỗi, sau lần tìm lại vẫn còn chi t
 # (its label follows the interface language, this line the question's), in place of "check your sources": the sources are not the cause
 DEGRADED_NOTE = {"vi": "Lần tìm này có thể chưa đầy đủ vì hệ thống đang chậm. Bạn có thể thử tìm lại sau ít phút.",
                  "en": "This search may be incomplete because the system was slow. You can try searching again in a few minutes."}
-NO_DATA_ANSWER = {"vi": "Không tìm thấy dữ liệu tài chính phù hợp trong tài liệu của notebook này. " + CHECK_SOURCES["vi"],
-                  "en": "No matching financial data was found in this notebook's documents. " + CHECK_SOURCES["en"]}
+# Only the selected sources are searched, never every document of the notebook
+NO_DATA_ANSWER = {"vi": "Không tìm thấy dữ liệu tài chính phù hợp trong các nguồn đã chọn. " + CHECK_SOURCES["vi"],
+                  "en": "No matching financial data was found in the selected sources. " + CHECK_SOURCES["en"]}
 
 
 def _cells(line: str) -> List[str]:

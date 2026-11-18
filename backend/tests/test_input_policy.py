@@ -24,9 +24,9 @@ def act(question, sources, notebook_docs=None, history=None):
 def test_sources_and_hygiene():
     assert act("What was the revenue?", [], 3).action == "ask_select_sources"
     assert act("What was Nike's revenue?", [], 0).action == "notebook_empty"
-    for bad in ("", "  ", "a", "x" * 5000):
+    for bad in ("", "  ", "a", "x" * 5001):
         assert act(bad, [NIKE23]).action == "reject_input"
-    for bad in ("???", "12345", "@#$%"):
+    for bad in ("?????", "12345", "@#$%^"):
         assert act(bad, [NIKE23]).action == "ask_rephrase"
 
 
@@ -239,8 +239,8 @@ def test_questions_that_each_name_their_item_are_still_split(question):
 
 def test_language_is_detected_for_the_messages():
     assert act("Doanh thu là bao nhiêu?", [KO22, PEP22]).lang == "vi"
-    assert act("???", [NIKE23]).lang == "en"
-    assert "Hãy" in act("???", [NIKE23]).message or "rephrase" in act("???", [NIKE23]).message
+    assert act("?????", [NIKE23]).lang == "en"
+    assert "Hãy" in act("?????", [NIKE23]).message or "rephrase" in act("?????", [NIKE23]).message
 
 
 # ---------------------------------------------------------------- the orchestrator uses the decisions
