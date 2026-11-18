@@ -134,12 +134,19 @@ class MessageOut(BaseModel):
     actions: dict = {}
     created_at: Any
     user_rating: Optional[int] = None  # -1: the user reported wrong figures
+    click: str = ""  # this answer was asked by a button: "deeper" | "again" | "chooser" | "retry" (older, kind unknown) (tests/test_click_marks.py)
+    clicked: str = ""  # a button was used on this answer: which one (its answer follows)
 
     @classmethod
     def of(cls, message: MessageRecord) -> "MessageOut":
         trace = message.trace_info or {}
         return cls(**message.model_dump(exclude={"trace_info"}), understood=trace.get("understood") or "", alternatives=trace.get("alternatives") or [],
-                   actions=trace.get("actions") or {})
+                   actions=trace.get("actions") or {}, click=click_of(trace))
+
+
+def click_of(trace: dict) -> str:
+    """Which button asked this answer ("" for a typed question). Answers stored before 18/11/2026 kept only retry_of: "retry", a neutral mark (either button)."""
+    return (trace.get("click") or "retry") if trace.get("retry_of") else ""
 
 
 # --- Endpoints ---
@@ -198,8 +205,10 @@ def shown_messages(messages: List[MessageRecord]) -> List["MessageOut"]:
     """The stored messages as the interface shows them: an answer already searched again keeps no "search again" button (one click)."""
     used = _retried(messages)
     out = [MessageOut.of(m) for m in messages]
+    clicks = {(m.trace_info or {}).get("retry_of"): click_of(m.trace_info or {}) for m in messages if (m.trace_info or {}).get("retry_of")}
     for m in out:
         if m.message_id in used:
+            m.clicked = clicks.get(m.message_id, "")
             m.alternatives = [a for a in m.alternatives if not a.get("kind")]
             if m.actions:
                 m.actions = {**m.actions, "chooser": [], "search_more": None, "try_again": False}
@@ -256,6 +265,7 @@ async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str])
     result.setdefault("trace", {})["asked"] = {"document_ids": list(adm.chosen), "mentions": list(adm.mentions)}  # what "search deeper" searches again
     if adm.retry_of is not None:
         result["trace"]["retry_of"] = adm.retry_of.message_id
+        result["trace"]["click"] = "deeper" if req.deeper else "again" if req.again else "chooser"  # the interface marks the click and its answer
     return result
 
 
