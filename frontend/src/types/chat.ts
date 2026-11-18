@@ -42,14 +42,18 @@ export interface ChatMessage {
  * `chooser`: mọi tài liệu đã chọn, tài liệu câu trả lời đã dùng được đánh dấu sẵn; chọn được nhiều tài liệu rồi hỏi lại (chúng thành thẻ @).
  * `search_more`: tìm lại đủ các bước, bỏ qua các đoạn đã gửi; `prominent` khi câu trả lời hụt hoặc hệ thống phải bỏ bớt một bước.
  * `edit_question`: đưa câu hỏi về ô nhập để sửa. `try_again`: hỏi lại y nguyên (sau khi hệ thống chưa tạo được câu trả lời).
- * Mỗi câu trả lời chỉ bấm được một lần (chooser, search_more hoặc try_again). */
-export type ClickKind = "deeper" | "again" | "chooser" | "retry";  // retry: stored before 18/11/2026, which button is unknown
+ * `search_all`: "Vẫn tìm trong mọi nguồn" sau câu trả lời cố định "các nguồn đã chọn dường như không có thông tin này" (mọi nguồn của câu đó thành thẻ @).
+ * Mỗi câu trả lời chỉ bấm được một lần (chooser, search_more, try_again hoặc search_all). */
+export type ClickKind = "deeper" | "again" | "chooser" | "everywhere" | "retry";  // retry: stored before 18/11/2026, which button is unknown
+/** How a button asks the question again (sent to the server as a flag of the same name); none = over the chooser's ticked sources. */
+export type AskMode = "deeper" | "again" | "everywhere";
 
 export interface AnswerActions {
   chooser?: { document_id: string; label: string; checked: boolean }[];
   search_more?: { prominent: boolean } | null;
   edit_question?: boolean;
   try_again?: boolean;
+  search_all?: boolean;
 }
 
 export type ChatStage = "understanding" | "searching" | "writing" | "checking";

@@ -12,6 +12,8 @@ export interface QueryRequest {
   deeper?: boolean;
   /** with retry_of: the "try again" button (same sources, the same search, nothing left out) */
   again?: boolean;
+  /** with retry_of: the "search all sources" button after "the selected sources do not seem to contain this" (every source of that answer, tagged) */
+  everywhere?: boolean;
   /** the interface language: the reply to a message too short to show its own ("?") */
   ui_lang?: "vi" | "en";
 }

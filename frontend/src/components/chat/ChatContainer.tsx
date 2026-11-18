@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLanguage } from "../../context/LanguageContext";
-import { ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
+import { AskMode, ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
 import { CitationBadge } from "./CitationBadge";
 import { AnswerActions } from "./AnswerActions";
 import { MarkdownRenderer } from "./MarkdownRenderer";
@@ -11,7 +11,7 @@ import "./chat.css";
 
 interface ChatContainerProps {
   messages: ChatMessage[];
-  onSendMessage: (query: string, mentions?: string[], retryOf?: string, mode?: "deeper" | "again") => void;
+  onSendMessage: (query: string, mentions?: string[], retryOf?: string, mode?: AskMode) => void;
   /** Report (or withdraw) wrong figures in a stored answer. */
   onFlagAnswer?: (messageId: string, flagged: boolean) => void;
   isLoading: boolean;

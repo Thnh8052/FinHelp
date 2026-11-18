@@ -95,6 +95,8 @@ async def test_the_planner_the_scope_check_and_the_follow_up_rewrite_do_not_ask_
     planner._guard_cache.clear()
     monkeypatch.setattr(planner, "chat_completion", cut)
     monkeypatch.setattr(input_policy, "chat_completion", cut)
-    assert await planner.plan_multi_doc("a question about both", CATALOG) == [] and len(calls) == 1  # it used to be asked twice
+    with pytest.raises(planner.PlanUnavailable):  # a failed planner, not a valid empty plan (test_empty_plan.py)
+        await planner.plan_multi_doc("a question about both", CATALOG)
+    assert len(calls) == 1  # it used to be asked twice
     assert await planner.unlisted_companies("Apple revenue?", CATALOG) == [] and len(calls) == 2  # and three times
     assert await input_policy.rewrite_followup("and 2022?", [{"role": "user", "content": "AMD revenue 2023?"}, {"role": "assistant", "content": "x"}]) is None and len(calls) == 3

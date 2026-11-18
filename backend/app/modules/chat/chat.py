@@ -97,6 +97,7 @@ class QueryRequest(BaseModel):
     retry_of: Optional[str] = None  # sent by a "search again" button: the answer that fell short (docs/Version_3/fail_cases.md, S3)
     deeper: bool = False  # with retry_of: the "search deeper" button (same documents, the excerpts already sent left out); without: the document chooser
     again: bool = False  # with retry_of: the "try again" button after a model that could not be reached (same documents, same search, nothing left out)
+    everywhere: bool = False  # with retry_of: the "search all sources" button after an empty plan (every source of that answer, each tagged: the full pipeline)
     ui_lang: Optional[Literal["vi", "en"]] = None  # the interface language: the reply to a message too short to show its own ("?")
 
 
@@ -117,7 +118,7 @@ class QueryResponse(BaseModel):
     citations: List[CitationOut]
     understood: str = ""  # G3: how the question was understood (documents, assumptions), shown above the answer
     alternatives: List[dict] = []  # buttons of answers stored before 17/11/2026 ([{"document_id", "label", "kind"?}]); new answers carry `actions`
-    actions: dict = {}  # {"chooser": [{"document_id", "label", "checked"}], "search_more": {"prominent"} | None, "edit_question", "try_again"} (orchestrator.answer_actions)
+    actions: dict = {}  # {"chooser": [{"document_id", "label", "checked"}], "search_more": {"prominent"} | None, "edit_question", "try_again", "search_all"?} (orchestrator.answer_actions, empty_plan_reply)
     message_id: str = ""  # the stored answer: what a report of wrong figures points to
 
 
@@ -134,7 +135,7 @@ class MessageOut(BaseModel):
     actions: dict = {}
     created_at: Any
     user_rating: Optional[int] = None  # -1: the user reported wrong figures
-    click: str = ""  # this answer was asked by a button: "deeper" | "again" | "chooser" | "retry" (older, kind unknown) (tests/test_click_marks.py)
+    click: str = ""  # this answer was asked by a button: "deeper" | "again" | "chooser" | "everywhere" | "retry" (older, kind unknown) (tests/test_click_marks.py)
     clicked: str = ""  # a button was used on this answer: which one (its answer follows)
 
     @classmethod
@@ -185,8 +186,18 @@ def deeper_of(message: MessageRecord) -> Dict[str, List[str]]:
 
 
 def uses_answer_documents(req: "QueryRequest") -> bool:
-    """A click that asks again over the documents of the clicked answer ("search deeper", "try again"), not over the ones it sends (the chooser's ticks)."""
-    return req.retry_of is not None and (req.deeper or req.again)
+    """A click that asks again over the documents of the clicked answer ("search deeper", "try again", "search all sources"), not over the ones it sends
+    (the chooser's ticks)."""
+    return req.retry_of is not None and (req.deeper or req.again or req.everywhere)
+
+
+def click_documents(req: "QueryRequest", message: MessageRecord, chosen: List[str], mentions: List[str]) -> Tuple[List[str], List[str]]:
+    """The sources and @ tags a click on `message` asks over. "Search all sources" tags every source of that answer: code then searches them even when the
+    planner again chooses none (retrieval_step: a targeted empty plan is vetoed)."""
+    if not uses_answer_documents(req):
+        return chosen, mentions
+    chosen, mentions = same_documents(message, chosen, mentions)
+    return (chosen, list(chosen)) if req.everywhere else (chosen, mentions)
 
 
 def same_documents(message: MessageRecord, chosen: List[str], mentions: List[str]) -> Tuple[List[str], List[str]]:
@@ -211,7 +222,7 @@ def shown_messages(messages: List[MessageRecord]) -> List["MessageOut"]:
             m.clicked = clicks.get(m.message_id, "")
             m.alternatives = [a for a in m.alternatives if not a.get("kind")]
             if m.actions:
-                m.actions = {**m.actions, "chooser": [], "search_more": None, "try_again": False}
+                m.actions = {**m.actions, "chooser": [], "search_more": None, "try_again": False, "search_all": False}
     return out
 
 
@@ -223,8 +234,8 @@ async def _admit(request: Request, req: "QueryRequest", user_id: Optional[str], 
         raise api_error(status_code=403, code=Code.SAMPLE_NOTEBOOK_READ_ONLY)
     chosen, mentions = validate_question(req.document_ids, req.document_id, req.mentions, req.query, signed_in=user_id is not None)
     retry_of = await retried_message(ChatRepository(db), req.notebook_id, req.retry_of)
-    if uses_answer_documents(req) and retry_of is not None:  # the documents of the clicked answer, checked below like any choice
-        chosen, mentions = same_documents(retry_of, chosen, mentions)
+    if retry_of is not None:  # a click asks over the documents of the clicked answer (or the chooser's ticks), checked below like any choice
+        chosen, mentions = click_documents(req, retry_of, chosen, mentions)
     await ensure_documents_ready(db, req.notebook_id, chosen)
     orchestrator = RAGWorkflowOrchestrator(db, qdrant)
     try:  # a question without a usable source choice is refused before it costs quota or writes a message
@@ -265,7 +276,7 @@ async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str])
     result.setdefault("trace", {})["asked"] = {"document_ids": list(adm.chosen), "mentions": list(adm.mentions)}  # what "search deeper" searches again
     if adm.retry_of is not None:
         result["trace"]["retry_of"] = adm.retry_of.message_id
-        result["trace"]["click"] = "deeper" if req.deeper else "again" if req.again else "chooser"  # the interface marks the click and its answer
+        result["trace"]["click"] = ("deeper" if req.deeper else "again" if req.again else "everywhere" if req.everywhere else "chooser")  # the interface marks the click and its answer
     return result
 
 

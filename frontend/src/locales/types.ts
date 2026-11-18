@@ -1,3 +1,5 @@
+import type { ClickKind } from "../types/chat";
+
 export type Language = "en" | "vi";
 
 export interface TranslationSchema {
@@ -285,11 +287,12 @@ export interface TranslationSchema {
     chooseSourcesLegend: string;
     searchDeeper: string;
     tryAgain: string;
-    clickAsk: Record<"deeper" | "again" | "chooser" | "retry", string>;
+    searchAll: string;
+    clickAsk: Record<ClickKind, string>;
     clickAskN: string;
-    clickStage: Record<"deeper" | "again" | "chooser" | "retry", string>;
-    clickResult: Record<"deeper" | "again" | "chooser" | "retry", string>;
-    clickedNote: Record<"deeper" | "again" | "chooser" | "retry", string>;
+    clickStage: Record<ClickKind, string>;
+    clickResult: Record<ClickKind, string>;
+    clickedNote: Record<ClickKind, string>;
     editQuestion: string;
     sendBtn: string;
     removeTag: string;

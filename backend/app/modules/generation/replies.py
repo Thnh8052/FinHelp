@@ -20,6 +20,12 @@ RETRY_FIGURES_APOLOGY = {"vi": "Xin lỗi, sau lần tìm lại vẫn còn chi t
 # (its label follows the interface language, this line the question's), in place of "check your sources": the sources are not the cause
 DEGRADED_NOTE = {"vi": "Lần tìm này có thể chưa đầy đủ vì hệ thống đang chậm. Bạn có thể thử tìm lại sau ít phút.",
                  "en": "This search may be incomplete because the system was slow. You can try searching again in a few minutes."}
+# A valid empty plan (the planner chose no selected report; step 3 of docs/VERSION_4/CODE_MODEL_DECISIONS_2026-11-17.md, TRIED KH-13): nothing is searched or
+# written. Names no component and no button (the buttons "search all sources" and the chooser follow the interface language)
+EMPTY_PLAN_ANSWER = {"vi": "Các nguồn đã chọn dường như không có thông tin này. Nếu bạn nghĩ là có, bạn vẫn có thể yêu cầu tìm trong mọi nguồn đã chọn, "
+                           "hoặc chọn tài liệu khác.",
+                     "en": "The selected sources do not seem to contain this information. If you think they do, you can still have every selected "
+                           "source searched, or choose other documents."}
 # Only the selected sources are searched, never every document of the notebook
 NO_DATA_ANSWER = {"vi": "Không tìm thấy dữ liệu tài chính phù hợp trong các nguồn đã chọn. " + CHECK_SOURCES["vi"],
                   "en": "No matching financial data was found in the selected sources. " + CHECK_SOURCES["en"]}

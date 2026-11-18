@@ -90,16 +90,19 @@ async def test_plan_multi_doc_asks_again_after_an_invalid_reply_but_not_after_an
     assert await planner.plan_multi_doc("q2", CATALOG) == [] and len(calls) == 1  # the model chose no report: not an error
 
     replies, calls = ["not json"] * 2, []
-    assert await planner.plan_multi_doc("q3", CATALOG) == [] and len(calls) == 2
+    with pytest.raises(planner.PlanUnavailable):  # no valid plan twice: a failure, told apart from a valid empty plan (test_empty_plan.py)
+        await planner.plan_multi_doc("q3", CATALOG)
+    assert len(calls) == 2
 
 
-async def test_plan_multi_doc_degrades_to_empty_when_llm_down_or_catalog_empty(monkeypatch):
+async def test_plan_multi_doc_raises_when_llm_down_and_is_empty_without_a_catalog(monkeypatch):
     async def down(messages, **kwargs):
         raise LLMUnavailableError("down")
 
     planner._cache.clear()
     monkeypatch.setattr(planner, "chat_completion", down)
-    assert await planner.plan_multi_doc("q", CATALOG) == []
+    with pytest.raises(planner.PlanUnavailable):  # the caller routes without a plan and says so (retrieval_step "plan_unavailable")
+        await planner.plan_multi_doc("q", CATALOG)
     assert await planner.plan_multi_doc("q", []) == []
 
 
@@ -520,7 +523,7 @@ async def test_retrieve_never_widens_the_selection(monkeypatch):
 
     # planner unavailable: routing without a language model, still only the selected documents
     async def broken_plan(query, catalog):
-        return []
+        raise planner.PlanUnavailable("down")
 
     monkeypatch.setattr(retrieval_step, "plan_multi_doc", broken_plan)
     seen.clear()

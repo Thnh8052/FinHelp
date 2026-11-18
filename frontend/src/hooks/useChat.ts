@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { ApiError, errorText, signInHelps } from "../services/api";
 import { chatService } from "../services/chat";
-import { ChatMessage, ChatStage, ClickKind } from "../types/chat";
+import { AskMode, ChatMessage, ChatStage, ClickKind } from "../types/chat";
 import { ShowToast } from "./useToast";
 
 interface ChatOptions {
@@ -24,7 +24,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
 
   const loginWarning = (detail: string) => showToast(detail, "warning", t.toasts.signInNow, onLoginRequired);
 
-  const sendMessage = async (queryText: string, mentions?: string[], retryOf?: string, mode?: "deeper" | "again") => {
+  const sendMessage = async (queryText: string, mentions?: string[], retryOf?: string, mode?: AskMode) => {
     if (selectedDocIds.length === 0) {
       showToast(t.toasts.selectFiling, "warning");
       return;
@@ -44,7 +44,7 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
       ...(retryOf
         ? prev.map((m) =>
             m.message_id === retryOf
-              ? { ...m, clicked: click, alternatives: (m.alternatives || []).filter((a) => !a.kind), actions: m.actions && { ...m.actions, chooser: [], search_more: null, try_again: false } }
+              ? { ...m, clicked: click, alternatives: (m.alternatives || []).filter((a) => !a.kind), actions: m.actions && { ...m.actions, chooser: [], search_more: null, try_again: false, search_all: false } }
               : m
           )
         : prev),

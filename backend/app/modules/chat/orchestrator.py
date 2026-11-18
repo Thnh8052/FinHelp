@@ -28,8 +28,8 @@ from app.modules.query_router.target_scope import TargetDecision, decide_targets
 from app.modules.generation.citation_generator import CitationGenerator
 from app.modules.generation.answer_check import policy, review
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
-from app.modules.generation.replies import CHECK_SOURCES, DEGRADED_NOTE, NO_DATA_ANSWER, RETRY_APOLOGY, RETRY_FIGURES_APOLOGY, excerpt_preview, sources_message, terminal, unlisted_message
-from app.modules.chat.retrieval_step import RetrievalResult, retrieve_for_scope, search_with_retry
+from app.modules.generation.replies import CHECK_SOURCES, DEGRADED_NOTE, EMPTY_PLAN_ANSWER, NO_DATA_ANSWER, RETRY_APOLOGY, RETRY_FIGURES_APOLOGY, excerpt_preview, sources_message, terminal, unlisted_message
+from app.modules.chat.retrieval_step import EMPTY_PLAN, RetrievalResult, retrieve_for_scope, search_with_retry
 from app.modules.chat.scope import catalog_entry, document_label, scope_doc, source_info
 from app.modules.generation.answer_check.citations import cited_numbers
 from app.modules.retrieval.hybrid_search import HybridSearchService, excerpt_tokens
@@ -200,6 +200,9 @@ class RAGWorkflowOrchestrator:
         if searched.refusal:
             return searched.refusal
         targets, notes, unlisted, found = searched.targets, searched.notes, searched.unlisted, searched.found
+        if found.routing == EMPTY_PLAN:  # nothing was searched: no answer is written (step 3, tests/test_empty_plan.py)
+            await self._cleared()  # a message the guard turns away gets the guard's reply instead
+            return empty_plan_reply(scope, found, targets, decision, retry)
         plan, sub_queries, retrieved, labels = found.plan, found.sub_queries, found.retrieved, found.labels
         if deeper and deeper.get("keep"):  # "search deeper": the excerpts the first answer cited, then the new ones, within the same budget
             kept = await self.hybrid_search._hydrate(list(deeper["keep"]), {})
@@ -665,6 +668,20 @@ class RAGWorkflowOrchestrator:
 def quoted(preview: str) -> str:
     """A text excerpt as a quote; a table excerpt (excerpt_preview) stays a table: a quoted table is shown as raw pipes."""
     return preview if preview.startswith("|") or "\n|" in preview else "> " + preview
+
+
+def empty_plan_reply(scope: List[DocumentRecord], found: RetrievalResult, targets: TargetDecision, decision: Decision, retry: bool) -> Dict[str, Any]:
+    """A valid empty plan (retrieval_step.EMPTY_PLAN): the fixed reply, not charged, with "search all sources" (every selected document asked again as @ tags,
+    which code then searches whatever the plan) and the chooser, nothing ticked. The answer to a click offers neither (one click), only the question box."""
+    lang = "vi" if decision.lang == "vi" else "en"
+    chooser = [{"document_id": d.document_id, "label": found.labels.get(d.document_id) or document_label(d), "checked": False} for d in scope]
+    actions = ({"chooser": [], "search_more": None, "edit_question": True, "try_again": False, "search_all": False} if retry else
+               {"chooser": chooser, "search_more": None, "edit_question": False, "try_again": False, "search_all": True})
+    return {"answer": EMPTY_PLAN_ANSWER[lang], "intent": "empty_plan", "focus_docs": [], "citations": [], "retrieved_chunks_count": 0, "charged": False,
+            "understood": "", "alternatives": [], "actions": actions,
+            "trace": {"multi_document": len(scope) > 1, "routing": found.routing, "targets": {"rule": targets.rule, "documents": targets.document_ids},
+                      "plan": [], "sub_queries": [], "retrieved_pages": [], "chunk_ids": [], "degraded": found.degraded,
+                      "decision": {"action": decision.action, "assumption": decision.assumption, "flags": decision.flags}, "timings": dict(found.timings)}}
 
 
 def kept_then_new(kept: List[Dict[str, Any]], new: List[Dict[str, Any]], budget: int, count: Callable[[Dict[str, Any]], int]) -> List[Dict[str, Any]]:
