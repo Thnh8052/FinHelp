@@ -9,6 +9,7 @@ reported as unverified and goes to the one repair.
 
 The report goes into the trace; verification.verify turns each unverified figure into a problem for the one rewrite, and what stays unverified is flagged under the answer.
 """
+import re
 from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
@@ -20,6 +21,10 @@ META = "<answer_meta>"  # generator v3 appends a machine block; only the text be
 SMALL = 12  # plain integers up to this are list markers, months, quarters or counts ("3 segments"): not checked; the day of a date is skipped by DAY
 SCALES = (1.0, 1e3, 1e6, 1e9, 1e-3, 1e-6, 1e-9)  # "$20.6 billion" against "20,604" (millions)
 PERCENT_SCALES = (1e-2, 1e2)  # "25%" against "0.25"
+# a page, note or item number and a short fiscal year are references, not figures: "(Note 21, page 113)", "page 68/92", "pages 108-109", "trang 113", "FY22"
+# (18/11: 19 figure findings of 923 stored answers, 16 of them on answers graded correct)
+REFERENCE_BEFORE = re.compile(r"(?:\b(?:pages?|pp?\.|trang|notes?|items?|thuyết minh|mục)\s*(?:\d+\s*(?:[-–/,&]|and|và|to|đến)\s*)*|\bFY\s*'?|\bQ)$", re.I)
+YEAR_PERCENT = re.compile(r"(?:19|20)\d\d\s+%")  # "Full Year 2022 % change": a year heading a column of changes
 
 
 def _figures(answer: str) -> List[Amount]:
@@ -28,6 +33,8 @@ def _figures(answer: str) -> List[Amount]:
     out = []
     for a in find_amounts(text, space_groups=True):  # "89 913" is one figure
         if a.is_year or a.is_reference or a.value is None or any(s <= a.start < e for s, e in days):
+            continue
+        if REFERENCE_BEFORE.search(text[max(0, a.start - 40):a.start]) or YEAR_PERCENT.fullmatch(a.raw):
             continue
         if text[a.start - 1:a.start] == "[" and text[a.end:a.end + 1] == "]":
             continue  # citation marker [3]
@@ -120,11 +127,14 @@ def check_numbers(answer: str, chunks: Sequence[Dict[str, Any]], passes: int = 3
                         break
         if not changed:
             break
-    if "unverified" in status:  # rule B: a figure the answer's own written, correct calculation of checked numbers produces
-        known = {abs(u) for u, s in zip(used, status) if s != "unverified"} | _trusted(chunks)
-        ok = written_results(answer, known | CONSTANTS)
+    if "unverified" in status:  # rule B: a figure the answer's own written, correct calculation of checked numbers produces, within the figure's own rounding
+        base = {abs(u) for u, s in zip(used, status) if s != "unverified"} | _trusted(chunks) | CONSTANTS
+        written = written_results(answer, base)
+        ok = np.unique(np.array(sorted(written), dtype=float))
+        # a percent of a ratio the answer computed ("= 0.00447 = 0.4%"); only the computed numbers, not every excerpt number x 100
+        pct = np.unique(np.array(sorted(x * 100 for x in written - base), dtype=float))
         for k in range(len(figures)):
-            if status[k] == "unverified" and any(abs(v - x) <= 1e-6 for v, _ in readings[k] for x in ok):
+            if status[k] == "unverified" and any(_near(ok, v, _tolerance(d)) or (figures[k].is_percent and _near(pct, v, _tolerance(d))) for v, d in readings[k]):
                 status[k] = "written"
     return {
         "checked": len(figures),

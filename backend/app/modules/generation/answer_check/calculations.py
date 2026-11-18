@@ -25,25 +25,33 @@ VI = "vi"
 GROUP = f"[{GROUP_SPACES}]"
 TOKEN = rf"(?:\d{{1,3}}(?:{GROUP}\d{{3}})+(?!\d)(?:[.,]\d+)?|\d(?:[.,]?\d)*)"
 NUMTOK = re.compile(TOKEN)
-NUM = rf"(?:\*\*)?\(*[-−]?\$?{TOKEN}%?\)*…?(?:\*\*)?"  # bold included ("**6.91x**", "0.6836…"): Markdown bold is not multiplication
-EXPR = rf"{NUM}(?:\s*[-+−–×x*/÷]\s*{NUM})*"
+CLOSE = r"(?:\s*\))*"  # closing brackets, also after a unit word read as spaces ("($373,396 million + $737 million)")
+NUM = rf"(?:\*\*)?\(*[-−]?\$?{TOKEN}%?{CLOSE}%?…?(?:\*\*)?"  # bold included ("(9.7)%": a percent after its bracket) ("**6.91x**", "0.6836…"): Markdown bold is not multiplication
+EXPR = rf"{NUM}(?:\s*[-+−–×x*/÷^]\s*{NUM})*"
 SEP = r"(?:=|≈|→)"  # "1.0150 → 101.0%" states a result as "=" does
 # a chain joined by "=", "≈" or "→": "(1,185 + 454) ÷ 1,513 = 1,639 ÷ 1,513 = 1.08"; never inside a date (4/6/2019) or a number
 CHAIN = re.compile(rf"(?<![\w/.,])({EXPR}(?:\s*{SEP}\s*{EXPR})+)(?![\d/])")
-SINGLE = re.compile(rf"(?:\*\*)?\(*[-−]?\$?({TOKEN})%?\)*…?(?:\*\*)?")
+SINGLE = re.compile(rf"(?:\*\*)?\(*[-−]?\$?({TOKEN})%?{CLOSE}%?…?(?:\*\*)?")
+# unit words after a number ("$4,258 million + $56 million", "= 52.60 days", "3,46 lần") are read as spaces of the same length: the calculation stays
+# one piece and every position in the text stays where it was (18/11: 33 figure findings of 923 stored answers came from these words)
+UNIT_WORDS = re.compile(r"(?<=[\d%])(?:\s+(?:million|billion|thousand|trillion|mn|bn|triệu|tỷ|nghìn|ngàn|USD|VND|đồng|days?|ngày|times|lần)(?!\w))+", re.I)
 CITATION = re.compile(r"\[\d+(?:\s*[,;]\s*\d+)*\]")  # "[1,2]" is not a number with a decimal comma
 # words before a "calculation" that is really a reference ("excerpt 4/6)", "page 3-4") and an exponent "^(1/2)"
 REFERENCE = re.compile(r"(?:excerpts?|pages?|notes?|items?|\^)\s*$", re.I)
 CONSTANTS = {365.0, 360.0, 100.0, 52.0, 53.0}  # days, weeks, percent: standard inputs no excerpt prints (numbers up to 12 are always allowed)
 SMALL = 12
-OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.USub: operator.neg}
+OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.USub: operator.neg, ast.Pow: operator.pow}
+BRACKETS = {"[": "(", "]": ")"}  # "65,398 ÷ [(47,528 + 50,710) ÷ 2]": square brackets group like round ones (a citation [1] stays a citation)
 
 
 def _eval(node):
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
         return float(node.value)
     if isinstance(node, ast.BinOp) and type(node.op) in OPS:
-        return OPS[type(node.op)](_eval(node.left), _eval(node.right))
+        value = OPS[type(node.op)](_eval(node.left), _eval(node.right))
+        if isinstance(value, complex):  # "(-8)^(1/3)"
+            raise ValueError("not a real number")
+        return value
     if isinstance(node, ast.UnaryOp) and type(node.op) in OPS:
         return OPS[type(node.op)](_eval(node.operand))
     raise ValueError("not arithmetic")
@@ -77,15 +85,16 @@ def readings_of(text: str) -> Tuple[str, ...]:
     return (EN,) if locale_of(text) == EN else (VI, EN)
 
 
-def evaluate(expression: str, locale: str = EN) -> Optional[Tuple[float, bool]]:
-    """(value, whether the expression used percent inputs) or None. Thousands marks dropped; "12.5%" read as 12.5; "(33)" is −33."""
+def evaluate(expression: str, locale: str = EN, fraction: bool = False) -> Optional[Tuple[float, bool]]:
+    """(value, whether the expression used percent inputs) or None. Thousands marks dropped; "12.5%" read as 12.5 (as 0.125 with `fraction`); "(33)" is −33."""
     expr = expression.replace("**", "").replace("…", "").replace("$", "")
     expr = NUMTOK.sub(lambda m: canon(m.group(0), locale) or m.group(0), expr)
     expr = expr.replace("−", "-").replace("–", "-").replace("×", "*").replace("÷", "/")
-    expr = re.sub(r"\((\d+(?:\.\d+)?)\)", r"(-\1)", expr)  # accounting notation: "337 − (33) = 370"
+    # accounting notation: "337 − (33) = 370", "3.2% + (1.4%) = 1.8%"; not an exponent ("2^(3)")
+    expr = re.sub(r"(?<!\^)\((\d+(?:\.\d+)?%?)\)", r"(-\1)", expr).replace("^", "**")  # Markdown bold was removed above, so "**" here is only a power
     expr = re.sub(r"(?<=\d)\s*x\s*(?=[\d(])", "*", expr)
     has_pct = "%" in expr
-    expr = expr.replace("%", "")
+    expr = expr.replace("%", "/100" if fraction else "")
     if expr.count("(") != expr.count(")"):
         expr = expr.strip("()")
     try:
@@ -99,9 +108,19 @@ def value_of(token: str, locale: str = EN) -> float:
     return float(canon(token, locale) or "nan")
 
 
+def _body(text: str) -> str:
+    """The answer as its calculations are read, every character at its place: without the machine block (answer_meta), square brackets that are no
+    citation read as round ones, the "$" of "$(5,642)" and unit words after a number read as spaces."""
+    body = text.split("<answer_meta>")[0]
+    cites = {i for m in CITATION.finditer(body) for i in range(*m.span())}
+    body = "".join(ch if i in cites else BRACKETS.get(ch, ch) for i, ch in enumerate(body))
+    body = re.sub(r"\$(?=\s*\()", " ", body)
+    return UNIT_WORDS.sub(lambda m: " " * len(m.group(0)), body)
+
+
 def steps(text: str) -> List[Tuple[str, str, int]]:
     """[(left, right, start of right in text)] of every written step; the machine block (answer_meta) is not read."""
-    body = text.split("<answer_meta>")[0]
+    body = _body(text)
     out = []
     for m in CHAIN.finditer(body):
         if REFERENCE.search(body[max(0, m.start() - 12):m.start()]):
@@ -118,31 +137,39 @@ def steps(text: str) -> List[Tuple[str, str, int]]:
 
 
 def is_calc(left: str) -> bool:
-    """A written calculation: two or more numbers joined by an operator ("554 ÷ 10,800"). A lone number is not one: "2.09 vs 2.55 = −18.0%" is a comparison."""
-    return len(NUMTOK.findall(left)) >= 2 and bool(re.search(r"\d\s*[-+−–×x*/÷]\s*\(*[-−]?\$?\d", left.replace("**", "")))
+    """A written calculation: two or more numbers joined by an operator ("554 ÷ 10,800", "(1.79% + 1.75%) / 2", "(33) − (498)"). A lone number is not one:
+    "2.09 vs 2.55 = −18.0%" is a comparison."""
+    return len(NUMTOK.findall(left)) >= 2 and bool(re.search(rf"\d%?{CLOSE}\s*[-+−–×x*/÷^]\s*\(*[-−]?\$?\d", left.replace("**", "")))
 
 
-def holds(left: str, right: str, locale: str = EN) -> bool:
-    """Whether the printed result is right for its expression: within the rounding of the digits printed, a percent also as 100 x the ratio. False when it is wrong
-    or when either side cannot be read."""
+def exact(left: str, right: str, locale: str = EN) -> Optional[float]:
+    """The value of `left` that the printed result rounds, or None when the result is wrong or either side cannot be read. Within the rounding of the digits
+    printed; a percent result also as 100 x the ratio; a percent among plain numbers ("495,761 × (1 − 24.7%)") also as a fraction."""
     a, b = evaluate(left, locale), evaluate(right, locale)
     if a is None or b is None:
-        return False
+        return None
     value, printed = a[0], b[0]
     single = SINGLE.fullmatch(right)
     if not single:  # "a + b ÷ c = d ÷ c": an equal step (its numbers become trusted)
-        return abs(value - printed) <= 0.002 * abs(printed) + 1e-9
+        return value if abs(value - printed) <= 0.002 * abs(printed) + 1e-9 else None
     decimals = len((canon(single.group(1), locale) or "").partition(".")[2])
     tol = max(0.5 * 10 ** -decimals + 1e-9, 0.002 * abs(printed))
     # "**5.1%**": the bold markers are not part of the unit; "(… = 77.8%)": nor is a closing bracket; "× 100" already makes a percent
     pct = right.replace("**", "").rstrip("…").rstrip(") ").endswith("%") and "%" not in left and not re.search(r"(?:[×x]|(?<!\*)\*(?!\*))\s*100\b", left)
-    return any(abs(abs(c) - abs(printed)) <= tol for c in [value] + ([value * 100] if pct else []))
+    fraction = evaluate(left, locale, fraction=True) if _mixed_percent(left) else None
+    return next((c for c in [value] + ([value * 100] if pct else []) + ([fraction[0]] if fraction else []) if abs(abs(c) - abs(printed)) <= tol), None)
+
+
+def holds(left: str, right: str, locale: str = EN) -> bool:
+    """Whether the printed result is right for its expression (exact)."""
+    return exact(left, right, locale) is not None
 
 
 def written_results(text: str, ok: Set[float]) -> Set[float]:
     """Rule B: `ok` grown with the numbers the answer's own written calculations establish from numbers in `ok`: the printed result of a step
     that checks ("x ÷ y = z" with z right), and every number of a right side that is itself an expression equal to the left ("(1,185 + 0 + 454
-    + 33) ÷ 1,513 = 1,672 ÷ 1,513": 1,672 is the written intermediate). Nothing is searched: only what the answer writes."""
+    + 33) ÷ 1,513 = 1,672 ÷ 1,513": 1,672 is the written intermediate), and the unrounded value of the step ("= 1.2 (1.205 before rounding)",
+    "= 55.115% ≈ 55.1%": numbers.check_numbers accepts a figure within its own rounding of it). Nothing is searched: only what the answer writes."""
     ok = set(ok)
 
     def trusted(expr, loc):
@@ -155,9 +182,10 @@ def written_results(text: str, ok: Set[float]) -> Set[float]:
         grown = False
         for left, right, _ in found:
             for loc in readings:
-                if not is_calc(left) or not trusted(left, loc) or not holds(left, right, loc):
+                value = exact(left, right, loc) if is_calc(left) and trusted(left, loc) else None
+                if value is None:
                     continue
-                new = {abs(value_of(t, loc)) for t in NUMTOK.findall(right)} - ok
+                new = ({abs(value_of(t, loc)) for t in NUMTOK.findall(right)} | {abs(value)}) - ok
                 if new:
                     ok |= new
                     grown = True
@@ -189,12 +217,22 @@ def _mixed_percent(left: str) -> bool:
     return any(t.rstrip().endswith("%") for t in tokens) and not all(t.rstrip().endswith("%") for t in tokens)
 
 
+def _slack(left: str, locale: str) -> float:
+    """Half a unit of the last digit of every operand printed with decimals in a sum or difference: those are rounded figures ("34.6% − 36.8% = −2.1"
+    is 34.64 − 36.75 = −2.11). A whole number is an exact table value and adds nothing ("1,824 − 1,806 = 19" stays wrong); 0 when the step also
+    multiplies or divides."""
+    if re.search(r"[×x*/÷^]", left.replace("**", "")):
+        return 0.0
+    decimals = [len((canon(t, locale) or "").partition(".")[2]) for t in NUMTOK.findall(left)]
+    return sum(0.5 * 10 ** -d for d in decimals if d)
+
+
 def wrong_steps(text: str) -> List[Tuple[str, str, str]]:
     """[(left, right as printed, right result)]: written steps whose printed result is wrong under BOTH ways of reading numbers (English and Vietnamese
     marks), with the result Python computes, written like the printed one (decimals, %). Only whole left sides without a percent mixed with plain
     numbers are judged: anything the reader may have cut or misread is left alone. Measured 15/11 on 923 stored answers: 7 reports, all real slips."""
     out = []
-    body = text.split("<answer_meta>")[0]
+    body = _body(text)
     for left, right, rstart in steps(text):
         if not is_calc(left) or not SINGLE.fullmatch(right) or _mixed_percent(left) or not _whole(body, left, rstart):
             continue
@@ -203,13 +241,15 @@ def wrong_steps(text: str) -> List[Tuple[str, str, str]]:
         a, b = evaluate(left, readings_of(text)[0]), evaluate(right, readings_of(text)[0])
         if a is None or b is None:
             continue
-        shown = right.replace("**", "").strip()
+        shown = " ".join(right.replace("**", "").split())
         pct = shown.rstrip("…").rstrip(") ").endswith("%") and "%" not in left and not re.search(r"(?:[×x]|(?<!\*)\*(?!\*))\s*100\b", left)
         value = min([a[0]] + ([a[0] * 100] if pct else []), key=lambda c: abs(abs(c) - abs(b[0])))
+        if abs(abs(value) - abs(b[0])) <= _slack(left, readings_of(text)[0]) + 1e-9:
+            continue
         if b[0] < 0 < value:
             value = -value
         token = SINGLE.fullmatch(right).group(1)
         decimals = max(1, len((canon(token, readings_of(text)[0]) or "").partition(".")[2]))
         suffix = "%" if shown.rstrip("…").rstrip(") ").endswith("%") else ("x" if re.search(r"\d[xX]$", shown) else "")
-        out.append((left, shown, f"{value:,.{decimals}f}{suffix}"))
+        out.append((" ".join(left.split()), shown, f"{value:,.{decimals}f}{suffix}"))
     return out

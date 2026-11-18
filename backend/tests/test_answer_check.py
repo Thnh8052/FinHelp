@@ -165,3 +165,22 @@ def test_a_whole_number_read_as_three_decimals_keeps_half_a_unit():
     # "36,701" can be read as 36.701 (Vietnamese marks): that reading must not get the wider tolerance and match 36,700 = 34,300 + 2,400 at another scale
     table = [{"content": "| Revenue | 34,300 | Other | 2,400 |"}]
     assert status("Revenue was 34,300 and other income 2,400, in all 36,701.", table)["36,701"] == "unverified"
+
+
+# ---------------------------------------------------------------- references read as figures (system test 18/11, T3: replay of 923 stored answers)
+def test_pages_notes_items_and_short_fiscal_years_are_not_figures():
+    for answer in ("AMD's FY22 (year ended December 31, 2022) quick ratio was about 1.6x.",
+                   "Boeing's FY2022 10-K (Note 21, page 113) reports ongoing legal matters.",
+                   "The table of contents lists Item 3 at page 24; the text comes from page 25.",
+                   "Dividends: 10-K, page 68/92, and page 168; pages 108-109.",
+                   "Báo cáo FY22 (thuyết minh 21, trang 113) nêu các vụ kiện.",
+                   "Adjusted EPS (Diluted), Full Year 2022 % change: 3.6%"):
+        report = check_numbers(answer, TABLE)
+        assert not {"22", "21", "113", "24", "25", "68", "92", "168", "108", "109", "2022 %"} & set(report["unverified"]), answer
+    assert check_numbers("Adjusted EPS (Diluted), Full Year 2022 % change: 3.6%", TABLE)["unverified"] == ["3.6%"]
+
+
+def test_a_figure_after_a_reference_word_is_still_checked():
+    assert check_numbers("Note: revenue was $3,456 million (page 4).", TABLE)["unverified"] == ["$3,456"]
+    assert check_numbers("Ghi chú: doanh thu 3.456 triệu USD (trang 4).", TABLE)["unverified"] == ["3.456"]
+    assert check_numbers("Page views rose 113% in FY2019.", TABLE)["unverified"] == ["113%"]
