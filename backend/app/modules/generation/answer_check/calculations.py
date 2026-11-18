@@ -157,7 +157,9 @@ def exact(left: str, right: str, locale: str = EN) -> Optional[float]:
     # "**5.1%**": the bold markers are not part of the unit; "(… = 77.8%)": nor is a closing bracket; "× 100" already makes a percent
     pct = right.replace("**", "").rstrip("…").rstrip(") ").endswith("%") and "%" not in left and not re.search(r"(?:[×x]|(?<!\*)\*(?!\*))\s*100\b", left)
     fraction = evaluate(left, locale, fraction=True) if _mixed_percent(left) else None
-    return next((c for c in [value] + ([value * 100] if pct else []) + ([fraction[0]] if fraction else []) if abs(abs(c) - abs(printed)) <= tol), None)
+    # a sum or difference of percents printed in basis points ("11,20% − 11,02% = 18 điểm cơ bản", held-out chat answer 19/11)
+    bps = "%" in left and not right.replace("**", "").rstrip("…").rstrip(") ").endswith("%") and not re.search(r"[×x*/÷^]", left.replace("**", ""))
+    return next((c for c in [value] + ([value * 100] if pct or bps else []) + ([fraction[0]] if fraction else []) if abs(abs(c) - abs(printed)) <= tol), None)
 
 
 def holds(left: str, right: str, locale: str = EN) -> bool:

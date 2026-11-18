@@ -231,3 +231,11 @@ def test_an_exponent_is_evaluated():
     assert len(wrong_steps("CAGR = (65,984 / 65,398)^(1/2) − 1 = 0.00547.")) == 1
     assert evaluate("2^(3)")[0] == 8  # "(3)" after an exponent is not an accounting negative
     assert evaluate("(-8)^(1/3)") is None and evaluate("10^400") is None  # no complex number, no overflow
+
+
+def test_a_change_of_percents_written_in_basis_points_is_right():
+    """Held-out chat answer msg_b9a48a4e (19/11): "11,20% − 11,02% = 18 điểm cơ bản" is right (0.18 points = 18 basis points) and was reported."""
+    assert wrong_steps("Biên gộp tăng: 11,20% − 11,02% = 18 điểm cơ bản [2].") == []
+    assert wrong_steps("Gross margin rose: 11.20% − 11.02% = 18 basis points [2].") == []
+    assert len(wrong_steps("Gross margin rose: 11.20% − 11.02% = 28 basis points [2].")) == 1
+    assert unverified("Gross margin rose from 11.02% to 11.20% [1]: 11.20% − 11.02% = 18 bps.", [{"content": "margin 11.20% and 11.02%"}]) == []
