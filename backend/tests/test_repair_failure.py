@@ -1,6 +1,5 @@
-"""L22: a second writing of the answer (the one repair of the checks) is an extra. When the model cannot be reached for it,
-the answer already written stands. Before the fix, `_answer` turned the failure into the fixed apology text ("No answer could be generated right now...")
-and the caller accepted that text over the real answer, because the apology has no more issues than the answer had (len(i2) <= len(issues)).
+"""When the model cannot be reached the answer is the fixed apology with the first excerpts, and that apology is never checked. (L22, a repair that
+could not reach the model, went with the repair itself: T4, 19/11.)
 
 The real `_answer` runs here; only the model call is faked, and production's prompt setting is used."""
 import pytest
@@ -36,23 +35,6 @@ def fake_model(orch, monkeypatch, *replies):
     return calls
 
 
-async def test_a_repair_that_cannot_reach_the_model_leaves_the_answer_already_written(monkeypatch):
-    orch, _ = _orchestrator([], monkeypatch)
-    calls = fake_model(orch, monkeypatch, "AMD revenue was $99,999 million [1].", LLMUnavailableError("llm_unavailable"))
-    r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 2  # the repair was tried
-    assert APOLOGY not in r["answer"] and "$99,999" in r["answer"]  # the real answer stands, not the apology
-    assert "⚠️" in r["answer"]  # it was never repaired, so its figure is still flagged
-    assert r["verification"]["repaired"] is False and not r["verification"]["passed"] and r["verification"]["first_issues"]
-
-
-async def test_a_repair_that_works_still_replaces_the_answer(monkeypatch):
-    orch, _ = _orchestrator([], monkeypatch)
-    calls = fake_model(orch, monkeypatch, "AMD revenue was $99,999 million [1].", "AMD revenue was $25,785 million [1].")
-    r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 2 and "$25,785" in r["answer"] and r["verification"]["repaired"] and r["verification"]["passed"]
-
-
 async def test_the_apology_for_an_outage_is_not_verified_or_repaired(monkeypatch):
     """The fixed apology shows the first excerpts and a page number ("Page 41"): the number check reads that number as an unverified figure of an answer, and the one repair then
     asks the model again, to rewrite an apology (found 14/11 while fixing the cut replies)."""
@@ -66,13 +48,10 @@ async def test_the_apology_for_an_outage_is_not_verified_or_repaired(monkeypatch
     monkeypatch.setattr(orch, "retrieve", retrieve)
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
     assert r["answer"].startswith("Sorry, no answer could be generated right now") and "⚠️" not in r["answer"]
-    assert len(calls) == 1 and not r["verification"]["repaired"] and r["verification"]["passed"]
+    assert len(calls) == 1 and r["verification"]["passed"]
 
 
-async def test_the_first_answer_still_falls_back_to_the_apology_and_a_second_writing_can_ask_for_the_error(monkeypatch):
+async def test_an_outage_falls_back_to_the_apology_with_the_excerpts(monkeypatch):
     orch, _ = _orchestrator([], monkeypatch)
     fake_model(orch, monkeypatch, LLMUnavailableError("llm_unavailable"))
-    chunks = [dict(c) for c in CHUNKS]
-    assert (await orch._answer("What was AMD's revenue?", chunks)).startswith(APOLOGY)  # nothing is written yet: the apology with the excerpts is all there is
-    with pytest.raises(LLMUnavailableError):
-        await orch._answer("What was AMD's revenue?", chunks, fallback=False)
+    assert (await orch._answer("What was AMD's revenue?", [dict(c) for c in CHUNKS])).startswith(APOLOGY)

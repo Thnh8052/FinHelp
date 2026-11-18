@@ -84,7 +84,6 @@ async def test_s3_a_partial_answer_over_several_files_offers_the_document_choose
 
 async def test_s3_an_unverified_answer_also_offers_them(monkeypatch):
     orch = answering(monkeypatch, "AMD net revenue was $99 million [1].\n" + META % ("answered", "[1]"), PLAN_AMD_ONLY)
-    monkeypatch.setattr(settings, "ANSWER_REPAIR_ENABLED", False)
     r = await orch._answer_one("Which company had the higher revenue in 2024?", "nb", _scope(), Decision(lang="en"))
     assert r["actions"]["chooser"] and r["actions"]["search_more"] == {"prominent": True}
 

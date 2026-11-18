@@ -1,16 +1,16 @@
-"""The review of a written answer (docs/Version_3/RAG_REDESIGN_SPEC.md section 4). Every check returns Findings of one shape; the orchestrator asks for
-at most ONE rewrite, with the notes of every check merged, then keeps, blocks or annotates the answer. Code only, no model.
+"""The review of a written answer (docs/Version_3/RAG_REDESIGN_SPEC.md section 4). Every check returns Findings of one shape; the orchestrator writes
+the answer ONCE, then blocks it (a hard finding) or shows it with one "⚠️" line for what is still wrong (annotate). Code only, no model.
+The one rewrite was removed 19/11 (T4, owner's decision of 18/11): it cost 4-54 s and 2 of 3 rewritten answers were right already.
 
 Checks (each reuses the module that measures it):
-  safety     policy.py: investment advice, its own instructions, internal names, foul language        hard: never shown if the rewrite keeps it
-  language   policy.py: answer not in the question's language                                          repairable
-  arithmetic calculations.wrong_steps: a written step whose printed result is wrong                    repairable, the note gives the right result
-  figure     numbers.check_numbers: a figure neither printed in the excerpts nor derived from them     repairable, the note names a close result
-                                                                                                       the answer itself computed, never replaces it
-  citation   citations.check_citations: [n] to no excerpt, to another company or period               repairable
+  safety     policy.py: investment advice, its own instructions, internal names, foul language        hard: the fixed reply instead (policy.blocked)
+  language   policy.py: answer not in the question's language                                          repairable: kept in the trace, no line
+  arithmetic calculations.wrong_steps: a written step whose printed result is wrong                    repairable: the "⚠️" line
+  figure     numbers.check_numbers: a figure neither printed in the excerpts nor derived from them     repairable: the "⚠️" line lists it
+  citation   citations.check_citations: [n] to no excerpt, to another company or period               repairable: the "⚠️" line
   status     policy.py: an answered status with no [n] at all                                         note: kept in the trace only
-Measured 15/11 on 923 stored answers (experiments/scripts/redesign/replay.py): the same answers get a rewrite as with the checks before,
-every planted wrong written result is caught (65 % before), no false report on 459 answers graded correct.
+The notes of the findings (what was wrong, the right result) stay for the trace. Measured on 923 stored answers: every planted wrong written result is
+caught; 42 answers have a repairable finding (4 of them graded correct), see experiments/scripts/system_test_18_11.
 """
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Sequence
@@ -86,29 +86,8 @@ def run_checks(answer: str, chunks: Sequence[Dict[str, Any]], docs: Sequence[Any
     return found
 
 
-def _weight(findings: Sequence[Finding]) -> int:
-    return sum(f.severity in (HARD, REPAIRABLE) for f in findings)
-
-
-def needs_rewrite(findings: Sequence[Finding]) -> bool:
-    return _weight(findings) > 0
-
-
 def has_hard(findings: Sequence[Finding]) -> bool:
     return any(f.severity == HARD for f in findings)
-
-
-def rewrite_note(findings: Sequence[Finding]) -> str:
-    """The one note of the one rewrite: every hard and repairable finding, in one list."""
-    items = "; ".join(f.note for f in findings if f.severity in (HARD, REPAIRABLE))
-    return ("Your previous answer had these problems: " + items + ". Rewrite the answer from the excerpts only: correct or remove each of them; "
-            "when a figure is not in the excerpts, say it was not found instead of giving a number.")
-
-
-def keep_rewrite(first: Sequence[Finding], second: Sequence[Finding]) -> bool:
-    """The rewrite replaces the first answer when it has no hard finding and either removed the first answer's hard finding or has strictly fewer
-    findings to fix (an equal count keeps the first: a rewrite is not taken on faith)."""
-    return not has_hard(second) and (has_hard(first) or _weight(second) < _weight(first))
 
 
 def annotate(answer: str, findings: Sequence[Finding], lang: str) -> str:

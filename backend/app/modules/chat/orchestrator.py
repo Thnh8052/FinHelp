@@ -229,10 +229,8 @@ class RAGWorkflowOrchestrator:
         t0 = time.perf_counter()
         answer, checked = await self._write_checked(query, retrieved, notes, docs, decision.lang)
         citations = [CitationGenerator.from_retrieved_chunk(chk, citation_offset + idx + 1) for idx, chk in enumerate(retrieved)]
-        left = [f for f in checked["final"] if f.severity != review.NOTE]
-        verification = {"passed": not left, "repaired": checked["outcome"] == "rewritten",
-                        "unverified_figures": [f.text for f in left if f.check == "figure"],
-                        "first_issues": [f.note for f in checked["first"] if f.severity != review.NOTE]}  # why a rewrite was asked, kept for the trace
+        left = [f for f in checked["findings"] if f.severity != review.NOTE]
+        verification = {"passed": not left, "unverified_figures": [f.text for f in left if f.check == "figure"]}
         text, meta = split_answer(answer)
         cited = cited_numbers(text)
         timings = {**found.timings, "generate": checked["seconds_first"], "verify_repair": round(time.perf_counter() - t0 - checked["seconds_first"], 2)}
@@ -616,45 +614,28 @@ class RAGWorkflowOrchestrator:
 
     async def _write_checked(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]], docs: List[Any], lang: str,
                              max_tokens: int = 1200, figures: bool = True) -> Tuple[str, Dict[str, Any]]:
-        """The answer as it may be shown (answer_check/review.py): written once; every check runs once; at most ONE rewrite, told every problem found;
-        the rewrite is kept only when it is better (review.keep_rewrite); then a hard problem left means the fixed reply, other problems left mean a
-        "⚠️" line under the answer. A hard problem is always worth the rewrite; the others only with ANSWER_REPAIR_ENABLED. An apology (no model, cut
-        reply) and an answer without excerpts are not checked. A rewrite that cannot reach the model keeps the first answer (L22).
-        Returns (answer, {"first", "final": findings, "outcome": accepted | rewritten | kept | blocked, "trace", "seconds_first"})."""
+        """The answer as it may be shown (answer_check/review.py): written ONCE, every check run once (code only). A hard problem (safety) means the fixed
+        reply; figures, calculations and citations still wrong get one "⚠️" line under the answer; a wrong language is kept as it is. The one rewrite was
+        removed 19/11 (T4, owner 18/11): 4-54 s each, and 2 of 3 rewritten answers were right already. An apology (no model, cut reply) and an answer
+        without excerpts are not checked. Returns (answer, {"findings", "outcome": accepted | annotated | blocked, "trace", "seconds_first"})."""
         lang = "vi" if lang == "vi" else "en"
         t0 = time.perf_counter()
         answer = await self._answer(query, chunks, notes, max_tokens)
         seconds = round(time.perf_counter() - t0, 2)
         if isinstance(answer, Unfinished) or not chunks:
-            return answer, {"first": [], "final": [], "outcome": "accepted", "trace": {"first": [], "after_rewrite": None, "outcome": "accepted"}, "seconds_first": seconds}
+            return answer, {"findings": [], "outcome": "accepted", "trace": {"first": [], "outcome": "accepted"}, "seconds_first": seconds}
         answer = policy.clean(answer, chunks)
-        first = review.run_checks(answer, chunks, docs, lang, policy_checks=settings.OUTPUT_POLICY_ENABLED, figures=figures)
-        final, second, outcome = first, None, "accepted"
-        if review.has_hard(first) or (review.needs_rewrite(first) and settings.ANSWER_REPAIR_ENABLED):
-            events.stage("checking")
-            try:
-                again = policy.clean(await self._answer(query, chunks, list(notes or []) + [review.rewrite_note(first)], max_tokens, fallback=False), chunks)
-            except LLMUnavailableError:  # the rewrite is an extra (L22): the answer already written stands
-                again = None
-            if again is not None:
-                second = review.run_checks(again, chunks, docs, lang, policy_checks=settings.OUTPUT_POLICY_ENABLED, figures=figures)
-                if review.keep_rewrite(first, second):
-                    answer, final, outcome = again, second, "rewritten"
-                else:
-                    outcome = "kept"
-            else:
-                outcome = "kept"
-        if review.has_hard(final):
-            answer, outcome = policy.blocked(lang, settings.GENERATION_PROMPT in STRUCTURED_PROMPTS), "blocked"
-            logger.warning(f"Answer blocked: {[f.check for f in final if f.severity == review.HARD]}")
+        found = review.run_checks(answer, chunks, docs, lang, policy_checks=settings.OUTPUT_POLICY_ENABLED, figures=figures)
+        if review.has_hard(found):
+            shown, outcome = policy.blocked(lang, settings.GENERATION_PROMPT in STRUCTURED_PROMPTS), "blocked"
+            logger.warning(f"Answer blocked: {[f.check for f in found if f.severity == review.HARD]}")
         else:
-            answer = review.annotate(answer, final, lang)
-        trace = {"first": review.trace(first), "after_rewrite": review.trace(second) if second is not None else None, "outcome": outcome}
-        return answer, {"first": first, "final": final, "outcome": outcome, "trace": trace, "seconds_first": seconds}
+            shown = review.annotate(answer, found, lang)
+            outcome = "accepted" if shown == answer else "annotated"
+        return shown, {"findings": found, "outcome": outcome, "trace": {"first": review.trace(found), "outcome": outcome}, "seconds_first": seconds}
 
-    async def _answer(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]] = None, max_tokens: int = 1200, fallback: bool = True) -> str:
-        """The answer, or when the model cannot be reached the fixed apology with the first excerpts. `fallback=False` is for a second writing (the repair): an answer already
-        exists, so the failure is raised for the caller to keep it; the apology must never be taken for a better answer."""
+    async def _answer(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]] = None, max_tokens: int = 1200) -> str:
+        """The answer, or when the model cannot be reached the fixed apology with the first excerpts."""
         await self._cleared()
         vi = detect_language(query) == "vi"
         if not chunks:
@@ -664,8 +645,6 @@ class RAGWorkflowOrchestrator:
             return await generate_answer(query, chunks, notes, max_tokens)
         except LLMUnavailableError as exc:
             logger.warning(f"Answer generation unavailable: {exc.code}")
-            if not fallback:
-                raise
             excerpts = "\n\n".join(f"**{'Trang' if vi else 'Page'} {c['page']}**\n" + quoted(excerpt_preview(c["content"])) for c in chunks[:3])
             cut = isinstance(exc, LLMTruncatedError)  # the model could not finish within its limit (never "the reports do not contain this"), not an outage
             kind = CutShort if cut else Unfinished

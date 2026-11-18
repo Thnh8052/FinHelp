@@ -435,9 +435,9 @@ async def test_citation_numbers_of_later_parts_continue_after_the_earlier_parts_
     assert len(parts) == 3 and all("query" in p and "timings" in p and "llm" in p for p in parts)
 
 
-async def test_a_wrong_written_result_is_not_rewritten_by_code_and_goes_to_the_one_repair(monkeypatch):
+async def test_a_wrong_written_result_is_not_rewritten_and_is_flagged_under_the_answer(monkeypatch):
     """Code no longer rewrites a figure (measured 14/11: it never acted with the model's thinking on). The wrong result is reported by the number check,
-    the one repair is asked for, and what is still wrong afterwards is flagged under the answer."""
+    and flagged under the answer; the model is not asked again (T4, 19/11)."""
     from app.modules.chat import orchestrator as orch_mod
 
     calls = []
@@ -450,7 +450,7 @@ async def test_a_wrong_written_result_is_not_rewritten_by_code_and_goes_to_the_o
     monkeypatch.setattr(orch_mod, "generate_answer", slip)
     r = await orch.execute_query("What is a quarter of Nike's revenue in FY2023?", "nb", document_ids=["d2"])
     assert "51,217 ÷ 4 = 13,000" in r["answer"] and "12,804" not in r["answer"]  # not rewritten
-    assert len(calls) == 2 and "13,000" in calls[1][-1]  # the repair was asked, with the figure in its list of problems
+    assert len(calls) == 1  # written once
     assert "⚠" in r["answer"] and "calculator" not in r["verification"]
 
 

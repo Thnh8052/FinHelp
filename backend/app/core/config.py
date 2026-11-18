@@ -217,9 +217,6 @@ class Settings(BaseSettings):
     # "v4_1" is v4 with three self-contradictions fixed (citation in table cells, two decimals for ratios, no space-grouped example cell);
     # it stays off until measured on questions it was not designed with.
     GENERATION_PROMPT: str = "v4"
-    # A2: an answer with a figure the excerpts do not show, a citation to no excerpt or to another company / period is rewritten once
-    # with the list of problems; what is still wrong after that is flagged in the answer ("chưa kiểm chứng"), never silently kept.
-    ANSWER_REPAIR_ENABLED: bool = True
     # The answer is checked before it is shown (generation/answer_check/policy.py): advice, leaked instructions, internal names, foul language.
     OUTPUT_POLICY_ENABLED: bool = True
     # The guard (query_router/guard.py): one short language-model call per message, beside the search, gives the message one label; a message

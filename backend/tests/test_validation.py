@@ -53,25 +53,24 @@ def _scope():
                            metadata=DocumentMetadata(company_name="NVIDIA Corporation", ticker="NVDA", fiscal_year=2024, years_covered=[2024, 2023]))]
 
 
-async def test_a_bad_answer_is_repaired_once(monkeypatch):
+async def test_a_bad_answer_is_written_once_and_flagged(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $99,999 million [1].", "AMD revenue was $25,785 million [1]."], monkeypatch)
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 2 and "$99,999" in calls[1][-1]
-    assert r["verification"]["passed"] and r["verification"]["repaired"] and "⚠️" not in r["answer"]
-    assert r["verification"]["first_issues"] and "$99,999" in r["verification"]["first_issues"][0]  # why the repair was tried
+    assert len(calls) == 1 and "$99,999" in r["answer"] and "⚠️" in r["answer"]
+    assert not r["verification"]["passed"] and r["verification"]["unverified_figures"] == ["$99,999"]
 
 
 async def test_what_stays_wrong_is_flagged_not_hidden(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $99,999 million [1]."], monkeypatch)
     r = await orch._answer_one("Doanh thu AMD và NVIDIA năm 2024", "nb", _scope(), Decision(lang="vi"))
-    assert len(calls) == 2 and not r["verification"]["passed"]
+    assert len(calls) == 1 and not r["verification"]["passed"]
     assert "⚠️ Lưu ý: số chưa kiểm chứng được trong đoạn trích: $99,999" in r["answer"]
 
 
 async def test_a_clean_answer_costs_no_second_call(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $25,785 million in 2024 [1]; NVIDIA $60,922 million [2]."], monkeypatch)
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 1 and r["verification"] == {"passed": True, "repaired": False, "unverified_figures": [], "first_issues": []}
+    assert len(calls) == 1 and r["verification"] == {"passed": True, "unverified_figures": []}
     assert r["understood"].startswith("I understood the question as about")
 
 
