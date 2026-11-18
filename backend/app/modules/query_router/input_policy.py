@@ -135,6 +135,10 @@ _CONCEPT_TERMS = _both(
     r"biên lợi nhuận|vốn lưu động|dòng tiền tự do|lợi thế thương mại|khấu hao|đòn bẩy|bảng cân đối|báo cáo kết quả")
 # Asking what a line item means, where "explain" or "how is it calculated" may still be about the report's own figure ("giải thích vì sao doanh thu giảm")
 _MEANING = _both(r"(nghĩa )?là gì\s*[?.!]*\s*$|thế nào là|phân biệt|khác nhau|định nghĩa|\bdifference between\b|\bdefine\b|\bwhat does .{1,40} mean\b")
+# A formula written in the question and a request for its figure make a calculation, not a concept question: "Tính ROE theo định nghĩa ROE = lợi nhuận
+# ròng / vốn chủ sở hữu" was refused as "explain ROE" (18/11/2026). " / " needs spaces so "P/E" is not a formula; "cách tính" asks how, not how much.
+_GIVES_FORMULA = _both(r"=|\s[/÷]\s|\bdivided by\b|\bminus\b|\bchia\b|\btrừ\b")
+_ASKS_FIGURE = _both(r"\b(compute|calculate|work out|how much)\b|(?<!cách )\btính\b|bao nhiêu")
 _WHAT_IS = re.compile(r"^\s*what('s| is| are)\s+(?:an? |the )?(.+?)\s*[?.!]*\s*$", re.I)
 _DOC_ANCHOR = _both(
     r"\b(the company|this company|company's|its|their|in (the|this) (report|filing|document|source|10-?k)|of (this|the) (filing|report|company))\b|"
@@ -205,7 +209,11 @@ _SEQUENTIAL = re.compile(
 MSG: Dict[str, Dict[str, str]] = {
     "notebook_empty": {"vi": "Notebook này chưa có tài liệu nào. Hãy tải một báo cáo lên rồi đặt câu hỏi.", "en": "This notebook has no documents yet. Upload a report, then ask your question."},
     "ask_select_sources": {"vi": "Notebook có nhiều tài liệu: hãy chọn tài liệu nguồn muốn hỏi trước khi đặt câu hỏi.", "en": "This notebook has several documents: choose the sources to ask about first."},
-    "reject_input": {"vi": "Câu hỏi đang trống, quá ngắn hoặc quá dài. Hãy nhập một câu hỏi rõ ràng về các báo cáo đã chọn.", "en": "The question is empty, too short or too long. Please type a clear question about the selected reports."},
+    # one message per limit: "?" was told it was "empty, too short or too long" (system test 18/11, C9)
+    "reject_input": {"vi": "Câu hỏi quá ngắn. Hãy nhập một câu hỏi rõ ràng về các báo cáo đã chọn, ví dụ: \"Doanh thu năm FY2023 là bao nhiêu?\".",
+                     "en": "The question is too short. Please type a clear question about the selected reports, for example: \"What was revenue in FY2023?\"."},
+    "reject_long": {"vi": "Câu hỏi quá dài (tối đa 5.000 ký tự). Hãy rút gọn và hỏi từng ý một.",
+                    "en": "The question is too long (5,000 characters at most). Please shorten it and ask one point at a time."},
     "ask_rephrase": {"vi": "Tôi chưa hiểu câu hỏi. Bạn hãy diễn đạt lại bằng chữ, ví dụ: \"Doanh thu của công ty năm FY2023 là bao nhiêu?\".", "en": "I did not understand the question. Please rephrase it in words, for example: \"What was the company's revenue in FY2023?\"."},
     "not_supported": {"vi": "Tôi chưa hỗ trợ tạo ghi chú, study guide hay xuất file. Hiện tôi trả lời câu hỏi về nội dung các báo cáo đã chọn, kèm trích dẫn trang.", "en": "I cannot create notes, study guides or exports yet. I answer questions about the selected reports, with page citations."},
     "refuse_concept": {"vi": "Hiện tôi chỉ trả lời dựa trên nội dung các tài liệu bạn đã chọn, chưa giải thích khái niệm tài chính chung. Bạn có thể hỏi về số liệu hoặc cách báo cáo trình bày chỉ tiêu đó.", "en": "For now I answer only from the documents you selected and do not explain general finance concepts. You can ask about the figures or how the report presents that item."},
@@ -310,7 +318,7 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
         return d
     # B: hygiene
     if len(q) < MIN_QUESTION_CHARS or len(q) > MAX_QUESTION_CHARS:
-        d.action, d.message = "reject_input", _msg("reject_input", lang)
+        d.action, d.message = "reject_input", _msg("reject_long" if len(q) > MAX_QUESTION_CHARS else "reject_input", lang)
         return d
     if not any(ch.isalpha() for ch in q):
         d.action, d.message = "ask_rephrase", _msg("ask_rephrase", lang)
@@ -357,7 +365,7 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
         return d
     what_is = _WHAT_IS.match(q)  # "What is ROE?" asks what the term means; "What is the dollar amount of goodwill?" asks for a figure
     definition = ((_DEFINITION.search(q) and _CONCEPT_TERMS.search(q)) or (what_is and _CONCEPT_TERMS.fullmatch(what_is.group(2)))
-                  or (_MEANING.search(q) and "metric" in d.evidence))  # "cổ tức là gì"
+                  or (_MEANING.search(q) and "metric" in d.evidence)) and not (_GIVES_FORMULA.search(q) and _ASKS_FIGURE.search(q))  # "cổ tức là gì"
     if definition and not anchored and not _DOC_ANCHOR.search(q):
         d.action, d.message = "refuse_concept", _msg("refuse_concept", lang)
         return d
