@@ -2,39 +2,186 @@
 
 @import "tailwindcss";
 
+/* Theme-independent values */
 :root {
-  /* FinHelp Unified Dark SaaS Palette (Synchronized with Landing Page) */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --transition: 0.15s ease;
+}
+
+/*
+ * COLOUR TOKENS. The only place colours are written: every other file reads these tokens by name.
+ * The dark block and the light block must define the SAME names: `npm run test:theme` checks it.
+ * dark  = the palette the app has always had (default).
+ * light = the Figma design (01 Homepage, 02 Start analysis, 03 Answer and sources).
+ * The theme is the data-theme attribute on <html>, set before first paint by the script in index.html.
+ */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* surfaces */
   --bg-app: #070a12;
-  --bg-sidebar: #0b1120;
+  --bg-sidebar: #0b1120;        /* panels next to the app background (top bars, the PDF panel) */
   --bg-card: #0e1526;
   --bg-card-hover: #131e36;
   --bg-input: #090e1a;
-  
+  --bg-elevated: #162034;       /* chips, table headings, segmented controls */
+  --bg-sunken: #101726;         /* wells and code blocks, a step deeper than the card */
+  --bg-hover: rgba(148, 163, 184, 0.12);
+
+  /* lines */
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-medium: #1e293b;
+  --border-strong: #22304d;
   --border-focus: #3b82f6;
 
+  /* text */
   --text-primary: #f8fafc;
   --text-secondary: #cbd5e1;
   --text-muted: #94a3b8;
   --text-dim: #8291a8; /* 4.5:1 or more on every surface (was #64748b, 3.1-4.2:1) */
 
+  /* accent */
   --accent-primary: #2563eb;
   --accent-hover: #1d4ed8;
-  
+  --accent-strong: #3b82f6;     /* highlighted words and bars */
+  --accent-text: #60a5fa;       /* blue text and icons on a surface */
+  --accent-text-soft: #93c5fd;  /* the lighter blue some headings and links use */
+  --accent-soft: rgba(37, 99, 235, 0.16);
+  --accent-soft-border: rgba(59, 130, 246, 0.35);
+  --on-accent: #ffffff;         /* text on a solid accent button */
+
+  /* status */
   --positive: #10b981;
+  --positive-text: #34d399;
   --positive-bg: rgba(16, 185, 129, 0.12);
   --negative: #f43f5e;
+  --negative-text: #fb7185;
   --negative-bg: rgba(244, 63, 94, 0.12);
+  --danger: #f87171;
+  --danger-solid: #ef4444;      /* solid red fills and strong red text */
+  --warn-solid: #f59e0b;
+  --warn-text: #fbbf24;
+  --warn-bg: rgba(245, 158, 11, 0.1);
+  --warn-border: rgba(245, 158, 11, 0.35);
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  
-  --transition: 0.15s ease;
+  /* left navigation (navy in both themes, as in the Figma) */
+  --side-bg: #0b1120;
+  --side-fg: #cbd5e1;
+  --side-muted: #8291a8;
+  --side-active: #162034;
+  --side-card: #0e1526;
+  --side-border: rgba(255, 255, 255, 0.08);
+  --side-strong: #ffffff;       /* titles and active text on the navy sidebar */
+  --side-hover: rgba(255, 255, 255, 0.06);
+  --side-danger: #fb7185;       /* red that reads on navy (the page's --negative-text is dark in the light theme) */
+
+  /* landing bands and glow */
+  --band-bg: #0b1120;
+  --band-fg: #f8fafc;
+  --band-muted: #94a3b8;
+  --band-line: rgba(255, 255, 255, 0.1);
+  --band-tile: #162034;
+  --band-accent: #93c5fd;       /* the small blue words and icons on a landing band */
+  --cta-bg: rgba(37, 99, 235, 0.12);
+  --hero-glow: rgba(37, 99, 235, 0.22);
+
+  /* source document */
+  --pdf-bg: #0b0f19;
+  --paper: #ffffff;             /* a PDF page stays white in both themes */
+  --paper-text: #0f172a;
+  --paper-muted: #64748b;
+  --highlight-ink: #facc15;     /* marker on a PDF page (mixed with transparency where used) */
+  --highlight-edge: #d97706;
+
+  /* overlays */
+  --scrim: rgba(3, 6, 12, 0.65);
+  --shadow-ink: #000000;        /* the colour a shadow is mixed from */
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-app: #f6f7fb;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f3f5fc;
+  --bg-input: #ffffff;
+  --bg-elevated: #eef1f8;
+  --bg-sunken: #f1f4fa;
+  --bg-hover: rgba(17, 28, 50, 0.06);
+
+  --border-subtle: rgba(17, 28, 50, 0.08);
+  --border-medium: #e5e9f2;
+  --border-strong: #d3daea;
+  --border-focus: #3659e3;
+
+  --text-primary: #111c32;
+  --text-secondary: #34405a;
+  --text-muted: #5b6579;
+  --text-dim: #66718a;
+
+  --accent-primary: #3659e3;
+  --accent-hover: #2a47c2;
+  --accent-strong: #3659e3;
+  --accent-text: #2a47c2;
+  --accent-text-soft: #3659e3;
+  --accent-soft: #edf1ff;
+  --accent-soft-border: #c9d4fb;
+  --on-accent: #ffffff;
+
+  --positive: #0f7a4f;
+  --positive-text: #0f7a4f;
+  --positive-bg: #def5e9;
+  --negative: #be123c;
+  --negative-text: #be123c;
+  --negative-bg: #fde3e9;
+  --danger: #dc2626;
+  --danger-solid: #dc2626;
+  --warn-solid: #d97706;
+  --warn-text: #8a5a00;
+  --warn-bg: #fff7e6;
+  --warn-border: #f3d9a4;
+
+  --side-bg: #111c32;
+  --side-fg: #e3e8f4;
+  --side-muted: #8e9ab3;
+  --side-active: #22314f;
+  --side-card: #1b2a46;
+  --side-border: rgba(255, 255, 255, 0.08);
+  --side-strong: #ffffff;
+  --side-hover: rgba(255, 255, 255, 0.06);
+  --side-danger: #fb7185;
+
+  --band-bg: #111c32;
+  --band-fg: #ffffff;
+  --band-muted: #9aa7c0;
+  --band-line: rgba(255, 255, 255, 0.12);
+  --band-tile: #22314f;
+  --band-accent: #aebcff;
+  --cta-bg: #edf1ff;
+  --hero-glow: rgba(54, 89, 227, 0.1);
+
+  --pdf-bg: #e9edf6;
+  --paper: #ffffff;
+  --paper-text: #111c32;
+  --paper-muted: #66718a;
+  --highlight-ink: #facc15;
+  --highlight-edge: #b45309;
+
+  --scrim: rgba(17, 28, 50, 0.35);
+  --shadow-ink: #111c32;
+  --shadow: 0 10px 30px rgba(17, 28, 50, 0.12);
 }
 
 /* The palette above as Tailwind names (bg-card, text-fg, border-line ...): one source for the CSS files and the utility classes */
 @theme inline {
+  --color-elevated: var(--bg-elevated);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
   --color-app: var(--bg-app);
   --color-panel: var(--bg-sidebar);
   --color-card: var(--bg-card);
@@ -52,6 +199,13 @@
   --color-positive-soft: var(--positive-bg);
   --color-negative: var(--negative);
   --color-negative-soft: var(--negative-bg);
+  --color-positive-text: var(--positive-text);
+  --color-negative-text: var(--negative-text);
+  --color-warn: var(--warn-solid);
+  --color-warn-text: var(--warn-text);
+  --color-hover: var(--bg-hover);
+  --color-on-accent: var(--on-accent);
+  --color-scrim: var(--scrim);
 }
 
 /* Resets sit in the base layer: Tailwind utilities (p-5, mt-2, text-sm) must win over them, the component CSS files still do */
@@ -105,6 +259,25 @@ button:disabled {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-dim);
+}
+
+/* Theme switch button (see ThemeToggle.tsx) */
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  transition: background-color var(--transition), color var(--transition);
+}
+.theme-toggle:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .mono {

@@ -1,29 +1,31 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLanguage } from "../../context/LanguageContext";
-import { ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
-import { CitationBadge } from "./CitationBadge";
+import { AskMode, ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
+import { SourceCard } from "./SourceCard";
 import { AnswerActions } from "./AnswerActions";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { citedFigures } from "../notebook/locateExcerpt";
-import { Flag } from "lucide-react";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, FileTextIcon, SendIcon } from "../common/Icons";
+import { ArrowUp, ChevronDown, Flag, Plus, Sparkles } from "lucide-react";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, FileTextIcon } from "../common/Icons";
 import "./chat.css";
 
 interface ChatContainerProps {
   messages: ChatMessage[];
-  onSendMessage: (query: string, mentions?: string[], retryOf?: string, mode?: "deeper" | "again") => void;
+  onSendMessage: (query: string, mentions?: string[], retryOf?: string, mode?: AskMode) => void;
   /** Report (or withdraw) wrong figures in a stored answer. */
   onFlagAnswer?: (messageId: string, flagged: boolean) => void;
   isLoading: boolean;
   /** What the system is doing for the question being answered (streamed chat). */
   loadingStage?: ChatStage | null;
   onSelectCitation: (citation: CitationItem) => void;
-  onClearChat?: () => void;
-  sessionTitle?: string;
-  onNewChat?: () => void;
-  onOpenSources?: () => void;
   onToggleSources?: () => void;
   isSourcesOpen?: boolean;
+  /** File name of each report in this chat, by document_id: the source cards under an answer show it. */
+  documentNames?: Record<string, string>;
+  /** Which chat this is (the notebook id): the question box keeps one unsent draft per chat. */
+  chatKey?: string;
+  /** What a chat with no question yet shows. It is given the way to put an example question into the question box. */
+  startScreen: (pickQuestion: (question: string) => void) => React.ReactNode;
   /** Chưa chọn tài liệu nguồn: không cho gửi (hệ thống không tự đoán phạm vi). */
   hasSources?: boolean;
   /** Đang tải lên hoặc đang xử lý bóc tách/lập chỉ mục các file PDF. */
@@ -32,6 +34,8 @@ interface ChatContainerProps {
   mentionOptions?: MentionOption[];
 }
 
+const STAGES: ChatStage[] = ["understanding", "searching", "writing", "checking"];
+
 export const ChatContainer: React.FC<ChatContainerProps> = ({
   messages,
   onSendMessage,
@@ -39,11 +43,11 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   isLoading,
   loadingStage,
   onSelectCitation,
-  sessionTitle,
-  onNewChat: _onNewChat,
-  onOpenSources,
   onToggleSources,
   isSourcesOpen = false,
+  documentNames = {},
+  chatKey = "",
+  startScreen,
   hasSources = true,
   isProcessing = false,
   mentionOptions = [],
@@ -51,10 +55,23 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const { t } = useLanguage();
   const [input, setInput] = useState("");
   const [mentions, setMentions] = useState<string[]>([]);
+  // Unsent text per chat: leaving a chat stores what was typed, entering one shows its own draft (or an empty box). Tags (@) belong to the chat they were made in.
+  const drafts = useRef(new Map<string, string>());
+  const shownChat = useRef(chatKey);
+  useEffect(() => {
+    if (shownChat.current === chatKey) return;
+    const left = shownChat.current;
+    shownChat.current = chatKey;
+    if (!left) return; // no chat was open yet (the list was still loading): what was typed is kept
+    drafts.current.set(left, input);
+    setInput(drafts.current.get(chatKey) ?? "");
+    setMentions([]);
+  }, [chatKey]); // eslint-disable-line react-hooks/exhaustive-deps -- reads the text at the moment of the switch
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // The real stage of the answer; a stage that lasts long says so, so the user knows nothing hung
   const stageName = loadingStage ?? "understanding";
+  const stageIndex = STAGES.indexOf(stageName);
   const [isSlow, setIsSlow] = useState(false);
   useEffect(() => {
     setIsSlow(false);
@@ -65,6 +82,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   // Once the answer shows up the waiting line goes away, unless the system checks it again (the text may then be replaced)
   const isWriting = messages.some((m) => m.streaming && m.content);
   const showWaiting = isLoading && (!isWriting || stageName === "checking");
+  // The answer's card may already be on screen (the note "I understood the question as…" arrives first) while it has no text yet: the waiting block then goes inside it
+  const lastMessage = messages[messages.length - 1];
+  const waitingInMessage = showWaiting && lastMessage?.role === "assistant" && !!lastMessage.streaming && !lastMessage.content;
   // a button asked the question again: the wait says what is being done instead of the plain stages
   const lastQuestion = [...messages].reverse().find((m) => m.role === "user");
   const waitingClick = isLoading && lastQuestion?.click ? lastQuestion.click : "";
@@ -84,6 +104,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const labelOf = (id: string) => mentionOptions.find((o) => o.document_id === id)?.label || id;
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
+  const pinnedRef = useRef(true); // the list is scrolled to its end: it stays there when the box under it grows
   const promptsTrackRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
@@ -169,40 +190,61 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // the start screen is read from the top; an answer from its end
+    if (messages.length === 0) {
+      pinnedRef.current = false;
+      streamRef.current?.scrollTo({ top: 0 });
+    } else {
+      pinnedRef.current = true;
+      scrollToBottom();
+    }
   }, [messages]);
 
-  // Auto-expand textarea to match content height (NotebookLM & ChatGPT style)
+  // A growing question box (or a panel opening) shrinks the list: if it was at its end it stays at its end, so the last lines are not pushed out of view
+  useEffect(() => {
+    const stream = streamRef.current;
+    if (!stream) return;
+    const observer = new ResizeObserver(() => {
+      if (pinnedRef.current) stream.scrollTop = stream.scrollHeight;
+    });
+    observer.observe(stream);
+    return () => observer.disconnect();
+  }, []);
+
+  // The question box grows with its text up to the CSS max-height (min-height and max-height live in chat.css), then scrolls
   const autoResizeTextarea = () => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
-    const isSmallMobile = typeof window !== "undefined" && window.innerWidth <= 480;
-    const minHeight = isSmallMobile ? 18 : isMobile ? 20 : 22;
-    const maxHeight = isMobile ? 120 : 180;
-    const newHeight = Math.min(Math.max(el.scrollHeight, minHeight), maxHeight);
-    el.style.height = `${newHeight}px`;
-    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+    const max = parseFloat(getComputedStyle(el).maxHeight) || 180;
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   };
 
   useEffect(() => {
     autoResizeTextarea();
   }, [input]);
 
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    let width = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth === width) return; // only a change of width wraps the text differently; a change of height is our own
+      width = el.clientWidth;
+      autoResizeTextarea();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!input.trim() || isLoading || !hasSources || isProcessing) return;
     const toSend = input;
     const usedMentions = mentions.length > 0 ? mentions : undefined;
-    setInput("");
+    setInput(""); // the box shrinks back by itself (the effect on input)
     setMentions([]);
-    if (textareaRef.current) {
-      const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
-      const isSmallMobile = typeof window !== "undefined" && window.innerWidth <= 480;
-      textareaRef.current.style.height = isSmallMobile ? "18px" : isMobile ? "20px" : "22px";
-      textareaRef.current.style.overflowY = "hidden";
-    }
     onSendMessage(toSend, usedMentions);
   };
 
@@ -227,90 +269,119 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
   const canSubmit = !isLoading && hasSources && !isProcessing && !!input.trim();
 
+  // What the system is doing now, a placeholder for the text to come, and how far along it is (4 steps: understand, search, write, check)
+  const waitingBlock = (
+    <div className="chat-loading-card">
+      <p className="chat-loading-status" role="status">
+        <span className="chat-spinner" aria-hidden />
+        {isSlow ? t.workspace.loadingSlow : waitingClick && (stageName === "understanding" || stageName === "searching") ? t.workspace.clickStage[waitingClick] : t.workspace.loadingStages[stageName]}
+      </p>
+      <div className="chat-skeleton" aria-hidden>
+        <i /><i /><i />
+      </div>
+      <div className="chat-stage-bar" aria-hidden>
+        {STAGES.map((s, i) => (
+          <span key={s} className={i < stageIndex ? "done" : i === stageIndex ? "current" : ""} />
+        ))}
+      </div>
+    </div>
+  );
+
+  // A chat with no question yet shows the start screen instead of the scope bar and the suggestions
+  const showStart = messages.length === 0 && !isLoading;
+  // An example question goes into the question box; the box takes it even while it is still locked (no report yet), and it is asked once a report is ready
+  const pickQuestion = (question: string) => {
+    setInput(question);
+    textareaRef.current?.focus();
+  };
+
+  // "2 reports selected" in the scope bar, "2 reports in scope" in the composer; with none chosen both say so / invite to choose
+  const reportCount = mentionOptions.length;
+  const scopeText =
+    reportCount === 0
+      ? t.workspace.noFilingsSelected
+      : (reportCount === 1 ? t.workspace.reportsSelectedOne : t.workspace.reportsSelectedMany).replace("{n}", String(reportCount));
+  const scopeChipText =
+    reportCount === 0
+      ? t.workspace.chooseFilingsBtn
+      : (reportCount === 1 ? t.workspace.scopeChipOne : t.workspace.scopeChipMany).replace("{n}", String(reportCount));
+
   return (
     <div className="chat-container">
-      {/* Top Header Bar inside Chat Container: Context Bar */}
-      <div className="chat-header">
-        <div className="chat-header-title-box">
-          <span className="chat-header-title">
-            {sessionTitle || t.workspace.currentSession}
-          </span>
-        </div>
-
-        {/* Context bar showing selected documents */}
+      {/* Scope bar: how many reports the questions are asked about, which ones, and the way to change them. The start screen says it itself. */}
+      {!showStart && <div className="chat-header">
         <div className="chat-header-sources">
-          <span className="chat-sources-label">{t.workspace.activeScope}</span>
+          <FileTextIcon size={16} color="var(--accent-text)" />
+          <span className="chat-sources-label">{scopeText}</span>
           <div className="chat-sources-tags">
-            {mentionOptions && mentionOptions.length > 0 ? (
-              <>
-                {/* Two tags at most, each shortened with "…" (full name on hover); the rest as "+N": a scrolling strip cut the second name in half */}
-                {mentionOptions.slice(0, 2).map((opt) => (
-                  <span key={opt.document_id} className="chat-source-tag" title={opt.label}>
-                    {opt.label}
-                  </span>
-                ))}
-                {mentionOptions.length > 2 && (
-                  <span className="chat-source-tag" title={mentionOptions.slice(2).map((o) => o.label).join("\n")}>
-                    +{mentionOptions.length - 2}
-                  </span>
-                )}
-              </>
-            ) : (
-              <span className="chat-source-tag muted">{t.workspace.noFilingsSelected}</span>
+            {/* Two tags at most, each shortened with "…" (full name on hover); the rest as "+N": a scrolling strip cut the second name in half */}
+            {mentionOptions.slice(0, 2).map((opt) => (
+              <span key={opt.document_id} className="chat-source-tag" title={opt.label}>
+                {opt.label}
+              </span>
+            ))}
+            {mentionOptions.length > 2 && (
+              <span className="chat-source-tag" title={mentionOptions.slice(2).map((o) => o.label).join("\n")}>
+                +{mentionOptions.length - 2}
+              </span>
             )}
           </div>
-          {(onToggleSources || onOpenSources) && (
-            <button
-              type="button"
-              onClick={onToggleSources || onOpenSources}
-              className={`chat-manage-sources-btn ${isSourcesOpen ? "active" : ""}`}
-              title={isSourcesOpen ? t.nav.closeSources : t.nav.manageSources}
-            >
-              <span>{isSourcesOpen ? t.nav.closeSources : t.nav.manageSources}</span>
-              <ChevronRightIcon size={12} />
-            </button>
-          )}
         </div>
-      </div>
+        {onToggleSources && (
+          <button
+            type="button"
+            onClick={onToggleSources}
+            className={`chat-manage-sources-btn ${isSourcesOpen ? "active" : ""}`}
+            aria-expanded={isSourcesOpen}
+          >
+            <span>{isSourcesOpen ? t.nav.closeSources : t.nav.manageSources}</span>
+            <ChevronDown size={15} aria-hidden />
+          </button>
+        )}
+      </div>}
 
       {/* Messages Stream */}
-      <div className="chat-messages-stream" ref={streamRef}>
+      <div
+        className="chat-messages-stream"
+        ref={streamRef}
+        onScroll={(e) => {
+          const s = e.currentTarget;
+          pinnedRef.current = s.scrollHeight - s.clientHeight - s.scrollTop < 48;
+        }}
+      >
+        {showStart && startScreen(pickQuestion)}
         <div className="chat-messages-column">
-          {messages.length === 0 && !isLoading && (
-            <div className="chat-empty-state">
-              <div className="chat-empty-title">
-                {t.workspace.emptyTitle}
-              </div>
-              <p className="chat-empty-desc">
-                {t.workspace.emptyDesc}
-              </p>
-              {!hasSources && (onToggleSources || onOpenSources) && (
-                <button
-                  type="button"
-                  onClick={onToggleSources || onOpenSources}
-                  className="chat-empty-select-docs-btn"
-                >
-                  <FileTextIcon size={14} />
-                  <span>{t.workspace.chooseFilingsBtn}</span>
-                </button>
-              )}
-            </div>
-          )}
           {messages.map((msg, index) => {
             const isUser = msg.role === "user";
+            // Only the excerpts the answer uses, each keeping its own [n]
+            const used = (msg.citations || [])
+              .map((cite, idx) => ({ cite, index: idx + 1 }))
+              .filter(({ cite }) => cite.cited !== false);
 
             return (
               <div
                 key={msg.message_id}
                 className={`chat-message-row ${isUser ? "user" : "assistant"}`}
               >
-                {/* Sender label */}
-                <span className="chat-sender-label">
-                  {isUser ? t.workspace.youLabel : t.workspace.aiLabel}
-                </span>
+                {/* The question is labelled; an answer carries its own header inside its card */}
+                {isUser && <span className="chat-sender-label">{t.workspace.youLabel}</span>}
 
                 {/* Message Box */}
                 <div className={`chat-message-bubble ${isUser ? "user" : "assistant"}`}>
+                  {!isUser && (
+                    <div className="chat-answer-head">
+                      <span className="chat-answer-avatar" aria-hidden>
+                        <Sparkles size={16} />
+                      </span>
+                      <span className="chat-answer-name">{t.workspace.aiLabel}</span>
+                      {!msg.streaming && used.length > 0 && (
+                        <span className="chat-answer-badge">
+                          <CheckIcon size={14} />
+                          {(used.length === 1 ? t.workspace.sourceRefsOne : t.workspace.sourceRefsMany).replace("{n}", String(used.length))}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {(() => {
                     // which button asked this question / answer again (a reloaded question takes it from its answer)
                     const click = isUser ? msg.click || messages[index + 1]?.click : msg.click;
@@ -330,6 +401,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                       onSelectCitation={onSelectCitation}
                     />
                   )}
+                  {!isUser && waitingInMessage && index === messages.length - 1 && waitingBlock}
                   {!isUser && msg.alternatives && msg.alternatives.length > 0 && msg.query && (
                     <div className="chat-alternatives">
                       {msg.alternatives.map((a) => (
@@ -346,34 +418,28 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                       ))}
                     </div>
                   )}
-                  {/* Footer of an answer, set apart from its text: the sources it cites, then one toolbar (answer buttons left, copy / report right) */}
-                  {!isUser && !msg.streaming && (
-                    <div className="chat-message-footer">
-                      {/* Grounded Evidence Citations: only the excerpts the answer uses, each keeping its own [n] */}
-                      {(() => {
-                        const used = (msg.citations || [])
-                          .map((cite, idx) => ({ cite, index: idx + 1 }))
-                          .filter(({ cite }) => cite.cited !== false);
-                        if (used.length === 0) return null;
-                        return (
-                          <div className="chat-citations-container">
-                            <span className="chat-citations-title">
-                              {t.workspace.sourceCitationsTitle} ({used.length})
-                            </span>
-                            <div className="chat-citations-list">
-                              {used.map(({ cite, index }) => (
-                                <CitationBadge
-                                  key={cite.citation_id}
-                                  citation={cite}
-                                  index={index}
-                                  onClick={() => onSelectCitation({ ...cite, figures: citedFigures(msg.content, index) })}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
+                  {/* Where the answer comes from: one card per excerpt it uses, each keeping its own [n] */}
+                  {!isUser && !msg.streaming && used.length > 0 && (
+                    <div className="chat-citations-container">
+                      <span className="chat-citations-title">{t.workspace.sourceCitationsTitle}</span>
+                      <div className="chat-citations-list">
+                        {used.map(({ cite, index }) => (
+                          <SourceCard
+                            key={cite.citation_id}
+                            citation={cite}
+                            index={index}
+                            fileName={documentNames[cite.document_id]}
+                            onClick={() => onSelectCitation({ ...cite, figures: citedFigures(msg.content, index) })}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
+                {/* Under the card: the answer buttons on the left, copy / report beside them */}
+                {!isUser && !msg.streaming && (
+                    <div className="chat-message-footer">
                       {msg.clicked && <div className="chat-clicked-note" role="note">{t.workspace.clickedNote[msg.clicked]}</div>}
                       <div className="chat-message-toolbar">
                         {msg.actions && (msg.query || messages[index - 1]?.role === "user") && (
@@ -392,17 +458,17 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                             type="button"
                             onClick={() => handleCopy(msg.content, msg.message_id)}
                             className={`chat-action-btn chat-copy-btn ${copiedMsgId === msg.message_id ? "copied" : ""}`}
-                            title={t.common.copy}
+                            title={t.workspace.copyAnswer}
                           >
                             {copiedMsgId === msg.message_id ? (
                               <>
-                                <CheckIcon size={12} color="#10b981" />
+                                <CheckIcon size={12} color="var(--positive)" />
                                 <span className="chat-copied-text">{t.common.copied}</span>
                               </>
                             ) : (
                               <>
                                 <CopyIcon size={12} />
-                                <span>{t.common.copy}</span>
+                                <span>{t.workspace.copyAnswer}</span>
                               </>
                             )}
                           </button>
@@ -422,21 +488,22 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                         </div>
                       </div>
                     </div>
-                  )}
-                </div>
+                )}
               </div>
             );
           })}
 
-          {/* Assistant Typing / Streaming Skeleton */}
-          {showWaiting && (
-            <div className="chat-loading-row">
-              <span className="chat-sender-label">{t.workspace.aiLabel}</span>
-              <div className="chat-loading-bubble">
-                <div className="chat-loading-spinner" />
-                <span role="status">
-                  {isSlow ? t.workspace.loadingSlow : waitingClick && (stageName === "understanding" || stageName === "searching") ? t.workspace.clickStage[waitingClick] : t.workspace.loadingStages[stageName]}
-                </span>
+          {/* Nothing of the answer is on screen yet: its card appears with the waiting block in it */}
+          {showWaiting && !waitingInMessage && (
+            <div className="chat-message-row assistant">
+              <div className="chat-message-bubble assistant" aria-busy="true">
+                <div className="chat-answer-head">
+                  <span className="chat-answer-avatar" aria-hidden>
+                    <Sparkles size={16} />
+                  </span>
+                  <span className="chat-answer-name">{t.workspace.aiLabel}</span>
+                </div>
+                {waitingBlock}
               </div>
             </div>
           )}
@@ -448,7 +515,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       <div className="chat-input-wrapper">
         <div className="chat-input-column">
           {/* Quick suggestions when input is empty */}
-          {messages.length <= 3 && (
+          {!showStart && messages.length <= 3 && (
             <div className="chat-sample-prompts">
               <span className="chat-prompts-label">{t.workspace.suggestionsLabel}</span>
 
@@ -529,38 +596,49 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             </div>
           )}
 
-          {/* Clean Input Pill Container */}
+          {/* Composer: the question on top, the reports it is asked about underneath */}
           <form onSubmit={handleSubmit} className={`chat-input-form ${isProcessing ? "is-processing" : ""}`}>
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onInput={autoResizeTextarea}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                isProcessing
-                  ? t.workspace.placeholderProcessing
-                  : hasSources
-                  ? t.workspace.placeholderWithDocs
-                  : t.workspace.placeholderNoDocs
-              }
-              disabled={isLoading || !hasSources || isProcessing}
-              rows={1}
-              className="chat-input-textarea"
-            />
+            <div className="chat-input-row">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onInput={autoResizeTextarea}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  isProcessing
+                    ? t.workspace.placeholderProcessing
+                    : hasSources
+                    ? t.workspace.placeholderWithDocs
+                    : t.workspace.placeholderNoDocs
+                }
+                disabled={isLoading || !hasSources || isProcessing}
+                rows={1}
+                className="chat-input-textarea"
+              />
 
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              aria-label={t.workspace.sendBtn}
-              className={`chat-send-btn ${canSubmit ? "active" : "inactive"}`}
-            >
-              <SendIcon size={14} />
-            </button>
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                aria-label={t.workspace.sendBtn}
+                className={`chat-send-btn ${canSubmit ? "active" : "inactive"}`}
+              >
+                <ArrowUp size={20} aria-hidden />
+              </button>
+            </div>
+            {onToggleSources ? (
+              <button type="button" className="chat-scope-chip" onClick={onToggleSources} aria-expanded={isSourcesOpen}>
+                <Plus size={16} aria-hidden />
+                {scopeChipText}
+              </button>
+            ) : (
+              <span className="chat-scope-chip">{scopeChipText}</span>
+            )}
           </form>
 
           <div className="chat-input-hint">
-            {t.workspace.inputShortcuts}
+            <span>{t.workspace.inputShortcuts}</span>
+            <span>{t.workspace.checkFigures}</span>
           </div>
         </div>
       </div>

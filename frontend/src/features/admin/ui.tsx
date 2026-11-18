@@ -44,7 +44,7 @@ export const CardHeader: React.FC<{ title: string; subtitle?: string; icon?: Luc
   <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
     <div className="flex min-w-0 items-start gap-3">
       {Icon && (
-        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-blue-400">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
           <Icon size={16} aria-hidden />
         </span>
       )}
@@ -75,7 +75,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ label, value, icon: Icon, sub,
         <span className="text-[13px] font-medium text-muted">{label}</span>
         <span
           className={`flex size-8 items-center justify-center rounded-lg ${
-            tone === "warning" ? "bg-amber-400/12 text-amber-300" : "bg-accent/15 text-blue-400"
+            tone === "warning" ? "bg-warn/12 text-warn-text" : "bg-accent/15 text-accent-text"
           }`}
         >
           <Icon size={16} aria-hidden />
@@ -104,9 +104,9 @@ export const KpiCard: React.FC<KpiCardProps> = ({ label, value, icon: Icon, sub,
 
 const STATUS_STYLE: Record<AdminDocument["status"], { icon: LucideIcon; className: string; spin?: boolean }> = {
   ready: { icon: CheckCircle2, className: "bg-positive-soft text-positive" },
-  processing: { icon: Loader2, className: "bg-accent/15 text-blue-300", spin: true },
-  pending: { icon: Clock, className: "bg-amber-400/12 text-amber-300" },
-  failed: { icon: AlertTriangle, className: "bg-negative-soft text-rose-300" },
+  processing: { icon: Loader2, className: "bg-accent/15 text-accent-text", spin: true },
+  pending: { icon: Clock, className: "bg-warn/12 text-warn-text" },
+  failed: { icon: AlertTriangle, className: "bg-negative-soft text-negative-text" },
 };
 
 export const StatusBadge: React.FC<{ status: AdminDocument["status"] }> = ({ status }) => {
@@ -140,7 +140,7 @@ export const EmptyState: React.FC<{ title: string; hint?: string; icon?: LucideI
 );
 
 export const Skeleton: React.FC<{ className?: string }> = ({ className = "" }) => (
-  <div className={`animate-pulse rounded-lg bg-white/5 ${className}`} />
+  <div className={`animate-pulse rounded-lg bg-hover ${className}`} />
 );
 
 export const SearchField: React.FC<{ value: string; onChange: (v: string) => void; label: string }> = ({ value, onChange, label }) => (
@@ -152,7 +152,7 @@ export const SearchField: React.FC<{ value: string; onChange: (v: string) => voi
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={label}
-      className="h-9 w-full rounded-lg border border-line-strong bg-field pl-9 pr-3 text-[13px] text-fg placeholder:text-dim focus:border-blue-500"
+      className="h-9 w-full rounded-lg border border-line-strong bg-field pl-9 pr-3 text-[13px] text-fg placeholder:text-dim focus:border-accent"
     />
   </label>
 );
@@ -204,7 +204,7 @@ export const Table: React.FC<{ caption: string; head: string[]; children: React.
           ))}
         </tr>
       </thead>
-      <tbody className="divide-y divide-white/5">{children}</tbody>
+      <tbody className="divide-y divide-line">{children}</tbody>
     </table>
   </div>
 );

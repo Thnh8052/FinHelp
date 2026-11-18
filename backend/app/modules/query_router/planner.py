@@ -102,6 +102,11 @@ def expand_plan(plan: Sequence[PlanItem], scope_ids: Sequence[str], limit: int) 
     return expanded if len(expanded) <= limit else list(plan)
 
 
+class PlanUnavailable(Exception):
+    """No plan could be had: the model could not be reached, or gave no valid plan twice. Not a valid empty plan (the model read the catalog and chose
+    no report), which comes back as []."""
+
+
 _cache: Dict[str, Tuple[List[PlanItem], str]] = {}
 _CACHE_MAX = 256
 
@@ -144,7 +149,8 @@ def _then(raw: str) -> str:
 
 async def _plan(question: str, catalog: Sequence[CatalogEntry], template: str) -> Tuple[List[PlanItem], str]:
     """(plan, dependent part) of a question over several filings. The model sees short ids (doc01, doc02, ...), as in the study; the plan comes back with
-    the real ones. No valid plan after a second call, an empty plan or the model being down all return ([], ""), and the caller routes without a plan."""
+    the real ones. A valid empty plan (the model chose no report) returns ([], ""): the caller stops there unless code chose the documents (step 3,
+    tests/test_empty_plan.py). The model being down, or no valid plan after a second call, raises PlanUnavailable: the caller routes without a plan."""
     if not catalog:
         return [], ""
     key = str(template is PROMPT_MULTIHOP) + "\x00" + question + "\x00" + "\x00".join(sorted(e.line() for e in catalog))
@@ -159,7 +165,7 @@ async def _plan(question: str, catalog: Sequence[CatalogEntry], template: str) -
             )
         except LLMUnavailableError as exc:
             logger.warning(f"Multi-document planning skipped: {type(exc).__name__}")
-            return [], ""
+            raise PlanUnavailable(type(exc).__name__) from exc
         plan = [PlanItem(p.query, [ids[d].document_id for d in p.document_ids]) for p in parse_plan(raw, list(ids))]
         if plan:
             if len(_cache) >= _CACHE_MAX:
@@ -169,7 +175,7 @@ async def _plan(question: str, catalog: Sequence[CatalogEntry], template: str) -
         if chose_nothing(raw):
             return [], ""
     logger.warning("Multi-document planning skipped: no valid plan in the reply")
-    return [], ""
+    raise PlanUnavailable("no valid plan")
 
 
 async def plan_multi_doc(question: str, catalog: Sequence[CatalogEntry]) -> List[PlanItem]:

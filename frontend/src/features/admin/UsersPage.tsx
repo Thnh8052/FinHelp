@@ -30,7 +30,7 @@ export const UsersPage: React.FC = () => {
       {shown.length ? (
         <Table caption={u.title} head={[u.colUser, u.colRole, u.colStatus, u.colNotebooks, u.colTokens, u.colCreated, u.colLastLogin]} alignRight={[3, 4]}>
           {shown.map((x) => (
-            <tr key={x.user_id} className="transition-colors hover:bg-white/[0.02]">
+            <tr key={x.user_id} className="transition-colors hover:bg-hover">
               <td className="min-w-[220px] px-5 py-3">
                 <div className="font-medium text-fg">{x.full_name || `@${x.username}`}</div>
                 <div className="text-xs text-muted">
@@ -40,12 +40,12 @@ export const UsersPage: React.FC = () => {
               </td>
               <td className="whitespace-nowrap px-5 py-3">
                 {x.role === "admin" ? (
-                  <span className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-2 py-0.5 text-xs font-medium text-blue-300">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent-text">
                     <ShieldCheck size={12} aria-hidden />
                     {u.roleAdmin}
                   </span>
                 ) : (
-                  <span className="rounded-md bg-white/5 px-2 py-0.5 text-xs font-medium text-fg-2">{u.roleUser}</span>
+                  <span className="rounded-md bg-hover px-2 py-0.5 text-xs font-medium text-fg-2">{u.roleUser}</span>
                 )}
               </td>
               <td className="whitespace-nowrap px-5 py-3">

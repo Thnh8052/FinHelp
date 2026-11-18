@@ -292,8 +292,9 @@ def _orchestrator(docs, monkeypatch, listed=()):
     async def no_unlisted(question, catalog):
         return list(listed)
 
-    async def plan(query, catalog):
-        return []
+    async def plan(query, catalog):  # no planner in these tests: the route without a plan (a valid empty plan would stop the question, test_empty_plan.py)
+        from app.modules.query_router.planner import PlanUnavailable
+        raise PlanUnavailable("not in this test")
 
     seen = {}
 

@@ -13,7 +13,7 @@ import { Card, CardHeader, KpiCard, Skeleton, fill, useFormat } from "./ui";
 const change = (now: number, before: number) => (before > 0 ? (now - before) / before : null);
 
 const ViewAll: React.FC<{ to: string; label: string }> = ({ to, label }) => (
-  <Link to={to} className="inline-flex items-center gap-1 text-[13px] font-medium text-blue-400 hover:text-blue-300">
+  <Link to={to} className="inline-flex items-center gap-1 text-[13px] font-medium text-accent-text hover:underline">
     {label}
     <ArrowRight size={14} aria-hidden />
   </Link>
@@ -29,9 +29,9 @@ const ServiceHealth: React.FC<{ services: AdminOverview["services"] }> = ({ serv
           key={name}
           className="inline-flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-1.5 text-xs text-fg-2"
         >
-          <span className={`size-2 rounded-full ${ms != null ? "bg-emerald-400" : "bg-rose-400"}`} aria-hidden />
+          <span className={`size-2 rounded-full ${ms != null ? "bg-positive" : "bg-negative"}`} aria-hidden />
           <span className="font-medium">{h.names[name as keyof typeof h.names] ?? name}</span>
-          <span className={ms != null ? "font-mono text-muted" : "text-rose-300"}>
+          <span className={ms != null ? "font-mono text-muted" : "text-negative-text"}>
             {ms != null ? fill(h.up, { ms: Math.round(ms) }) : h.down}
           </span>
         </li>

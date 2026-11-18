@@ -19,7 +19,7 @@ export const DocumentsTable: React.FC<{ documents: AdminDocument[]; emptyText: s
         const active = doc.status === "processing" || doc.status === "pending";
         const period = [doc.ticker, doc.report_type, doc.fiscal_year && `FY${doc.fiscal_year}`].filter(Boolean).join(" · ");
         return (
-          <tr key={doc.document_id} className="align-top transition-colors hover:bg-white/[0.02]">
+          <tr key={doc.document_id} className="align-top transition-colors hover:bg-hover">
             <td className="max-w-[320px] px-5 py-3">
               <div className="truncate font-medium text-fg" title={doc.file_name}>{doc.file_name}</div>
               <div className="truncate text-xs text-muted">
@@ -40,19 +40,19 @@ export const DocumentsTable: React.FC<{ documents: AdminDocument[]; emptyText: s
                     <span className="font-mono">{doc.progress_percent ?? 0}%</span>
                   </div>
                   <div
-                    className="h-1 overflow-hidden rounded-full bg-white/10"
+                    className="h-1 overflow-hidden rounded-full bg-elevated"
                     role="progressbar"
                     aria-valuenow={doc.progress_percent ?? 0}
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-label={stage ?? d.status.processing}
                   >
-                    <div className="h-full rounded-full bg-blue-500 transition-[width]" style={{ width: `${doc.progress_percent ?? 0}%` }} />
+                    <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${doc.progress_percent ?? 0}%` }} />
                   </div>
                 </div>
               )}
               {doc.status === "failed" && doc.error_code && (
-                <p className="mt-1.5 max-w-[260px] text-xs text-rose-300/90">
+                <p className="mt-1.5 max-w-[260px] text-xs text-negative-text">
                   {processingErrorText(doc.error_code, t)} <span className="font-mono text-dim">({doc.error_code})</span>
                 </p>
               )}

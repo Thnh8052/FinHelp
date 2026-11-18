@@ -1,5 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { useLanguage } from "../../context/LanguageContext";
+import { usePdfDrop } from "../../hooks/usePdfDrop";
 import { processingErrorText } from "../../services/api";
 import { DocumentRecord, isDocProcessing, isDocFailed } from "../../types/notebook";
 import {
@@ -49,48 +50,11 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   maxFileSizeMb,
 }) => {
   const { t } = useLanguage();
-  const [isDragging, setIsDragging] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   // Đang gửi tệp hoặc còn tài liệu đang xử lý: chưa nhận thêm tệp
   const isBusy = isUploading || documents.some(isDocProcessing);
+  const { isDragging, inputRef: fileInputRef, dropHandlers, onInputChange: handleFileInputChange, openPicker } = usePdfDrop(onUploadFiles, isBusy);
   const selectableCount = documents.filter((d) => d.status === "ready").length;
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    if (isBusy) return;
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const pdfFiles = Array.from(e.dataTransfer.files).filter((f) =>
-        f.name.toLowerCase().endsWith(".pdf")
-      );
-      if (pdfFiles.length > 0) {
-        onUploadFiles(pdfFiles);
-      }
-    }
-  };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isBusy) return;
-    if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
-      e.target.value = "";
-      onUploadFiles(files);
-    }
-  };
 
   const allSelected =
     selectableCount > 0 && selectedDocIds.length === selectableCount;
@@ -120,7 +84,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       {/* 1. Header Panel */}
       <div className="doc-drawer-header">
         <div className="doc-drawer-title-box">
-          <FileTextIcon size={15} color="var(--accent-primary, #2563eb)" />
+          <FileTextIcon size={15} color="var(--accent-primary)" />
           <span className="doc-drawer-title">{t.sourcesDrawer.title}</span>
           <span className="doc-drawer-badge">{documents.length} {t.sourcesDrawer.filesCount}</span>
         </div>
@@ -144,12 +108,10 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           className={`doc-drawer-dropzone ${isDragging ? "dragging" : ""} ${
             isBusy ? "uploading" : ""
           }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          {...dropHandlers}
           onClick={(e) => {
             if (e.target === fileInputRef.current) return;
-            if (!isBusy) fileInputRef.current?.click();
+            openPicker();
           }}
           role="button"
           tabIndex={0}
@@ -165,7 +127,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           />
 
           <div className="doc-dropzone-icon">
-            <UploadCloudIcon size={18} color="var(--accent-primary, #2563eb)" />
+            <UploadCloudIcon size={18} color="var(--accent-primary)" />
           </div>
           <p className="doc-dropzone-text">
             {isBusy ? t.workspace.placeholderProcessing : t.sourcesDrawer.dropzoneIdle}
@@ -269,7 +231,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                           className="doc-btn-open-pdf"
                           title={t.sourcesDrawer.openInReader}
                         >
-                          <FileTextIcon size={12} color="#60a5fa" />
+                          <FileTextIcon size={12} color="var(--accent-text)" />
                           <span>{t.sourcesDrawer.viewPdf}</span>
                         </button>
                       )}

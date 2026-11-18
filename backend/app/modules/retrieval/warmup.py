@@ -21,6 +21,20 @@ async def warm_chunk_tokenizer() -> None:
         logger.warning(f"Chunk tokenizer warm-up skipped: {type(exc).__name__}: {str(exc)[:120]}")
 
 
+async def warm_guard() -> None:
+    """One guard call on a fixed harmless message when the server starts (about 0.0001 dollar). The first call after a start was slower than the
+    guard's 3 s deadline (behavior check 18/11/2026, E01: 3.01 s, "unchecked"), so the first user message went through without its safety label."""
+    if not settings.GUARD_ENABLED:
+        return
+    from app.modules.query_router import guard
+
+    try:
+        verdict = await guard.classify("Hello", [])
+        logger.info(f"Guard warm in {verdict.seconds:.1f}s" + (f" ({verdict.error})" if verdict.error else ""))
+    except Exception as exc:  # the first message pays it instead
+        logger.warning(f"Guard warm-up skipped: {type(exc).__name__}: {str(exc)[:120]}")
+
+
 async def warm_models() -> None:
     if not settings.PRELOAD_MODELS:
         return

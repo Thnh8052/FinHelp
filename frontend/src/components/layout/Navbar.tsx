@@ -2,35 +2,24 @@ import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../common/LanguageToggle";
+import { ThemeToggle } from "../common/ThemeToggle";
 import { UserDropdown } from "../auth/UserDropdown";
-import { FileTextIcon, MenuIcon, TableIcon, UserIcon } from "../common/Icons";
-import { FinHelpLogo } from "../common/FinHelpLogo";
+import { ChevronRightIcon, MenuIcon, UserIcon } from "../common/Icons";
 import "./layout.css";
 
 interface NavbarProps {
   notebookTitle: string;
-  sourcesCount?: number;
-  isSourcesOpen?: boolean;
-  onToggleSources?: () => void;
-  isSplitViewOpen?: boolean;
-  onToggleSplitView?: () => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   onOpenAuthModal: () => void;
-  onNavigateHome?: () => void;
 }
 
+/** The top bar of the work area: sidebar button, "Workspace › chat title", theme, language, account. */
 export const Navbar: React.FC<NavbarProps> = ({
   notebookTitle,
-  sourcesCount = 0,
-  isSourcesOpen = false,
-  onToggleSources,
-  isSplitViewOpen = false,
-  onToggleSplitView,
   isSidebarOpen = true,
   onToggleSidebar,
   onOpenAuthModal,
-  onNavigateHome,
 }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -47,11 +36,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const isAdmin = user?.role === "admin";
+  const title = notebookTitle || t.nav.defaultTitle;
 
   return (
     <header className="navbar">
-      {/* Left: App Logo & Workspace Title */}
-      <div className="navbar-brand">
+      <div className="navbar-crumb-box">
         {onToggleSidebar && (
           <button
             type="button"
@@ -60,75 +49,28 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`navbar-sidebar-btn ${isSidebarOpen ? "active" : ""}`}
             title={t.nav.toggleSidebar}
             aria-label={t.nav.toggleSidebar}
+            aria-expanded={isSidebarOpen}
           >
             <MenuIcon size={16} />
           </button>
         )}
-        <button type="button" className="navbar-brand-home" onClick={onNavigateHome} title={t.nav.returnHome} aria-label={t.nav.returnHome}>
-          <FinHelpLogo size="sm" showText={false} />
-        </button>
-        <div className="navbar-brand-info">
-          <div className="navbar-brand-row">
-            <span
-              className="navbar-brand-title cursor-pointer hover:text-blue-400 transition-colors"
-              onClick={onNavigateHome}
-              title={t.nav.returnHome}
-            >
-              FinHelp
-            </span>
-            <span className="navbar-version-badge">V3</span>
-          </div>
-          <div className="navbar-brand-subtitle">
-            <span className="navbar-status-dot" />
-            <span className="navbar-notebook-title" title={notebookTitle}>
-              {notebookTitle || t.nav.defaultTitle}
-            </span>
-          </div>
+        <div className="navbar-crumb">
+          <span className="navbar-crumb-root">{t.nav.breadcrumbRoot}</span>
+          <ChevronRightIcon size={14} />
+          <h1 className="navbar-crumb-title" title={title}>{title}</h1>
         </div>
+        {!user && <span className="navbar-session-note">{t.nav.sessionOnly}</span>}
       </div>
 
-      {/* Right: Workspace & Account Controls */}
       <div className="navbar-actions">
-        {/* Toggle Sources Drawer Button */}
-        {onToggleSources && (
-          <button
-            type="button"
-            id="btn-toggle-sources"
-            onClick={onToggleSources}
-            className={`navbar-action-btn ${isSourcesOpen ? "active" : ""}`}
-            title={t.nav.toggleFilings}
-          >
-            <FileTextIcon size={14} color="var(--accent-primary)" />
-            <span className="navbar-btn-text">{t.nav.filings}: <strong>{sourcesCount}</strong></span>
-            <span className={`navbar-source-indicator ${sourcesCount > 0 ? "ready" : ""}`} />
-          </button>
-        )}
-
-        {/* Toggle PDF Split-View Button */}
-        {onToggleSplitView && (
-          <button
-            type="button"
-            id="btn-toggle-splitview"
-            onClick={onToggleSplitView}
-            className={`navbar-action-btn split-toggle ${isSplitViewOpen ? "active" : ""}`}
-            title={isSplitViewOpen ? t.nav.closeReader : t.nav.openReader}
-            aria-label={t.nav.toggleReader}
-          >
-            <TableIcon size={14} />
-            <span className="navbar-btn-text">{t.nav.splitView} [{isSplitViewOpen ? t.nav.splitViewOn : t.nav.splitViewOff}]</span>
-          </button>
-        )}
-
-        {/* Language Switcher */}
+        <ThemeToggle />
         <LanguageToggle size="sm" />
 
-        <div className="navbar-divider" />
-
-        {/* User / Auth Indicator */}
         {user ? (
           <div
             onClick={() => setDropdownOpen(!dropdownOpen)}
             className="navbar-user-chip"
+            title={user.full_name || user.username}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
@@ -146,15 +88,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </div>
         ) : (
-          <div className="navbar-guest-actions">
-            <span className="navbar-guest-badge">
-              {t.nav.guestMode}
-            </span>
-            <button onClick={onOpenAuthModal} className="navbar-login-btn">
+          // The guest's sign-in lives in the sidebar card; with the sidebar closed this button keeps it one click away
+          !isSidebarOpen && (
+            <button type="button" onClick={onOpenAuthModal} className="navbar-login-btn">
               <UserIcon size={12} />
               <span>{t.common.signIn}</span>
             </button>
-          </div>
+          )
         )}
 
         {/* Dropdown Popover */}

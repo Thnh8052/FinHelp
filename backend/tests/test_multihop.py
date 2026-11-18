@@ -258,8 +258,8 @@ async def test_flag_off_never_asks_for_then(flags, monkeypatch):
 async def test_whole_message_without_a_plan_routes_each_part_by_code(flags, monkeypatch):
     flags(whole=True)
 
-    async def no_plan(q, catalog):
-        return []
+    async def no_plan(q, catalog):  # the planner failed (a valid empty plan stops the question instead: test_empty_plan.py)
+        raise planner.PlanUnavailable("down")
 
     monkeypatch.setattr(retrieval_step, "plan_multi_doc", no_plan)
     search = FakeSearch()

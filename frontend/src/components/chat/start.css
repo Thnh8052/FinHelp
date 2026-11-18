@@ -1,0 +1,416 @@
+/* StartScreen: a chat with no question yet (Figma frame 02). Colours are tokens only: it follows the theme. */
+.start-screen {
+  width: 100%;
+  max-width: 900px;
+  padding: 28px 0 8px;
+}
+
+.start-eyebrow {
+  margin: 0;
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.start-title {
+  margin: 14px 0 8px;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+.start-lead {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+/* Three steps joined by a line; the current one is filled */
+.start-steps {
+  display: flex;
+  align-items: center;
+  margin: 32px 0 26px;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+
+.start-step {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.start-step:not(:last-child) {
+  flex: 1;
+}
+
+.start-step:not(:last-child)::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  margin: 0 28px;
+  background-color: var(--border-medium);
+}
+
+.start-step-dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.start-step.current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.start-step.current .start-step-dot,
+.start-step.done .start-step-dot {
+  background-color: var(--accent-primary);
+  color: var(--on-accent);
+}
+
+.start-step.done {
+  color: var(--text-secondary);
+}
+
+/* The card that holds the reports and the drop zone */
+.start-upload {
+  padding: 20px;
+  border: 1px solid var(--border-medium);
+  border-radius: 16px;
+  background-color: var(--bg-card);
+}
+
+.start-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 244px;
+  padding: 20px;
+  border: 1.5px dashed var(--accent-soft-border);
+  border-radius: 12px;
+  text-align: center;
+  transition: background-color var(--transition), border-color var(--transition);
+}
+
+.start-drop:hover,
+.start-drop.dragging,
+.start-strip.dragging {
+  border-color: var(--border-focus);
+  background-color: var(--accent-soft);
+}
+
+.start-drop-tile {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background-color: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.start-drop-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.start-drop-sub {
+  margin: 4px 0 16px;
+  color: var(--text-muted);
+}
+
+.start-drop-limits {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.start-drop .start-drop-limits {
+  margin-top: 10px;
+}
+
+.start-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background-color: var(--accent-primary);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--transition);
+}
+
+.start-btn:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+}
+
+.start-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Secondary button: the card already has a primary action (the files above it) */
+.start-btn.outline {
+  border-color: var(--border-strong);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.start-btn.outline:hover:not(:disabled) {
+  background-color: var(--bg-card-hover);
+}
+
+.start-btn:focus-visible,
+.start-link:focus-visible,
+.start-q:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Reports already added to this chat */
+.start-files {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.start-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-medium);
+  border-radius: 10px;
+  background-color: var(--bg-app);
+}
+
+.start-file-icon {
+  flex: none;
+  color: var(--accent-text);
+}
+
+.start-file-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.start-file-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.start-file-text small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.start-file-text .start-file-error {
+  color: var(--danger-solid);
+}
+
+.start-file-status {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  background-color: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.start-file-status.ready {
+  background-color: var(--positive-bg);
+  color: var(--positive-text);
+}
+
+.start-file-status.failed {
+  background-color: var(--negative-bg);
+  color: var(--negative-text);
+}
+
+/* Add another report / limits / manage, under the files */
+.start-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 10px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 12px;
+  transition: background-color var(--transition), border-color var(--transition);
+}
+
+.start-strip .start-drop-limits {
+  flex: 1;
+  min-width: 180px;
+}
+
+.start-link {
+  padding: 6px 4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.start-link:hover {
+  text-decoration: underline;
+}
+
+.start-under {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 4px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Example questions */
+.start-questions-title {
+  margin: 44px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.start-questions-sub {
+  margin: 4px 0 18px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.start-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+}
+
+.start-q {
+  position: relative;
+  display: block;
+  min-height: 158px;
+  padding: 18px;
+  border: 1px solid var(--border-medium);
+  border-radius: 12px;
+  background-color: var(--bg-card);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition), border-color var(--transition);
+}
+
+.start-q:hover {
+  border-color: var(--accent-soft-border);
+  background-color: var(--bg-card-hover);
+}
+
+.start-q-icon {
+  color: var(--accent-text);
+}
+
+.start-q-arrow {
+  position: absolute;
+  top: 19px;
+  right: 18px;
+  color: var(--text-muted);
+}
+
+.start-q b {
+  display: block;
+  margin: 18px 0 8px;
+  font-size: 14.5px;
+}
+
+.start-q span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.start-fine {
+  margin: 34px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .start-screen {
+    padding-top: 8px;
+  }
+
+  .start-title {
+    font-size: 26px;
+  }
+
+  .start-steps {
+    font-size: 13px;
+  }
+
+  /* only the current step keeps its words: the three do not fit in a row */
+  .start-step:not(.current) .start-step-label {
+    display: none;
+  }
+
+  .start-step:not(:last-child)::after {
+    margin: 0 12px;
+  }
+
+  .start-upload {
+    padding: 12px;
+  }
+
+  .start-drop {
+    min-height: 220px;
+  }
+
+  .start-drop-title {
+    font-size: 18px;
+  }
+
+  .start-grid {
+    gap: 12px;
+  }
+
+  .start-q {
+    min-height: 0;
+  }
+}

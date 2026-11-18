@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FinHelp – UI demo v2 (dark / light)</title>
+<style>
+/* ===== TOKENS. In the real app these live in index.css; every rule below reads colours ONLY from here. =====
+   dark  = the palette index.css has today.   light = sampled from the Figma frames 01 / 02 / 03. */
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg-app:#070a12; --bg-sidebar:#0b1120; --bg-card:#0e1526; --bg-card-hover:#131e36; --bg-input:#090e1a; --bg-elevated:#162034;
+  --bg-hover:rgba(148,163,184,.12);
+  --border-medium:#1e293b; --border-strong:#2a3956; --border-focus:#3b82f6;
+  --text-primary:#f8fafc; --text-secondary:#cbd5e1; --text-muted:#94a3b8; --text-dim:#8291a8;
+  --accent:#2563eb; --accent-hover:#1d4ed8; --on-accent:#fff; --accent-text:#60a5fa; --accent-soft:rgba(37,99,235,.16); --accent-soft-border:rgba(59,130,246,.35);
+  --accent-strong:#3b82f6;
+  --positive:#34d399; --positive-bg:rgba(16,185,129,.14); --negative:#fb7185; --negative-bg:rgba(244,63,94,.14);
+  --warncard-bg:rgba(245,158,11,.10); --warncard-border:rgba(245,158,11,.35); --warncard-text:#fbbf24;
+  --hl-bg:rgba(250,204,21,.4); --hl-line:rgba(217,119,6,.8);
+  --side-bg:#0b1120; --side-fg:#cbd5e1; --side-muted:#8291a8; --side-active:#162034; --side-card:#0e1526; --side-border:rgba(255,255,255,.08);
+  --band-bg:#0b1120; --band-fg:#f8fafc; --band-muted:#94a3b8; --band-line:rgba(255,255,255,.1); --band-tile:#162034;
+  --cta-bg:rgba(37,99,235,.12); --hero-glow:rgba(37,99,235,.22);
+  --pdf-bg:#0b0f19; --paper:#fff; --paper-text:#0f172a; --paper-muted:#64748b;
+  --shadow:0 8px 28px rgba(0,0,0,.45); --note:#f59e0b;
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-app:#f6f7fb; --bg-sidebar:#ffffff; --bg-card:#ffffff; --bg-card-hover:#f3f5fc; --bg-input:#ffffff; --bg-elevated:#eef1f8;
+  --bg-hover:rgba(17,28,50,.06);
+  --border-medium:#e5e9f2; --border-strong:#d3daea; --border-focus:#3659e3;
+  --text-primary:#111c32; --text-secondary:#34405a; --text-muted:#5b6579; --text-dim:#66718a;
+  --accent:#3659e3; --accent-hover:#2a47c2; --on-accent:#fff; --accent-text:#2a47c2; --accent-soft:#edf1ff; --accent-soft-border:#c9d4fb;
+  --accent-strong:#3659e3;
+  --positive:#0f7a4f; --positive-bg:#def5e9; --negative:#be123c; --negative-bg:#fde3e9;
+  --warncard-bg:#fff7e6; --warncard-border:#f3d9a4; --warncard-text:#8a5a00;
+  --hl-bg:rgba(250,204,21,.45); --hl-line:rgba(180,83,9,.85);
+  --side-bg:#111c32; --side-fg:#e3e8f4; --side-muted:#8e9ab3; --side-active:#22314f; --side-card:#1b2a46; --side-border:rgba(255,255,255,.08);
+  --band-bg:#111c32; --band-fg:#fff; --band-muted:#9aa7c0; --band-line:rgba(255,255,255,.12); --band-tile:#22314f;
+  --cta-bg:#edf1ff; --hero-glow:rgba(54,89,227,.10);
+  --pdf-bg:#e9edf6; --paper:#fff; --paper-text:#111c32; --paper-muted:#66718a;
+  --shadow:0 10px 30px rgba(17,28,50,.12); --note:#d97706;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg-app);color:var(--text-primary);font:14px/1.6 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+button,summary{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+a{color:inherit;text-decoration:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sr{position:absolute;left:-9999px}
+
+/* demo frame (not product) */
+.demo-bar{height:48px;display:flex;align-items:center;gap:6px;padding:0 14px;background:var(--bg-sidebar);border-bottom:1px solid var(--border-medium);position:relative;z-index:50}
+.demo-bar b{font-size:13px;margin-right:8px}
+.dt{padding:6px 12px;border-radius:8px;font-size:13px;color:var(--text-muted);white-space:nowrap}
+.dt:hover{background:var(--bg-hover)}
+.dt[aria-selected=true]{background:var(--accent-soft);color:var(--accent-text);font-weight:600}
+.sp{flex:1}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:999px;padding:2px;gap:2px}
+.seg button{padding:3px 11px;border-radius:999px;font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:5px}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.stage{height:calc(100% - 48px);position:relative}
+.page{display:none;height:100%}.page.on{display:flex}
+.nm{display:none;position:absolute;top:-9px;left:-9px;z-index:30;min-width:22px;height:20px;border-radius:10px;background:var(--note);color:#111;font:700 11px/20px Inter,sans-serif;text-align:center;padding:0 6px;box-shadow:0 0 0 2px var(--bg-app);pointer-events:none}
+body.notes .nm{display:block}
+.rel{position:relative}
+.legend{display:none;position:absolute;right:16px;bottom:16px;z-index:40;width:330px;max-height:62%;overflow:auto;background:var(--bg-card);border:1px solid var(--border-strong);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);font-size:12px;color:var(--text-secondary)}
+body.notes .legend{display:block}
+.legend h4{font-size:12px;color:var(--text-primary);margin-bottom:6px}
+.legend li{list-style:none;margin:5px 0;display:flex;gap:8px}
+.legend li i{font-style:normal;flex:none;min-width:24px;height:18px;border-radius:9px;background:var(--note);color:#111;font:700 11px/18px Inter;text-align:center;padding:0 4px}
+
+/* shared atoms */
+.logo{width:32px;height:32px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.logo svg.i{width:20px;height:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 18px;border-radius:10px;font-weight:600;border:1px solid transparent}
+.btn.p{background:var(--accent);color:var(--on-accent)}.btn.p:hover{background:var(--accent-hover)}
+.btn.o{background:var(--bg-card);border-color:var(--border-strong);color:var(--text-primary);font-weight:500}.btn.o:hover{background:var(--bg-card-hover)}
+.btn.lg{height:48px;padding:0 22px;font-size:15px}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text);font-weight:600}
+.link{color:var(--accent-text);font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.chip{font-size:12px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border-medium);border-radius:7px;padding:5px 12px;white-space:nowrap}
+.cite{display:inline-block;background:var(--accent-soft);color:var(--accent-text);border:1px solid var(--accent-soft-border);border-radius:6px;padding:3px 12px;font-size:12.5px}
+.cite:hover{border-color:var(--border-focus)}
+.lbl{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px}
+.icon-btn{width:38px;height:38px;border:1px solid var(--border-strong);border-radius:9px;display:grid;place-items:center;background:var(--bg-card)}
+.icon-btn:hover{background:var(--bg-card-hover)}
+
+/* ============ 01 HOMEPAGE ============ */
+.land{flex:1;overflow:auto;background:var(--bg-sidebar)}
+.wrap{width:min(1200px,calc(100% - 48px));margin:0 auto}
+.lnav{height:88px;display:flex;align-items:center;border-bottom:1px solid var(--border-medium);background:var(--bg-sidebar);position:sticky;top:0;z-index:20}
+.lnav .wrap{display:flex;align-items:center;gap:0}
+.lnav .brand{display:flex;align-items:center;gap:12px;font-size:24px;font-weight:700;letter-spacing:-.02em}
+.lnav .links{display:flex;gap:56px;margin-left:calc(50% - 330px - 130px);color:var(--text-muted);font-size:14px}
+.lnav .links a:hover{color:var(--text-primary)}
+.lnav .right{margin-left:auto;display:flex;align-items:center;gap:22px;font-size:14px}
+.lang{color:var(--text-dim)}.lang b{color:var(--text-primary)}
+.hero{background:radial-gradient(900px 420px at 50% 0,var(--hero-glow),transparent 70%),var(--bg-app);padding:32px 0 56px;text-align:center}
+.hero .tag{display:inline-block;background:var(--accent-soft);color:var(--accent-text);border-radius:999px;padding:6px 16px;font-size:11px;letter-spacing:.07em;font-weight:600}
+.hero h1{font-size:60px;line-height:1.2;letter-spacing:-.035em;margin:20px 0 14px;font-weight:700}
+.hero h1 em{font-style:normal;color:var(--accent-strong);display:block}
+.hero .lead{color:var(--text-muted);font-size:17px;max-width:520px;margin:0 auto 26px}
+.ctas{display:flex;gap:14px;justify-content:center}
+.fine{color:var(--text-dim);font-size:12px;margin-top:16px}
+.prev{width:min(1136px,calc(100% - 48px));height:390px;margin:44px auto 0;border:1px solid var(--border-medium);border-radius:16px;overflow:hidden;display:flex;background:var(--bg-card);box-shadow:var(--shadow);text-align:left;font-size:12px}
+.prev .pn{width:166px;background:var(--side-bg);color:var(--side-fg);padding:16px 12px}
+.prev .pn .b{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;margin:2px 4px 26px}
+.prev .pn .b .logo{width:24px;height:24px;border-radius:6px}.prev .pn .b .logo svg.i{width:14px;height:14px}
+.prev .pn .nb{background:var(--accent);color:#fff;border-radius:8px;padding:7px 12px;font-weight:600;margin-bottom:28px}
+.prev .pn small{display:block;font-size:10px;color:var(--side-muted);letter-spacing:.06em;margin:0 6px 8px}
+.prev .pn .ca{background:var(--side-active);border-radius:8px;padding:8px 10px;margin-bottom:12px}.prev .pn .ca span{display:block;font-size:10px;color:var(--side-muted)}
+.prev .pc{flex:1;border-right:1px solid var(--border-medium);min-width:0}
+.prev .pt{height:53px;border-bottom:1px solid var(--border-medium);display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-weight:600;font-size:13px}
+.prev .pt span{font-weight:400;font-size:10.5px;background:var(--bg-elevated);border-radius:5px;padding:4px 9px;color:var(--text-muted)}
+.prev .pb{padding:18px 20px}
+.prev .pq{background:var(--accent-soft);border:1px solid var(--accent-soft-border);border-radius:9px;padding:12px;margin-bottom:14px}
+.prev .pa{border:1px solid var(--border-medium);border-radius:10px;padding:14px;background:var(--bg-card)}
+.prev .pa h5{font-size:16px;margin:6px 0 2px}.prev .pa p{color:var(--text-muted);margin-bottom:10px}
+.prev table{width:100%;border-collapse:collapse;font-size:11px}.prev th{font-size:9px;letter-spacing:.06em;text-align:left;color:var(--text-muted);background:var(--bg-elevated);padding:8px 10px}.prev td{padding:9px 10px;border-top:1px solid var(--border-medium)}
+.prev .pr{width:336px;background:var(--bg-app)}
+.prev .pr .pt{background:var(--bg-sidebar)}
+.prev .pr .pp{margin:16px 18px;background:var(--paper);color:var(--paper-text);border-radius:8px;padding:20px;height:300px;box-shadow:var(--shadow)}
+.prev .pp h5{font-size:15px;margin:14px 0 2px}.prev .pp .rw{display:flex;padding:8px 6px;font-size:11px}.prev .pp .rw span:first-child{flex:1}.prev .pp .rw span{width:56px;text-align:right}
+.prev .pp .rw.h{background:#e6ecff;border-left:3px solid #3659e3;font-weight:700;margin:14px -4px 6px}
+.prev-note{text-align:center;color:var(--text-dim);font-size:11px;letter-spacing:.07em;margin:16px 0 0;text-transform:uppercase}
+.sec{padding:56px 0}
+.sec.alt{background:var(--bg-app)}
+.sec h2{font-size:36px;letter-spacing:-.025em;line-height:1.2;font-weight:700}
+.sec .sub{color:var(--text-muted);margin-top:8px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);margin-top:48px}
+.step{padding:0 40px;border-left:1px solid var(--border-medium)}
+.step:first-child{padding-left:0;border-left:0}
+.step .n{display:inline-grid;place-items:center;min-width:35px;height:29px;border-radius:7px;background:var(--accent-soft);color:var(--accent-text);font-size:12px;font-weight:700;vertical-align:top;margin-right:12px}
+.step h3{display:inline-block;font-size:20px;line-height:29px}
+.step p{margin:12px 0 0 47px;color:var(--text-muted);font-size:13.5px}
+.cap-head{display:flex;justify-content:space-between;align-items:flex-end}
+.cap-head .sub{max-width:313px;margin:0 0 6px}
+.caps{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:36px}
+.cap{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:16px;padding:24px;display:flex;flex-direction:column}
+.cap .h{display:flex;gap:16px}
+.cap .ic{width:40px;height:40px;border-radius:10px;background:var(--accent-soft);color:var(--accent-text);display:grid;place-items:center;flex:none}
+.cap h3{font-size:20px}.cap .h p{color:var(--text-muted);font-size:13px}
+.cap .pane{margin-top:26px;background:var(--bg-app);border:1px solid var(--border-medium);border-radius:12px;padding:18px;flex:1}
+.bar{display:flex;align-items:center;gap:16px;margin-top:18px;font-size:13px}.bar span:first-child{width:96px;font-weight:500}
+.bar .t{flex:1;height:19px;position:relative}.bar .t i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--accent)}
+.bar .t i.l{background:var(--accent);opacity:.4}
+.bar b{width:44px;font-weight:600;color:var(--accent-text)}
+.cap .foot{margin-top:18px;color:var(--text-dim);font-size:12px}
+.qbox{background:var(--bg-app);border:1px solid var(--border-medium);border-radius:10px;padding:10px 14px;font-size:13px}
+.warn{margin-top:14px;background:var(--warncard-bg);border:1px solid var(--warncard-border);border-radius:10px;padding:14px;display:flex;gap:12px;font-size:12.5px}
+.warn b{color:var(--warncard-text);display:block;font-size:13px}.warn p{color:var(--text-muted)}.warn .link{margin-top:12px}
+.warn svg.i{color:var(--warncard-text);margin-top:2px}
+.band{background:var(--band-bg);color:var(--band-fg);padding:44px 0}
+.band .wrap{display:grid;grid-template-columns:1fr 1fr;gap:60px}
+.band .eyebrow{color:#aebcff;font-size:11px}
+.band h2{font-size:36px;line-height:1.25;margin:14px 0 22px}
+.band p{color:var(--band-muted);font-size:14px;max-width:300px}
+.trow{display:flex;gap:18px;padding:0 0 22px;margin-bottom:18px;border-bottom:1px solid var(--band-line)}
+.trow:last-child{border:0;margin:0;padding:0}
+.trow .tt{width:36px;height:36px;border-radius:9px;background:var(--band-tile);display:grid;place-items:center;flex:none;color:#cfd8ff}
+.trow b{display:block;font-size:16px}.trow span{color:var(--band-muted);font-size:13px}
+.faq{display:grid;grid-template-columns:5fr 7fr;gap:60px}
+.faq h2{font-size:34px}
+details.fq{border-bottom:1px solid var(--border-medium);padding:18px 0}
+details.fq:first-child{padding-top:0}
+details.fq summary{list-style:none;display:flex;justify-content:space-between;align-items:center;font-size:16px;font-weight:600}
+details.fq summary::-webkit-details-marker{display:none}
+details.fq summary svg{transition:transform .15s}
+details.fq[open] summary .plus{display:none}details.fq:not([open]) summary .minus{display:none}
+details.fq p{margin-top:10px;color:var(--text-muted);font-size:13.5px;max-width:390px}
+.cta{background:var(--cta-bg);text-align:center;padding:40px 0 34px}
+.cta h2{font-size:40px;letter-spacing:-.025em}.cta p{color:var(--text-muted);font-size:17px;margin:6px 0 24px}
+.lfoot{padding:28px 0 22px;font-size:13px}
+.lfoot .top{display:flex;align-items:center;gap:20px;padding-bottom:18px;border-bottom:1px solid var(--border-medium)}
+.lfoot .brand{display:flex;align-items:center;gap:11px;font-size:22px;font-weight:700}
+.lfoot .brand .logo{width:30px;height:30px}
+.lfoot .tl{color:var(--text-muted)}.lfoot .fl{margin-left:auto;display:flex;gap:60px;color:var(--text-muted)}
+.lfoot .bot{display:flex;justify-content:space-between;color:var(--text-dim);font-size:12px;padding-top:16px}
+
+/* ============ WORKSPACE shell (02 + 03) ============ */
+.side{width:232px;flex:none;background:var(--side-bg);color:var(--side-fg);border-right:1px solid var(--side-border);display:flex;flex-direction:column;padding:28px 16px 16px}
+.side .brand{display:flex;align-items:center;gap:10px;font-size:25px;font-weight:700;letter-spacing:-.02em;padding:0 8px;color:#fff}
+.side .brand-sub{font-size:10px;letter-spacing:.07em;color:var(--side-muted);padding:10px 9px 22px;text-transform:uppercase}
+.side .newb{display:flex;align-items:center;gap:10px;height:44px;border-radius:10px;background:var(--accent);color:#fff;font-weight:600;padding:0 14px}
+.side .newb:hover{background:var(--accent-hover)}
+.side .srch{display:flex;align-items:center;gap:11px;height:40px;margin-top:24px;padding:0 10px;border-radius:9px;color:var(--side-fg);width:100%}
+.side .srch kbd{margin-left:auto;font:11px Inter;color:var(--side-muted)}
+.side .srch:hover,.side .nav:hover{background:rgba(255,255,255,.06)}
+.side .sec2{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--side-muted);padding:22px 9px 8px}
+.side .nav{display:flex;align-items:center;gap:11px;height:42px;padding:0 14px;border-radius:9px;width:100%;color:var(--side-fg)}
+.side .nav.act{background:var(--side-active);color:#fff;font-weight:600}
+.side .rec{display:block;width:100%;text-align:left;padding:10px 14px;border-radius:9px;margin-top:2px}
+.side .rec.act{background:var(--side-active)}
+.side .rec b{display:block;font-weight:500;color:#fff}.side .rec small{color:var(--side-muted);font-size:12px}
+.side .empty{padding:10px 9px;color:var(--side-muted);font-size:12.5px;line-height:1.7}
+.side .grow{flex:1}
+.guest{background:var(--side-card);border-radius:12px;padding:14px;font-size:12px;color:var(--side-muted);line-height:1.5}
+.guest b{display:block;color:#fff;font-size:13px;margin:12px 0 4px}
+.guest a{display:inline-flex;gap:6px;align-items:center;margin-top:10px;color:#fff;font-weight:500}
+.me{display:flex;align-items:center;gap:10px;padding:18px 8px 0;margin-top:16px;border-top:1px solid var(--side-border);color:#fff}
+.me small{display:block;color:var(--side-muted);line-height:1.2;margin-top:2px}
+.me .down{margin-left:auto;color:var(--side-muted)}
+
+.col{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{height:80px;flex:none;display:flex;align-items:center;gap:12px;padding:0 32px;border-bottom:1px solid var(--border-medium);background:var(--bg-sidebar)}
+.crumb{color:var(--text-muted);display:flex;align-items:center;gap:12px}
+.crumb b{color:var(--text-primary);font-size:18px;font-weight:600;letter-spacing:-.01em}
+.tag{font-size:12px;color:var(--text-muted);background:var(--bg-elevated);border-radius:6px;padding:3px 10px}
+.sess{color:var(--text-muted);font-size:13px;margin:0 auto}
+.lsw{display:inline-flex;background:var(--bg-app);border-radius:10px;padding:4px;gap:0}
+[data-theme="dark"] .lsw{background:var(--bg-elevated)}
+.lsw button{padding:0 14px;height:32px;border-radius:7px;font-size:13px;font-weight:600;color:var(--text-muted)}
+.lsw button.on{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+/* 02 start analysis */
+.start{flex:1;overflow:auto;background:var(--bg-app);padding:60px 0 40px}
+.start .in{width:min(900px,calc(100% - 64px));margin:0 auto}
+.start h1{font-size:36px;letter-spacing:-.025em;line-height:1.25;margin:14px 0 8px}
+.start .lead{color:var(--text-muted);font-size:16px}
+.stp{display:flex;align-items:center;margin:32px 0 26px;font-size:14px}
+.stp .s{display:flex;align-items:center;gap:11px;color:var(--text-muted)}
+.stp .s i{font-style:normal;width:24px;height:24px;border-radius:50%;background:var(--bg-elevated);color:var(--text-muted);display:grid;place-items:center;font-size:12px}
+.stp .s.on{color:var(--text-primary);font-weight:600}.stp .s.on i{background:var(--accent);color:#fff}
+.stp .ln{flex:1;height:1px;background:var(--border-medium);margin:0 28px}
+.upl{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:16px;padding:20px}
+.drop{border:1.5px dashed var(--accent-soft-border);border-radius:12px;height:244px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;text-align:center;transition:background .15s,border-color .15s}
+.drop.drag,.drop:hover{background:var(--accent-soft);border-color:var(--border-focus)}
+.drop .tile{width:56px;height:56px;border-radius:14px;background:var(--accent-soft);color:var(--accent-text);display:grid;place-items:center;margin-bottom:16px}
+.drop .tile svg.i{width:24px;height:24px}
+.drop h3{font-size:22px;letter-spacing:-.01em}.drop p{color:var(--text-muted);margin:4px 0 16px}
+.drop small{color:var(--text-dim);font-size:12px;margin-top:10px}
+.under{display:flex;justify-content:space-between;margin:14px 4px 0;font-size:13px;color:var(--text-muted)}
+.under span{display:inline-flex;gap:8px;align-items:center}
+.qs h3{font-size:20px;margin-top:44px}.qs .sub{color:var(--text-muted);font-size:14px;margin:4px 0 18px}
+.qgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.qc{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:12px;padding:18px;text-align:left;min-height:158px;position:relative;display:block}
+.qc:hover{border-color:var(--accent-soft-border);background:var(--bg-card-hover)}
+.qc .ic{color:var(--accent-text)}.qc .ar{position:absolute;right:18px;top:19px;color:var(--text-muted)}
+.qc b{display:block;margin:18px 0 8px;font-size:14.5px}.qc span{color:var(--text-muted);font-size:13px;display:block;max-width:190px}
+.start .fine{margin-top:34px}
+
+/* 03 answer + sources */
+.body{flex:1;min-height:0;display:flex}
+.chat{width:760px;flex:none;display:flex;flex-direction:column;background:var(--bg-app)}
+.scope{height:72px;flex:none;display:flex;align-items:center;gap:12px;padding:0 28px;border-bottom:1px solid var(--border-medium);background:var(--bg-sidebar)}
+.scope .tx{font-weight:500;margin-right:20px}
+.stream{flex:1;overflow:auto;padding:24px 28px 0}
+.q{background:var(--accent-soft);border:1px solid var(--accent-soft-border);border-radius:12px;padding:16px 18px;font-size:15px;line-height:1.55;margin-bottom:22px}
+.ans{background:var(--bg-card);border:1px solid var(--border-medium);border-radius:16px;padding:20px 20px 22px}
+.ah{display:flex;align-items:center;gap:11px;margin-bottom:26px;font-weight:600}
+.ah .av{width:28px;height:28px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center}
+.badge-ok{margin-left:auto;display:inline-flex;gap:8px;align-items:center;font-size:12px;font-weight:500;color:var(--positive);background:var(--positive-bg);border-radius:7px;padding:5px 12px}
+.ans h2{font-size:26px;letter-spacing:-.02em;margin-bottom:8px}
+.ans .sum{color:var(--text-muted);font-size:15px;max-width:430px;margin-bottom:22px}
+.tbl{border:1px solid var(--border-medium);border-radius:10px;background:var(--bg-card)}
+.tbl table{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);font-weight:600;text-align:left;padding:12px 14px;background:var(--bg-app)}
+.tbl th:first-child{border-top-left-radius:9px}.tbl th:last-child{border-top-right-radius:9px}
+.tbl td{padding:16px 14px;border-top:1px solid var(--border-medium);font-variant-numeric:tabular-nums}
+.tbl td.pos{color:var(--positive);font-weight:600}
+.fn{font-size:12px;color:var(--text-muted);margin:14px 0 22px}
+.refs{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ref{display:flex;align-items:center;gap:12px;text-align:left;padding:14px 12px;border:1px solid var(--border-medium);border-radius:10px;background:var(--bg-card);width:100%}
+.ref:hover{background:var(--bg-card-hover)}
+.ref.act{background:var(--accent-soft);border-color:var(--accent-soft-border)}
+.ref .n{width:24px;height:24px;border-radius:6px;background:var(--accent-soft);color:var(--accent-text);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+.ref.act .n{background:var(--accent);color:#fff}
+.ref b{display:block;font-size:13px;font-weight:600}.ref small{color:var(--text-muted);font-size:12px}
+.ref .ar{margin-left:auto;color:var(--accent-text)}
+.acts{display:flex;align-items:center;gap:30px;margin:16px 4px 0;color:var(--text-muted);font-size:13px}
+.acts button{display:inline-flex;gap:9px;align-items:center}.acts button:hover{color:var(--text-primary)}
+.acts .d{margin-left:auto;font-size:12px;color:var(--text-dim)}
+.sugg{margin:18px 0 0}
+.sugg button{border:1px solid var(--border-strong);background:var(--bg-card);border-radius:8px;padding:6px 12px;font-size:12.5px;color:var(--text-secondary);display:inline-flex;gap:8px;align-items:center}
+.sugg button:hover{background:var(--bg-card-hover)}
+.comp{padding:14px 28px 12px;background:var(--bg-app)}
+.box{border:1px solid var(--border-strong);background:var(--bg-input);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px;min-height:76px;justify-content:space-between}
+.box:focus-within{border-color:var(--border-focus)}
+.box .r{display:flex;align-items:center;gap:10px}
+.box input{flex:1;background:none;border:0;color:var(--text-primary);font:inherit;font-size:14.5px}.box input:focus{outline:none}
+.box input::placeholder{color:var(--text-muted)}
+.send{width:36px;height:36px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;margin:-8px -6px -8px 0}
+.sl{display:flex;gap:10px;align-items:center;color:var(--text-muted);font-size:12.5px}
+.hint{display:flex;justify-content:space-between;font-size:11.5px;color:var(--text-dim);margin:10px 0 0}
+.pdf{width:448px;flex:none;display:flex;flex-direction:column;background:var(--bg-sidebar);border-left:1px solid var(--border-medium)}
+.pdfh{height:72px;flex:none;display:flex;align-items:center;gap:12px;padding:0 22px;border-bottom:1px solid var(--border-medium)}
+.pdfh b{font-size:17px;margin-right:40px}
+.sel{display:inline-flex;align-items:center;gap:8px;height:31px;padding:0 13px;border-radius:7px;background:var(--bg-elevated);font-size:12.5px;color:var(--text-muted)}
+.file{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--border-medium)}
+.file b{display:block;font-size:14px;font-weight:600}.file small{color:var(--text-muted);font-size:12px}
+.pager{display:flex;align-items:center;gap:10px;height:34px;padding:0 20px 0 18px;margin-top:-1px;border-bottom:1px solid var(--border-medium);color:var(--text-muted);font-size:12px;height:56px}
+.pager input{width:41px;height:23px;text-align:center;border:1px solid var(--border-strong);border-radius:5px;background:var(--bg-input);color:var(--text-primary);font:inherit}
+.hlb{display:flex;gap:11px;align-items:center;background:var(--accent-soft);border:1px solid var(--accent-soft-border);color:var(--accent-text);border-radius:9px;padding:10px 11px;font-size:12.5px;margin:18px 20px 0}
+.hlb i{font-style:normal;width:25px;height:23px;border-radius:6px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:11px}
+.pv{flex:1;overflow:auto;background:var(--pdf-bg);padding:18px 20px 0;margin-top:16px}
+.paper{background:var(--paper);color:var(--paper-text);border-radius:8px;padding:28px 29px 16px;box-shadow:var(--shadow);font-size:12px;min-height:568px}
+.paper small{color:var(--paper-muted);font-size:10px;letter-spacing:.04em}
+.paper hr{border:0;border-top:2px solid var(--paper-text);margin:12px 0}
+.paper h3{font-size:26px;margin:22px 0 2px}
+.paper h4{font-size:20px;margin:30px 0 6px;line-height:1.3}
+.paper .r{display:flex;padding:10px 8px;font-size:12px}
+.paper .r span:first-child{flex:1}.paper .r span{width:70px;text-align:right}
+.paper .r.hl{background:#e6ecff;border-left:3px solid #3659e3;font-weight:700;margin:6px -8px;padding-left:16px;padding-right:16px}
+.paper .r.l{border-top:1px solid #e2e8f0}
+.pnote{margin:18px 20px 0;border:1px solid var(--border-medium);border-radius:10px;padding:13px 14px;font-size:12px;color:var(--text-muted);display:flex;gap:12px;background:var(--bg-card)}
+.pnote b{display:block;color:var(--text-primary);font-size:13px;margin-bottom:3px}
+.pfoot{font-size:11.5px;color:var(--text-dim);padding:14px 25px 16px}
+
+/* ============ 04 AUTH (no Figma frame: same language, built from the existing three pages) ============ */
+.auth{flex:1;display:grid;place-items:center;background:radial-gradient(900px 420px at 50% -10%,var(--hero-glow),transparent 70%),var(--bg-app);overflow:auto;padding:30px}
+.acard{width:420px;background:var(--bg-card);border:1px solid var(--border-medium);border-radius:18px;padding:30px;box-shadow:var(--shadow)}
+.acard .brand{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:700;margin-bottom:18px}
+.acard h1{font-size:24px;letter-spacing:-.02em}.acard .d{color:var(--text-muted);margin:4px 0 18px}
+.field{display:block;margin-bottom:14px;font-size:12.5px;color:var(--text-secondary);font-weight:500}
+.field .row{display:flex;justify-content:space-between}
+.field input{display:block;width:100%;margin-top:6px;height:42px;border-radius:9px;border:1px solid var(--border-strong);background:var(--bg-input);color:var(--text-primary);padding:0 12px;font:inherit}
+.field input:focus{outline:none;border-color:var(--border-focus)}
+.err{color:var(--negative);background:var(--negative-bg);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px}
+.acard .foot{text-align:center;margin-top:16px;font-size:13px;color:var(--text-muted)}
+.asub{display:none}.asub.on{display:block}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="i-cash" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+<symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+<symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+<symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17.5v.01"/></symbol>
+<symbol id="i-split" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 4v16"/></symbol>
+</defs></svg>
+
+<div class="demo-bar" role="tablist">
+  <b>FinHelp · UI demo v2</b>
+  <button class="dt" role="tab" aria-selected="true"  data-page="home">01 · Homepage</button>
+  <button class="dt" role="tab" aria-selected="false" data-page="start">02 · Start analysis</button>
+  <button class="dt" role="tab" aria-selected="false" data-page="answer">03 · Answer + sources</button>
+  <button class="dt" role="tab" aria-selected="false" data-page="auth">04 · Đăng nhập / đăng ký</button>
+  <span class="sp"></span>
+  <button class="dt" id="notes-btn" aria-pressed="false" style="border:1px solid var(--border-strong)">Hiện chú thích</button>
+  <div class="seg" role="group" aria-label="Theme">
+    <button data-theme-set="dark" aria-pressed="true"><svg class="i"><use href="#i-moon"/></svg>Dark</button>
+    <button data-theme-set="light" aria-pressed="false"><svg class="i"><use href="#i-sun"/></svg>Light</button>
+  </div>
+</div>
+
+<div class="stage">
+
+<!-- ====================== 01 HOMEPAGE ====================== -->
+<section class="page on" id="p-home">
+ <div class="land">
+  <div class="lnav rel"><div class="wrap rel">
+    <span class="nm" style="top:-6px;left:150px">H1</span>
+    <a class="brand" data-go="home"><span class="logo"><svg class="i"><use href="#i-logo"/></svg></span>FinHelp</a>
+    <div class="links"><a>How it works</a><a>Features</a><a>Trust</a></div>
+    <div class="right">
+      <span class="lang"><b>EN</b> &nbsp;/&nbsp; VI</span>
+      <button class="icon-btn theme-toggle" aria-label="Đổi giao diện"><svg class="i"><use href="#i-sun"/></svg></button>
+      <a data-go="auth">Sign in</a>
+      <button class="btn p" data-go="start">Get started</button>
+    </div>
+  </div></div>
+
+  <div class="hero rel">
+    <span class="nm" style="top:30px;left:24px">H2</span>
+    <span class="tag">FINANCIAL RESEARCH, WITH CLARITY</span>
+    <h1>From financial reports<em>to confident answers.</em></h1>
+    <p class="lead">Turn complex filings into clear, source-backed insights. Ask in plain language. Get answers you can actually trace.</p>
+    <div class="ctas"><button class="btn p lg" data-go="start">Start analyzing <svg class="i"><use href="#i-arrow"/></svg></button><button class="btn o lg" data-go="answer">Explore demo</button></div>
+    <div class="fine">No account needed to try · PDF reports · English &amp; Vietnamese</div>
+
+    <div class="prev rel">
+      <span class="nm">H3</span>
+      <div class="pn"><div class="b"><span class="logo"><svg class="i"><use href="#i-logo"/></svg></span>FinHelp</div><div class="nb">+&nbsp; New analysis</div><small>RECENT</small><div class="ca">Revenue comparison<span>Demo workspace</span></div><div style="padding:0 10px;color:var(--side-muted)">Cash flow overview</div></div>
+      <div class="pc"><div class="pt">Revenue comparison<span>2 reports selected · FY2023</span></div>
+        <div class="pb"><div class="pq">Compare revenue growth for these two companies in FY2023.</div>
+          <div class="pa"><span style="color:var(--accent-text);font-weight:600">FinHelp</span><h5>Company A grew faster in FY2023.</h5><p>26.1% revenue growth vs. 5.7% for Company B.</p>
+            <table><tr><th>COMPANY</th><th>FY2022</th><th>FY2023</th><th>YOY</th><th>SOURCE</th></tr><tr><td><b>Company A</b></td><td>$14,200M</td><td>$17,902M</td><td style="color:var(--positive);font-weight:600">+26.1%</td><td style="color:var(--accent-text)">[1] p.45</td></tr><tr><td><b>Company B</b></td><td>$28,500M</td><td>$30,120M</td><td style="color:var(--positive);font-weight:600">+5.7%</td><td style="color:var(--accent-text)">[2] p.32</td></tr></table></div></div></div>
+      <div class="pr"><div class="pt">Source preview<span style="background:none;color:var(--accent-text)">[1] Page 45</span></div>
+        <div class="pp" style="margin:16px 18px;background:var(--paper);color:var(--paper-text);border-radius:8px;padding:20px;height:300px;box-shadow:var(--shadow)"><span style="font-size:9px;color:var(--paper-muted);letter-spacing:.05em">COMPANY A · ANNUAL REPORT 2023</span><hr style="border:0;border-top:1px solid var(--paper-text);margin:10px 0 16px"><h5>Consolidated statements<br>of operations</h5><span style="font-size:10px;color:var(--paper-muted)">USD in millions</span><div class="rw" style="margin-top:18px;font-weight:700"><span></span><span>FY2023</span><span>FY2022</span></div><div class="rw h"><span>Revenue</span><span>17,902</span><span>14,200</span></div><div class="rw"><span>Cost of revenue</span><span>10,473</span><span>8,781</span></div></div></div>
+    </div>
+    <div class="prev-note">Product preview · Example data</div>
+  </div>
+
+  <section class="sec rel"><span class="nm" style="left:24px">H4</span><div class="wrap">
+    <h2>A simpler path from question to insight.</h2><p class="sub">Keep your research moving, without losing the source.</p>
+    <div class="steps">
+      <div class="step"><span class="n">01</span><h3>Bring your reports</h3><p>Upload a PDF annual report, Form 10-K<br>or financial statement.</p></div>
+      <div class="step"><span class="n">02</span><h3>Ask what matters</h3><p>Explore revenue, cash flow, margins<br>and disclosures in plain language.</p></div>
+      <div class="step"><span class="n">03</span><h3>See the evidence</h3><p>Open page-level citations and read<br>the original passage alongside the answer.</p></div>
+    </div></div></section>
+
+  <section class="sec alt rel"><span class="nm" style="left:24px">H5</span><div class="wrap">
+    <div class="eyebrow">Made for financial research</div>
+    <div class="cap-head"><h2>More clarity. Less digging.</h2><p class="sub">From the big picture to the details in the footnotes.</p></div>
+    <div class="caps">
+      <div class="cap"><div class="h"><span class="ic"><svg class="i"><use href="#i-logo"/></svg></span><div><h3>Compare performance, with context.</h3><p>Bring periods, units and source references into one view.</p></div></div>
+        <div class="pane"><div class="lbl">FY2023 revenue growth</div>
+          <div class="bar"><span>Company A</span><span class="t"><i style="width:100%"></i></span><b>26.1%</b></div>
+          <div class="bar"><span>Company B</span><span class="t"><i class="l" style="width:22%"></i></span><b style="color:var(--text-muted)">5.7%</b></div></div>
+        <div class="foot">Revenue, margins, cash flows and financial footnotes</div></div>
+      <div class="cap rel"><span class="nm">H6</span><div class="h"><span class="ic"><svg class="i"><use href="#i-file"/></svg></span><div><h3>No source? No assumption.</h3><p>Know when the selected reports cannot support an answer.</p></div></div>
+        <div class="pane"><div class="qbox">“What was Amazon’s revenue in FY2015?”</div>
+          <div class="warn"><svg class="i"><use href="#i-warn"/></svg><div><b>The selected filing covers FY2018, not FY2015.</b><p>Add the FY2015 report or ask about the available period.</p><a class="link">Add another report <svg class="i"><use href="#i-arrow"/></svg></a></div></div></div>
+        <div class="foot">Ask in English or Vietnamese. Keep the same source context.</div></div>
+    </div></div></section>
+
+  <section class="band rel"><span class="nm" style="left:24px">H7</span><div class="wrap">
+    <div><div class="eyebrow">Built around the source</div><h2>An answer is only as useful<br>as the evidence behind it.</h2><p>Stay in control of what the assistant reads and how you verify the result.</p></div>
+    <div>
+      <div class="trow"><span class="tt"><svg class="i"><use href="#i-check"/></svg></span><div><b>Selected reports only</b><span>Know exactly which filings are in scope.</span></div></div>
+      <div class="trow"><span class="tt"><svg class="i"><use href="#i-check"/></svg></span><div><b>Page-level references</b><span>Move from a figure to its original context.</span></div></div>
+      <div class="trow"><span class="tt"><svg class="i"><use href="#i-check"/></svg></span><div><b>Session-isolated documents</b><span>Keep guest uploads within the current session.</span></div></div>
+    </div></div></section>
+
+  <section class="sec rel"><span class="nm" style="left:24px">H8</span><div class="wrap faq">
+    <div><h2>A few things<br>you might be wondering.</h2><p class="sub" style="margin-top:28px">Clear answers, before you start.</p></div>
+    <div>
+      <details class="fq" open><summary>What can I upload?<svg class="i plus"><use href="#i-plus"/></svg><svg class="i minus"><use href="#i-minus"/></svg></summary><p>PDF annual reports, Form 10-K filings and financial statements. Guest mode supports one PDF, up to 5 MB.</p></details>
+      <details class="fq"><summary>Can I compare more than one company?<svg class="i plus"><use href="#i-plus"/></svg><svg class="i minus"><use href="#i-minus"/></svg></summary><p>Yes. Select several reports and ask one question: each figure keeps its own source.</p></details>
+      <details class="fq"><summary>How do I check the assistant’s answers?<svg class="i plus"><use href="#i-plus"/></svg><svg class="i minus"><use href="#i-minus"/></svg></summary><p>Click a citation: the original page opens beside the answer with the figure marked.</p></details>
+      <details class="fq"><summary>Is FinHelp a substitute for financial advice?<svg class="i plus"><use href="#i-plus"/></svg><svg class="i minus"><use href="#i-minus"/></svg></summary><p>No. FinHelp is research assistance, not investment advice.</p></details>
+    </div></div></section>
+
+  <section class="cta rel"><span class="nm" style="left:24px">H9</span><div class="wrap">
+    <h2>Your reports hold the answers.</h2><p>Spend less time searching for them.</p>
+    <div class="ctas"><button class="btn p lg" data-go="start">Start analyzing <svg class="i"><use href="#i-arrow"/></svg></button><button class="btn o lg" data-go="answer">Explore demo</button></div>
+    <div class="fine">Start with a PDF. No account needed to try.</div></div></section>
+
+  <footer class="lfoot"><div class="wrap">
+    <div class="top"><span class="brand"><span class="logo"><svg class="i"><use href="#i-logo"/></svg></span>FinHelp</span><span class="tl">Clarity in every filing.</span><span class="fl"><a>How it works</a><a>Features</a><a>Trust</a><a data-go="auth">Sign in</a></span></div>
+    <div class="bot"><span>© 2026 FinHelp</span><span>Research assistance, not investment advice.</span></div>
+  </div></footer>
+ </div>
+ <div class="legend"><h4>Homepage — chỗ khác code hiện tại</h4><ul>
+  <li><i>H1</i>Menu chỉ còn 3 mục (How it works / Features / Trust). Nút "Get started" + "Sign in" + EN/VI. Thêm nút đổi theme</li>
+  <li><i>H2</i>Tiêu đề mới "From financial reports to confident answers." (code đang là "Understand Financial Reports / Make Better Decisions") và 2 nút Start analyzing / Explore demo</li>
+  <li><i>H3</i>Khung xem trước sản phẩm ngay dưới hero (code: nhiều khối minh họa riêng)</li>
+  <li><i>H4</i>"How it works" gọn 3 bước ngang</li>
+  <li><i>H5</i>2 thẻ năng lực: so sánh có ngữ cảnh + "No source? No assumption"</li>
+  <li><i>H6</i>Thẻ cảnh báo khi kỳ báo cáo không có trong tài liệu</li>
+  <li><i>H7</i>Dải tin cậy nền navy, 3 dòng</li>
+  <li><i>H8</i>FAQ dạng thu gọn: phần MỚI, code chưa có</li>
+  <li><i>H9</i>Dải CTA cuối + footer gọn. Code hiện có thêm "The problem" và "Use cases": Figma bỏ cả hai</li></ul></div>
+</section>
+
+<!-- ====================== 02 START ANALYSIS ====================== -->
+<section class="page" id="p-start">
+ <aside class="side rel">
+  <span class="nm" style="top:12px;left:6px">S1</span>
+  <div class="brand"><span class="logo"><svg class="i"><use href="#i-logo"/></svg></span>FinHelp</div>
+  <div class="brand-sub">Financial intelligence</div>
+  <button class="newb"><svg class="i"><use href="#i-plus"/></svg>New analysis</button>
+  <button class="srch"><svg class="i"><use href="#i-search"/></svg>Search analyses<kbd>⌘ K</kbd></button>
+  <div class="sec2">Workspace</div>
+  <button class="nav act"><svg class="i"><use href="#i-chat"/></svg>Analyses</button>
+  <button class="nav"><svg class="i"><use href="#i-file"/></svg>Document library</button>
+  <div class="sec2" style="padding-top:34px">Recent analyses</div>
+  <div class="empty">Your research starts here.<br>Analyses will appear here.</div>
+  <div class="grow"></div>
+  <div class="guest"><svg class="i"><use href="#i-shield"/></svg><b>Your private workspace</b>Sign in to save your analyses and access more filings.<br><a data-go="auth">Sign in to save <svg class="i" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a></div>
+  <div class="me"><svg class="i" style="width:22px;height:22px"><use href="#i-user"/></svg><div><b style="font-size:14px;font-weight:600">Guest workspace</b><small>Free trial</small></div><svg class="i down"><use href="#i-down"/></svg></div>
+ </aside>
+ <div class="col">
+  <header class="top rel"><span class="nm">S2</span>
+   <span class="crumb">Workspace <svg class="i"><use href="#i-right"/></svg> <b>New analysis</b></span>
+   <span class="sess">Session-only · Not saved</span>
+   <button class="icon-btn theme-toggle" aria-label="Đổi giao diện"><svg class="i"><use href="#i-sun"/></svg></button>
+   <div class="lsw"><button class="on">EN</button><button>VI</button></div>
+  </header>
+  <div class="start"><div class="in">
+   <div class="eyebrow">Less searching. More understanding.</div>
+   <h1>Your next insight starts with a report.</h1>
+   <p class="lead">Upload a financial statement. Ask a question. Trace every answer to its source.</p>
+   <div class="stp rel"><span class="nm" style="top:-4px;left:-30px">S3</span>
+     <span class="s on"><i>1</i>Add a report</span><span class="ln"></span><span class="s"><i>2</i>Ask a question</span><span class="ln"></span><span class="s"><i>3</i>Verify the source</span></div>
+   <div class="upl rel"><span class="nm">S4</span>
+     <label class="drop" id="drop"><input type="file" accept=".pdf" class="sr">
+       <span class="tile"><svg class="i"><use href="#i-upload"/></svg></span>
+       <h3>Drop your financial report here</h3><p>Annual reports, Form 10-K and financial statements</p>
+       <span class="btn p"><svg class="i"><use href="#i-upload"/></svg>Choose PDF</span>
+       <small>PDF only · Up to 5 MB · 1 report in guest mode</small></label></div>
+   <div class="under"><span><svg class="i" style="width:15px;height:15px"><use href="#i-lock"/></svg>Documents are isolated to this session.</span><a class="link" data-go="answer">Want to explore first? Try a demo <svg class="i" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a></div>
+   <div class="qs rel"><span class="nm" style="top:34px;left:-30px">S5</span>
+     <h3>A few good questions to start with</h3><p class="sub">Add a report to ask your own question, or explore an example below.</p>
+     <div class="qgrid">
+      <a class="qc" data-go="answer"><svg class="i ic" style="width:22px;height:22px"><use href="#i-logo"/></svg><svg class="i ar"><use href="#i-arrow"/></svg><b>Compare performance</b><span>How did revenue and operating margin change year over year?</span></a>
+      <a class="qc" data-go="answer"><svg class="i ic" style="width:22px;height:22px"><use href="#i-cash"/></svg><svg class="i ar"><use href="#i-arrow"/></svg><b>Understand cash flow</b><span>What drove the change in operating cash flow?</span></a>
+      <a class="qc" data-go="answer"><svg class="i ic" style="width:22px;height:22px"><use href="#i-search"/></svg><svg class="i ar"><use href="#i-arrow"/></svg><b>Read between the lines</b><span>What key risks are disclosed in the financial footnotes?</span></a>
+     </div></div>
+   <div class="fine" style="text-align:left">Answers are grounded in your selected reports — not investment advice.</div>
+  </div></div>
+ </div>
+ <div class="legend"><h4>Start analysis — chỗ khác code hiện tại</h4><ul>
+  <li><i>S1</i>Sidebar navy ở cả dark và light, có ⌘K, mục Document library, khối "Recent analyses" trống có lời nhắn, thẻ guest ở cuối</li>
+  <li><i>S2</i>Header: breadcrumb + "Session-only · Not saved" + EN/VI. Không còn Filings / Split view</li>
+  <li><i>S3</i>Thanh 3 bước (Add a report → Ask a question → Verify the source): MỚI</li>
+  <li><i>S4</i>Ô thả PDF to ngay giữa trang. Code hiện chỉ có ô thả trong ngăn Sources kéo ra từ bên phải, màn hình trống chỉ có chữ và nút "chọn tài liệu"</li>
+  <li><i>S5</i>3 thẻ câu hỏi mẫu bấm được (code: 3 chip chữ dài sát ô nhập, chỉ chèn chữ vào ô)</li></ul></div>
+</section>
+
+<!-- ====================== 03 ANSWER + SOURCES ====================== -->
+<section class="page" id="p-answer">
+ <aside class="side rel">
+  <span class="nm" style="top:12px;left:6px">A1</span>
+  <div class="brand"><span class="logo"><svg class="i"><use href="#i-logo"/></svg></span>FinHelp</div>
+  <div class="brand-sub">Financial intelligence</div>
+  <button class="newb"><svg class="i"><use href="#i-plus"/></svg>New analysis</button>
+  <button class="srch"><svg class="i"><use href="#i-search"/></svg>Search analyses<kbd>⌘ K</kbd></button>
+  <div class="sec2">Workspace</div>
+  <button class="nav act"><svg class="i"><use href="#i-chat"/></svg>Analyses</button>
+  <button class="nav"><svg class="i"><use href="#i-file"/></svg>Document library</button>
+  <div class="sec2" style="padding-top:34px">Recent analyses</div>
+  <button class="rec act"><b>Revenue comparison</b><small>Demo · Just now</small></button>
+  <button class="rec"><b style="font-weight:500;color:var(--side-fg)">Cash flow overview</b><small>Example analysis</small></button>
+  <div class="grow"></div>
+  <div class="guest"><svg class="i"><use href="#i-shield"/></svg><b>Your private workspace</b>Sign in to save your analyses and access more filings.<br><a data-go="auth">Sign in to save <svg class="i" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a></div>
+  <div class="me"><svg class="i" style="width:22px;height:22px"><use href="#i-user"/></svg><div><b style="font-size:14px;font-weight:600">Guest workspace</b><small>Free trial</small></div><svg class="i down"><use href="#i-down"/></svg></div>
+ </aside>
+ <div class="col">
+  <header class="top rel"><span class="nm">A2</span>
+   <span class="crumb">Workspace <svg class="i"><use href="#i-right"/></svg> <b>Revenue comparison</b><span class="tag">Sample data</span></span>
+   <span class="sp"></span>
+   <button class="btn o" style="height:40px"><svg class="i"><use href="#i-dl"/></svg>Export</button>
+   <button class="icon-btn theme-toggle" aria-label="Đổi giao diện"><svg class="i"><use href="#i-sun"/></svg></button>
+   <div class="lsw"><button class="on">EN</button><button>VI</button></div>
+  </header>
+  <div class="body">
+   <div class="chat">
+    <div class="scope rel"><span class="nm">A3</span><svg class="i" style="color:var(--accent-text)"><use href="#i-file"/></svg><span class="tx">2 reports selected</span><span class="chip">Company A · FY23</span><span class="chip">Company B · FY23</span><span class="sp"></span><a class="link">Manage <svg class="i" style="width:15px;height:15px"><use href="#i-down"/></svg></a></div>
+    <div class="stream">
+     <div class="lbl">You</div>
+     <div class="q">Compare revenue growth for these two companies in FY2023. Which one grew faster?</div>
+     <div class="ans rel"><span class="nm">A4</span>
+      <div class="ah"><span class="av"><svg class="i" style="width:16px;height:16px"><use href="#i-split"/></svg></span>FinHelp<span class="badge-ok"><svg class="i" style="width:15px;height:15px"><use href="#i-check"/></svg>2 source references</span></div>
+      <h2>Company A grew faster in FY2023.</h2>
+      <p class="sum">Revenue increased 26.1%, compared with 5.7% for Company B — a difference of 20.4 percentage points.</p>
+      <div class="tbl"><table><tr><th>Company</th><th>FY2022</th><th>FY2023</th><th>YoY</th><th>Source</th></tr>
+        <tr><td><b>Company A</b></td><td>$14,200M</td><td>$17,902M</td><td class="pos">+26.1%</td><td><button class="cite">[1] p.45</button></td></tr>
+        <tr><td><b>Company B</b></td><td>$28,500M</td><td>$30,120M</td><td class="pos">+5.7%</td><td><button class="cite">[2] p.32</button></td></tr></table></div>
+      <p class="fn">USD millions · YoY = (FY2023 ÷ FY2022 − 1) × 100, rounded.</p>
+      <div class="lbl rel">Source references<span class="nm" style="top:-6px;left:-34px">A5</span></div>
+      <div class="refs">
+       <button class="ref act"><span class="n">1</span><span><b>Company_A_FY2023.pdf</b><small>p.45 · Income statement</small></span><svg class="i ar"><use href="#i-arrow"/></svg></button>
+       <button class="ref"><span class="n">2</span><span><b>Company_B_FY2023.pdf</b><small>p.32 · Financial statements</small></span><svg class="i ar"><use href="#i-arrow"/></svg></button>
+      </div></div>
+     <div class="acts rel"><span class="nm" style="left:-18px">A6</span><button><svg class="i"><use href="#i-copy"/></svg>Copy answer</button><button><svg class="i"><use href="#i-flag"/></svg>Report an issue</button><span class="d">Illustrative answer · Sample documents</span></div>
+     <div class="sugg"><button>How does the operating margin compare? <svg class="i" style="width:14px;height:14px"><use href="#i-arrow"/></svg></button></div>
+     <div style="height:12px"></div>
+    </div>
+    <div class="comp rel"><span class="nm" style="left:20px">A7</span>
+     <div class="box"><div class="r"><input placeholder="Ask a follow-up about your selected reports…" aria-label="Question"><button class="send" aria-label="Send"><svg class="i" style="width:20px;height:20px"><use href="#i-up"/></svg></button></div>
+      <div class="sl"><svg class="i" style="width:17px;height:17px"><use href="#i-plus"/></svg>2 reports in scope</div></div>
+     <div class="hint"><span>Enter to send · Shift + Enter for a new line</span><span>Check important figures against the source.</span></div></div>
+   </div>
+   <aside class="pdf rel"><span class="nm" style="top:8px;left:8px">A8</span>
+    <div class="pdfh"><b>Source preview</b><span class="sel">All reports (2) <svg class="i" style="width:12px;height:12px"><use href="#i-down"/></svg></span><span class="sp"></span><button aria-label="Close" style="color:var(--text-muted)"><svg class="i"><use href="#i-close"/></svg></button></div>
+    <div class="file"><svg class="i" style="width:22px;height:22px;color:var(--accent-text)"><use href="#i-file"/></svg><div><b>Company_A_FY2023.pdf</b><small>Sample filing · Annual report</small></div><span class="sp"></span><button aria-label="Open in new tab" style="color:var(--text-muted)"><svg class="i"><use href="#i-ext"/></svg></button></div>
+    <div class="pager"><button aria-label="Previous"><svg class="i"><use href="#i-left"/></svg></button><input value="45" aria-label="Page"><span>/ 64</span><button aria-label="Next"><svg class="i"><use href="#i-right"/></svg></button><span class="sp"></span><span>100%</span><button aria-label="Fullscreen" style="margin-left:56px"><svg class="i"><use href="#i-full"/></svg></button></div>
+    <div class="hlb"><i>1</i>Income statement · Highlighted in source</div>
+    <div class="pv"><div class="paper">
+      <small>SAMPLE FILING · ILLUSTRATIVE DATA</small><hr>
+      <h3>Company A</h3><small style="font-size:12px">Annual report 2023</small>
+      <h4>Consolidated statements<br>of operations</h4><small style="font-size:11px;line-height:1.4;display:block">For the years ended December 31<br>(USD in millions)</small>
+      <div style="margin-top:34px"><div class="r" style="font-weight:700;border-bottom:1px solid var(--paper-text)"><span></span><span>FY2023</span><span>FY2022</span></div>
+       <div class="r hl"><span>Revenue</span><span>17,902</span><span>14,200</span></div>
+       <div class="r"><span>Cost of revenue</span><span>10,473</span><span>8,781</span></div>
+       <div class="r l"><span><b>Gross profit</b></span><span><b>7,429</b></span><span><b>5,419</b></span></div></div>
+      <small style="display:block;margin-top:44px;line-height:1.4">See accompanying notes to the consolidated financial statements.</small>
+    </div></div>
+    <div class="pnote"><svg class="i" style="color:var(--accent-text);margin-top:2px"><use href="#i-file"/></svg><div><b>Read the context, not just the number.</b>Citations open the matching page and passage.</div></div>
+    <div class="pfoot">Sample document preview — not an actual company filing.</div>
+   </aside>
+  </div>
+ </div>
+ <div class="legend"><h4>Answer + sources — chỗ khác code hiện tại</h4><ul>
+  <li><i>A1</i>Sidebar giống trang 02 (navy cả hai theme)</li>
+  <li><i>A2</i>Header: breadcrumb, Export, EN/VI. Bỏ V3, Filings, Split view</li>
+  <li><i>A3</i>"2 reports selected" + chip công ty·kỳ + Manage</li>
+  <li><i>A4</i>Câu trả lời thành thẻ, badge số nguồn, tiêu đề lớn, bảng có cột Source</li>
+  <li><i>A5</i>Thẻ nguồn: tên file + "p.45 · Income statement" (cần backend trả tên mục)</li>
+  <li><i>A6</i>Copy / Report; gợi ý câu hỏi tiếp theo theo ngữ cảnh (cần backend)</li>
+  <li><i>A7</i>Ô nhập có chip phạm vi + dòng nhắc kiểm tra số</li>
+  <li><i>A8</i>Panel PDF 448px: dropdown file, ô nhập trang, banner "Highlighted in source", thẻ chú thích</li></ul></div>
+</section>
+
+<!-- ====================== 04 AUTH ====================== -->
+<section class="page" id="p-auth">
+ <div class="auth rel">
+  <div class="acard rel">
+   <span class="nm" style="top:-10px;left:-10px">U</span>
+   <div class="brand"><span class="logo"><svg class="i"><use href="#i-logo"/></svg></span>FinHelp
+     <span class="sp"></span><div class="seg" role="group" aria-label="Màn hình"><button data-auth="in" aria-pressed="true">Sign in</button><button data-auth="up" aria-pressed="false">Register</button><button data-auth="reset" aria-pressed="false">Reset</button></div></div>
+   <div class="asub on" id="a-in"><h1>Welcome back</h1><p class="d">Sign in to save your analyses.</p>
+     <div class="err">Wrong email, username or password.</div>
+     <label class="field">Email or username<input value="analyst@example.com"></label>
+     <label class="field"><span class="row">Password <a class="link" style="font-size:12px">Forgot password?</a></span><input type="password" value="••••••••"></label>
+     <button class="btn p" style="width:100%">Sign in</button>
+     <p class="foot">No account? <a class="link" data-auth-go="up">Create one</a></p></div>
+   <div class="asub" id="a-up"><h1>Create your account</h1><p class="d">Save analyses and access more filings.</p>
+     <label class="field">Email address<input placeholder="you@example.com"></label>
+     <label class="field">Username<input placeholder="e.g. analyst_01"></label>
+     <label class="field">Full name (optional)<input placeholder="e.g. Nguyen Van A"></label>
+     <label class="field">Password (min 8 characters)<input type="password"></label>
+     <button class="btn p" style="width:100%">Create account</button>
+     <p class="foot">Already registered? <a class="link" data-auth-go="in">Sign in</a></p></div>
+   <div class="asub" id="a-reset"><h1>Forgot your password?</h1><p class="d">We will email a 6-digit code to your account.</p>
+     <label class="field">Account email<input placeholder="you@example.com"></label>
+     <button class="btn p" style="width:100%">Send code</button>
+     <p class="foot"><a class="link" data-auth-go="in">Back to sign in</a></p></div>
+  </div>
+ </div>
+ <div class="legend"><h4>Đăng nhập / đăng ký / quên mật khẩu</h4><ul>
+  <li><i>U</i>Figma không có frame cho 3 trang này. Demo dùng cùng ngôn ngữ (thẻ, nút, ô nhập) và đúng các trường đang có trong code. Cần bạn xác nhận hoặc gửi thiết kế</li></ul></div>
+</section>
+
+</div>
+
+<script>
+const root=document.documentElement;
+function setTheme(t){root.dataset.theme=t;document.querySelectorAll('[data-theme-set]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.themeSet===t));
+  document.querySelectorAll('.theme-toggle use').forEach(u=>u.setAttribute('href',t==='dark'?'#i-sun':'#i-moon'));
+  try{localStorage.setItem('demo2-theme',t)}catch(e){}}
+try{const s=localStorage.getItem('demo2-theme');if(s)setTheme(s)}catch(e){}
+document.querySelectorAll('[data-theme-set]').forEach(b=>b.onclick=()=>setTheme(b.dataset.themeSet));
+document.querySelectorAll('.theme-toggle').forEach(b=>b.onclick=()=>setTheme(root.dataset.theme==='dark'?'light':'dark'));
+function go(id){document.querySelectorAll('[data-page]').forEach(x=>x.setAttribute('aria-selected',x.dataset.page===id));
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+id));}
+document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>go(b.dataset.page));
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+document.getElementById('notes-btn').onclick=e=>{const on=document.body.classList.toggle('notes');e.currentTarget.setAttribute('aria-pressed',on)};
+function auth(k){document.querySelectorAll('.asub').forEach(s=>s.classList.toggle('on',s.id==='a-'+k));document.querySelectorAll('[data-auth]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.auth===k))}
+document.querySelectorAll('[data-auth]').forEach(b=>b.onclick=()=>auth(b.dataset.auth));
+document.querySelectorAll('[data-auth-go]').forEach(b=>b.onclick=()=>auth(b.dataset.authGo));
+const drop=document.getElementById('drop');
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag')}));
+</script>
+</body>
+</html>

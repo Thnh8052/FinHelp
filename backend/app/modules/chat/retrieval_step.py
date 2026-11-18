@@ -16,12 +16,13 @@ from app.modules.query_router.catalog_route import question_years, r5
 from app.modules.query_router.decomposer import decompose_query
 from app.modules.query_router.bridge import continue_plan
 from app.modules.query_router.input_policy import _split, detect_language, needs_lookup
-from app.modules.query_router.planner import PlanItem, plan_multi_doc, plan_with_then
+from app.modules.query_router.planner import PlanItem, PlanUnavailable, plan_multi_doc, plan_with_then
 from app.modules.chat.scope import catalog_card, catalog_entry, document_label, text_years
 from app.modules.retrieval.hybrid_search import SEARCH_PARTS, HybridSearchService
 
 
 T = TypeVar("T")
+EMPTY_PLAN = "empty_plan"  # routing of a valid empty plan: nothing searched (step 3, tests/test_empty_plan.py)
 # What a dropped or slow vector store looks like: a timeout, a refused or reset connection, an httpx transport error, the client's own wrapper of those.
 # The remote GPU worker is not here: its client already resends once and reports ServiceUnavailableError, which passes through unchanged.
 SEARCH_FAILURES = (asyncio.TimeoutError, ConnectionError, httpx.TransportError, ResponseHandlingException)
@@ -49,20 +50,27 @@ class RetrievalResult:
     plan: List[PlanItem]
     sub_queries: List[str]
     retrieved: List[Dict[str, Any]]
-    routing: str = "planner"  # [targets_]single | [targets_]planner | r5 | r4 (how the searched documents were chosen)
+    routing: str = "planner"  # [targets_]single | [targets_]planner | r5 | r4 (how the searched documents were chosen) | empty_plan (nothing searched) | targets_question (an empty plan code vetoed: the question in each targeted document)
     timings: Dict[str, float] = field(default_factory=dict)  # seconds: plan (planner / decomposer), search
     missing: List[str] = field(default_factory=list)  # targeted documents with no retrieved chunk
     hop: Dict[str, Any] = field(default_factory=dict)  # MULTIHOP_ENABLED: the dependent part and what the second step did (empty when there was none)
-    degraded: List[str] = field(default_factory=list)  # "plan_deadline", "rerank_skipped": a step dropped for time or failure (the answer shows "search more")
+    degraded: List[str] = field(default_factory=list)  # "plan_deadline", "plan_unavailable", "rerank_skipped": a step dropped for time or failure (the answer shows "search more")
+
+
+PLAN_FAILURES = ("plan_deadline", "plan_unavailable")
 
 
 async def within_deadline(call: Awaitable[T], fallback: T, degraded: List[str]) -> T:
-    """`call`, or `fallback` past PLAN_DEADLINE_SECONDS (the planner or the query split); a late call is noted in `degraded` as "plan_deadline"."""
+    """`call`, or `fallback` past PLAN_DEADLINE_SECONDS (the planner or the query split) or when the planner had no plan to give (PlanUnavailable: the
+    model down, no valid plan twice); noted in `degraded` as "plan_deadline" or "plan_unavailable" (before 18/11 a failed planner was not noted at all)."""
     try:
         return await asyncio.wait_for(call, settings.PLAN_DEADLINE_SECONDS)
     except asyncio.TimeoutError:
         logger.warning(f"Planner past its {settings.PLAN_DEADLINE_SECONDS:.0f} s deadline: the question goes on without its plan")
         degraded.append("plan_deadline")
+        return fallback
+    except PlanUnavailable:
+        degraded.append("plan_unavailable")
         return fallback
 
 
@@ -146,8 +154,19 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
         retrieved = await search_with_retry(lambda: hybrid_search.retrieve_planned(query, plan, notebook_id, ids, **left_out))
         if then:
             hop = await second_step(hybrid_search, query, then, retrieved, notebook_id, scope, ids)
+    elif multi and not targeted and not set(PLAN_FAILURES) & set(degraded):
+        # a VALID empty plan: the planner read the catalog of every selected report and chose none (gold v2: 6 of 200, all unanswerable; 0 of 274
+        # answerable, TRIED KH-13). Nothing is searched; the answer is a fixed reply with "search all sources" (step 3, tests/test_empty_plan.py).
+        routing, sub_queries, retrieved = EMPTY_PLAN, [], []
+    elif multi and targeted and not set(PLAN_FAILURES) & set(degraded):
+        # code vetoes a valid empty plan when it chose the documents (a named company, @ tags, the chooser, "search all sources"; KH-21: wrong 0 of 13):
+        # EACH of them is searched with the question on the planned path, as a tagged document the plan skips is. Not the route without a plan: its R5
+        # keeps only the report of the year asked (live check 18/11: Costco FY2015 never searched after "search all sources")
+        plan = [PlanItem(query, [d]) for d in ids]
+        routing, sub_queries = "targets_question", [query]
+        retrieved = await search_with_retry(lambda: hybrid_search.retrieve_planned(query, plan, notebook_id, ids, **left_out))
     elif multi:
-        # no plan (model down or no valid JSON): the routing without a language model. With MULTIDOC_WHOLE_MESSAGE the message reached here uncut, so code cuts it
+        # no plan (model down, no valid JSON, past the deadline): the routing without a language model. With MULTIDOC_WHOLE_MESSAGE the message reached here uncut, so code cuts it
         # (input_policy._split) and routes each part; the chunks are pooled in order (measured as the net: 12 of 24 messages, see config)
         pieces = (_split(query) or [query]) if settings.MULTIDOC_WHOLE_MESSAGE else [query]
         retrieved, routes = [], []

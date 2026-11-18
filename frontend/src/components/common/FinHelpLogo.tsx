@@ -1,5 +1,16 @@
 import React from "react";
 
+/* The brand mark looks the same in both themes, so these colours are fixed on purpose (the marker keeps `npm run test:theme` quiet). */
+const BRAND = {
+  blue1: "#2563EB", // theme-ok
+  blue2: "#1D4ED8", // theme-ok
+  sky: "#0284C7", // theme-ok
+  sparkLight: "#FDE047", // theme-ok
+  sparkDark: "#F59E0B", // theme-ok
+  rim: "rgba(255,255,255,0.2)", // theme-ok
+  trend: "#93C5FD", // theme-ok
+};
+
 interface FinHelpLogoProps {
   size?: "sm" | "md" | "lg" | "xl";
   showText?: boolean;
@@ -41,15 +52,15 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
         <defs>
           {/* Main Gradient */}
           <linearGradient id="fhBlueCyanGrad" x1="2" y1="2" x2="38" y2="38" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#2563EB" />
-            <stop offset="0.6" stopColor="#1D4ED8" />
-            <stop offset="1" stopColor="#0284C7" />
+            <stop stopColor={BRAND.blue1} />
+            <stop offset="0.6" stopColor={BRAND.blue2} />
+            <stop offset="1" stopColor={BRAND.sky} />
           </linearGradient>
 
           {/* Accent Glow */}
           <linearGradient id="fhSparkGrad" x1="25" y1="6" x2="35" y2="16" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#FDE047" />
-            <stop offset="1" stopColor="#F59E0B" />
+            <stop stopColor={BRAND.sparkLight} />
+            <stop offset="1" stopColor={BRAND.sparkDark} />
           </linearGradient>
 
           {/* Glass Overlay */}
@@ -61,7 +72,7 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
 
         {/* Squircle Background */}
         <rect width="40" height="40" rx="11" fill="url(#fhBlueCyanGrad)" />
-        <rect width="40" height="40" rx="11" fill="url(#fhGlassOverlay)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+        <rect width="40" height="40" rx="11" fill="url(#fhGlassOverlay)" stroke={BRAND.rim} strokeWidth="1" />
 
         {/* Ascending Financial Columns (Balance / Income Bars) */}
         <path
@@ -82,7 +93,7 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
         {/* Upward Growth Trendline */}
         <path
           d="M7 23.5L14 17.5L20 20L30 9.5"
-          stroke="#93C5FD"
+          stroke={BRAND.trend}
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -99,10 +110,8 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
       {showText && (
         <div className="flex flex-col leading-none">
           <div className={`font-extrabold tracking-tight ${currentSize.font} font-sans`}>
-            <span className="text-white">Fin</span>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-sky-300">
-              Help
-            </span>
+            <span className="text-fg">Fin</span>
+            <span className="text-accent-text">Help</span>
           </div>
         </div>
       )}
