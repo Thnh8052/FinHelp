@@ -1,6 +1,6 @@
 # Frontend refactor handoff: Figma redesign + dark/light themes
 
-Written 18/11/2026 for the next model. The owner (Vietnamese speaker, replies in Vietnamese) approved the plan and the visual demo; Phases 1-2 are done and committed. **Phases 3-6 are not started.**
+Written 18/11/2026 for the next model. The owner (Vietnamese speaker, replies in Vietnamese) approved the plan and the visual demo. Phases 1-2 are committed (`df6017b`). **Phases 3-6 were done later the same day and are NOT committed yet; see §8 for what changed and what is left.** Sections 4-5 below describe the state BEFORE phases 3-6 (kept as the record of the plan).
 
 ## 0. Start here
 
@@ -127,3 +127,22 @@ const bgOf=el=>{const s=[];for(let e=el;e;e=e.parentElement){const c=parse(getCo
 - Contextual follow-up suggestions after an answer (backend work): later, or never.
 - Auth pages: confirm the invented style (demo tab 04) or send real designs.
 - Landing navbar "Use Cases" link once that section is removed.
+
+## 8. Status after Phases 3-6 (18/11/2026, uncommitted)
+
+Owner decisions taken during the work: no Export button; "Document library" opens the Sources drawer; the landing navbar lost its "Use Cases" link; report after every phase.
+
+- **Phase 3 (workspace):** navy full-height sidebar (`history.css`), top bar = breadcrumb + `ThemeToggle` + EN/VI (`Navbar.tsx`), answer card + `SourceCard.tsx` (replaces `CitationBadge`), composer with scope chip, 448px source preview (`SourceViewer.tsx`: report dropdown, page box, native full screen, highlight bar). Under 1480px only one side panel (Sources drawer or PDF) is open at a time. The guest's sign-in button shows in the top bar only while the sidebar is closed.
+- **Phase 4 (start screen):** `StartScreen.tsx` + `start.css`, passed to `ChatContainer` as the render prop `startScreen`. Upload logic shared in `hooks/usePdfDrop.ts` (the Sources drawer uses it too). Limits shown come from the quota. Left out: Figma's "Try a demo" link (the app has no demo).
+- **Phase 5 (landing):** `LandingPage.tsx` rebuilt except the floating navbar; `LandingPage.css` now holds only the navbar and the shell; sections are in `landing-sections.css` (`lp-*`). Whole `landing` locale block replaced. Figma's "Explore demo" became "See how it works" (anchor). FAQ uses `<details>`, guest limits come from `guestQuota`.
+- **Phase 6:** sign-in pages and modal restyled (tab 04 look, card radius 18, soft glow, fields 9px radius); a real light-theme bug fixed (`.auth-submit-btn` had dark text on blue). Admin: all 38 Tailwind palette classes replaced by token classes (new names in `@theme inline`: `text-negative-text`, `text-warn-text`, `bg-hover`, `text-on-accent`, `bg-scrim`, ...). `npm run test:theme` now also fails on any palette class in a `.tsx`. `ThemeToggle` is mounted in the workspace top bar, the landing navbar, the three sign-in pages, the sign-in modal and the admin header.
+- **Checked:** `tsc`, `test:theme`, `vite build` green; contrast audit (section 6) empty on `/`, `/login`, `/register`, `/reset-password`, `/app` in both themes, and on the five admin pages in light (admin was driven by a temporary page with made-up data, since removed). Layouts looked at 1440 / 1000 / 390 px, EN and VI.
+- **Not checked (needs backend or a person):** a real answer with citations and the PDF highlight on a long report; uploading a real PDF; the browser pane refuses the Fullscreen API, so the source preview's full-screen button is untested; admin with real data; admin in dark after the token change was only looked at once.
+- **Still open:** contextual follow-up suggestions after an answer (needs backend); real designs for the sign-in pages if the owner has them; unused locale keys may remain (the three `sidebar.isolatedFiling`-style leftovers); optional vitest + Testing Library.
+
+### 8b. Fixes after trying the app signed in as admin (18/11/2026, uncommitted)
+- Question box: font 14.5px (was 13), send button stays beside the last line while the box grows, height read from the CSS `max-height` (180px, 120px on a phone) and recomputed when the box's width changes (a panel opening); the message list stays at its end while the box grows (`pinnedRef` + `ResizeObserver` in `ChatContainer`). Note: the built-in browser pane only runs `ResizeObserver` callbacks when it paints (a screenshot forces it), so measure after a screenshot.
+- Waiting state: the old `.chat-loading-*` classes had NO CSS at all (no spinner). Now one card: status line + spinner, three skeleton bars, a 4-step bar (understand, search, write, check). When the answer's card is already on screen (the "I understood the question as…" note arrives first) the block goes inside that card, not under it as a second card.
+- Opening the source preview below 1320px closes the sidebar (chat stays about 620px or more); the user chip's name is cut with an ellipsis (150px).
+- Backend, not done: correct answers get the line "This search may be incomplete because the system was slow…" when the search stage takes about 20 s.
+- **Question box per chat (18/11):** `ChatContainer` takes `chatKey` (the notebook id) and keeps one unsent draft per chat in a `Map`; switching chats shows the draft of the chat you land in (empty if none), `@` tags are cleared. In memory only: a reload drops drafts.

@@ -52,14 +52,6 @@
   font-size: 12px;
 }
 
-/* Auth Page specific positioning */
-.auth-page-lang-toggle {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 10;
-}
-
 @media (max-width: 640px) {
   .lang-toggle-item {
     padding: 2.5px 7px;

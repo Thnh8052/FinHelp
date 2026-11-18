@@ -1,12 +1,28 @@
-/* Layout Components Styling (Navbar, SplitLayout) */
+/* Layout: the top bar of the work area (Navbar) and the shell (SplitLayout) */
 
-/* Navbar */
+/* Sizes from the Figma frames: sidebar 232, top bar 80, source preview 448 */
+.split-layout {
+  --header-h: 80px;
+  --sidebar-w: 232px;
+  --pdf-w: 448px;
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--bg-app);
+}
+
+/* ---------- Top bar ---------- */
 .navbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  height: 54px;
+  gap: 16px;
+  flex: none;
+  height: var(--header-h);
+  padding: 0 32px;
   background-color: var(--bg-sidebar);
   border-bottom: 1px solid var(--border-medium);
   position: relative;
@@ -14,174 +30,88 @@
   user-select: none;
 }
 
-.navbar-brand {
+.navbar-crumb-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.navbar-crumb {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.navbar-brand-logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 15px;
-  color: var(--on-accent);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-primary) 30%, transparent);
-}
-
-/* A flex box, not an inline one: the logo sits on the row's centre line with the menu button and the text */
-.navbar-brand-home {
-  display: flex;
-  padding: 0;
-  border: none;
-  background: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.navbar-brand-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  line-height: 1.25;
-}
-
-.navbar-brand-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.navbar-brand-title {
-  font-weight: 700;
+  min-width: 0;
+  color: var(--text-muted);
   font-size: 14px;
+}
+
+.navbar-crumb-root {
+  white-space: nowrap;
+}
+
+.navbar-crumb-title {
+  margin: 0;
+  overflow: hidden;
   color: var(--text-primary);
-  letter-spacing: -0.2px;
-}
-
-.navbar-version-badge {
-  font-size: 11px; /* a tag, not text to read: kept small so the title row stays the title's height */
-  font-weight: 700;
-  line-height: 1.2;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background-color: color-mix(in srgb, var(--accent-primary) 20%, transparent);
-  color: var(--accent-text);
-  border: 1px solid color-mix(in srgb, var(--accent-strong) 30%, transparent);
-  text-transform: uppercase;
-}
-
-.navbar-brand-subtitle {
-  font-size: 12px;
-  color: var(--text-dim);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 380px;
-  overflow: hidden;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.navbar-notebook-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.navbar-session-note {
+  margin-left: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
   white-space: nowrap;
-}
-
-.navbar-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--positive);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--positive) 60%, transparent);
-  flex-shrink: 0;
 }
 
 .navbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-shrink: 0;
+  gap: 12px;
   position: relative;
 }
 
-/* Nút Toggle Nguồn & Split-View trên Navbar */
-.navbar-action-btn {
+/* Sidebar button (also the only way to open the sidebar drawer on a phone) */
+.navbar-sidebar-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 8px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-medium);
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 500;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--shadow-ink) 20%, transparent);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition);
 }
 
-.navbar-action-btn:hover {
-  background-color: var(--bg-elevated);
-  border-color: color-mix(in srgb, var(--accent-strong) 50%, transparent);
+.navbar-sidebar-btn:hover {
   color: var(--text-primary);
+  background-color: var(--bg-hover);
 }
 
-.navbar-action-btn.active {
-  background-color: var(--bg-elevated);
-  border-color: var(--accent-primary);
+.navbar-sidebar-btn.active {
   color: var(--accent-text);
-}
-
-.navbar-action-btn.split-toggle {
-  background-color: color-mix(in srgb, var(--accent-primary) 15%, transparent);
-  border-color: color-mix(in srgb, var(--accent-strong) 30%, transparent);
-  color: var(--accent-text);
-}
-
-.navbar-action-btn.split-toggle:hover {
-  background-color: color-mix(in srgb, var(--accent-primary) 25%, transparent);
-  border-color: var(--border-focus);
-  color: var(--on-accent);
-}
-
-.navbar-source-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--text-dim);
-  transition: background-color 0.2s ease;
-}
-
-.navbar-source-indicator.ready {
-  background-color: var(--positive);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--positive) 70%, transparent);
-}
-
-.navbar-divider {
-  width: 1px;
-  height: 16px;
-  background-color: var(--border-medium);
-  margin: 0 2px;
 }
 
 .navbar-user-chip {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 8px 3px 4px;
+  padding: 3px 10px 3px 4px;
   border-radius: 20px;
   background-color: var(--bg-card);
   border: 1px solid var(--border-medium);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color var(--transition);
 }
 
 .navbar-user-chip:hover {
@@ -189,8 +119,8 @@
 }
 
 .navbar-avatar {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background-color: var(--bg-elevated);
   border: 1.5px solid var(--border-medium);
@@ -207,13 +137,17 @@
 .navbar-avatar.admin {
   background-color: color-mix(in srgb, var(--accent-strong) 15%, transparent);
   border-color: var(--border-focus);
-  color: var(--accent-strong);
+  color: var(--accent-text);
 }
 
 .navbar-username {
-  font-size: 12px;
+  max-width: 150px; /* a long full name ("Name (Role, Rights)") must not push the switches off the bar */
+  overflow: hidden;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .navbar-role-badge {
@@ -221,70 +155,48 @@
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 3px;
-  background-color: var(--border-medium);
+  background-color: var(--bg-elevated);
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .navbar-role-badge.admin {
   background-color: color-mix(in srgb, var(--accent-strong) 15%, transparent);
-  color: var(--accent-strong);
-}
-
-.navbar-guest-badge {
-  font-size: 12px;
-  color: var(--text-muted);
-  padding: 3px 8px;
-  border-radius: 4px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-medium);
-}
-
-.navbar-guest-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  color: var(--accent-text);
 }
 
 .navbar-login-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  border-radius: 6px;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
   background-color: var(--accent-primary);
   color: var(--on-accent);
   border: none;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s ease;
-  white-space: nowrap !important;
-  flex-shrink: 0 !important;
+  transition: background-color var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .navbar-login-btn:hover {
   background-color: var(--accent-hover);
 }
 
-/* SplitLayout 4-Zone Container */
-.split-layout {
-  display: flex;
-  height: calc(100vh - 54px);
-  width: 100%;
-  overflow: hidden;
-  position: relative;
-  background-color: var(--bg-app);
-}
+/* ---------- Shell ---------- */
 
-/* 1. Sidebar Trái: Không còn gạch trắng, transition êm ái */
+/* 1. Sidebar: full height, navy in both themes */
 .split-sidebar {
-  width: 270px;
-  min-width: 270px;
-  border-right: 1px solid var(--border-medium);
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  border-right: 1px solid var(--side-border);
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-sidebar);
+  background-color: var(--side-bg);
   overflow: hidden;
   transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
@@ -300,71 +212,35 @@
   pointer-events: none;
 }
 
-/* Nút Toggle Sidebar trên Navbar (Mockup V3) */
-.navbar-sidebar-btn {
+/* The work area: top bar over the chat and the panels */
+.split-workspace {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background-color: transparent;
-  border: 1px solid transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  margin-right: 4px;
-  flex-shrink: 0;
+  flex-direction: column;
 }
 
-.navbar-sidebar-btn:hover {
-  color: var(--text-primary);
-  background-color: var(--bg-elevated);
-  border-color: var(--border-medium);
+.split-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
 }
 
-.navbar-sidebar-btn.active {
-  color: var(--accent-text);
-  background-color: color-mix(in srgb, var(--accent-primary) 15%, transparent);
-  border-color: color-mix(in srgb, var(--accent-strong) 30%, transparent);
-}
-
-/* 2. Main Workspace: Chat Stream với co giãn linh hoạt */
+/* 2. Chat: takes the width the panels leave */
 .split-main {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-app);
   overflow: hidden;
-  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), flex 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.split-main.flex-full {
-  flex: 1;
-}
-
-.split-main.chat-both-open {
-  width: 38%;
-  flex: none;
-  border-right: 1px solid var(--border-medium);
-}
-
-.split-main.chat-split-open {
-  width: 45%;
-  flex: none;
-  border-right: 1px solid var(--border-medium);
-}
-
-.split-main.chat-sources-open {
-  flex: 1;
-  border-right: 1px solid var(--border-medium);
-}
-
-/* 3. Panel Nguồn phiên này (Sources Drawer ~320px bên phải - Chuẩn Mockup V3) */
+/* 3. Sources drawer (the uploaded reports of this chat) */
 .split-sources-pane {
   width: 320px;
   min-width: 320px;
-  max-width: 340px;
   border-left: 1px solid var(--border-medium);
   background-color: var(--bg-sidebar);
   display: flex;
@@ -372,7 +248,6 @@
   overflow: hidden;
   transition: width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
               min-width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
-              max-width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
               opacity 0.2s ease;
   z-index: 12;
   opacity: 1;
@@ -381,46 +256,41 @@
 .split-sources-pane.closed {
   width: 0 !important;
   min-width: 0 !important;
-  max-width: 0 !important;
   border-left: none !important;
-  border-right: none !important;
   opacity: 0;
   pointer-events: none;
   overflow: hidden;
 }
 
-/* 4. Trình đọc BCTC PDF Split-View (~50-55% bên phải - Chuẩn Mockup V3) */
+/* 4. Source preview: the original PDF page, fixed width as in the Figma */
 .split-pdf-pane {
-  flex: 1;
+  flex: none;
+  width: var(--pdf-w);
   min-width: 0;
   border-left: 1px solid var(--border-medium);
-  background-color: var(--bg-app);
+  background-color: var(--bg-sidebar);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: flex 0.24s cubic-bezier(0.16, 1, 0.3, 1),
-              width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.2s ease;
+  transition: width 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
   z-index: 10;
   opacity: 1;
 }
 
 .split-pdf-pane.closed {
-  flex: 0 0 0 !important;
   width: 0 !important;
-  min-width: 0 !important;
   border-left: none !important;
-  border-right: none !important;
   opacity: 0;
   pointer-events: none;
   overflow: hidden;
 }
 
-/* Responsive Layout */
+/* ---------- Responsive ---------- */
+/* Below 1100px the sources drawer and the PDF pane slide over the chat from the right */
 @media (max-width: 1100px) {
   .split-sources-pane {
     position: fixed;
-    top: 54px;
+    top: var(--header-h);
     right: 0;
     bottom: 0;
     width: 320px;
@@ -430,74 +300,70 @@
 
   .split-pdf-pane {
     position: fixed;
-    top: 54px;
+    top: var(--header-h);
     right: 0;
     bottom: 0;
-    width: 600px;
+    width: 520px;
     max-width: 90vw;
     z-index: 40;
     box-shadow: -10px 0 30px color-mix(in srgb, var(--shadow-ink) 70%, transparent);
   }
 }
 
+@media (max-width: 900px) {
+  .navbar-session-note {
+    display: none;
+  }
+}
+
 @media (max-width: 768px) {
+  .split-layout {
+    --header-h: 64px;
+  }
+
   .navbar {
-    padding: 0 10px;
+    padding: 0 14px;
+    gap: 8px;
   }
 
-  .navbar-brand-subtitle {
+  .navbar-crumb-root,
+  .navbar-crumb > svg {
     display: none;
   }
 
-  .navbar-guest-badge {
+  .navbar-actions {
+    gap: 8px;
+  }
+
+  .navbar-username,
+  .navbar-role-badge {
     display: none;
   }
 
-  /* Ẩn nút toggle sources trên navbar ở mobile vì đã có nút "Manage Sources >" ngay trong chat header */
-  #btn-toggle-sources {
-    display: none !important;
+  .navbar-user-chip {
+    padding: 3px;
   }
 
-  .navbar-action-btn.split-toggle {
-    padding: 0 8px;
-    height: 30px;
-  }
-  .navbar-action-btn.split-toggle .navbar-btn-text {
-    display: none;
+  .split-sources-pane,
+  .split-pdf-pane {
+    width: 100vw;
+    max-width: 100vw;
   }
 
   .split-sources-pane {
-    position: fixed;
-    top: 54px;
-    right: 0;
-    bottom: 0;
-    width: 100vw;
-    max-width: 100vw;
-    z-index: 45;
     box-shadow: -8px 0 25px color-mix(in srgb, var(--shadow-ink) 70%, transparent);
   }
 
-  .split-pdf-pane {
-    position: fixed;
-    top: 54px;
-    right: 0;
-    bottom: 0;
-    width: 100vw;
-    max-width: 100vw;
-    z-index: 40;
-    box-shadow: -10px 0 30px color-mix(in srgb, var(--shadow-ink) 80%, transparent);
-  }
-
+  /* The sidebar becomes a drawer over everything (it is full height now, so it also covers the top bar) */
   .split-sidebar {
     position: fixed;
-    top: 54px;
+    top: 0;
     left: 0;
     bottom: 0;
-    width: 270px;
+    width: var(--sidebar-w);
     max-width: 85vw;
-    z-index: 50;
+    z-index: 70;
     box-shadow: 10px 0 30px color-mix(in srgb, var(--shadow-ink) 70%, transparent);
-    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     transform: translateX(0);
     visibility: visible !important;
     pointer-events: auto !important;
@@ -506,113 +372,23 @@
   .split-sidebar.collapsed {
     transform: translateX(-100%) !important;
     visibility: hidden !important;
-    width: 270px !important;
-    min-width: 270px !important;
-  }
-
-  .split-toggle-btn {
-    left: 10px;
-    top: 8px;
-    z-index: 55;
-  }
-
-  .split-toggle-btn:not(.collapsed) {
-    left: 250px;
+    width: var(--sidebar-w) !important;
+    min-width: var(--sidebar-w) !important;
   }
 
   .split-sidebar-backdrop {
     position: fixed;
-    top: 54px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: color-mix(in srgb, var(--shadow-ink) 65%, transparent);
+    inset: 0;
+    background-color: var(--scrim);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
-    z-index: 48;
+    z-index: 65;
   }
 }
 
-@media (max-width: 600px) {
-  .navbar {
-    padding: 0 6px;
-  }
-  .navbar-brand {
-    gap: 5px;
-  }
-  .navbar-brand-title {
-    font-size: 12.5px;
-  }
-  .navbar-version-badge {
+@media (max-width: 480px) {
+  .navbar-login-btn span {
     display: none;
-  }
-  .navbar-actions {
-    gap: 3.5px;
-    flex-shrink: 0;
-  }
-  .navbar-action-btn {
-    padding: 0 5px;
-    font-size: 12px;
-    gap: 3px;
-    white-space: nowrap;
-    flex-shrink: 0;
-    height: 28px;
-  }
-  .navbar-action-btn .navbar-btn-text {
-    white-space: nowrap;
-  }
-  .navbar-action-btn.split-toggle {
-    display: inline-flex;
-    padding: 0 6px;
-    height: 28px;
-    min-width: 28px;
-    justify-content: center;
-  }
-  .navbar-action-btn.split-toggle .navbar-btn-text {
-    display: none; /* Compact icon-only button on mobile; opens full-width PDF drawer */
-  }
-  .navbar-divider {
-    display: none;
-  }
-  .navbar-guest-actions {
-    gap: 3.5px;
-    flex-shrink: 0;
-  }
-  .navbar-guest-badge {
-    display: none;
-  }
-  .navbar-login-btn {
-    padding: 4px 6px !important;
-    font-size: 12px !important;
-    white-space: nowrap !important;
-    flex-shrink: 0 !important;
-  }
-  .navbar-user-chip {
-    padding: 2px 6px 2px 3px;
-    gap: 5px;
-  }
-  .navbar-avatar {
-    width: 22px;
-    height: 22px;
-    font-size: 8px;
-    letter-spacing: -0.02em;
-  }
-  .navbar-username {
-    font-size: 12px;
-    max-width: 80px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .navbar-role-badge {
-    font-size: 8px;
-    padding: 0 4px;
-  }
-}
-
-@media (max-width: 380px) {
-  .navbar-username {
-    max-width: 56px;
   }
 }
 

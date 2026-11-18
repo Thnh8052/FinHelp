@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { apiRequest, errorText } from "../../services/api";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
+import { ThemeToggle } from "../../components/common/ThemeToggle";
 import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import type { AdminOverview } from "./types";
 import { Segmented, fill, useFormat } from "./ui";
@@ -83,12 +84,12 @@ export const AdminLayout: React.FC = () => {
             autoFocus
             onClick={() => setMenuOpen(false)}
             aria-label={p.nav.closeMenu}
-            className="flex size-9 items-center justify-center rounded-md text-muted hover:bg-white/5 hover:text-fg"
+            className="flex size-9 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg"
           >
             <X size={18} aria-hidden />
           </button>
         ) : (
-        <span className="inline-flex items-center gap-1 rounded-md border border-blue-500/30 bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-blue-300">
+        <span className="inline-flex items-center gap-1 rounded-md border border-accent/30 bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-accent-text">
           <ShieldCheck size={12} aria-hidden />
           Admin
         </span>
@@ -102,7 +103,7 @@ export const AdminLayout: React.FC = () => {
               end={to === "/admin"}
               className={({ isActive }) =>
                 `group flex h-10 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${
-                  isActive ? "bg-accent/15 text-fg ring-1 ring-blue-500/30" : "text-muted hover:bg-white/5 hover:text-fg"
+                  isActive ? "bg-accent/15 text-fg ring-1 ring-accent/30" : "text-muted hover:bg-hover hover:text-fg"
                 }`
               }
             >
@@ -110,7 +111,7 @@ export const AdminLayout: React.FC = () => {
               <span className="flex-1 truncate">{p.nav[key]}</span>
               {!!badges[key] && (
                 <span
-                  className="rounded-full bg-amber-400/15 px-1.5 font-mono text-[11px] font-semibold text-amber-300"
+                  className="rounded-full bg-warn/15 px-1.5 font-mono text-[11px] font-semibold text-warn-text"
                   aria-label={fill(p.nav.needsAttention, { n: badges[key]! })}
                 >
                   {badges[key]}
@@ -124,13 +125,13 @@ export const AdminLayout: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate("/app")}
-          className="flex h-10 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium text-muted transition-colors hover:bg-white/5 hover:text-fg"
+          className="flex h-10 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium text-muted transition-colors hover:bg-hover hover:text-fg"
         >
           <ArrowLeft size={17} aria-hidden />
           {p.nav.backToChat}
         </button>
-        <div className="mt-1 flex items-center gap-3 rounded-lg bg-white/[0.03] px-3 py-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold uppercase text-white">
+        <div className="mt-1 flex items-center gap-3 rounded-lg bg-hover px-3 py-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold uppercase text-on-accent">
             {(user?.username ?? "A").slice(0, 1)}
           </span>
           <div className="min-w-0 flex-1 leading-tight">
@@ -145,7 +146,7 @@ export const AdminLayout: React.FC = () => {
             }}
             aria-label={t.common.signOut}
             title={t.common.signOut}
-            className="flex size-8 items-center justify-center rounded-md text-muted hover:bg-white/5 hover:text-rose-300"
+            className="flex size-8 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-negative-text"
           >
             <LogOut size={15} aria-hidden />
           </button>
@@ -160,7 +161,7 @@ export const AdminLayout: React.FC = () => {
 
       {menuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={p.nav.label}>
-          <button type="button" aria-label={p.nav.closeMenu} className="absolute inset-0 bg-black/60" onClick={() => setMenuOpen(false)} />
+          <button type="button" aria-label={p.nav.closeMenu} className="absolute inset-0 bg-scrim" onClick={() => setMenuOpen(false)} />
           <aside className="relative h-full w-72 max-w-[85vw] border-r border-line bg-panel">{sidebar(true)}</aside>
         </div>
       )}
@@ -190,11 +191,12 @@ export const AdminLayout: React.FC = () => {
               type="button"
               onClick={load}
               disabled={loading}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-line-strong px-3 text-[13px] font-medium text-fg-2 transition-colors hover:bg-white/5 hover:text-fg"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-line-strong px-3 text-[13px] font-medium text-fg-2 transition-colors hover:bg-hover hover:text-fg"
             >
               <RefreshCw size={14} aria-hidden className={loading ? "animate-spin" : ""} />
               <span className="hidden sm:inline">{p.refresh}</span>
             </button>
+            <ThemeToggle />
             <LanguageToggle size="sm" />
           </div>
         </header>
@@ -202,9 +204,9 @@ export const AdminLayout: React.FC = () => {
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6" aria-busy={loading}>
           <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
             {error && (
-              <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-negative-soft px-4 py-3 text-sm text-rose-200">
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-negative/30 bg-negative-soft px-4 py-3 text-sm text-negative-text">
                 {error}
-                <button type="button" onClick={load} className="rounded-md border border-rose-400/40 px-3 py-1 text-xs font-medium hover:bg-rose-500/10">
+                <button type="button" onClick={load} className="rounded-md border border-negative/40 px-3 py-1 text-xs font-medium hover:bg-negative-soft">
                   {t.common.retry}
                 </button>
               </div>

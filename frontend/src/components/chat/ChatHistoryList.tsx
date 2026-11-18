@@ -1,8 +1,11 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { ArrowRight, FileText, MessageSquare, Search, ShieldCheck, User } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 import { Notebook } from "../../types/notebook";
-import { CheckIcon, CloseIcon, MessageSquareIcon, PencilIcon, PlusIcon, TrashIcon } from "../common/Icons";
+import { CheckIcon, CloseIcon, PencilIcon, PlusIcon, TrashIcon } from "../common/Icons";
+import { FinHelpLogo } from "../common/FinHelpLogo";
 import "./chat.css";
+import "./history.css";
 
 interface ChatHistoryListProps {
   notebooks: Notebook[];
@@ -11,12 +14,15 @@ interface ChatHistoryListProps {
   onNewChat: () => void;
   onRenameNotebook: (notebookId: string, title: string) => Promise<boolean>;
   onDeleteNotebook: (notebookId: string) => void;
+  onNavigateHome?: () => void;
+  /** "Document library": there is no page for it, so it opens the Sources drawer (where the uploaded reports are managed). */
+  onOpenLibrary: () => void;
+  onOpenAuth: () => void;
   isGuest?: boolean;
 }
 
 /**
- * Danh sách đoạn chat (mỗi notebook là một đoạn chat)
- * Provides "New Analysis" button, session cards with metadata, and secure workspace footer.
+ * The sidebar: brand, new analysis, search, menu, the chats (each notebook is one chat) and, for a guest, the sign-in card.
  */
 export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
   notebooks,
@@ -25,6 +31,9 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
   onNewChat,
   onRenameNotebook,
   onDeleteNotebook,
+  onNavigateHome,
+  onOpenLibrary,
+  onOpenAuth,
   isGuest = false,
 }) => {
   const { t } = useLanguage();
@@ -34,6 +43,21 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const cancelled = useRef(false);  // Escape unmounts the input, which some browsers report as a blur: that must not save
+  const searchRef = useRef<HTMLInputElement>(null);
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.userAgent);
+
+  // Ctrl/Cmd+K jumps to the search field, but only while it can be seen (a collapsed sidebar must not swallow the browser's shortcut)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const input = searchRef.current;
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "k" || !input) return;
+      if (getComputedStyle(input).visibility === "hidden") return;
+      e.preventDefault();
+      input.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const saveRename = async (session: Notebook) => {
     const title = draft.trim();
@@ -49,52 +73,43 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
 
   return (
     <div className="history-container">
-      {/* 1. New Chat Action */}
-      <div className="history-top-section">
-        <button
-          type="button"
-          onClick={onNewChat}
-          className="history-new-btn group"
-          title={t.sidebar.newSessionTitle}
-        >
-          <div className="history-new-btn-left">
-            <PlusIcon size={16} className="history-plus-icon" />
-            <span>{t.sidebar.newAnalysis}</span>
-          </div>
-          <span className="history-new-tag">
-            {isGuest ? t.sidebar.badgeLogin : t.sidebar.badgeNew}
-          </span>
-        </button>
+      <button type="button" className="history-brand-home" onClick={onNavigateHome} title={t.nav.returnHome} aria-label={t.nav.returnHome}>
+        <FinHelpLogo size="sm" showText={false} />
+        FinHelp
+      </button>
+      <div className="history-brand-sub">{t.sidebar.brandSub}</div>
+
+      <button type="button" onClick={onNewChat} className="history-new-btn" title={t.sidebar.newSessionTitle}>
+        <PlusIcon size={16} />
+        <span>{t.sidebar.newAnalysis}</span>
+      </button>
+
+      <label className="history-search">
+        <Search size={16} aria-hidden />
+        <input
+          ref={searchRef}
+          type="search"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder={t.sidebar.searchPlaceholder}
+          aria-label={t.sidebar.searchPlaceholder}
+          className="history-search-input"
+        />
+        <kbd aria-hidden>{isMac ? "⌘ K" : "Ctrl K"}</kbd>
+      </label>
+
+      <div className="history-section-title">{t.sidebar.navWorkspace}</div>
+      <div className="history-nav active" aria-current="page">
+        <MessageSquare size={16} aria-hidden />
+        {t.sidebar.navAnalyses}
       </div>
+      <button type="button" className="history-nav" onClick={onOpenLibrary}>
+        <FileText size={16} aria-hidden />
+        {t.sidebar.navLibrary}
+      </button>
 
-      {/* 2. Section Header */}
-      <div className="history-section-header">
-        <span className="history-section-title">{t.sidebar.historyTitle}</span>
-        <span className="history-section-count">{(notebooks.length === 1 ? t.sidebar.sessionOne : t.sidebar.sessionMany).replace("{n}", String(notebooks.length))}</span>
-      </div>
+      <div className="history-section-title">{t.sidebar.historyTitle}</div>
 
-      {/* Search Filter */}
-      {notebooks.length >= 3 && (
-        <div className="history-search-box">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={t.sidebar.searchPlaceholder}
-            className="history-search-input"
-          />
-        </div>
-      )}
-
-      {/* Guest Mode Banner */}
-      {isGuest && (
-        <div className="history-guest-banner">
-          <div className="history-guest-badge">{t.sidebar.guestBannerTitle}</div>
-          <div>{t.sidebar.guestBannerDesc}</div>
-        </div>
-      )}
-
-      {/* 3. Session Cards List */}
       <div className="history-list scrollbar-slim">
         {filteredNotebooks.length === 0 ? (
           <div className="history-empty">
@@ -117,11 +132,6 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
               >
                 <div className="history-card-inner">
                   <div className="history-card-main">
-                    <MessageSquareIcon
-                      size={15}
-                      color={isActive ? "var(--accent-text)" : "var(--text-dim)"}
-                      className="history-card-icon"
-                    />
                     <div className="history-card-info">
                       {renamingId === session.notebook_id ? (
                         <input
@@ -233,14 +243,27 @@ export const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
         )}
       </div>
 
-      {/* 4. Secure Workspace Footer */}
-      <div className="history-footer">
-        <div className="history-footer-status">
-          <span className="history-footer-dot" />
-          <span>{t.sidebar.workspaceActive}</span>
-        </div>
-        <span className="history-footer-tag">{t.sidebar.encrypted}</span>
-      </div>
+      {isGuest && (
+        <>
+          <div className="history-guest-card">
+            <ShieldCheck size={16} aria-hidden />
+            <span className="history-guest-title">{t.sidebar.guestBannerTitle}</span>
+            {t.sidebar.guestBannerDesc}
+            <br />
+            <button type="button" className="history-guest-link" onClick={onOpenAuth}>
+              {t.sidebar.guestCta}
+              <ArrowRight size={14} aria-hidden />
+            </button>
+          </div>
+          <div className="history-me">
+            <User size={22} aria-hidden />
+            <div>
+              <span className="history-me-name">{t.sidebar.guestName}</span>
+              <span className="history-me-plan">{t.sidebar.guestPlan}</span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

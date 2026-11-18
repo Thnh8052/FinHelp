@@ -73,6 +73,9 @@
   --side-active: #162034;
   --side-card: #0e1526;
   --side-border: rgba(255, 255, 255, 0.08);
+  --side-strong: #ffffff;       /* titles and active text on the navy sidebar */
+  --side-hover: rgba(255, 255, 255, 0.06);
+  --side-danger: #fb7185;       /* red that reads on navy (the page's --negative-text is dark in the light theme) */
 
   /* landing bands and glow */
   --band-bg: #0b1120;
@@ -80,6 +83,7 @@
   --band-muted: #94a3b8;
   --band-line: rgba(255, 255, 255, 0.1);
   --band-tile: #162034;
+  --band-accent: #93c5fd;       /* the small blue words and icons on a landing band */
   --cta-bg: rgba(37, 99, 235, 0.12);
   --hero-glow: rgba(37, 99, 235, 0.22);
 
@@ -147,12 +151,16 @@
   --side-active: #22314f;
   --side-card: #1b2a46;
   --side-border: rgba(255, 255, 255, 0.08);
+  --side-strong: #ffffff;
+  --side-hover: rgba(255, 255, 255, 0.06);
+  --side-danger: #fb7185;
 
   --band-bg: #111c32;
   --band-fg: #ffffff;
   --band-muted: #9aa7c0;
   --band-line: rgba(255, 255, 255, 0.12);
   --band-tile: #22314f;
+  --band-accent: #aebcff;
   --cta-bg: #edf1ff;
   --hero-glow: rgba(54, 89, 227, 0.1);
 
@@ -191,6 +199,13 @@
   --color-positive-soft: var(--positive-bg);
   --color-negative: var(--negative);
   --color-negative-soft: var(--negative-bg);
+  --color-positive-text: var(--positive-text);
+  --color-negative-text: var(--negative-text);
+  --color-warn: var(--warn-solid);
+  --color-warn-text: var(--warn-text);
+  --color-hover: var(--bg-hover);
+  --color-on-accent: var(--on-accent);
+  --color-scrim: var(--scrim);
 }
 
 /* Resets sit in the base layer: Tailwind utilities (p-5, mt-2, text-sm) must win over them, the component CSS files still do */

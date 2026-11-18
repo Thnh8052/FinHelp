@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { useLanguage } from "../../context/LanguageContext";
 import { CitationItem } from "../../types/chat";
-import { DocumentRecord } from "../../types/notebook";
+import { DocumentRecord, documentLabel } from "../../types/notebook";
 import { documentService } from "../../services/documents";
 import { bandsFor, figureLines, locateExcerpt, type Box, type PageItem } from "./locateExcerpt";
+import { ChevronDown, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
 import {
   FileTextIcon,
   CloseIcon,
@@ -59,6 +60,9 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFull, setIsFull] = useState(false);
+  const [pageDraft, setPageDraft] = useState<string | null>(null); // what is typed in the page box until Enter or leaving it
   const pageText = useRef<Map<number, PageItem[]>>(new Map()); // the text pdf.js reads from each page of the open report, read once
 
   const handleZoomIn = () => {
@@ -134,8 +138,8 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   // The page is drawn off screen and copied in when done: the old page stays visible meanwhile, so turning a page does not flash
   useEffect(() => {
     const canvas = canvasRef.current;
-    // Read here, not from the observer: it reports nothing until the page is painted. 10: the panel's padding and the canvas border
-    const available = (viewportRef.current?.clientWidth ?? 0) - 10;
+    // Read here, not from the observer: it reports nothing until the page is painted. 34: the panel's padding (2 x 16) and the canvas border
+    const available = (viewportRef.current?.clientWidth ?? 0) - 34;
     if (!pdfDoc || !canvas || (isFitWidth && available <= 0)) return;
     let cancelled = false;
     let task: RenderTask | null = null;
@@ -235,6 +239,28 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
     if (currentPage < totalPages) setCurrentPage((prev) => prev + 1);
   };
 
+  // The page box: a typed number is kept inside 1..totalPages; anything else is dropped
+  const commitPageDraft = () => {
+    const n = parseInt(pageDraft ?? "", 10);
+    if (Number.isFinite(n)) setCurrentPage(Math.min(Math.max(n, 1), totalPages));
+    setPageDraft(null);
+  };
+
+  // Full screen is the browser's own, on the whole panel; Esc leaves it
+  useEffect(() => {
+    const onChange = () => setIsFull(document.fullscreenElement === containerRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else containerRef.current?.requestFullscreen().catch(() => undefined); // a browser or frame that refuses full screen leaves the panel as it is
+  };
+  const closeViewer = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    onClose?.();
+  };
+
   if (!currentDoc) {
     return (
       <div className="pdf-viewer-empty-state">
@@ -248,124 +274,121 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   }
 
   const pdfUrl = pdfObjectUrl ? `${pdfObjectUrl}#page=${currentPage}` : null;
+  // Under the name: what the catalog knows about the report (company, type, year), then its length
+  const label = documentLabel(currentDoc);
+  const fileMeta = [label !== currentDoc.file_name ? label : "", t.sourceViewer.pagesN.replace("{n}", String(totalPages))].filter(Boolean).join(" · ");
   // An excerpt from a report deleted since the answer: its text is kept with the message, but no open report may claim it
   const citationGone = !!activeCitation?.document_id && !documents.some((d) => d.document_id === activeCitation.document_id);
 
   return (
-    <div className="pdf-split-viewer-container">
-      {/* 1. PDF Toolbar */}
-      <div className="pdf-viewer-toolbar">
-        {/* Document Tab Bar */}
-        <div className="pdf-docs-tab-bar scrollbar-slim">
-          <span className="pdf-tab-label">{t.sourceViewer.filingsLabel}</span>
-          {documents.map((doc) => {
-            const isTabActive = doc.document_id === currentDoc.document_id;
-            return (
-              <button
-                key={doc.document_id}
-                type="button"
-                onClick={() => {
-                  onSelectDoc(doc.document_id);
-                  onClearCitation();
-                }}
-                className={`pdf-doc-tab-btn ${isTabActive ? "active" : ""}`}
-                title={doc.file_name}
-              >
-                <FileTextIcon size={12} color={isTabActive ? "var(--on-accent)" : "var(--text-dim)"} />
-                <span className="pdf-tab-text">{doc.file_name}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Navigation & Zoom Controls */}
-        <div className="pdf-nav-controls">
-          <button
-            type="button"
-            onClick={handlePrevPage}
-            disabled={currentPage <= 1}
-            className="pdf-page-btn"
-            title={t.sourceViewer.prevPage}
+    <div className="pdf-split-viewer-container" ref={containerRef}>
+      {/* 1. Title, the report chooser, close */}
+      <div className="pdf-head">
+        <h2 className="pdf-head-title">{t.sourceViewer.previewTitle}</h2>
+        <label className="pdf-select">
+          <span>{t.sourceViewer.allReports.replace("{n}", String(documents.length))}</span>
+          <ChevronDown size={12} aria-hidden />
+          <select
+            value={currentDoc.document_id}
+            aria-label={t.sourceViewer.chooseReport}
+            onChange={(e) => {
+              onSelectDoc(e.target.value);
+              onClearCitation();
+            }}
           >
-            <ChevronLeftIcon size={13} />
+            {documents.map((doc) => (
+              <option key={doc.document_id} value={doc.document_id}>{doc.file_name}</option>
+            ))}
+          </select>
+        </label>
+        <span className="pdf-head-spacer" />
+        {onClose && (
+          <button type="button" onClick={closeViewer} className="pdf-close-btn" title={t.sourceViewer.closeViewer} aria-label={t.sourceViewer.closeViewer}>
+            <CloseIcon size={18} />
           </button>
-
-          <span className="pdf-page-indicator">
-            Page {currentPage} of {totalPages}
-          </span>
-
-          <button
-            type="button"
-            onClick={handleNextPage}
-            disabled={currentPage >= totalPages}
-            className="pdf-page-btn"
-            title={t.sourceViewer.nextPage}
-          >
-            <ChevronRightIcon size={13} />
-          </button>
-
-          <div className="pdf-toolbar-sep" />
-
-          {/* Zoom In / Out / Fit Width */}
-          <button
-            type="button"
-            onClick={handleZoomOut}
-            className="pdf-page-btn"
-            title={t.sourceViewer.zoomOutPct}
-          >
-            <ZoomOutIcon size={13} />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleToggleFitWidth}
-            className={`pdf-zoom-indicator ${isFitWidth ? "active" : ""}`}
-            title={isFitWidth ? t.sourceViewer.fitWidthClick : t.sourceViewer.zoomPctClick.replace("{zoom}", String(zoomLevel))}
-          >
-            <FitWidthIcon size={12} />
-            <span>{isFitWidth ? t.sourceViewer.fit : `${zoomLevel}%`}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleZoomIn}
-            className="pdf-page-btn"
-            title={t.sourceViewer.zoomInPct}
-          >
-            <ZoomInIcon size={13} />
-          </button>
-
-          <div className="pdf-toolbar-sep" />
-
-          {/* Open in new tab */}
-          {pdfUrl && (
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="pdf-page-btn"
-              title={t.sourceViewer.openPageNewTab.replace("{page}", String(currentPage))}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            </a>
-          )}
-
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="pdf-close-btn"
-              title={t.sourceViewer.closeViewer}
-            >
-              <CloseIcon size={13} />
-            </button>
-          )}
-        </div>
+        )}
       </div>
+
+      {/* The open report */}
+      <div className="pdf-file">
+        <FileTextIcon size={22} color="var(--accent-text)" />
+        <div className="pdf-file-text">
+          <b className="pdf-file-name" title={currentDoc.file_name}>{currentDoc.file_name}</b>
+          <small>{fileMeta}</small>
+        </div>
+        {pdfUrl && (
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="pdf-icon-btn"
+            title={t.sourceViewer.openPageNewTab.replace("{page}", String(currentPage))}
+            aria-label={t.sourceViewer.openPageNewTab.replace("{page}", String(currentPage))}
+          >
+            <ExternalLink size={18} aria-hidden />
+          </a>
+        )}
+      </div>
+
+      {/* Page number, zoom, full screen */}
+      <div className="pdf-pager">
+        <button type="button" onClick={handlePrevPage} disabled={currentPage <= 1} className="pdf-icon-btn" title={t.sourceViewer.prevPage} aria-label={t.sourceViewer.prevPage}>
+          <ChevronLeftIcon size={16} />
+        </button>
+        <input
+          className="pdf-page-input"
+          inputMode="numeric"
+          aria-label={t.sourceViewer.pageNumber}
+          value={pageDraft ?? String(currentPage)}
+          onFocus={(e) => e.target.select()}
+          onChange={(e) => setPageDraft(e.target.value.replace(/\D/g, ""))}
+          onBlur={commitPageDraft}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+        />
+        <span>/ {totalPages}</span>
+        <button type="button" onClick={handleNextPage} disabled={currentPage >= totalPages} className="pdf-icon-btn" title={t.sourceViewer.nextPage} aria-label={t.sourceViewer.nextPage}>
+          <ChevronRightIcon size={16} />
+        </button>
+
+        <span className="pdf-pager-spacer" />
+
+        <button type="button" onClick={handleZoomOut} className="pdf-icon-btn" title={t.sourceViewer.zoomOutPct} aria-label={t.sourceViewer.zoomOutPct}>
+          <ZoomOutIcon size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={handleToggleFitWidth}
+          className={`pdf-zoom-indicator ${isFitWidth ? "active" : ""}`}
+          title={isFitWidth ? t.sourceViewer.fitWidthClick : t.sourceViewer.zoomPctClick.replace("{zoom}", String(zoomLevel))}
+        >
+          <FitWidthIcon size={13} />
+          <span>{isFitWidth ? t.sourceViewer.fit : `${zoomLevel}%`}</span>
+        </button>
+        <button type="button" onClick={handleZoomIn} className="pdf-icon-btn" title={t.sourceViewer.zoomInPct} aria-label={t.sourceViewer.zoomInPct}>
+          <ZoomInIcon size={16} />
+        </button>
+        {document.fullscreenEnabled && (
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="pdf-icon-btn"
+            title={isFull ? t.sourceViewer.exitFullscreen : t.sourceViewer.fullscreen}
+            aria-label={isFull ? t.sourceViewer.exitFullscreen : t.sourceViewer.fullscreen}
+          >
+            {isFull ? <Minimize2 size={16} aria-hidden /> : <Maximize2 size={16} aria-hidden />}
+          </button>
+        )}
+      </div>
+
+      {/* The citation that opened this page, once its lines are marked on it */}
+      {activeCitation && citationHere && marks && marks.page === currentPage && marks.boxes.length + marks.figures.length > 0 && (
+        <div className="pdf-context-bar" role="status">
+          <FileTextIcon size={15} />
+          <span>{t.workspace.pageLabel} {currentPage} · {t.sourceViewer.highlightedInSource}</span>
+        </div>
+      )}
 
       {/* 2. Only when there is something to say: the cited report is gone, or the page has nothing to mark (a scan, or turned sideways). Otherwise the PDF alone, with the marks on it. */}
       {activeCitation && (citationGone || (citationHere && marks && marks.page === currentPage && marks.boxes.length + marks.figures.length === 0)) && (
@@ -407,6 +430,14 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
             <p className="pdf-empty-sub" role="status">{pdfFailed ? t.sourceViewer.pdfFailed : t.sourceViewer.pdfLoading}</p>
           </div>
         )}
+      </div>
+
+      <div className="pdf-note">
+        <FileTextIcon size={16} color="var(--accent-text)" />
+        <div>
+          <b>{t.sourceViewer.contextTitle}</b>
+          {t.sourceViewer.contextText}
+        </div>
       </div>
     </div>
   );

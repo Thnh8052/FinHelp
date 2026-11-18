@@ -60,7 +60,7 @@ export const TokensPage: React.FC = () => {
         <Card className="min-w-0">
           <CardHeader title={k.topUsers} subtitle={k.topUsersNote} icon={Users} />
           {topUsers.length ? (
-            <ol className="divide-y divide-white/5">
+            <ol className="divide-y divide-line">
               {topUsers.map((u, i) => {
                 const pct = Math.max(2, Math.round((u.total_tokens / topUsers[0].total_tokens) * 100));
                 return (
@@ -71,7 +71,7 @@ export const TokensPage: React.FC = () => {
                         <span className="truncate text-[13px] font-medium text-fg">@{u.username}</span>
                         <span className="font-mono text-xs text-fg-2">{fmt.number(u.total_tokens)}</span>
                       </div>
-                      <div className="mt-1.5 h-1 rounded-full bg-white/5" aria-hidden>
+                      <div className="mt-1.5 h-1 rounded-full bg-hover" aria-hidden>
                         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: PROMPT }} />
                       </div>
                     </div>

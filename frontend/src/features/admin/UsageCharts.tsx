@@ -60,7 +60,7 @@ export const UsageCharts: React.FC<{ series: DayUsage[]; tokensOnly?: boolean }>
     <button
       type="button"
       onClick={() => setAsTable((v) => !v)}
-      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium text-muted hover:bg-white/5 hover:text-fg"
+      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium text-muted hover:bg-hover hover:text-fg"
     >
       {asTable ? <BarChart3 size={14} aria-hidden /> : <Table2 size={14} aria-hidden />}
       {asTable ? c.chartToggle : c.tableToggle}
@@ -82,7 +82,7 @@ export const UsageCharts: React.FC<{ series: DayUsage[]; tokensOnly?: boolean }>
                 <th scope="col" className="py-2 text-right font-medium">{c.completion}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5 font-mono text-fg-2">
+            <tbody className="divide-y divide-line font-mono text-fg-2">
               {rows.map((r) => (
                 <tr key={r.date}>
                   <td className="py-1.5">{r.label}</td>

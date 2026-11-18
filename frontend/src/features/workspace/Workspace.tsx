@@ -6,6 +6,7 @@ import { DocumentManager } from "../../components/notebook/DocumentManager";
 import { SourceViewer } from "../../components/notebook/SourceViewer";
 import { ChatContainer } from "../../components/chat/ChatContainer";
 import { ChatHistoryList } from "../../components/chat/ChatHistoryList";
+import { StartScreen } from "../../components/chat/StartScreen";
 import { AuthModal } from "../../components/auth/AuthModal";
 import { Toast } from "../../components/common/Toast";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -45,15 +46,26 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     setIsSplitViewOpen(false);
   }, [notebookId]);
 
-  // Below 1100px the sources drawer and the PDF pane both slide over the chat from the right: opening the PDF closes the drawer
+  // The chat needs about 480px beside the sidebar (232) and a panel (320 or 448): under 1480px only one panel fits, so opening one closes the other
+  const oneAtATime = () => window.matchMedia("(max-width: 1480px)").matches;
   const openPdfPane = () => {
     setIsSplitViewOpen(true);
-    if (window.matchMedia("(max-width: 1100px)").matches) setIsSourcesOpen(false);
+    if (oneAtATime()) setIsSourcesOpen(false);
+    // sidebar 232 + source preview 448 leave a chat narrower than ~620px below 1320px (a table in an answer gets cut): the sidebar steps aside, one click brings it back
+    if (window.matchMedia("(max-width: 1320px)").matches) setIsSidebarOpen(false);
+  };
+  const setSourcesOpen = (open: boolean) => {
+    setIsSourcesOpen(open);
+    if (open && oneAtATime()) setIsSplitViewOpen(false);
+  };
+  // "Document library" has no page of its own: it opens the drawer where the reports are managed (on a phone the sidebar drawer gives way)
+  const openLibrary = () => {
+    setSourcesOpen(true);
+    if (window.matchMedia("(max-width: 768px)").matches) setIsSidebarOpen(false);
   };
 
   const unconfirmedDocs = docs.documents.filter(needsCatalogConfirmation);
   const notebookList = notebooks.map((n) => (n.notebook_id === notebookId ? { ...n, document_count: docs.documents.length, processing_count: docs.documents.filter(isDocProcessing).length } : n));
-  const activeSessionTitle = notebookTitle || (isAuthenticated ? t.workspace.financialAnalysisSession : t.workspace.guestTrialSession);
 
   // Khi click vào trích dẫn [1] Trang 12: Tự động mở Split-View, chuyển đúng tài liệu và nhảy tới trang đó
   const handleSelectCitation = (citation: CitationItem) => {
@@ -87,24 +99,18 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       {/* Top-Center Toast Notification */}
       <Toast toast={toast} onClose={closeToast} />
 
-      {/* Top Minimalist Header với 2 nút Toggle (Mockup V3) */}
-      <Navbar
-        notebookTitle={notebookTitle}
-        sourcesCount={docs.documents.length}
-        isSourcesOpen={isSourcesOpen}
-        onToggleSources={() => setIsSourcesOpen((prev) => !prev)}
-        isSplitViewOpen={isSplitViewOpen}
-        onToggleSplitView={() => setIsSplitViewOpen((prev) => !prev)}
-        isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-        onOpenAuthModal={() => setAuthModalOpen(true)}
-        onNavigateHome={onNavigateHome}
-      />
-
-      {/* Main 4-Zone Workstation (Sidebar | Chat | Sources Drawer | PDF Split-View) */}
+      {/* Workstation: Sidebar | (top bar over Chat | Sources drawer | Source preview) */}
       <SplitLayout
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+        header={
+          <Navbar
+            notebookTitle={notebookTitle}
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+            onOpenAuthModal={() => setAuthModalOpen(true)}
+          />
+        }
         sidebar={
           <ChatHistoryList
             notebooks={notebookList}
@@ -113,6 +119,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             onNewChat={newChat}
             onRenameNotebook={renameNotebook}
             onDeleteNotebook={deleteNotebook}
+            onNavigateHome={onNavigateHome}
+            onOpenLibrary={openLibrary}
+            onOpenAuth={() => setAuthModalOpen(true)}
             isGuest={!isAuthenticated}
           />
         }
@@ -139,12 +148,22 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               isLoading={chat.isLoading}
               loadingStage={chat.stage}
               onSelectCitation={handleSelectCitation}
-              onClearChat={() => chat.setMessages([])}
-              sessionTitle={activeSessionTitle}
-              onNewChat={newChat}
-              onOpenSources={() => setIsSourcesOpen((prev) => !prev)}
-              onToggleSources={() => setIsSourcesOpen((prev) => !prev)}
+              onToggleSources={() => setSourcesOpen(!isSourcesOpen)}
               isSourcesOpen={isSourcesOpen}
+              documentNames={Object.fromEntries(docs.documents.map((d) => [d.document_id, d.file_name]))}
+              chatKey={notebookId}
+              startScreen={(pickQuestion) => (
+                <StartScreen
+                  documents={docs.documents}
+                  isUploading={docs.isUploading}
+                  isGuest={!isAuthenticated}
+                  maxSources={maxSources}
+                  maxFileSizeMb={maxFileSizeMb}
+                  onUploadFiles={docs.uploadFiles}
+                  onManage={() => setSourcesOpen(!isSourcesOpen)}
+                  onPickQuestion={pickQuestion}
+                />
+              )}
               hasSources={docs.selectedDocIds.length > 0}
               isProcessing={docs.isUploading || docs.documents.some(isDocProcessing)}
               mentionOptions={docs.documents

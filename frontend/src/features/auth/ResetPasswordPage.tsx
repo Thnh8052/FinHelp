@@ -4,6 +4,7 @@ import { authService } from "../../services/auth";
 import { errorText } from "../../services/api";
 import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../../components/common/LanguageToggle";
+import { ThemeToggle } from "../../components/common/ThemeToggle";
 import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import "./auth-pages.css";
 
@@ -81,7 +82,8 @@ export const ResetPasswordPage: React.FC = () => {
     <div className="auth-page-wrapper">
       <div className="auth-page-card">
         {/* Language Switcher in top-right */}
-        <div className="auth-page-lang-toggle">
+        <div className="auth-page-tools">
+          <ThemeToggle />
           <LanguageToggle size="sm" />
         </div>
 

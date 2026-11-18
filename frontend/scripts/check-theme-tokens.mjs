@@ -3,6 +3,7 @@
 //     (a line that holds the marker "theme-ok" is allowed: the white PDF paper, brand marks)
 //  2. every var(--x) that is used is defined in index.css or in the file that uses it
 //  3. the dark block and the light block of index.css define exactly the same tokens
+//  4. no Tailwind palette class (bg-slate-900, text-white, ...) in a .tsx file: it would not follow the theme
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
@@ -48,6 +49,20 @@ for (const file of walk(SRC)) {
 }
 if (literalLines > 15) problems.push(`... and ${literalLines - 15} more colour literal lines (${literalLines} in all)`);
 
+// --- Tailwind palette classes (bg-slate-900, text-white, ...) do not change with the theme: use the token classes (bg-card, text-fg, ...) ---
+const PALETTE = /(?<![\w-])(?:[a-z-]+:)*(?:bg|text|border|from|to|via|ring|divide|fill|stroke|shadow|outline|decoration|caret|placeholder)-(?:(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}|white|black)(?![\w-])/;
+let paletteLines = 0;
+for (const file of walk(SRC)) {
+  if (!file.endsWith(".tsx")) continue;
+  readFileSync(file, "utf8").split("\n").forEach((line, i) => {
+    if (PALETTE.test(line) && !line.includes("theme-ok")) {
+      paletteLines++;
+      if (paletteLines <= 15) problems.push(`${relative(SRC, file)}:${i + 1}: palette class (${PALETTE.exec(line)[0]}) -> use a token class`);
+    }
+  });
+}
+if (paletteLines > 15) problems.push(`... and ${paletteLines - 15} more palette class lines (${paletteLines} in all)`);
+
 // --- every var(--x) is defined somewhere ---
 const defined = new Set([...(dark ?? []), ...(light ?? [])]);
 const colorNames = [...stripComments(indexText).matchAll(/(--[a-z0-9-]+)\s*:/g)].map((x) => x[1]);
@@ -65,4 +80,4 @@ if (problems.length) {
   console.error(`theme check FAILED (${problems.length} problems)\n` + [...new Set(problems)].join("\n"));
   process.exit(1);
 }
-console.log("theme check OK: dark and light define the same tokens, no stray colour literals, no undefined variables");
+console.log("theme check OK: dark and light define the same tokens, no stray colour literals, no palette classes, no undefined variables");

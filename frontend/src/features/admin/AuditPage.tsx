@@ -15,7 +15,7 @@ export const AnswerList: React.FC<{ answers: AdminAnswer[]; emptyTitle: string; 
   if (!answers.length) return <EmptyState title={emptyTitle} hint={emptyHint} icon={Flag} />;
 
   return (
-    <ul className="divide-y divide-white/5">
+    <ul className="divide-y divide-line">
       {answers.map((item) => (
         <li key={item.message_id} className="px-5 py-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-dim">
@@ -23,7 +23,7 @@ export const AnswerList: React.FC<{ answers: AdminAnswer[]; emptyTitle: string; 
             <span aria-hidden>·</span>
             <span>{fmt.dateTime(item.created_at)}</span>
             {item.rating === -1 && (
-              <span className="inline-flex items-center gap-1 rounded-md bg-negative-soft px-1.5 py-0.5 font-medium text-rose-300">
+              <span className="inline-flex items-center gap-1 rounded-md bg-negative-soft px-1.5 py-0.5 font-medium text-negative-text">
                 <Flag size={11} aria-hidden />
                 {item.rated_at ? fill(a.flaggedAt, { time: fmt.dateTime(item.rated_at) }) : a.flaggedTag}
               </span>
@@ -31,7 +31,7 @@ export const AnswerList: React.FC<{ answers: AdminAnswer[]; emptyTitle: string; 
           </div>
           <p className="mt-1.5 text-[13.5px] font-medium leading-snug text-fg">{item.question || a.noQuestion}</p>
           <details className="group mt-2">
-            <summary className="cursor-pointer list-none text-xs font-medium text-blue-400 hover:text-blue-300 [&::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none text-xs font-medium text-accent-text hover:underline [&::-webkit-details-marker]:hidden">
               <span className="group-open:hidden">{a.showAnswer}</span>
               <span className="hidden group-open:inline">{a.hideAnswer}</span>
             </summary>

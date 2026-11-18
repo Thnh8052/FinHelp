@@ -4,6 +4,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { authService } from "../../services/auth";
 import { errorText } from "../../services/api";
 import { LanguageToggle } from "../common/LanguageToggle";
+import { ThemeToggle } from "../common/ThemeToggle";
 import { CloseIcon, SparklesIcon } from "../common/Icons";
 import "./auth.css";
 
@@ -117,6 +118,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
             </p>
           </div>
           <div className="auth-header-actions">
+            <ThemeToggle />
             <LanguageToggle size="sm" />
             <button onClick={onClose} className="auth-close-btn" aria-label={t.common.close}>
               <CloseIcon size={16} />

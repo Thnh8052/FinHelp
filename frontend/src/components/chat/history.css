@@ -1,0 +1,377 @@
+/*
+ * ChatHistoryList: the sidebar. It is navy in BOTH themes (Figma), so every colour here is a --side-* token,
+ * never the page tokens (--text-primary is dark in the light theme and would vanish on the navy).
+ */
+.history-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px 14px 14px;
+  background-color: var(--side-bg);
+  color: var(--side-fg);
+}
+
+/* Logo, name, one-line tagline */
+.history-brand-home {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--side-strong);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+}
+
+.history-brand-sub {
+  padding: 6px 8px 20px;
+  color: var(--side-muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.history-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background-color: var(--accent-primary);
+  color: var(--on-accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--transition);
+}
+
+.history-new-btn:hover {
+  background-color: var(--accent-hover);
+}
+
+/* The search field looks like a menu row until it is used */
+.history-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  margin-top: 20px;
+  padding: 0 10px;
+  border-radius: 9px;
+  color: var(--side-fg);
+  transition: background-color var(--transition);
+}
+
+.history-search:hover,
+.history-search:focus-within {
+  background-color: var(--side-hover);
+}
+
+.history-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--side-strong);
+  font: inherit;
+  font-size: 14px;
+}
+
+.history-search-input::placeholder {
+  color: var(--side-fg);
+  opacity: 1;
+}
+
+.history-search kbd {
+  color: var(--side-muted);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.history-section-title {
+  padding: 22px 9px 8px;
+  color: var(--side-muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.history-nav {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--side-fg);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition);
+}
+
+.history-nav:hover {
+  background-color: var(--side-hover);
+}
+
+.history-nav.active {
+  background-color: var(--side-active);
+  color: var(--side-strong);
+  font-weight: 600;
+  cursor: default;
+}
+
+.history-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-empty {
+  padding: 10px 9px;
+  color: var(--side-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.history-card {
+  position: relative;
+  padding: 9px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background-color var(--transition);
+}
+
+.history-card:hover {
+  background-color: var(--side-hover);
+}
+
+.history-card.active {
+  background-color: var(--side-active);
+}
+
+.history-card-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.history-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.history-card-title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--side-fg);
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-card.active .history-card-title {
+  color: var(--side-strong);
+}
+
+.history-card-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: var(--side-muted);
+  font-size: 12px;
+}
+
+.status-active {
+  color: var(--side-fg);
+  font-weight: 600;
+}
+
+.history-card-processing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.history-card-del-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 5px;
+  border: none;
+  border-radius: 5px;
+  background-color: transparent;
+  color: var(--side-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: background-color var(--transition), color var(--transition), opacity var(--transition);
+}
+
+.history-card:hover .history-card-del-btn,
+.history-card.active .history-card-del-btn,
+.history-card-del-btn:focus-visible {
+  opacity: 1;
+}
+
+.history-card-del-btn:hover {
+  background-color: var(--side-hover);
+  color: var(--side-danger);
+}
+
+.history-card-rename-btn:hover {
+  color: var(--side-strong);
+}
+
+.history-card-del-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.history-card-del-btn:disabled:hover {
+  background-color: transparent;
+  color: var(--side-muted);
+}
+
+/* Inline rename and the "really delete?" pair */
+.history-rename-input {
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--border-focus);
+  border-radius: 5px;
+  background-color: var(--side-card);
+  color: var(--side-strong);
+  font: inherit;
+  font-size: 14px;
+}
+
+.history-rename-input:focus {
+  outline: none;
+}
+
+.history-card-confirm {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.history-card-confirm button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: none;
+  border-radius: 5px;
+  background-color: transparent;
+  cursor: pointer;
+}
+
+.history-card-confirm button:focus-visible,
+.history-brand-home:focus-visible,
+.history-nav:focus-visible,
+.history-new-btn:focus-visible,
+.history-guest-link:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.history-card-confirm-yes {
+  color: var(--side-danger);
+}
+
+.history-card-confirm-no {
+  color: var(--side-muted);
+}
+
+.history-card-confirm button:hover {
+  background-color: var(--side-hover);
+}
+
+/* Guest: one card that says what signing in gives, and who is in the workspace */
+.history-guest-card {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background-color: var(--side-card);
+  color: var(--side-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.history-guest-title {
+  display: block;
+  margin: 10px 0 4px;
+  color: var(--side-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.history-guest-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--side-strong);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.history-guest-link:hover {
+  text-decoration: underline;
+}
+
+.history-me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 16px 8px 0;
+  border-top: 1px solid var(--side-border);
+  color: var(--side-strong);
+}
+
+.history-me-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.history-me-plan {
+  display: block;
+  margin-top: 2px;
+  color: var(--side-muted);
+  font-size: 12px;
+  line-height: 1.2;
+}

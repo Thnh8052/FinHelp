@@ -1,4 +1,4 @@
-/* Standalone Auth Pages: FinHelp Unified Dark SaaS Palette */
+/* Standalone Auth Pages (sign in, register, reset password): tokens only, so they follow the theme */
 
 .auth-page-wrapper {
   min-height: 100vh;
@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--bg-app);
+  background: radial-gradient(900px 420px at 50% -10%, var(--hero-glow), transparent 70%), var(--bg-app);
   padding: 24px 16px;
   box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -19,10 +19,26 @@
   max-width: 440px;
   background-color: var(--bg-card);
   border: 1px solid var(--border-medium);
-  border-radius: 12px;
-  padding: 36px 32px;
-  box-shadow: 0 20px 40px color-mix(in srgb, var(--shadow-ink) 40%, transparent);
+  border-radius: 18px;
+  padding: 36px 32px 30px;
+  box-shadow: var(--shadow);
   box-sizing: border-box;
+}
+
+/* Theme and language switches, top right of the card */
+.auth-page-tools {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-page-tools .theme-toggle {
+  width: 32px;
+  height: 32px;
 }
 
 .auth-page-brand {
@@ -40,11 +56,12 @@
 }
 
 .auth-page-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
-  line-height: 28px;
-  margin: 0 0 8px 0;
+  line-height: 32px;
+  margin: 0 0 6px 0;
 }
 
 .auth-page-desc {
@@ -79,8 +96,8 @@
   font-size: 14px;
   color: var(--text-primary);
   background-color: var(--bg-input);
-  border: 1px solid var(--border-medium);
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
   box-sizing: border-box;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -88,7 +105,7 @@
 
 .auth-page-input:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 1px var(--accent-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 20%, transparent);
 }
 
 .auth-page-input::placeholder {
@@ -117,7 +134,7 @@
   font-size: 14px;
   font-weight: 600;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -138,7 +155,7 @@
 
 .auth-page-alert {
   padding: 12px 14px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   line-height: 18px;
   margin-bottom: 16px;
@@ -191,7 +208,6 @@
 
 .auth-page-link-small {
   font-size: 12px;
-  color: var(--text-dim);
 }
 
 .auth-page-row {
