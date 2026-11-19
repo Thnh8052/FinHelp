@@ -81,10 +81,10 @@ def test_the_note_under_the_answer_lists_what_stays_wrong_in_the_answers_languag
     found = [review.Finding("figure", review.REPAIRABLE, "$99,999", ""), review.Finding("arithmetic", review.REPAIRABLE, "1 + 1 = 3", ""),
              review.Finding("citation", review.REPAIRABLE, "[7]", ""), review.Finding("language", review.REPAIRABLE, "", "")]
     vi = review.annotate("Câu trả lời." + META, found, "vi")
-    assert "⚠️ Lưu ý: số chưa kiểm chứng được trong đoạn trích: $99,999" in vi and "phép tính viết ra cho kết quả khác" in vi
+    assert "⚠️ Lưu ý: số chưa đối chiếu được với đoạn trích hay phép tính trong câu trả lời: $99,999" in vi and "phép tính viết ra cho kết quả khác" in vi
     assert "trích dẫn không khớp nguồn" in vi and vi.index("⚠️") < vi.index("<answer_meta>")
     en = review.annotate("An answer.", found[:1], "en")
-    assert en.endswith("⚠️ Note: figures not verified in the excerpts: $99,999.")
+    assert en.endswith("⚠️ Note: figures not traced to the excerpts or to a calculation in the answer: $99,999.")
     assert review.annotate("An answer.", [review.Finding("language", review.REPAIRABLE, "", "")], "en") == "An answer."
 
 
@@ -142,11 +142,11 @@ async def test_an_unverified_figure_is_noted_under_the_answer_in_its_language(mo
     orch, _ = _orchestrator([], monkeypatch)
     calls = _model(orch, monkeypatch, "AMD revenue was $99,999 million [1].")
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 1 and "⚠️ Note: figures not verified in the excerpts: $99,999" in r["answer"]
+    assert len(calls) == 1 and "⚠️ Note: figures not traced to the excerpts or to a calculation in the answer: $99,999" in r["answer"]
     assert r["trace"]["review"]["outcome"] == "annotated" and not r["verification"]["passed"] and r["verification"]["unverified_figures"] == ["$99,999"]
     calls = _model(orch, monkeypatch, "Doanh thu AMD là 99,999 triệu USD [1].")
     r = await orch._answer_one("Doanh thu AMD năm 2024 là bao nhiêu?", "nb", _scope(), Decision(lang="vi"))
-    assert len(calls) == 1 and "⚠️ Lưu ý: số chưa kiểm chứng được trong đoạn trích: 99,999" in r["answer"]
+    assert len(calls) == 1 and "⚠️ Lưu ý: số chưa đối chiếu được với đoạn trích hay phép tính trong câu trả lời: 99,999" in r["answer"]
 
 
 async def test_an_answer_in_the_wrong_language_is_kept_as_it_is(monkeypatch):

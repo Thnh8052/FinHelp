@@ -239,3 +239,29 @@ def test_a_change_of_percents_written_in_basis_points_is_right():
     assert wrong_steps("Gross margin rose: 11.20% − 11.02% = 18 basis points [2].") == []
     assert len(wrong_steps("Gross margin rose: 11.20% − 11.02% = 28 basis points [2].")) == 1
     assert unverified("Gross margin rose from 11.02% to 11.20% [1]: 11.20% − 11.02% = 18 bps.", [{"content": "margin 11.20% and 11.02%"}]) == []
+
+
+# ---------------------------------------------------------------- a result written with its sign (live chat answer msg_7924779c, 19/11)
+COSTCO_MARGINS = [{"content": "Operating income 3,624 and 5,435; total revenue 116,199 and 166,761"}]
+
+
+def test_a_result_written_with_a_plus_sign_is_read():
+    """"3.2591% − 3.1188% = +0.1403 điểm phần trăm" was no step (the "+" stopped the reader), so the right 0.1403 was flagged under a right answer."""
+    vi = ("- FY2015: 3,624 / 116,199 = 3.1188% ≈ 3.12%.\n- FY2020: 5,435 / 166,761 = 3.2591% ≈ 3.26%.\n"
+          "- Thay đổi: 3.2591% − 3.1188% = {r} điểm phần trăm ≈ +0.14 điểm phần trăm.")
+    en = ("- FY2015: 3,624 / 116,199 = 3.1188%.\n- FY2020: 5,435 / 166,761 = 3.2591%.\n- Change: 3.2591% − 3.1188% = {r} percentage points.")
+    assert unverified(vi.format(r="+0.1403"), COSTCO_MARGINS) == []
+    assert unverified(en.format(r="+0.1403"), COSTCO_MARGINS) == []
+    assert "0.2403" in " ".join(unverified(vi.format(r="+0.2403"), COSTCO_MARGINS))
+    assert "0.2403" in " ".join(unverified(en.format(r="+0.2403"), COSTCO_MARGINS))
+    assert wrong_steps("Difference: 5.9% − 3.3% = +2.6 percentage points.") == []
+    assert len(wrong_steps("Difference: 5.9% − 3.3% = +3.6 percentage points.")) == 1
+
+
+def test_a_step_that_mixes_scales_is_not_judged():
+    """Held-out chat answer msg_baf3cdc6 (19/11): "1,4 tỷ − 848 triệu ≈ +552 triệu USD" is right (1,400 − 848), but read without its unit words it
+    was 1.4 − 848 and reported as wrong. A step whose numbers carry different scales is left alone; one scale is still judged."""
+    assert wrong_steps("Chi phí lãi vay: 1,4 tỷ − 848 triệu ≈ **+552** triệu USD [5].") == []
+    assert wrong_steps("Interest expense: $1.4 billion − $848 million ≈ +$552 million [5].") == []
+    assert len(wrong_steps("Chi phí lãi vay: 1.400 triệu − 848 triệu = 652 triệu USD [5].")) == 1
+    assert len(wrong_steps("Interest expense: $1,400 million − $848 million = $652 million [5].")) == 1

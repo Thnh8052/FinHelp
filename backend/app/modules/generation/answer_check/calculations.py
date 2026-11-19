@@ -26,12 +26,13 @@ GROUP = f"[{GROUP_SPACES}]"
 TOKEN = rf"(?:\d{{1,3}}(?:{GROUP}\d{{3}})+(?!\d)(?:[.,]\d+)?|\d(?:[.,]?\d)*)"
 NUMTOK = re.compile(TOKEN)
 CLOSE = r"(?:\s*\))*"  # closing brackets, also after a unit word read as spaces ("($373,396 million + $737 million)")
-NUM = rf"(?:\*\*)?\(*[-−]?\$?{TOKEN}%?{CLOSE}%?…?(?:\*\*)?"  # bold included ("(9.7)%": a percent after its bracket) ("**6.91x**", "0.6836…"): Markdown bold is not multiplication
+NUM = rf"(?:\*\*)?\(*[-−+]?\$?{TOKEN}%?{CLOSE}%?…?(?:\*\*)?"  # bold included ("**6.91x**", "0.6836…"): Markdown bold is not multiplication;
+# "(9.7)%": a percent after its bracket; "= +0.1403": a result written with its sign (live chat answer 19/11)
 EXPR = rf"{NUM}(?:\s*[-+−–×x*/÷^]\s*{NUM})*"
 SEP = r"(?:=|≈|→)"  # "1.0150 → 101.0%" states a result as "=" does
 # a chain joined by "=", "≈" or "→": "(1,185 + 454) ÷ 1,513 = 1,639 ÷ 1,513 = 1.08"; never inside a date (4/6/2019) or a number
 CHAIN = re.compile(rf"(?<![\w/.,])({EXPR}(?:\s*{SEP}\s*{EXPR})+)(?![\d/])")
-SINGLE = re.compile(rf"(?:\*\*)?\(*[-−]?\$?({TOKEN})%?{CLOSE}%?…?(?:\*\*)?")
+SINGLE = re.compile(rf"(?:\*\*)?\(*[-−+]?\$?({TOKEN})%?{CLOSE}%?…?(?:\*\*)?")
 # unit words after a number ("$4,258 million + $56 million", "= 52.60 days", "3,46 lần") are read as spaces of the same length: the calculation stays
 # one piece and every position in the text stays where it was (18/11: 33 figure findings of 923 stored answers came from these words)
 UNIT_WORDS = re.compile(r"(?<=[\d%])(?:\s+(?:million|billion|thousand|trillion|mn|bn|triệu|tỷ|nghìn|ngàn|USD|VND|đồng|days?|ngày|times|lần)(?!\w))+", re.I)
@@ -40,7 +41,7 @@ CITATION = re.compile(r"\[\d+(?:\s*[,;]\s*\d+)*\]")  # "[1,2]" is not a number w
 REFERENCE = re.compile(r"(?:excerpts?|pages?|notes?|items?|\^)\s*$", re.I)
 CONSTANTS = {365.0, 360.0, 100.0, 52.0, 53.0}  # days, weeks, percent: standard inputs no excerpt prints (numbers up to 12 are always allowed)
 SMALL = 12
-OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.USub: operator.neg, ast.Pow: operator.pow}
+OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.USub: operator.neg, ast.UAdd: operator.pos, ast.Pow: operator.pow}
 BRACKETS = {"[": "(", "]": ")"}  # "65,398 ÷ [(47,528 + 50,710) ÷ 2]": square brackets group like round ones (a citation [1] stays a citation)
 
 
@@ -131,9 +132,20 @@ def steps(text: str) -> List[Tuple[str, str, int]]:
             pieces.append((part, base + pos))
             pos += len(part)
         exprs = pieces[::2]
-        for (left, _), (right, rstart) in zip(exprs, exprs[1:]):
+        for (left, lstart), (right, rstart) in zip(exprs, exprs[1:]):
+            if len(_scales(text[lstart:rstart + len(right) + 16])) > 1:
+                continue  # "1,4 tỷ − 848 triệu ≈ 552 triệu": read without its unit words it is 1.4 − 848 (held-out chat answer 19/11)
             out.append((left.strip(), right.strip(), rstart + (len(right) - len(right.lstrip()))))
     return out
+
+
+SCALE_WORDS = {"million": "m", "mn": "m", "triệu": "m", "billion": "b", "bn": "b", "tỷ": "b", "thousand": "k", "nghìn": "k", "ngàn": "k", "trillion": "t"}
+SCALE = re.compile(rf"(?<=[\d%])\s*({'|'.join(SCALE_WORDS)})(?!\w)", re.I)
+
+
+def _scales(span: str) -> set:
+    """The scales the numbers of a span are written in ("1,4 tỷ − 848 triệu": billions and millions)."""
+    return {SCALE_WORDS[m.group(1).lower()] for m in SCALE.finditer(span)}
 
 
 def is_calc(left: str) -> bool:

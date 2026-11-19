@@ -64,7 +64,7 @@ async def test_what_stays_wrong_is_flagged_not_hidden(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $99,999 million [1]."], monkeypatch)
     r = await orch._answer_one("Doanh thu AMD và NVIDIA năm 2024", "nb", _scope(), Decision(lang="vi"))
     assert len(calls) == 1 and not r["verification"]["passed"]
-    assert "⚠️ Lưu ý: số chưa kiểm chứng được trong đoạn trích: $99,999" in r["answer"]
+    assert "⚠️ Lưu ý: số chưa đối chiếu được với đoạn trích hay phép tính trong câu trả lời: $99,999" in r["answer"]
 
 
 async def test_a_clean_answer_costs_no_second_call(monkeypatch):

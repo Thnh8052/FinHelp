@@ -99,7 +99,9 @@ def annotate(answer: str, findings: Sequence[Finding], lang: str) -> str:
     figures = [f.text for f in findings if f.check == "figure"]
     parts = []
     if figures:
-        parts.append(("số chưa kiểm chứng được trong đoạn trích: " if vi else "figures not verified in the excerpts: ") + ", ".join(figures))
+        # a computed figure is never IN an excerpt: the line says it was traced to neither an excerpt nor a calculation (owner 19/11)
+        parts.append(("số chưa đối chiếu được với đoạn trích hay phép tính trong câu trả lời: " if vi
+                      else "figures not traced to the excerpts or to a calculation in the answer: ") + ", ".join(figures))
     if any(f.check == "arithmetic" for f in findings):
         parts.append("có phép tính viết ra cho kết quả khác với kết quả đã ghi" if vi else "a written calculation gives a different result than the one stated")
     if any(f.check == "citation" for f in findings):

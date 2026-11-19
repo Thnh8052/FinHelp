@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Sequence, Set, Tuple
 
 import numpy as np
 
-from app.modules.generation.answer_check.amounts import DAY, Amount, find_amounts
+from app.modules.generation.answer_check.amounts import DAY, UNIT_WORD, Amount, find_amounts
 from app.modules.generation.answer_check.calculations import CONSTANTS, NUMTOK, SINGLE, exact, is_calc, readings_of, steps, value_of, written_results
 
 META = "<answer_meta>"  # generator v3 appends a machine block; only the text before it is the answer
@@ -28,12 +28,17 @@ REFERENCE_BEFORE = re.compile(r"(?:\b(?:pages?|pp?\.|trang|notes?|items?|thuyế
 YEAR_PERCENT = re.compile(r"(?:19|20)\d\d\s+%")  # "Full Year 2022 % change": a year heading a column of changes
 
 
+def _year(a: Amount, text: str) -> bool:
+    """A year, unless a scale or currency word follows it: "1999 million" is an amount (19/11)."""
+    return a.is_year and not UNIT_WORD.match(text[a.end:].lstrip())
+
+
 def _figures(answer: str) -> List[Amount]:
     text = answer.split(META)[0]
     days = [m.span(m.lastindex) for m in DAY.finditer(text)]  # "June 30", "30/06/2021", "2021-06-30", "ngày 30": the day of a date is not a figure
     out = []
     for a in find_amounts(text, space_groups=True):  # "89 913" is one figure
-        if a.is_year or a.is_reference or a.value is None or any(s <= a.start < e for s, e in days):
+        if _year(a, text) or a.is_reference or a.value is None or any(s <= a.start < e for s, e in days):
             continue
         if REFERENCE_BEFORE.search(text[max(0, a.start - 40):a.start]) or YEAR_PERCENT.fullmatch(a.raw):
             continue
@@ -61,8 +66,8 @@ def _readings(a: Amount) -> List[Tuple[float, int]]:
 def _excerpt_numbers(chunks: Sequence[Dict[str, Any]]) -> List[float]:
     """Every number the excerpts print: each way to read it, and a space-grouped "89 913" both as 89913 and as the two numbers a reader
     of a flattened table row could also see (the columns "3 650 3 484" must not hide 3 650)."""
-    amounts = [a for c in chunks for grouped in (False, True) for a in find_amounts(c.get("content", ""), space_groups=grouped)]
-    return [v for a in amounts if a.value is not None and not a.is_year and a.value != 0 for v, _ in _readings(a)]
+    amounts = [(a, c.get("content", "")) for c in chunks for grouped in (False, True) for a in find_amounts(c.get("content", ""), space_groups=grouped)]
+    return [v for a, text in amounts if a.value is not None and not _year(a, text) and a.value != 0 for v, _ in _readings(a)]
 
 
 def _trusted(chunks: Sequence[Dict[str, Any]]) -> set:

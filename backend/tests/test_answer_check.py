@@ -184,3 +184,23 @@ def test_a_figure_after_a_reference_word_is_still_checked():
     assert check_numbers("Note: revenue was $3,456 million (page 4).", TABLE)["unverified"] == ["$3,456"]
     assert check_numbers("Ghi chú: doanh thu 3.456 triệu USD (trang 4).", TABLE)["unverified"] == ["3.456"]
     assert check_numbers("Page views rose 113% in FY2019.", TABLE)["unverified"] == ["113%"]
+
+
+# ---------------------------------------------------------------- figures that were never checked (19/11)
+LOSS = [{"content": "| Net income (loss) | 1,725 | (45) |\n| Revenue | 1,999 | 1,725 |"}]
+
+
+def test_a_small_loss_in_brackets_before_a_unit_is_a_figure_not_a_clause_marker():
+    """"(45) million" was read like "(1) Includes ...": never checked, so a wrong "(47) million" went through."""
+    assert status("The company lost (45) million in 2019 [1].", LOSS) == {"(45)": "verified"}
+    assert status("Công ty lỗ (45) triệu USD năm 2019 [1].", LOSS) == {"(45)": "verified"}
+    assert check_numbers("The company lost (47) million in 2019 [1].", LOSS)["unverified"] == ["(47)"]
+    assert check_numbers("(1) Includes restructuring costs [1].", LOSS)["checked"] == 0  # a clause marker stays one
+
+
+def test_an_amount_written_like_a_year_before_a_unit_is_a_figure():
+    """"1999 million" was skipped as the year 1999."""
+    assert status("Revenue was 1999 million in 2019 [1].", LOSS) == {"1999": "verified"}
+    assert status("Doanh thu năm 2019 là 1999 triệu USD [1].", LOSS) == {"1999": "verified"}
+    assert check_numbers("Revenue was 1998 million in 2019 [1].", LOSS)["unverified"] == ["1998"]
+    assert check_numbers("In 2019 and 2020 revenue grew [1].", LOSS)["checked"] == 0  # years stay years
