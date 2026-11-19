@@ -35,6 +35,8 @@ export interface StreamHandlers {
   onUnderstood: (text: string, alternatives: ChatMessage["alternatives"]) => void;
   /** The next piece of the answer as it is written; the recorded answer (the resolved value) replaces the pieces. */
   onDelta: (text: string) => void;
+  /** The answer being written broke a rule of the server's output checks: what was shown must go; the final answer arrives with "done". */
+  onRetract?: () => void;
 }
 
 /** POST /chat/query/stream: server-sent events (stage, understood, delta) ending in done (the recorded answer) or error. */
@@ -57,6 +59,7 @@ async function queryStream(body: QueryRequest, on: StreamHandlers): Promise<Quer
       if (kind === "stage") on.onStage(data.name);
       else if (kind === "understood") on.onUnderstood(data.text, data.alternatives);
       else if (kind === "delta") on.onDelta(data.text);
+      else if (kind === "retract") on.onRetract?.();
       else if (kind === "done") return data as QueryResponse;
       else if (kind === "error") throw new ApiError(data.status, data.code, data.params ?? {});
     }

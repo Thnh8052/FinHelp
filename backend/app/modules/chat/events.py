@@ -55,6 +55,12 @@ def writing() -> None:
         stream.emit("stage", {"name": "writing"})
 
 
+def retract() -> None:
+    """The streamed answer broke a hard rule of the output checks (answer_check/policy.checked_stream): the interface removes what it showed and waits
+    for the final event, which carries the reply that replaces the answer."""
+    emit("retract")
+
+
 def no_answer_stream() -> None:
     """For answers assembled from several parts: the final event carries the whole text, nothing is streamed piece by piece."""
     stream = _STREAM.get()

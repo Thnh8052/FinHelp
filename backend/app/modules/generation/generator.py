@@ -530,6 +530,9 @@ async def generate_answer(question: str, chunks: List[Dict[str, Any]], notes: Op
     first answer of the request is sent piece by piece as it is written (events.answer_sink); the returned text is still the whole answer."""
     multi_doc = len({c["document_id"] for c in chunks}) > 1
     sink = events.answer_sink()
+    if sink and settings.OUTPUT_POLICY_ENABLED:  # a sentence reaches the browser only once the output checks passed on it (red-team 19/11)
+        from app.modules.generation.answer_check.policy import checked_stream  # here, not at the top: policy imports this module
+        sink = checked_stream(sink, chunks, detect_language(question), events.retract)
     answer = await chat_completion(build_messages(build_context(chunks), question, multi_doc, notes), max_tokens=max_tokens,
                                    on_delta=hold_meta(sink) if sink else None, stream=True)  # a stream even for a second writing: it may write as long as the first answer
     if not answer and settings.GENERATION_PROMPT in STRUCTURED_PROMPTS:
