@@ -143,6 +143,12 @@ export function useChat({ notebookId, selectedDocIds, maxSources, showToast, onL
             pending += text;
             if (!frame) frame = requestAnimationFrame(draw);
           },
+          onRetract: () => {  // the server's checks stopped the answer: nothing it wrote stays on screen
+            if (frame) cancelAnimationFrame(frame);
+            frame = 0;
+            pending = "";
+            upsert({ content: "" });
+          },
         }
       );
       if (frame) cancelAnimationFrame(frame);

