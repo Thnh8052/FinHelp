@@ -4,7 +4,7 @@ import time
 from collections import Counter
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from qdrant_client import AsyncQdrantClient
@@ -22,6 +22,8 @@ from app.modules.query_router.input_policy import COMPARE_CUE, MSG, TERMINAL, De
 from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_from_focus, focus_view
 from app.modules.query_router import guard
 from app.modules.query_router.bridge import writer_note
+from app.modules.query_router.catalog_route import company_key
+from app.modules.generation.conflicts import ANNUAL_FORMS, Report, conflict_notes
 from app.modules.query_router.planner import PlanItem, unlisted_companies
 from app.modules.query_router.catalog_route import company_key
 from app.modules.query_router.target_scope import TargetDecision, decide_targets, merge_understood, understood_line
@@ -68,6 +70,7 @@ class QuestionPlan:
     followup: Optional[Dict[str, Any]] = None  # {"method": "focus" | "llm", "resolved": the rewrite}
     prefix: str = ""  # "I understood the question as ...", shown above the answer
     stop: Optional[Dict[str, Any]] = None  # a reply that ends the question here: nothing is searched
+    unselected: List[SourceInfo] = field(default_factory=list)  # the chat's ready reports not selected: a period they cover is named (B2, 18/11)
 
 
 @dataclass
@@ -225,6 +228,10 @@ class RAGWorkflowOrchestrator:
         if found.missing:
             notes.append("No excerpt was found in: " + "; ".join(labels.get(d, d) for d in found.missing)
                          + ". Say that the figures of these sources could not be found in the documents; do not estimate them.")
+        # two annual reports printing different figures for one item and year (a restatement): the model is told, so the answer says so (owner 19/11)
+        reports = {d.document_id: Report(company_key(d.metadata.company_name or d.file_name), (d.metadata.report_type or "").lower() in ANNUAL_FORMS,
+                                         d.metadata.fiscal_year, labels.get(d.document_id, d.file_name)) for d in scope}
+        notes.extend(conflict_notes(retrieved, reports))
         docs = [scope_doc(d) for d in scope]
         t0 = time.perf_counter()
         answer, checked = await self._write_checked(query, retrieved, notes, docs, decision.lang)
@@ -450,7 +457,7 @@ class RAGWorkflowOrchestrator:
         p.ready_count = len(ready)
         p.infos = [source_info(d) for d in scope]
         chosen = {d.document_id for d in scope}
-        unselected = [source_info(d) for d in ready if d.document_id not in chosen]  # a period they cover is named in the reply (B2, 18/11)
+        p.unselected = unselected = [source_info(d) for d in ready if d.document_id not in chosen]
         history = history or []
         tagged = {**focus_state, "document_ids": mentions} if mentions and focus_state else focus_state  # @file names the company: the topic only gives the item and year
         p.focus = focus = focus_view(tagged, [d.document_id for d in scope], p.infos)
@@ -481,18 +488,19 @@ class RAGWorkflowOrchestrator:
                 p.stop["actions"] = {"chooser": [], "search_more": None, "edit_question": True, "try_again": False}
         return p
 
-    async def _split_parts(self, decision: Decision, infos: List[SourceInfo], ready_count: int) -> List[Tuple[str, Decision]]:
+    async def _split_parts(self, decision: Decision, infos: List[SourceInfo], ready_count: int,
+                           unselected: Sequence[SourceInfo] = ()) -> List[Tuple[str, Decision]]:
         """Each question of a message that asks several, decided on its own. A part that leans on an earlier one ("How about its total
         assets?") is rewritten with the earlier parts as the conversation: only their text is needed, never their answers."""
         parts: List[Tuple[str, Decision]] = []
         earlier: List[dict] = []
         for sub in decision.sub_questions:
             context = earlier + [{"role": "assistant", "content": "(answered above)"}] if earlier else []
-            sub_decision = decide(sub, infos, ready_count, context)
+            sub_decision = decide(sub, infos, ready_count, context, unselected=unselected)
             if sub_decision.action == "rewrite_followup":
                 rewritten = await rewrite_followup(sub, context)
                 if rewritten:
-                    sub, sub_decision = rewritten, decide(rewritten, infos, ready_count, [])
+                    sub, sub_decision = rewritten, decide(rewritten, infos, ready_count, [], unselected=unselected)
                 else:
                     sub_decision = Decision(action="ask_clarify", lang=sub_decision.lang, message=MSG["ask_clarify"][sub_decision.lang])
             earlier.append({"role": "user", "content": sub})
@@ -534,7 +542,7 @@ class RAGWorkflowOrchestrator:
         if decision.action == "use_previous_citations":
             out["parts"].append({"query": p.query, "chunks": _previews((await self._previous_chunks(p.scope, history))[1])})
             return out
-        questions = await self._split_parts(decision, p.infos, p.ready_count) if decision.action == "split_questions" else [(p.query, decision)]
+        questions = await self._split_parts(decision, p.infos, p.ready_count, p.unselected) if decision.action == "split_questions" else [(p.query, decision)]
         for sub, sub_decision in questions:
             if sub_decision.action in TERMINAL or sub_decision.action == "rewrite_followup":
                 out["parts"].append({"query": sub, "decision": sub_decision.action, "message": sub_decision.message or MSG["ask_clarify"][sub_decision.lang]})
@@ -584,7 +592,7 @@ class RAGWorkflowOrchestrator:
             events.no_answer_stream()  # numbered parts: the whole text arrives with the final event
             parts, citations, offset, charged, last_part, traced = [], [], 0, False, {}, []
             used = REQUEST_USAGE.get()
-            for n, (sub, sub_decision) in enumerate(await self._split_parts(decision, p.infos, p.ready_count), 1):
+            for n, (sub, sub_decision) in enumerate(await self._split_parts(decision, p.infos, p.ready_count, p.unselected), 1):
                 if sub_decision.action in TERMINAL or sub_decision.action == "rewrite_followup":
                     parts.append(f"{n}. {sub}\n{sub_decision.message or MSG['ask_clarify'][sub_decision.lang]}")
                     continue

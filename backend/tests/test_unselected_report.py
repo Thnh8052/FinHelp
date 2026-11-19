@@ -34,3 +34,13 @@ async def test_the_chat_passes_the_ready_reports_that_are_not_selected(monkeypat
     assert r["intent"] == "period_unavailable" and EN in r["answer"]
     r = await orch.execute_query("Doanh thu của Nike năm 2012 là bao nhiêu?", "nb", document_ids=["d1", "d2"])
     assert r["intent"] == "period_unavailable" and VI in r["answer"]
+
+
+async def test_a_part_of_a_message_with_several_questions_names_the_unselected_report_too(monkeypatch):
+    """The parts of a message that asks several questions are decided one by one (_split_parts): they got the old message before 19/11."""
+    docs = [_doc("d1", "nike19.pdf", company_name="NIKE, Inc", fiscal_year=2019, report_type="10-K"),
+            _doc("d2", "nike23.pdf", company_name="NIKE, Inc", fiscal_year=2023, report_type="10-K"),
+            _doc("d3", "nike12.pdf", company_name="NIKE, Inc", fiscal_year=2012, report_type="10-K")]
+    orch, _ = _orchestrator(docs, monkeypatch)
+    r = await orch.execute_query("What was Nike's revenue in FY2019? What was Nike's revenue in FY2012?", "nb", document_ids=["d1", "d2"])
+    assert EN in r["answer"]
