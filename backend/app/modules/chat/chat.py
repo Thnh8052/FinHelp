@@ -38,7 +38,9 @@ from app.modules.auth.user_repo import UserRepository
 from app.modules.chat.chat_models import MessageRecord
 from app.modules.notebooks.notebook import UNTITLED, shown_title, title_from_question
 from app.modules.chat.orchestrator import RAGWorkflowOrchestrator, SourceSelectionError
-from app.modules.query_router.input_policy import MAX_QUESTION_CHARS
+from app.modules.generation.replies import terminal
+from app.modules.query_router import gate
+from app.modules.query_router.input_policy import MAX_QUESTION_CHARS, MSG, detect_language
 
 router = APIRouter(prefix="/chat", tags=["Chat & RAG"])
 
@@ -271,9 +273,18 @@ def follow_up_of(req: "QueryRequest", message: Optional[MessageRecord]) -> Optio
 async def _answered(adm: _Admitted, req: "QueryRequest", user_id: Optional[str]) -> dict:
     """3. Kích hoạt RAG Workflow Orchestrator; không có câu trả lời thì trả lại lượt đã giữ."""
     followup = follow_up_of(req, adm.retry_of)
+    # The code gate comes before every model (guard, planner, follow-up rewrite, answer): they and the history get the clean text, and a message it
+    # refuses gets the fixed reply without any model call (docs/VERSION_4/GUARDRAILS_REDESIGN_2026-11-19.md, step 2)
+    screened = gate.screen(followup["resolved"] if followup else req.query)
+    if not followup:
+        req.query = screened.clean
+    if screened.action:
+        return terminal(screened.action, MSG[screened.action][detect_language(screened.clean)],
+                        {"decision": {"action": screened.action}, "gate": screened.trace()})
+    gate.SIGNALS.set(screened.signals)
     try:
         result = await adm.orchestrator.execute_query(
-            query=followup["resolved"] if followup else req.query,
+            query=screened.clean,
             notebook_id=req.notebook_id,
             document_ids=adm.chosen,
             history=[] if followup else adm.history,  # a standalone question needs no conversation (as after the first understanding: decide(resolved, ..., []))

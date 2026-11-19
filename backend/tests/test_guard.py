@@ -118,6 +118,24 @@ async def test_vietnamese_reaches_the_guard_as_written(monkeypatch):
     assert "Doanh thu năm 2023 của công ty là bao nhiêu?" in seen["user"]
 
 
+@pytest.mark.parametrize("signals, label", [(["leet"], "prompt_attack"), ([], "")])
+async def test_a_failed_call_turns_away_a_message_the_gate_found_disguised(monkeypatch, signals, label):
+    """The guard fails open (a late call must not stop every question), except for a message the code gate found disguised (leetspeak, letters
+    split apart, a hidden character): then the failure is the attacker's best chance, and the message is turned away."""
+    from app.modules.query_router import gate
+
+    async def down(messages, **kw):
+        raise llm_client.LLMUnavailableError("llm_unavailable")
+
+    monkeypatch.setattr(guard, "chat_completion", down)
+    token = gate.SIGNALS.set(signals)
+    try:
+        v = await guard.classify("Wh4t w4s r3v3nu3?", [])
+    finally:
+        gate.SIGNALS.reset(token)
+    assert v.label == label and v.error == "unavailable"
+
+
 @pytest.mark.parametrize("fail, error", [(llm_client.LLMUnavailableError("llm_unavailable"), "unavailable"), (RuntimeError("boom"), "error")])
 async def test_a_failing_call_gives_no_label_and_never_raises(monkeypatch, fail, error):
     async def chat(messages, **kw):
