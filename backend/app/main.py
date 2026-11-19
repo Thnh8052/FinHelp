@@ -81,11 +81,17 @@ async def lifespan(app: FastAPI):
     await QdrantManager.close_qdrant_connection()
 
 
+def docs_urls(environment: str) -> dict:
+    """The API documentation (/docs, /redoc, /openapi.json) only in development: elsewhere it listed every route and field to anyone (red-team 19/11)."""
+    return {} if environment == "development" else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="Financial RAG Backend: FastAPI + MongoDB + Qdrant",
     lifespan=lifespan,
+    **docs_urls(settings.ENVIRONMENT),
 )
 
 # Added before CORS so that CORS stays the outermost layer: a refused upload and an unforeseen error still carry its headers

@@ -162,8 +162,26 @@ def test_probing_for_taken_accounts_is_limited(client, monkeypatch):
     assert codes == [400] * auth_api.REGISTER_TAKEN_PER_IP + [429]
 
 
-def test_successful_registrations_do_not_use_up_the_limit(client):
+def test_successful_registrations_do_not_use_up_the_limit(client, monkeypatch):
+    monkeypatch.setattr(settings, "REGISTRATIONS_PER_IP_DAILY", auth_api.REGISTER_TAKEN_PER_IP + 2)  # the daily limit on new accounts is tested below
     assert {client.post("/api/v1/auth/register", json=NEW_ACCOUNT).status_code for _ in range(auth_api.REGISTER_TAKEN_PER_IP + 2)} == {200}
+
+
+def test_one_address_opens_at_most_the_daily_number_of_accounts(client, monkeypatch):
+    """Red-team 19/11 (H): one address opened 25 accounts in a row, 100 questions a day each."""
+    monkeypatch.setattr(settings, "REGISTRATIONS_PER_IP_DAILY", 3)
+    codes = [client.post("/api/v1/auth/register", json=NEW_ACCOUNT).status_code for _ in range(4)]
+    refused = client.post("/api/v1/auth/register", json=NEW_ACCOUNT)
+    assert codes == [200, 200, 200, 429] and refused.json()["detail"]["code"] == "too_many_attempts" and refused.headers["retry-after"] == str(24 * 60 * 60)
+
+
+def test_a_refused_registration_is_not_an_opened_account(client, monkeypatch):
+    monkeypatch.setattr(settings, "REGISTRATIONS_PER_IP_DAILY", 2)
+    monkeypatch.setattr(Accounts, "taken_email", True)
+    taken = [client.post("/api/v1/auth/register", json=NEW_ACCOUNT).status_code for _ in range(3)]
+    monkeypatch.setattr(Accounts, "taken_email", False)
+    opened = [client.post("/api/v1/auth/register", json=NEW_ACCOUNT).status_code for _ in range(3)]
+    assert taken == [400] * 3 and opened == [200, 200, 429]
 
 
 # ---------------------------------------------------------------- the emailed link
@@ -183,6 +201,13 @@ def test_every_api_answer_has_the_security_headers():
 
 def test_the_api_documentation_page_can_still_load_its_scripts():
     assert "content-security-policy" not in TestClient(main.app, raise_server_exceptions=False).get("/docs").headers
+
+
+@pytest.mark.parametrize("environment, shown", [("development", True), ("production", False), ("staging", False)])
+def test_the_api_documentation_is_published_only_in_development(environment, shown):
+    """Red-team 19/11 (L4): /docs and /openapi.json listed every route and field to anyone."""
+    client = TestClient(FastAPI(**main.docs_urls(environment)))
+    assert [client.get(p).status_code == 200 for p in ("/docs", "/redoc", "/openapi.json")] == [shown] * 3
 
 
 def test_https_is_remembered_only_over_https():

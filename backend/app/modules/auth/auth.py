@@ -30,7 +30,7 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.infrastructure.database.mongodb import get_database
-from app.shared.rate_limit import client_ip, enforce, limiter
+from app.shared.rate_limit import DAY_SECONDS, client_ip, enforce, limiter
 from app.core.error_codes import Code, api_error
 from app.modules.auth.user_repo import UserRepository
 from app.modules.auth.user import ADMIN_EMAIL, ADMIN_USERNAME, TIER_SPECS, UserQuota, UserRecord
@@ -205,27 +205,36 @@ async def get_guest_quota():
 @router.post("/register", response_model=TokenResponse)
 async def register(request: Request, response: Response, req: RegisterRequest, background: BackgroundTasks, db: AsyncIOMotorDatabase = Depends(get_database)):
     """Đăng ký tài khoản người dùng mới vào MongoDB (role='user', tối đa 5 tài liệu/notebook)."""
-    attempts = f"register:ip:{client_ip(request)}"
+    ip = client_ip(request)
+    attempts, opened = f"register:ip:{ip}", f"register:opened:{ip}"
     enforce(attempts, REGISTER_TAKEN_PER_IP, RATE_WINDOW)
-    limiter.record(attempts)  # counted before the lookups: registrations sent together cannot pass the limit; a success takes it back below
-    repo = UserRepository(db)
-    reserved = req.username.lower() == ADMIN_USERNAME or req.email.lower() == ADMIN_EMAIL  # the admin's names, even before it exists
-    if reserved or await repo.get_by_email(req.email) or await repo.get_by_username(req.username):
-        raise api_error(status_code=400, code=ACCOUNT_NOT_AVAILABLE)
-
-    user_id = f"usr_{uuid.uuid4().hex[:8]}"
-    user = UserRecord(
-        user_id=user_id,
-        email=req.email,
-        username=req.username,
-        hashed_password=await asyncio.to_thread(get_password_hash, req.password),
-        full_name=req.full_name or req.username,
-        role="user",
-    )
+    enforce(opened, settings.REGISTRATIONS_PER_IP_DAILY, DAY_SECONDS)  # accounts opened today from this address (red-team 19/11: 25 in a row)
+    # Both counted before the lookups, so registrations sent together cannot pass a limit: a success takes back `attempts` (only refusals probe for
+    # taken names), a refusal takes back `opened` (only accounts really opened count against the day)
+    limiter.record(attempts)
+    limiter.record(opened)
     try:
-        await repo.save_user(user)
-    except DuplicateKeyError:  # two registrations raced past the checks above; the unique indexes refused the second
-        raise api_error(status_code=400, code=ACCOUNT_NOT_AVAILABLE)
+        repo = UserRepository(db)
+        reserved = req.username.lower() == ADMIN_USERNAME or req.email.lower() == ADMIN_EMAIL  # the admin's names, even before it exists
+        if reserved or await repo.get_by_email(req.email) or await repo.get_by_username(req.username):
+            raise api_error(status_code=400, code=ACCOUNT_NOT_AVAILABLE)
+
+        user_id = f"usr_{uuid.uuid4().hex[:8]}"
+        user = UserRecord(
+            user_id=user_id,
+            email=req.email,
+            username=req.username,
+            hashed_password=await asyncio.to_thread(get_password_hash, req.password),
+            full_name=req.full_name or req.username,
+            role="user",
+        )
+        try:
+            await repo.save_user(user)
+        except DuplicateKeyError:  # two registrations raced past the checks above; the unique indexes refused the second
+            raise api_error(status_code=400, code=ACCOUNT_NOT_AVAILABLE)
+    except BaseException:
+        limiter.forget_latest(opened)
+        raise
     limiter.forget_latest(attempts)
     # Sent after the response, in a worker thread: SendGrid's wait must not stop the server for everyone
     background.add_task(email_service.send_account_confirmation, to_email=user.email, username=user.username, full_name=user.full_name)
