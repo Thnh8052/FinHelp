@@ -94,21 +94,14 @@ def has_hard(findings: Sequence[Finding]) -> bool:
 
 
 def annotate(answer: str, findings: Sequence[Finding], lang: str) -> str:
-    """The answer with one "⚠️" line for what stays wrong in its figures, calculations and citations (before its machine block); unchanged when none."""
-    vi = lang == "vi"
-    figures = [f.text for f in findings if f.check == "figure"]
-    parts = []
-    if figures:
-        # a computed figure is never IN an excerpt: the line says it was traced to neither an excerpt nor a calculation (owner 19/11)
-        parts.append(("số chưa đối chiếu được với đoạn trích hay phép tính trong câu trả lời: " if vi
-                      else "figures not traced to the excerpts or to a calculation in the answer: ") + ", ".join(figures))
-    if any(f.check == "arithmetic" for f in findings):
-        parts.append("có phép tính viết ra cho kết quả khác với kết quả đã ghi" if vi else "a written calculation gives a different result than the one stated")
-    if any(f.check == "citation" for f in findings):
-        parts.append("có trích dẫn không khớp nguồn" if vi else "some citations do not match their source")
-    if not parts:
+    """The answer with one "⚠️" line when a written calculation gives a different result than the one stated (before its machine block); unchanged
+    otherwise. Owner 19/11 (week12 audit of 200 E2E planner answers): of 24 lines that also listed untraced figures and citations, 1 pointed at a real
+    problem and none at the real error of a wrong answer, so figure and citation findings stay in the trace and the admin review queue only."""
+    if not any(f.check == "arithmetic" for f in findings):
         return answer
-    line = "\n\n⚠️ " + ("Lưu ý: " if vi else "Note: ") + "; ".join(parts) + "."
+    vi = lang == "vi"
+    line = "\n\n⚠️ " + ("Lưu ý: có phép tính viết ra cho kết quả khác với kết quả đã ghi." if vi
+                         else "Note: a written calculation gives a different result than the one stated.")
     cut = answer.find(META_OPEN)
     return answer + line if cut < 0 else answer[:cut].rstrip() + line + "\n" + answer[cut:]
 

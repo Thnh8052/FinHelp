@@ -42,6 +42,11 @@ class TargetDecision:
     alternatives: List[Dict[str, str]] = field(default_factory=list)  # [{"document_id", "label"}] other documents that also match
     notes: List[str] = field(default_factory=list)  # for the answer prompt
     rule: str = "none"  # mentions | resolved | none
+    from_later: bool = False  # a year is read from a later report's comparative column (the input policy's note for it is then left out)
+
+
+# The note for what the line above the answer already shows (prompt review 19/11, problem 2: answers opened by repeating it)
+SHOWN = "Shown to the user above your answer, so use it and do not repeat it: "
 
 
 def _named(question: str, docs: Sequence[ScopeDoc]) -> List[ScopeDoc]:
@@ -80,7 +85,7 @@ def _hint(vi: bool) -> str:
             "with @ or name the company / year." + (" Write that sentence in Vietnamese." if vi else ""))
 
 
-def from_mentions(question: str, docs: Sequence[ScopeDoc], mentions: Sequence[str], vi: bool) -> TargetDecision:
+def from_mentions(question: str, docs: Sequence[ScopeDoc], mentions: Sequence[str], vi: bool, shown: bool = True) -> TargetDecision:
     tagged = [d for d in docs if d.document_id in set(mentions)]
     tagged_keys = {company_key(d.filing.company) for d in tagged}
     others = sorted({d.card.get("entity") or d.label for d in _named(question, docs) if company_key(d.filing.company) not in tagged_keys})
@@ -93,7 +98,8 @@ def from_mentions(question: str, docs: Sequence[ScopeDoc], mentions: Sequence[st
         out.understood = _understood(tagged, vi, (f"(Câu hỏi nhắc {what}, nhưng không có trong file được tag.)" if vi else
                                                   f"(The question mentions {what}, which the tagged files do not cover.)"))
         out.notes.append(f"Answer ONLY for the tagged sources ({'; '.join(d.label for d in tagged)}). The question also mentions {what}, which "
-                         f"the tagged sources do not cover: say so in one sentence, without figures for it.")
+                         + ("the tagged sources do not cover; this is shown to the user above your answer, so do not repeat it, and give no figures for it."
+                            if shown else "the tagged sources do not cover: say so in one sentence, without figures for it."))
         out.notes.append(_hint(vi))
     else:
         out.understood = _understood(tagged, vi)
@@ -115,7 +121,7 @@ def _lists_an_unmatched_name(question: str, docs: Sequence[ScopeDoc]) -> bool:
                for t in _unmatched_names(question, docs))
 
 
-def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecision:
+def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool, shown: bool = True) -> TargetDecision:
     named = _named(question, docs)
     if not named or _lists_an_unmatched_name(question, docs):  # "Pepsi and Coke": forcing Pepsi would hide Coke from the planner
         return TargetDecision()
@@ -158,7 +164,7 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
     if not chosen:
         return TargetDecision()
     # each alternative carries the whole set to ask with: the chosen documents with only the one it replaces swapped, so asking again keeps the other companies
-    out = TargetDecision(chosen, rule="resolved",
+    out = TargetDecision(chosen, rule="resolved", from_later=any("FY" in a and ("comparative column" in a or "cột so sánh" in a) for a in assumptions),
                          alternatives=[{"document_id": i, "label": by_id[i].label,
                                         "document_ids": list(dict.fromkeys(i if c == replaces.get(i) else c for c in chosen))}
                                        for i in alternatives if i not in chosen])
@@ -166,16 +172,20 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool) -> TargetDecis
     extra = " ".join(x for x in (("Giả định: " if vi else "Assumed: ") + "; ".join(assumptions) + "." if assumptions else "", note) if x)
     out.understood = _understood([by_id[i] for i in chosen], vi, extra)
     out.notes.append(f"The question is about these sources: {'; '.join(by_id[i].label for i in chosen)}. Answer for them.")
-    if assumptions:
-        out.notes.append("State the assumption in one short sentence at the start: " + "; ".join(assumptions) + ".")
-        if out.alternatives:  # "tag the right file" only when another file can be tagged; not for a year read from the comparative column of the only report (D5)
-            out.notes.append(_hint(vi))
-    if note:
-        out.notes.append("Say how the fiscal years were aligned: " + note)
+    if shown and (assumptions or note):  # the understood line says it: the model is told, not asked to say it again
+        out.notes.append(SHOWN + " ".join(x for x in ("Assumed: " + "; ".join(assumptions) + "." if assumptions else "", note) if x))
+    else:  # no line above the answer (a part of a message with several questions): the answer says it
+        if assumptions:
+            out.notes.append("State the assumption in one short sentence at the start: " + "; ".join(assumptions) + ".")
+        if note:
+            out.notes.append("Say how the fiscal years were aligned: " + note)
+    if assumptions and out.alternatives:  # "tag the right file" only when another file can be tagged; not for a year read from the comparative column of the only report (D5)
+        out.notes.append(_hint(vi))
     return out
 
 
-def decide_targets(question: str, docs: Sequence[ScopeDoc], mentions: Optional[Sequence[str]], vi: bool) -> TargetDecision:
+def decide_targets(question: str, docs: Sequence[ScopeDoc], mentions: Optional[Sequence[str]], vi: bool, shown: bool = True) -> TargetDecision:
+    """`shown`: the answer has the understood line above it (a part of a message with several questions has none)."""
     if mentions:
-        return from_mentions(question, docs, mentions, vi)
-    return from_names(question, docs, vi)
+        return from_mentions(question, docs, mentions, vi, shown)
+    return from_names(question, docs, vi, shown)

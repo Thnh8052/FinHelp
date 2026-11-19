@@ -92,6 +92,14 @@ export const authService = {
     });
   },
 
+  /** The signed-in user's own password. The server ends the account's other sessions and sets a new cookie for this one. */
+  async changePassword(old_password: string, new_password: string): Promise<{ success: boolean }> {
+    return apiRequest("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ old_password, new_password }),
+    });
+  },
+
   async adminUpdateTier(user_id: string, tier: string): Promise<{ success: boolean }> {
     return apiRequest("/auth/admin/update-tier", {
       method: "POST",

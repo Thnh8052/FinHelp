@@ -338,6 +338,26 @@ export interface TranslationSchema {
     roleMember: string;
     maxDocs: string;
   };
+  /** The signed-in user's own account: change password (dialog opened from the account menu). */
+  account: {
+    changePassword: string;
+    title: string;
+    desc: string;
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+    hint: string;
+    save: string;
+    saving: string;
+    done: string;
+    doneDesc: string;
+    close: string;
+    currentMissing: string;
+    tooShort: string;
+    mismatch: string;
+    unchanged: string;
+    failed: string;
+  };
   auth: {
     signInTitle: string;
     signInDesc: string;
@@ -353,6 +373,19 @@ export interface TranslationSchema {
     emailAddress: string;
     username: string;
     usernameRule: string;
+    /** The sign-up form (components/auth/SignUpForm.tsx). */
+    signUpWhy: string;
+    benefitSave: string;
+    benefitMore: string;
+    benefitRecover: string;
+    emailHint: string;
+    passwordRuleLength: string;
+    showPassword: string;
+    hidePassword: string;
+    emailMissing: string;
+    emailInvalid: string;
+    usernameMissing: string;
+    passwordMissing: string;
     fullNameOptional: string;
     completeRegistration: string;
     creatingAccount: string;
@@ -405,6 +438,10 @@ export interface TranslationSchema {
     refresh: string;
     updatedAt: string;
     viewAll: string;
+    /** The dashboard's user filter (every page): one user, the guests, or everyone. */
+    userFilter: string;
+    userAll: string;
+    userGuests: string;
     nav: {
       label: string;
       overview: string;
@@ -412,6 +449,7 @@ export interface TranslationSchema {
       audit: string;
       tokens: string;
       users: string;
+      review: string;
       backToChat: string;
       openMenu: string;
       closeMenu: string;
@@ -423,6 +461,37 @@ export interface TranslationSchema {
       audit: string;
       tokens: string;
       users: string;
+      review: string;
+    };
+    /** The review queue: answers with a problem, found automatically (backend admin/review.py). */
+    review: {
+      title: string;
+      note: string;
+      statusOpen: string;
+      statusReviewed: string;
+      statusAll: string;
+      statusLabel: string;
+      allProblems: string;
+      problemsLabel: string;
+      labels: Record<"user_report" | "warning" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow", string>;
+      hints: Record<"user_report" | "warning" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow", string>;
+      why: string;
+      unverified: string;
+      degraded: string;
+      handledAs: string;
+      notes: string;
+      noteLabel: string;
+      notePlaceholder: string;
+      markOk: string;
+      markNeedsFix: string;
+      reopen: string;
+      reviewedOk: string;
+      reviewedNeedsFix: string;
+      reviewedBy: string;
+      saveFailed: string;
+      empty: string;
+      emptyHint: string;
+      emptyReviewed: string;
     };
     kpi: {
       questions: string;
@@ -562,6 +631,15 @@ export interface TranslationSchema {
     quarter: string;
     fullYear: string;
     periodEnd: string;
+    purpose: string;
+    companySection: string;
+    periodSection: string;
+    companyHint: string;
+    tickerHint: string;
+    aliasesHint: string;
+    periodHint: string;
+    needsCheck: string;
+    needsCheckWhy: string;
     saving: string;
     confirm: string;
     connectionError: string;

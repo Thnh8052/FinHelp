@@ -216,7 +216,9 @@ class Settings(BaseSettings):
     # Generation: prompt "v2" is the measured one (121/150). "v1" is the stricter, refusal-prone prompt (118/150).
     # "v4_1" is v4 with three self-contradictions fixed (citation in table cells, two decimals for ratios, no space-grouped example cell);
     # it stays off until measured on questions it was not designed with.
-    GENERATION_PROMPT: str = "v4"
+    # "v5" (the default since 19/11, owner): v4.1's three fixes, rules for interim periods, amounts dated after the period end, report names and
+    # statuses; measured equal to v4 on 64 questions with tidier tables (docs/VERSION_4/PROMPT_V5_DRAFT_2026-11-19.md section 5). v4 stays selectable.
+    GENERATION_PROMPT: str = "v5"
     # The answer is checked before it is shown (generation/answer_check/policy.py): advice, leaked instructions, internal names, foul language.
     OUTPUT_POLICY_ENABLED: bool = True
     # The guard (query_router/guard.py): one short language-model call per message, beside the search, gives the message one label; a message

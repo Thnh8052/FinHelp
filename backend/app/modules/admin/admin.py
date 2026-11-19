@@ -9,7 +9,7 @@ Mọi endpoint ở đây yêu cầu role == 'admin' (require_admin). Đường d
 """
 
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -22,6 +22,7 @@ from app.infrastructure.database.mongodb import get_database
 from app.modules.auth.user_repo import UserRepository
 from app.modules.auth.user import UserRecord
 from app.modules.admin.overview import build_overview
+from app.modules.admin.review import LABELS, open_count, review_queue, set_review
 
 router = APIRouter(prefix="/auth/admin", tags=["Admin"])
 
@@ -56,14 +57,49 @@ async def get_admin_dashboard(
 @router.get("/overview")
 async def get_admin_overview(
     days: int = Query(14, ge=7, le=90),
+    user: Optional[str] = Query(None, max_length=64, description="One user's id, or \"guests\"; every user when left out"),
     current_user: UserRecord = Depends(require_admin),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
-    """Every number of the admin dashboard in one read-only request; `days` is the window of the charts and the audit list."""
-    overview = await build_overview(db, days)
+    """Every number of the admin dashboard in one read-only request; `days` is the window of the charts and the audit list, `user` narrows the
+    questions, tokens, documents and answers to one user's chats (the user list stays whole)."""
+    overview = await build_overview(db, days, user)
+    overview["review_open"] = await open_count(db, days, user)  # answers waiting for the admin (review queue)
     services = await check_services()
     overview["services"] = services  # latency in ms per service, None when it did not answer
     return overview
+
+
+@router.get("/review")
+async def get_review_queue(
+    days: int = Query(14, ge=1, le=90),
+    label: Optional[Literal[tuple(LABELS)]] = Query(None, description="One problem; every problem when left out"),  # type: ignore[valid-type]
+    user: Optional[str] = Query(None, max_length=64, description="One user's id, or \"guests\""),
+    status: Literal["open", "reviewed", "all"] = Query("open"),
+    current_user: UserRecord = Depends(require_admin),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """The answers with a problem (review.PROBLEMS: reported by the user, shown with a warning, blocked, not found, partial, degraded, turned away,
+    slow), newest first, with the number of open ones per problem."""
+    return await review_queue(db, days=days, label=label, user=user, status=status)
+
+
+class ReviewRequest(BaseModel):
+    status: Literal["ok", "needs_fix", "open"]
+    note: str = Field(default="", max_length=2000)
+
+
+@router.post("/review/{message_id}")
+async def review_answer(
+    message_id: str,
+    req: ReviewRequest,
+    current_user: UserRecord = Depends(require_admin),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """The admin's verdict on an answer of the queue ("ok", "needs_fix" with a note), or "open" to put it back."""
+    if not await set_review(db, message_id, req.status, req.note, reviewer=current_user.username):
+        raise api_error(status_code=404, code=Code.MESSAGE_NOT_FOUND)
+    return {"success": True}
 
 
 class UpdateTierRequest(BaseModel):

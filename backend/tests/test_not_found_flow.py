@@ -82,8 +82,9 @@ async def test_s3_a_partial_answer_over_several_files_offers_the_document_choose
     assert r["actions"]["search_more"] == {"prominent": True}
 
 
-async def test_s3_an_unverified_answer_also_offers_them(monkeypatch):
-    orch = answering(monkeypatch, "AMD net revenue was $99 million [1].\n" + META % ("answered", "[1]"), PLAN_AMD_ONLY)
+async def test_s3_an_answer_with_a_wrong_calculation_also_offers_them(monkeypatch):
+    """Owner 19/11: only a wrong written calculation is a shown problem (an untraced figure stays in the trace and does not make the button prominent)."""
+    orch = answering(monkeypatch, "AMD net revenue: 25,000 + 785 = 26,785 [1].\n" + META % ("answered", "[1]"), PLAN_AMD_ONLY)
     r = await orch._answer_one("Which company had the higher revenue in 2024?", "nb", _scope(), Decision(lang="en"))
     assert r["actions"]["chooser"] and r["actions"]["search_more"] == {"prominent": True}
 

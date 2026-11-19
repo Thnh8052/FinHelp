@@ -6,6 +6,7 @@ import { errorText } from "../../services/api";
 import { LanguageToggle } from "../common/LanguageToggle";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { CloseIcon, SparklesIcon } from "../common/Icons";
+import { SignUpForm } from "./SignUpForm";
 import "./auth.css";
 
 interface AuthModalProps {
@@ -14,7 +15,11 @@ interface AuthModalProps {
   initialTab?: "signin" | "signup";
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTab = "signin" }) => {
+/** The dialog lives only while it is open: closing it drops what was typed, so a password typed before signing out is not waiting in the next
+ * dialog, and it opens again on its first tab (auth flow test 19/11). */
+export const AuthModal: React.FC<AuthModalProps> = (props) => (props.isOpen ? <AuthDialog {...props} /> : null);
+
+const AuthDialog: React.FC<AuthModalProps> = ({ onClose, initialTab = "signin" }) => {
   const { login, register, continueAsGuest } = useAuth();
   const { t } = useLanguage();
   const [tab, setTab] = useState<"signin" | "signup" | "forgot">(initialTab);
@@ -22,9 +27,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
   // Form states
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [fullName, setFullName] = useState("");
 
   // Forgot password states
   const [forgotStep, setForgotStep] = useState<1 | 2>(1);
@@ -35,8 +37,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  if (!isOpen) return null;
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,19 +52,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
     }
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      await register(email, username, password, fullName);
-      onClose();
-    } catch (err: unknown) {
-      setError(errorText(err, t, t.auth.errorRegisterFallback));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleForgotStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,82 +205,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
           {/* TAB 2: SIGN UP */}
           {tab === "signup" && (
             <div>
-              <form onSubmit={handleSignUp} className="auth-form-dense">
-                <div className="auth-field">
-                  <label className="auth-label" htmlFor="modal-reg-email">
-                    {t.auth.emailAddress} <span className="auth-required">*</span>
-                  </label>
-                  <input
-                    id="modal-reg-email"
-                    autoComplete="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@company.com"
-                    className="auth-input"
-                  />
-                </div>
-
-                <div className="auth-field">
-                  <label className="auth-label" htmlFor="modal-reg-username">
-                    {t.auth.username} <span className="auth-required">*</span>
-                  </label>
-                  <input
-                    id="modal-reg-username"
-                    autoComplete="username"
-                    type="text"
-                    required
-                    pattern="[A-Za-z0-9._\-]{3,32}"
-                    title={t.auth.usernameRule}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder={t.auth.exampleUsername}
-                    className="auth-input"
-                  />
-                </div>
-
-                <div className="auth-field">
-                  <label className="auth-label" htmlFor="modal-reg-password">
-                    {t.auth.passwordMin} <span className="auth-required">*</span>
-                  </label>
-                  <input
-                    id="modal-reg-password"
-                    autoComplete="new-password"
-                    type="password"
-                    required
-                    minLength={8}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="auth-input"
-                  />
-                </div>
-
-                <div className="auth-field">
-                  <label className="auth-label" htmlFor="modal-reg-full-name">
-                    {t.auth.fullNameOptional}
-                  </label>
-                  <input
-                    id="modal-reg-full-name"
-                    autoComplete="name"
-                    type="text"
-                    maxLength={120}
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder={t.auth.exampleName}
-                    className="auth-input"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="auth-submit-btn spaced"
-                >
-                  {loading ? t.auth.creatingAccount : t.auth.completeRegistration}
-                </button>
-              </form>
+              <SignUpForm
+                idPrefix="modal-reg"
+                onSubmit={async (email, username, password, fullName) => {
+                  await register(email, username, password, fullName);
+                  onClose();
+                }}
+              />
 
               <div className="auth-footer-switch">
                 {t.auth.haveAccount}{" "}

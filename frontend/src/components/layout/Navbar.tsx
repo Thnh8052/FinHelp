@@ -4,6 +4,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { LanguageToggle } from "../common/LanguageToggle";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { UserDropdown } from "../auth/UserDropdown";
+import { ChangePasswordDialog } from "../auth/ChangePasswordDialog";
 import { ChevronRightIcon, MenuIcon, UserIcon } from "../common/Icons";
 import "./layout.css";
 
@@ -24,6 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { user } = useAuth();
   const { t } = useLanguage();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   // Get initials for avatar (e.g. "VT" for Vũ Thành)
   const getInitials = (name?: string | null) => {
@@ -102,7 +104,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           isOpen={dropdownOpen}
           onClose={() => setDropdownOpen(false)}
           onOpenAuthModal={onOpenAuthModal}
+          onChangePassword={() => setPasswordOpen(true)}
         />
+        <ChangePasswordDialog isOpen={passwordOpen} onClose={() => setPasswordOpen(false)} />
       </div>
     </header>
   );

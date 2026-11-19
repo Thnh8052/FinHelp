@@ -273,3 +273,36 @@ def test_three_dots_before_the_percent_are_an_ellipsis():
     assert wrong_steps("- 2018: 12,421 / 232,887 = 5.333...% ≈ 5.3%.") == []
     assert len(wrong_steps("- 2018: 12,421 / 232,887 = 6.333...% ≈ 6.3%.")) == 1
     assert unverified("- 2018: 12,421 / 232,887 = 5.333...% ≈ 5.3%.", [{"content": "Operating income 12,421; net sales 232,887"}]) == []
+
+
+# ---------------------------------------------------------------- a percent divided by a percent (E2E planner mdg_b03_004, 19/11)
+CVS_TAX = [{"content": "Effective income tax rate 39.3% (2015) and 26.3% (2019)"}]
+
+
+def test_a_percent_divided_by_a_percent_printed_as_a_percent_is_right():
+    """"(26.3% − 39.3%) ÷ 39.3% = −33.1%" is right: dividing a percent by a percent cancels the "%", the ratio −0.331 printed as a percent is −33.1%.
+    The checker read it as −0.3% and put the warning line under an answer the judge graded correct."""
+    assert wrong_steps("- Relative change: (26.3% − 39.3%) ÷ 39.3% = **−33.1%**") == []
+    assert wrong_steps("- Thay đổi tương đối: (26,3% − 39,3%) ÷ 39,3% = −33,1%") == []
+    assert wrong_steps("Share of the target: 26.3% ÷ 39.3% = 66.9%.") == []
+    assert wrong_steps("Ratio: 26.3% / 39.3% = 0.67.") == []
+    assert unverified("Relative change: (26.3% − 39.3%) ÷ 39.3% = −33.1% [1].", CVS_TAX) == []
+
+
+def test_a_wrong_percent_over_percent_and_sums_of_percents_are_still_judged_as_before():
+    assert len(wrong_steps("- Relative change: (26.3% − 39.3%) ÷ 39.3% = −35.4%")) == 1  # planted x1.07
+    assert len(wrong_steps("Share of the target: 26.3% ÷ 39.3% = 71.6%.")) == 1
+    assert wrong_steps("Change: 26.3% − 39.3% = −13.0%.") == []
+    assert len(wrong_steps("Change: 26.3% − 39.3% = −1,300%.")) == 1  # no "× 100" for a difference of percents
+    assert wrong_steps("(56.2% + 55.4% + 53.8%) / 3 = 55.1%") == []  # an average of percents: unchanged
+
+
+def test_an_amount_in_millions_divided_by_a_headcount_is_right_per_person():
+    """E2E planner mdg_b04_002 / mdg_b11_004 (19/11): net sales are printed in USD millions, employees as people; "$40,536 million ÷ 126,000 =
+    $321,714" is right (40,536,000,000 ÷ 126,000) and was reported as "= 0.3". A division may print its result in thousands or millions."""
+    assert wrong_steps("- FY2015: $40,536 million ÷ 126,000 = $321,714.") == []
+    assert wrong_steps("- FY2019: $59,812 ÷ 110,000 = $543,745.") == []
+    assert wrong_steps("- FY2017: $7,017 ÷ 9,800 = $716,020.41") == []
+    assert wrong_steps("Revenue per employee: 116,199 ÷ 205,000 = 566.82 thousand") == []
+    assert len(wrong_steps("- FY2015: $40,536 million ÷ 126,000 = $344,234.")) == 1  # planted x1.07: still wrong at every scale
+    assert len(wrong_steps("- FY2015: 4,053 + 126 = 4,279,000.")) == 1  # a sum never changes scale

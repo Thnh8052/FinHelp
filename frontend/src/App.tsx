@@ -7,16 +7,17 @@ import { RegisterPage } from "./features/auth/RegisterPage";
 import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
 import { AuthModal } from "./components/auth/AuthModal";
 import { useAuth } from "./context/AuthContext";
+import { waitsForSession } from "./context/sessionGate";
 import "./App.css";
 
 const AdminRoutes = lazy(() => import("./features/admin/AdminRoutes"));
 
 /** /app và /app/:notebookId: một giao diện chat cho cả thành viên (nhiều đoạn chat) lẫn khách (một đoạn chat dùng thử). */
 const AppHome: React.FC<{ onNavigateHome: () => void }> = ({ onNavigateHome }) => {
-  const { user, hasSession, isLoading } = useAuth();
-  // The session is still being checked. Not while a sign-in runs (hasSession is set only once it succeeded: the sign-in box stays to
-  // show a wrong password), and not after a check that failed on the network (the session is kept for the next load: guest view now)
-  if (hasSession && !user && isLoading) return null;
+  const { user, hasSession, checkingSession } = useAuth();
+  // The session is still being checked. Not while a sign-in runs: the sign-in box stays to show a wrong password, also after a first check
+  // that failed on the network or the server, which keeps the session flag with no user (auth flow test 19/11, sessionGate.ts)
+  if (waitsForSession({ hasSession, user, checkingSession })) return null;
   return <Workspace onNavigateHome={onNavigateHome} />;
 };
 

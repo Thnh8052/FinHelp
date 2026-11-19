@@ -136,8 +136,20 @@ def steps(text: str) -> List[Tuple[str, str, int]]:
         for (left, lstart), (right, rstart) in zip(exprs, exprs[1:]):
             if len(_scales(text[lstart:rstart + len(right) + 16])) > 1:
                 continue  # "1,4 tỷ − 848 triệu ≈ 552 triệu": read without its unit words it is 1.4 − 848 (held-out chat answer 19/11)
+            if _year_range(left):
+                continue  # "thay đổi 2015–2020 ≈ +3.8": a range of years, not 2015 − 2020 (v4/v5 measurement 19/11)
             out.append((left.strip(), right.strip(), rstart + (len(right) - len(right.lstrip()))))
     return out
+
+
+YEAR_RANGE = re.compile(r"(?:.*\s)?(?:FY\s?)?((?:19|20)\d{2})\s*[-−–—]\s*(?:FY\s?)?((?:19|20)\d{2})", re.I)
+
+
+def _year_range(left: str) -> bool:
+    """The left side ends with an earlier year, a dash and a later year ("2015–2020", "over 2015 - 2020", "FY2018–FY2020"). A subtraction of years is
+    written later minus earlier ("2020 − 2015") and stays a calculation."""
+    m = YEAR_RANGE.fullmatch(left.strip())
+    return bool(m) and int(m.group(1)) < int(m.group(2))
 
 
 SCALE_WORDS = {"million": "m", "mn": "m", "triệu": "m", "billion": "b", "bn": "b", "tỷ": "b", "thousand": "k", "nghìn": "k", "ngàn": "k", "trillion": "t"}
@@ -167,12 +179,25 @@ def exact(left: str, right: str, locale: str = EN) -> Optional[float]:
         return value if abs(value - printed) <= 0.002 * abs(printed) + 1e-9 else None
     decimals = len((canon(single.group(1), locale) or "").partition(".")[2])
     tol = max(0.5 * 10 ** -decimals + 1e-9, 0.002 * abs(printed))
-    # "**5.1%**": the bold markers are not part of the unit; "(… = 77.8%)": nor is a closing bracket; "× 100" already makes a percent
-    pct = right.replace("**", "").rstrip("…").rstrip(") ").endswith("%") and "%" not in left and not re.search(r"(?:[×x]|(?<!\*)\*(?!\*))\s*100\b", left)
+    pct = _percent_of_ratio(left, right)
     fraction = evaluate(left, locale, fraction=True) if _mixed_percent(left) else None
     # a sum or difference of percents printed in basis points ("11,20% − 11,02% = 18 điểm cơ bản", held-out chat answer 19/11)
     bps = "%" in left and not right.replace("**", "").rstrip("…").rstrip(") ").endswith("%") and not re.search(r"[×x*/÷^]", left.replace("**", ""))
-    return next((c for c in [value] + ([value * 100] if pct or bps else []) + ([fraction[0]] if fraction else []) if abs(abs(c) - abs(printed)) <= tol), None)
+    # an amount in millions or thousands divided by a count, its result per unit: "$40,536 million ÷ 126,000 = $321,714" (E2E planner mdg_b04_002, 19/11)
+    per_unit = [value * 1e3, value * 1e6] if "%" not in left and re.search(r"[/÷]", left.replace("**", "")) else []
+    return next((c for c in [value] + ([value * 100] if pct or bps else []) + ([fraction[0]] if fraction else []) + per_unit
+                 if abs(abs(c) - abs(printed)) <= tol), None)
+
+
+def _percent_of_ratio(left: str, right: str) -> bool:
+    """Whether a percent result may be 100 x the value of `left`: the left side is a ratio ("554 ÷ 10,800 = 5.1%"), or a percent divided by a
+    percent, where the "%" cancel ("(26.3% − 39.3%) ÷ 39.3% = −33.1%", E2E planner mdg_b03_004, 19/11). Not a sum or difference of percents
+    ("26.3% − 39.3% = −13.0%"), and not when "× 100" already makes the percent. "**5.1%**": the bold markers are not part of the unit;
+    "(… = 77.8%)": nor is a closing bracket."""
+    if not right.replace("**", "").rstrip("…").rstrip(") ").endswith("%") or re.search(r"(?:[×x]|(?<!\*)\*(?!\*))\s*100\b", left):
+        return False
+    tokens = re.findall(r"\d[\d,.]*\s*%?", left.replace("**", ""))
+    return "%" not in left or (all(t.rstrip().endswith("%") for t in tokens) and bool(re.search(r"[/÷]", left)))
 
 
 def holds(left: str, right: str, locale: str = EN) -> bool:
@@ -257,7 +282,7 @@ def wrong_steps(text: str) -> List[Tuple[str, str, str]]:
         if a is None or b is None:
             continue
         shown = " ".join(right.replace("**", "").split())
-        pct = shown.rstrip("…").rstrip(") ").endswith("%") and "%" not in left and not re.search(r"(?:[×x]|(?<!\*)\*(?!\*))\s*100\b", left)
+        pct = _percent_of_ratio(left, right)
         value = min([a[0]] + ([a[0] * 100] if pct else []), key=lambda c: abs(abs(c) - abs(b[0])))
         if abs(abs(value) - abs(b[0])) <= _slack(left, readings_of(text)[0]) + 1e-9:
             continue

@@ -29,8 +29,8 @@ def _changed_lines():
 
 
 # ------------------------------------------------------------------ the flag
-def test_the_default_is_still_v4_and_v4_1_is_a_structured_prompt():
-    assert Settings.model_fields["GENERATION_PROMPT"].default == "v4"
+def test_v4_1_is_not_the_default_and_is_a_structured_prompt():
+    assert Settings.model_fields["GENERATION_PROMPT"].default == "v5"  # v5 since 19/11 (test_prompt_v5.py); v4.1 never became the default
     assert "v4_1" in STRUCTURED_PROMPTS  # the answer's <answer_meta> block is read, as for v3 and v4
 
 

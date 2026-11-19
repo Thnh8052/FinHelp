@@ -20,6 +20,7 @@ from app.modules.query_router.focus import METRICS, Focus, metric_in
 TERMINAL = frozenset({
     "notebook_empty", "ask_select_sources", "reject_input", "ask_rephrase", "list_sources", "not_supported", "static_reply", "refuse_concept",
     "refuse_out_of_domain", "refuse_advice", "ask_clarify", "not_supported_yet", "period_unavailable", "form_unavailable", "refuse_instruction", "support", "refuse_sensitive",
+    "unsupported_language",
 })
 
 
@@ -66,6 +67,42 @@ def detect_language(text: str) -> str:
     return "vi" if any(ch in _VI_CHARS for ch in low) or _VI_WORDS.search(low) or _VI_PLAIN.search(low) else "en"
 
 
+# Another language than Vietnamese or English (owner 19/11: say that only these two are supported). Code only, no model and no library:
+# 1. letters of another script (Chinese, Japanese, Korean, Cyrillic, Arabic, Thai, Greek, Hebrew, Devanagari...) make 30 % or more of the letters
+#    ("What was 阿里巴巴's revenue?" stays English);
+# 2. in Latin script, function words of French, Spanish, German, Portuguese, Italian, Indonesian and Dutch make 2+ words and 30 % or more of them.
+#    Left out on purpose: words that are English, or Vietnamese typed without accents ("de" = để, "la" = là, "da" = đã, "do", "em", "sao", "nao",
+#    "con", "dan"), or a name ("yang"), or short for something else ("war", "die", "per").
+_FOREIGN_WORDS = frozenset("""
+le les des du une est était etait été quel quelle quels quelles chiffre affaires combien dans avec sont année annee société societe bénéfice
+benefice résultat resultat pourquoi comment entreprise
+el los las del cuál cual cuáles cuales fueron fue ingresos año años ano empresa cuánto cuanto cuánta qué que para sus una ventas beneficio
+ganancia utilidad durante entre como es en
+der das und ist wie hoch umsatz von im jahr jahres den dem nicht welche welcher wurde gewinn mit für fur auf zum zur ein eine einer betrug
+unternehmen geschäftsjahr
+qual quais foi receita anos dos das uma lucro quanto são
+il della dello delle degli dei è stato fatturato nel nella sono anno ricavi utile azienda perché
+berapa berapakah pendapatan adalah perusahaan laba bersih tahun pada untuk dari apa bagaimana
+het een wat omzet jaar hoeveel zijn voor bedrijf
+""".split())
+
+
+def _latin(ch: str) -> bool:
+    """Basic Latin to Latin Extended-B, and Latin Extended Additional (the Vietnamese letters with two marks)."""
+    return ord(ch) < 0x250 or 0x1E00 <= ord(ch) <= 0x1EFF
+
+
+def unsupported_language(text: str) -> bool:
+    letters = [ch for ch in text or "" if ch.isalpha()]
+    if not letters:
+        return False
+    if sum(1 for ch in letters if not _latin(ch)) >= 0.3 * len(letters):
+        return True
+    words = re.findall(r"[^\W\d_]+", (text or "").lower())
+    foreign = sum(1 for w in words if w in _FOREIGN_WORDS)
+    return foreign >= 2 and foreign >= 0.3 * len(words)
+
+
 def _strip_accents(text: str) -> str:
     return "".join(ch for ch in unicodedata.normalize("NFD", text.replace("đ", "d").replace("Đ", "D")) if unicodedata.category(ch) != "Mn")
 
@@ -100,6 +137,14 @@ _YEAR = re.compile(r"(?<![\d.,$])(?:fy\s?)?((?:19|20)\d{2})(?![\d]|[.,]\d)", re.
 
 def _years(question: str) -> List[int]:
     return sorted({int(m.group(1)) for m in _YEAR.finditer(question)})
+
+
+# B8: words that date an amount given in a report (a debt maturing, a payment due or scheduled, an expectation), up to 80 characters before the year
+_SCHEDULE_CUE = re.compile(r"\b(matur\w*|due|scheduled|expir\w*|expect\w*|payable|guidance|forecast\w*|commit\w*)\b|đáo hạn|đến hạn|dự kiến|cam kết|kế hoạch", re.I)
+
+
+def _scheduled(question: str, year: int) -> bool:
+    return any(_SCHEDULE_CUE.search(question[max(0, m.start() - 80):m.start()]) for m in re.finditer(str(year), question))
 
 
 # ---------------------------------------------------------------- patterns
@@ -227,8 +272,20 @@ MSG: Dict[str, Dict[str, str]] = {
     "refuse_sensitive": {"vi": "Tôi không thể hỗ trợ yêu cầu này. Tôi chỉ giúp đọc và phân tích các báo cáo tài chính bạn đã chọn.", "en": "I cannot help with that request. I only help read and analyse the financial reports you selected."},
     "small_talk": {"vi": "Tôi luôn sẵn sàng! Tôi là trợ lý đọc và phân tích báo cáo tài chính: bạn cứ hỏi về số liệu hoặc nội dung trong các tài liệu đã chọn nhé.", "en": "I am here and ready! I am an assistant for reading and analysing financial reports: ask me about the figures or content of the selected documents."},
     "greeting": {"vi": "Xin chào! Hãy chọn tài liệu và hỏi tôi về số liệu hoặc nội dung trong các báo cáo tài chính của bạn.", "en": "Hello! Select your documents and ask me about the figures or content of your financial reports."},
+    # both languages in one reply: the user may read neither of them well, so each sentence is there; the interface language comes first
+    "unsupported_language": {"vi": "Hệ thống hiện chỉ hỗ trợ tiếng Việt và tiếng Anh. Vui lòng đặt câu hỏi bằng tiếng Việt hoặc tiếng Anh.\n\n"
+                                    "FinHelp currently supports only Vietnamese and English. Please ask your question in Vietnamese or English.",
+                             "en": "FinHelp currently supports only Vietnamese and English. Please ask your question in Vietnamese or English.\n\n"
+                                   "Hệ thống hiện chỉ hỗ trợ tiếng Việt và tiếng Anh. Vui lòng đặt câu hỏi bằng tiếng Việt hoặc tiếng Anh."},
     "capabilities": {"vi": "Tôi giúp đọc và phân tích báo cáo tài chính bạn đã tải lên: tra số liệu, so sánh giữa các công ty hoặc các kỳ, tính chỉ số từ số liệu trong báo cáo, kèm trích dẫn trang. Tôi chỉ trả lời dựa trên các nguồn bạn chọn, không đưa lời khuyên đầu tư.", "en": "I help read and analyse the financial reports you uploaded: look up figures, compare companies or periods, compute ratios from the reported numbers, with page citations. I answer only from the sources you select and give no investment advice."},
 }
+
+
+# Left out of the answer prompt when the line above the answer already says which later report a year comes from (orchestrator, prompt review 19/11)
+PRIOR_YEAR_NOTE = "Some requested years are not the report's own fiscal year: take them from the comparative columns of the later report and say so."
+# B8 (owner 19/11, the short note proposed that day): a year no selected report shows, asked next to years that are shown
+PARTIAL_PERIOD_NOTE = ("The selected reports do not show {wanted}: say those figures are not in the selected sources, answer the rest, never use another "
+                       "year's figure instead.")
 
 
 def _msg(key: str, lang: str) -> str:
@@ -317,6 +374,11 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
         lang = detect_language(said) if shown else ui_lang if ui_lang in ("vi", "en") else lang
     d = Decision(lang=lang)
 
+    # 0: a language other than Vietnamese or English, before anything else (a user who cannot read "upload a report" in either language)
+    if unsupported_language(q):
+        d.lang = ui_lang if ui_lang in ("vi", "en") else "en"
+        d.action, d.message = "unsupported_language", _msg("unsupported_language", d.lang)
+        return d
     # A: sources
     if not sources:
         d.action = "notebook_empty" if notebook_docs == 0 else "ask_select_sources"
@@ -417,13 +479,21 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
         # answerable SEC questions and 0/176 non-SEC refused). Otherwise only years that are too OLD are refused (an annual report shows
         # up to 5 years). Later years stay in that case: filings talk about the next year and fiscal-year labels differ between datasets.
         covered = [set(s.years_covered) | {s.fiscal_year} for s in target] if all(s.years_covered for s in target) else None
-        for y in years:
+        latest = max(s.fiscal_year for s in target)
+        # B8: a year after the latest report, asked as the date of an amount that report gives (debt maturing in 2021, expected for 2020), is in
+        # that report; the answer prompt says how to state it (v5, "Amounts dated after a report's period end")
+        asked = [y for y in years if not (y > latest and _scheduled(q, y))]
+        for y in asked:
             if covered is not None and not any(y in c for c in covered):
                 bad.append(y)
             elif covered is None and all(y < s.fiscal_year - 4 for g in groups.values() for s in g):
                 bad.append(y)
             elif not any(s.fiscal_year == y for s in target) and any(s.fiscal_year - 4 <= y < s.fiscal_year for s in target):
                 via_later = True
+        if bad and len(bad) < len(asked):  # B8: other years asked are shown: answer them, say this one is not there (it was refused whole)
+            d.notes.append(PARTIAL_PERIOD_NOTE.format(wanted=", ".join(f"FY{y}" for y in bad)))
+            d.flags.append("period_missing")
+            bad = []
         if bad:
             avail = {g[0].company or g[0].file_name: sorted({s.fiscal_year for s in g}) for g in groups.values()}
             in_chat = [y for y in bad if any(_company_key(u) in groups and y in set(u.years_covered) | {u.fiscal_year} for u in unselected)]
@@ -445,7 +515,7 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
                         d.flags.append("period_missing")
         if via_later:
             d.assumption = "prior_year_from_later_filing"
-            d.notes.append("Some requested years are not the report's own fiscal year: take them from the comparative columns of the later report and say so.")
+            d.notes.append(PRIOR_YEAR_NOTE)
     if _QUARTER.search(q):
         quarterly = any(s.fiscal_quarter or (s.report_type or "").lower() in ("10-q", "8-k", "earnings release", "interim financial statements") for s in target)
         forms = sorted({s.report_type for s in target if s.report_type})
