@@ -87,13 +87,20 @@ def focus_view(state: Optional[Dict[str, Any]], document_ids: Sequence[str], sou
     return Focus(list(dict.fromkeys(companies)), list(state.get("fiscal_years") or []), state.get("metric"))
 
 
-def build_focus(question: str, document_ids: Sequence[str], fiscal_years: Dict[str, Optional[int]], previous: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """The state after a searched question: what it does not say is kept from before."""
+def build_focus(question: str, document_ids: Sequence[str], fiscal_years: Dict[str, Optional[int]], sources: Sequence[Any]) -> Optional[Dict[str, Any]]:
+    """The state after a searched question. The item is kept only from a plain figure question ("Costco's revenue in 2015?"): from any other
+    ("why did comparable sales grow?") a later "and Amazon?" is the same question for Amazon, which only the model can rewrite (18/11)."""
     ids = list(dict.fromkeys(document_ids))
     if not ids:
         return None
     years = sorted(question_years(question, ranges=True), reverse=True) or sorted({y for d in ids if (y := fiscal_years.get(d))}, reverse=True)
-    return {"document_ids": ids, "fiscal_years": years, "metric": metric_in(question) or (previous or {}).get("metric")}
+    cards = _cards(sources)
+    plain = metric_in(question) and _only_slots(question, cards, company_matches(question, cards))
+    return {"document_ids": ids, "fiscal_years": years, "metric": metric_in(question) if plain else None}
+
+
+def _cards(sources: Sequence[Any]) -> List[Dict[str, Any]]:
+    return [{"entity": s.company or s.file_name, "aliases": s.aliases, "ticker": s.ticker} for s in sources]
 
 
 def _together(names: Sequence[str], vi: bool) -> str:
@@ -107,19 +114,31 @@ def _only_slots(question: str, cards: Sequence[Dict[str, Any]], matches: Dict[in
     return all(w.lower() in _FILLER or w.lower() in named_words or set(company_matches(re.sub(rf"(?<!\w){re.escape(w)}(?!\w)", " ", question), cards)) != set(matches) for w in words_left)
 
 
+def _years_of(companies: Sequence[str], years: List[int], sources: Sequence[Any]) -> List[int]:
+    """The topic's years for newly named companies, when each one's reports cover them; else the years of those reports (18/11: Costco's 2015 is
+    not Amazon's period when the only Amazon report is for 2018)."""
+    covered = {c: set() for c in companies}
+    for s in sources:
+        if s.company in covered:
+            covered[s.company] |= set(s.years_covered) | {s.fiscal_year}
+    if all(set(years) <= ys for ys in covered.values()):
+        return years
+    return sorted({s.fiscal_year for s in sources if s.company in covered and s.fiscal_year}, reverse=True)
+
+
 def fill_from_focus(question: str, focus: Optional[Focus], sources: Sequence[Any], lang: str) -> Optional[str]:
     """A complete question from a short follow-up and the focus, in the question's language; None when the slots do not settle it (the model then rewrites it)."""
     if not focus or _QUARTER.search(question):
         return None
     vi = lang == "vi"
-    cards = [{"entity": s.company or s.file_name, "aliases": s.aliases, "ticker": s.ticker} for s in sources]
+    cards = _cards(sources)
     matches = company_matches(question, cards)
     if not _only_slots(question, cards, matches) or not (metric_in(question) or matches or question_years(question) or _PREVIOUS.search(question)):
         return None
     named = list(dict.fromkeys(sources[i].company for i in sorted(matches) if sources[i].company))
     companies = [short_name(c) for c in (named or focus.companies)]
     metric = metric_in(question) or focus.metric
-    years = sorted(question_years(question), reverse=True) or focus.years
+    years = sorted(question_years(question), reverse=True) or _years_of(named, focus.years, sources)
     if not metric or not companies or len(years) != 1:
         return None
     year, label = years[0], METRICS[metric][0 if vi else 1]

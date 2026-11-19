@@ -392,7 +392,7 @@ async def test_follow_up_is_rewritten_shown_and_answered(monkeypatch):
 
     monkeypatch.setattr(orch_mod, "rewrite_followup", rewrite)
     r = await orch.execute_query("And the net income?", "nb", document_ids=["d2"], history=HIST)
-    assert r["answer"].startswith("I understood the question as: “What was Nike's net income in FY2023?”")
+    assert r["understood"].startswith("I understood the question as: “What was Nike's net income in FY2023?”")  # once, above the answer (D5 18/11)
     assert seen["answers"][0][0] == "What was Nike's net income in FY2023?"
 
     async def fails(q, history):
@@ -435,9 +435,9 @@ async def test_citation_numbers_of_later_parts_continue_after_the_earlier_parts_
     assert len(parts) == 3 and all("query" in p and "timings" in p and "llm" in p for p in parts)
 
 
-async def test_a_wrong_written_result_is_not_rewritten_by_code_and_goes_to_the_one_repair(monkeypatch):
+async def test_a_wrong_written_result_is_not_rewritten_and_is_flagged_under_the_answer(monkeypatch):
     """Code no longer rewrites a figure (measured 14/11: it never acted with the model's thinking on). The wrong result is reported by the number check,
-    the one repair is asked for, and what is still wrong afterwards is flagged under the answer."""
+    and flagged under the answer; the model is not asked again (T4, 19/11)."""
     from app.modules.chat import orchestrator as orch_mod
 
     calls = []
@@ -450,7 +450,7 @@ async def test_a_wrong_written_result_is_not_rewritten_by_code_and_goes_to_the_o
     monkeypatch.setattr(orch_mod, "generate_answer", slip)
     r = await orch.execute_query("What is a quarter of Nike's revenue in FY2023?", "nb", document_ids=["d2"])
     assert "51,217 ÷ 4 = 13,000" in r["answer"] and "12,804" not in r["answer"]  # not rewritten
-    assert len(calls) == 2 and "13,000" in calls[1][-1]  # the repair was asked, with the figure in its list of problems
+    assert len(calls) == 1  # written once
     assert "⚠" in r["answer"] and "calculator" not in r["verification"]
 
 
@@ -532,3 +532,16 @@ def test_unknown_coverage_of_a_named_company_only_counts_years_too_old():
     assert "period_missing" not in decide("Compare Nike and PepsiCo revenue in FY2017.", [nike, PEP17], 2).flags
     old = decide("Compare Nike and PepsiCo revenue in FY2012.", [nike, SourceInfo("PepsiCo, Inc", "10-K", 2012, None, "")], 2)
     assert old.action == "proceed" and "period_missing" in old.flags and any("NIKE" in n and "2012" in n for n in old.notes)
+
+
+@pytest.mark.parametrize("question, intent", [
+    ("What was Nike's revenue in FY2012?", "period_unavailable"), ("Doanh thu của Nike năm 2012 là bao nhiêu?", "period_unavailable"),
+    ("What did the latest 10-Q report for Nike's net income?", "form_unavailable"), ("Báo cáo 10-Q gần nhất ghi lợi nhuận ròng của Nike là bao nhiêu?", "form_unavailable"),
+])
+async def test_a_missing_period_offers_to_edit_the_question(monkeypatch, question, intent):
+    """18/11: "the selected sources do not cover FY2015" came with only Copy: the user could not fix the question in one click."""
+    orch, _ = _orchestrator(NIKE_DOCS, monkeypatch)
+    r = await orch.execute_query(question, "nb", document_ids=["d1", "d2"])
+    assert r["intent"] == intent
+    assert r["actions"] == {"chooser": [], "search_more": None, "edit_question": True, "try_again": False}
+    assert r["trace"]["actions"] == r["actions"]  # kept for a reloaded chat

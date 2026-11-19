@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { ApiError, errorText, signInHelps } from "../services/api";
 import { documentService } from "../services/documents";
-import { DocumentRecord, isDocFailed, isDocProcessing } from "../types/notebook";
+import { defaultSelection, DocumentRecord, isDocFailed, isDocProcessing } from "../types/notebook";
 import { ShowToast } from "./useToast";
 
 /**
@@ -17,17 +17,11 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  /** Thay cả danh sách (lúc tải notebook): tài liệu đầu tiên được xem, tài liệu đầu tiên không lỗi được chọn. */
+  /** Thay cả danh sách (lúc tải notebook): tài liệu đầu tiên được xem, mọi tài liệu đã xử lý xong được chọn (tối đa số tài liệu cho phép). */
   const load = (docs: DocumentRecord[]) => {
     setDocuments(docs);
-    if (docs.length > 0) {
-      setActiveDocId(docs[0].document_id);
-      const usable = docs.find((d) => d.status === "ready");
-      setSelectedDocIds(usable ? [usable.document_id] : []);
-    } else {
-      setActiveDocId(null);
-      setSelectedDocIds([]);
-    }
+    setActiveDocId(docs[0]?.document_id ?? null);
+    setSelectedDocIds(defaultSelection(docs, maxSources));
   };
 
   const reset = () => {
@@ -200,8 +194,7 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
 
   const toggleAll = (selectAll: boolean) => {
     if (selectAll) {
-      const usableIds = documents.filter((d) => d.status === "ready").map((d) => d.document_id);
-      setSelectedDocIds(usableIds.slice(-maxSources));
+      setSelectedDocIds(defaultSelection(documents, maxSources));
     } else {
       setSelectedDocIds([]);
     }

@@ -8,6 +8,7 @@ import { documentService } from "../services/documents";
 import { emptyOrNewNotebook, guestNotebook, notebookService } from "../services/notebooks";
 import { Notebook, isDocProcessing } from "../types/notebook";
 import { useChat } from "./useChat";
+import { MESSAGE_PAGE } from "./chatStore";
 import { useDocuments } from "./useDocuments";
 import { useToast } from "./useToast";
 
@@ -58,12 +59,11 @@ export function useWorkspace(onLoginRequired: () => void) {
     const id = notebook.notebook_id;
     opening.current = id;
     setNotebookId(id);
-    docs.reset();
-    chat.setMessages([]);
-    const [documents, messages] = await Promise.all([attempt(documentService.list(id)), attempt(chatService.getMessages(id))]);
+    docs.reset();  // the messages need no reset: each chat has its own list, the open one is shown
+    const [documents, messages] = await Promise.all([attempt(documentService.list(id)), attempt(chatService.getMessages(id, { limit: MESSAGE_PAGE }))]);  // the newest page (D7)
     if (opening.current !== id) return;  // the user already opened another chat
     if (documents) docs.load(documents);
-    if (messages) chat.setMessages(messages);
+    if (messages) chat.showMessages(id, messages);
   };
 
   const selectNotebook = (id: string) => {
@@ -131,8 +131,7 @@ export function useWorkspace(onLoginRequired: () => void) {
       }
       const notebook = await guestNotebook();
       if (!notebook) {
-        docs.reset();
-        chat.setMessages([]);
+        docs.reset();  // no notebook: the list of the empty id is shown, which has nothing in it
         return;
       }
       setNotebooks([notebook]);

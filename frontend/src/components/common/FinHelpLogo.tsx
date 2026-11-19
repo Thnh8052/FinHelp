@@ -15,7 +15,9 @@ interface FinHelpLogoProps {
   size?: "sm" | "md" | "lg" | "xl";
   showText?: boolean;
   className?: string;
+  /** Makes the logo a button (keyboard focus, Enter / Space); `label` then names what it does. */
   onClick?: () => void;
+  label?: string;
 }
 
 export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
@@ -23,6 +25,7 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
   showText = true,
   className = "",
   onClick,
+  label,
 }) => {
   const sizeMap = {
     sm: { icon: 30, font: "text-[16.5px]", gap: "gap-2.5" },
@@ -33,12 +36,13 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
 
   const currentSize = sizeMap[size] || sizeMap.md;
 
+  const Tag = onClick ? "button" : "div";
   return (
-    <div
+    <Tag
+      {...(onClick ? { type: "button" as const, onClick, "aria-label": label } : {})}
       className={`inline-flex items-center ${currentSize.gap} select-none ${
-        onClick ? "cursor-pointer hover:opacity-95 transition-opacity" : ""
+        onClick ? "cursor-pointer hover:opacity-95 transition-opacity bg-transparent border-0 p-0 text-inherit" : ""
       } ${className}`}
-      onClick={onClick}
     >
       {/* Dynamic FinHelp SVG Emblem */}
       <svg
@@ -115,7 +119,7 @@ export const FinHelpLogo: React.FC<FinHelpLogoProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </Tag>
   );
 };
 

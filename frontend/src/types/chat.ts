@@ -28,6 +28,8 @@ export interface ChatMessage {
   query?: string;
   /** Có trường này (kể cả null) = câu trả lời đã lưu, báo sai được; -1 = người dùng đã báo sai số liệu. */
   user_rating?: number | null;
+  /** Vị trí trong đoạn chat (0, 1, 2…) của tin đã lưu: để xin trang tin cũ hơn (D7). */
+  message_index?: number;
   /** Câu trả lời đang được viết (chat dạng stream): chưa có trích dẫn, chưa sao chép được. */
   streaming?: boolean;
   /** Câu hỏi / câu trả lời do một nút gửi lại (tìm kỹ hơn, thử lại, hỏi lại với tài liệu đã chọn): giao diện gắn nhãn để không trông như câu trùng. */

@@ -72,15 +72,8 @@ async def test_a_question_whose_answer_cannot_be_finished_costs_one_attempt_and_
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
     assert len(calls) == 1  # one attempt, no repair of an apology
     assert r["answer"].startswith("Sorry, this question is beyond") and "⚠️" not in r["answer"]
-    assert r["verification"]["passed"] and not r["verification"]["repaired"]
+    assert r["verification"]["passed"]
 
-
-@pytest.mark.parametrize("failure", [LLMUnavailableError, LLMTruncatedError])
-async def test_a_second_writing_that_fails_either_way_keeps_the_first_answer(monkeypatch, failure):
-    orch, _ = _orchestrator([], monkeypatch)
-    calls = fake_model(orch, monkeypatch, "AMD revenue was $99,999 million [1].", failure(CUT))
-    r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 2 and "$99,999" in r["answer"] and "Sorry" not in r["answer"] and not r["verification"]["repaired"]
 
 
 # ---------------------------------------------------------------- the other callers ask once, not again and again

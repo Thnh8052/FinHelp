@@ -108,3 +108,168 @@ def test_a_result_with_an_uncertain_reading_is_reported_not_guessed():
     """Report-style thousands in an answer that writes its decimals with a comma: "23,495" may be 23495 or 23.495; the wrong result is simply reported."""
     answer = "Thuế suất = 1,197 / 11,261 = 10,63%. Vốn đầu tư = 23,495 + 43,549 = 66 044 [1]."
     assert unverified(answer, AMZN) == ["66 044"]
+
+
+# ---------------------------------------------------------------- false alarms on right answers (system test 18/11, T3: replay of 923 stored answers)
+from app.modules.generation.answer_check.calculations import wrong_steps  # noqa: E402
+
+MARGINS = [{"content": "Net income 116, 131 and 155; revenue 6,489, 7,500 and 7,017"}]
+
+
+def test_an_average_of_percents_is_a_written_calculation():
+    """financebench_id_07966: "(1.7876% + 1.7467% + 2.2095%) / 3 = 1.9146%": a "%" between a number and its operator hid the calculation."""
+    en = ("FY2019: 116 / 6,489 × 100 = 1.7876%\nFY2018: 131 / 7,500 × 100 = 1.7467%\nFY2017: 155 / 7,017 × 100 = 2.2095%\n"
+          "Average: (1.7876% + 1.7467% + 2.2095%) / 3 = {avg}, rounded to 1.9%.")
+    vi = ("Năm 2019: 116 / 6.489 × 100 = 1,7876%\nNăm 2018: 131 / 7.500 × 100 = 1,7467%\nNăm 2017: 155 / 7.017 × 100 = 2,2095%\n"
+          "Trung bình: (1,7876% + 1,7467% + 2,2095%) / 3 = {avg}, làm tròn 1,9%.")
+    assert unverified(en.format(avg="1.9146%"), MARGINS) == []
+    assert unverified(vi.format(avg="1,9146%"), MARGINS) == []
+    assert "1.9846%" in unverified(en.format(avg="1.9846%"), MARGINS)
+    assert "1,9846%" in unverified(vi.format(avg="1,9846%"), MARGINS)
+
+
+def test_a_difference_of_bracketed_losses_is_a_written_calculation():
+    """mdg_b16_005: "(33) − (498) = 465": a closing bracket between a number and its operator hid the calculation."""
+    chunks = [{"content": "| Net income (loss) | (33) | (498) |"}]
+    assert unverified("Net income FY2016→FY2017: (33) − (498) = **465 USD million improvement**.", chunks) == []
+    assert unverified("Lợi nhuận ròng 2016 → 2017: (33) − (498) = **465 triệu USD**.", chunks) == []
+    assert unverified("Net income FY2016→FY2017: (33) − (498) = **565 USD million improvement**.", chunks) == ["565"]
+
+
+TURNOVER = [{"content": "Cost of sales 24,576; inventories 7,367 and 6,854; cash 4,258, short-term investments 56, receivables 4,947; current liabilities 10,936"}]
+
+
+def test_unit_words_inside_a_written_calculation_are_read_through():
+    """financebench_id_04080 and 00807: "million", "times", "days" between the numbers cut the calculation into pieces nobody could check."""
+    assert unverified("Calculation: $24,576 million ÷ (($7,367 million + $6,854 million) ÷ 2) = **3.46 times**.", TURNOVER) == []
+    assert unverified("Vòng quay = 24.576 triệu USD ÷ ((7.367 triệu USD + 6.854 triệu USD) ÷ 2) = 3,46 lần.", TURNOVER) == []
+    assert unverified("Quick assets = $4,258 million + $56 million + $4,947 million = $9,261 million", TURNOVER) == []
+    assert unverified("Tài sản nhanh = 4.258 triệu + 56 triệu + 4.947 triệu = 9.261 triệu USD; tỷ số nhanh = 9.261 / 10.936 = 0,85.", TURNOVER) == []
+    assert unverified("Calculation: $24,576 million ÷ (($7,367 million + $6,854 million) ÷ 2) = **3.66 times**.", TURNOVER) == ["3.66"]
+    assert unverified("Quick assets = $4,258 million + $56 million + $4,947 million = $9,361 million", TURNOVER) == ["$9,361"]
+
+
+def test_the_arithmetic_check_reads_through_unit_words_too():
+    found = wrong_steps("Quick assets = $4,258 million + $56 million + $4,947 million = $9,361 million.")
+    assert len(found) == 1 and found[0][2].startswith("9,261")
+    assert wrong_steps("Quick assets = $4,258 million + $56 million + $4,947 million = $9,261 million.") == []
+
+
+def test_a_percent_among_plain_numbers_may_be_a_fraction():
+    """financebench_id_06247: "495,761 × (1 − 24.7%) = 373,308.0" was evaluated with 24.7 for 24.7% and refused."""
+    chunks = [{"content": "Net sales 495,761; gross profit margin 24.7%"}]
+    assert unverified("FY2018 COGS = 495,761 × (1 − 24.7%) = 373,308.0 million.", chunks) == []
+    assert unverified("Giá vốn năm 2018 = 495.761 × (1 − 24,7%) = 373.308,0 triệu.", chunks) == []
+    assert unverified("FY2018 COGS = 495,761 × (1 − 24.7%) = 383,308.0 million.", chunks) == ["383,308.0"]
+
+
+def test_a_rounded_result_of_a_right_calculation_is_accepted():
+    """fb_think 04302 and mdg_b16_007: "= 55.115% ≈ 55.1%" and "= 1.2 (1.205 before rounding)": the rounding of a right result is right."""
+    pcts = [{"content": "Cost of sales as a percent of revenue: 56.161%, 55.424%, 53.759%"}]
+    assert unverified("Average: (56.161% + 55.424% + 53.759%) ÷ 3 = 55.115% ≈ 55.1%. The three-year average is 55.1%.", pcts) == []
+    assert unverified("Trung bình: (56,161% + 55,424% + 53,759%) ÷ 3 = 55,115% ≈ 55,1%. Trung bình ba năm là 55,1%.", pcts) == []
+    assert unverified("FY2018: (1,078 + 78 + 1,235) ÷ 1,984 = 1.2 (1.205 before rounding).", AMD) == []
+    # one unit of the last digit is not a rounding
+    assert unverified("Average: (56.161% + 55.424% + 53.759%) ÷ 3 = 55.115%. The three-year average is 55.3%.", pcts) == ["55.3%"]
+    assert unverified("FY2018: (1,078 + 78 + 1,235) ÷ 1,984 = 1.2 (1.215 before rounding).", AMD) == ["1.215"]
+
+
+def test_bracketed_percents_are_negative_and_a_percent_after_the_bracket_is_a_percent():
+    """Found by the replay of this fix: "(5,642) / 58,158 = (9.7)%" and "3.2% + (1.4%) + (3.8%) = (2.0)" are right and were reported as wrong."""
+    assert wrong_steps("Gross margin = (5,642) / 58,158 = (9.7)%.") == []
+    assert wrong_steps("Biên lợi nhuận gộp = (5.642) / 58.158 = (9,7)%.") == []
+    assert wrong_steps("Net effect: 3.2% + (1.4%) + (3.8%) = (2.0)%.") == []
+    assert wrong_steps("Tác động ròng: 3,2% + (1,4%) + (3,8%) = (2,0)%.") == []
+    assert len(wrong_steps("Gross margin = (5,642) / 58,158 = (8.7)%.")) == 1
+    assert len(wrong_steps("Net effect: 3.2% + (1.4%) + (3.8%) = (2.6)%.")) == 1
+
+
+def test_a_sum_or_difference_of_rounded_figures_may_be_off_by_their_rounding():
+    """"34.6% − 36.8% = −2.1": the operands are rounded (34.64 − 36.75 = −2.11), so the printed result is not a wrong step; −2.4 is."""
+    assert wrong_steps("Gross margin change: 34.6% − 36.8% = −2.1 percentage points.") == []
+    assert wrong_steps("Thay đổi biên gộp: 34,6% − 36,8% = −2,1 điểm phần trăm.") == []
+    assert len(wrong_steps("Gross margin change: 34.6% − 36.8% = −2.4 percentage points.")) == 1
+    assert len(wrong_steps("Thay đổi biên gộp: 34,6% − 36,8% = −2,4 điểm phần trăm.")) == 1
+
+
+def test_whole_table_values_are_exact_so_their_difference_is_too():
+    """Found by the planted-error replay: "1,824 − 1,806 = 19" (a planted 18) got through when every operand counted half a unit."""
+    assert len(wrong_steps("Change: 1,824 − 1,806 = 19 million.")) == 1
+    assert len(wrong_steps("Thay đổi: 1 824 − 1 806 = 19 triệu.")) == 1
+    assert len(wrong_steps("Change: (907 + 128) − (930 + 127) = −24.")) == 1
+
+
+# ---------------------------------------------------------------- the last easy false alarms of the replay (19/11)
+BOEING = [{"content": "Total revenues 58,158; cost of products 54,568; cost of services 9,232"}]
+
+
+def test_a_dollar_sign_before_an_accounting_bracket_is_read():
+    """financebench_id_00678: "= $(5,642) million" was not read as a result, so the loss and the margin from it were flagged."""
+    en = "Gross profit FY2020 = 58,158 − 54,568 − 9,232 = {gp} million; margin = (5,642) / 58,158 = (9.7)%."
+    vi = "Lợi nhuận gộp năm 2020 = 58.158 − 54.568 − 9.232 = {gp} triệu; biên = (5.642) / 58.158 = (9,7)%."
+    assert unverified(en.format(gp="$(5,642)"), BOEING) == []
+    assert unverified(vi.format(gp="$(5.642)"), BOEING) == []
+    assert "$(5,742)" in unverified(en.format(gp="$(5,742)"), BOEING)
+
+
+def test_square_brackets_group_like_round_ones_and_citations_stay_citations():
+    """luna_fb 04412 and 04103: "65,398 ÷ [(47,528 + 50,710) ÷ 2] = 1.33" was not read."""
+    chunks = [{"content": "Revenue 65,398; assets 47,528 and 50,710; inventories 1,642.2 and 1,559.3; cost of sales 11,108.4"}]
+    assert unverified("Turnover = 65,398 ÷ [(47,528 + 50,710) ÷ 2] = 1.33 times [1].", chunks) == []
+    assert unverified("Vòng quay = 65.398 ÷ [(47.528 + 50.710) ÷ 2] = 1,33 lần [1].", chunks) == []
+    assert unverified("DIO = 365 × [(1,642.2 + 1,559.3) ÷ 2] ÷ 11,108.4 = **52.60** [1, 2]", chunks) == []
+    assert unverified("Turnover = 65,398 ÷ [(47,528 + 50,710) ÷ 2] = 1.43 times [1].", chunks) == ["1.43"]
+    assert written_results("Revenue 1,185 [1] + 454 [2] = 1,639", {1185.0, 454.0}) == {1185.0, 454.0}  # a citation is no bracket
+
+
+def test_an_exponent_is_evaluated():
+    """fb150 qwen3_v3_5 03718: a growth rate "(65,984 / 65,398)^(1/2) − 1 = 0.00447 = 0.4%" was not read."""
+    chunks = [{"content": "Net sales 65,984 and 65,398"}]
+    assert unverified("CAGR = (65,984 / 65,398)^(1/2) − 1 = 0.00447 = 0.4%", chunks) == []
+    assert unverified("CAGR = (65.984 / 65.398)^(1/2) − 1 = 0,00447 = 0,4%", chunks) == []
+    assert "0.00547" in unverified("CAGR = (65,984 / 65,398)^(1/2) − 1 = 0.00547 = 0.5%", chunks)
+    assert len(wrong_steps("CAGR = (65,984 / 65,398)^(1/2) − 1 = 0.00547.")) == 1
+    assert evaluate("2^(3)")[0] == 8  # "(3)" after an exponent is not an accounting negative
+    assert evaluate("(-8)^(1/3)") is None and evaluate("10^400") is None  # no complex number, no overflow
+
+
+def test_a_change_of_percents_written_in_basis_points_is_right():
+    """Held-out chat answer msg_b9a48a4e (19/11): "11,20% − 11,02% = 18 điểm cơ bản" is right (0.18 points = 18 basis points) and was reported."""
+    assert wrong_steps("Biên gộp tăng: 11,20% − 11,02% = 18 điểm cơ bản [2].") == []
+    assert wrong_steps("Gross margin rose: 11.20% − 11.02% = 18 basis points [2].") == []
+    assert len(wrong_steps("Gross margin rose: 11.20% − 11.02% = 28 basis points [2].")) == 1
+    assert unverified("Gross margin rose from 11.02% to 11.20% [1]: 11.20% − 11.02% = 18 bps.", [{"content": "margin 11.20% and 11.02%"}]) == []
+
+
+# ---------------------------------------------------------------- a result written with its sign (live chat answer msg_7924779c, 19/11)
+COSTCO_MARGINS = [{"content": "Operating income 3,624 and 5,435; total revenue 116,199 and 166,761"}]
+
+
+def test_a_result_written_with_a_plus_sign_is_read():
+    """"3.2591% − 3.1188% = +0.1403 điểm phần trăm" was no step (the "+" stopped the reader), so the right 0.1403 was flagged under a right answer."""
+    vi = ("- FY2015: 3,624 / 116,199 = 3.1188% ≈ 3.12%.\n- FY2020: 5,435 / 166,761 = 3.2591% ≈ 3.26%.\n"
+          "- Thay đổi: 3.2591% − 3.1188% = {r} điểm phần trăm ≈ +0.14 điểm phần trăm.")
+    en = ("- FY2015: 3,624 / 116,199 = 3.1188%.\n- FY2020: 5,435 / 166,761 = 3.2591%.\n- Change: 3.2591% − 3.1188% = {r} percentage points.")
+    assert unverified(vi.format(r="+0.1403"), COSTCO_MARGINS) == []
+    assert unverified(en.format(r="+0.1403"), COSTCO_MARGINS) == []
+    assert "0.2403" in " ".join(unverified(vi.format(r="+0.2403"), COSTCO_MARGINS))
+    assert "0.2403" in " ".join(unverified(en.format(r="+0.2403"), COSTCO_MARGINS))
+    assert wrong_steps("Difference: 5.9% − 3.3% = +2.6 percentage points.") == []
+    assert len(wrong_steps("Difference: 5.9% − 3.3% = +3.6 percentage points.")) == 1
+
+
+def test_a_step_that_mixes_scales_is_not_judged():
+    """Held-out chat answer msg_baf3cdc6 (19/11): "1,4 tỷ − 848 triệu ≈ +552 triệu USD" is right (1,400 − 848), but read without its unit words it
+    was 1.4 − 848 and reported as wrong. A step whose numbers carry different scales is left alone; one scale is still judged."""
+    assert wrong_steps("Chi phí lãi vay: 1,4 tỷ − 848 triệu ≈ **+552** triệu USD [5].") == []
+    assert wrong_steps("Interest expense: $1.4 billion − $848 million ≈ +$552 million [5].") == []
+    assert len(wrong_steps("Chi phí lãi vay: 1.400 triệu − 848 triệu = 652 triệu USD [5].")) == 1
+    assert len(wrong_steps("Interest expense: $1,400 million − $848 million = $652 million [5].")) == 1
+
+
+def test_three_dots_before_the_percent_are_an_ellipsis():
+    """Live answer 19/11 (vi_calc): "12,421 / 232,887 = 5.333...% ≈ 5.3%" lost its "%" at the dots and was reported as a wrong step."""
+    assert wrong_steps("- Năm 2018: 12,421 / 232,887 = 5.333...% ≈ 5.3%.") == []
+    assert wrong_steps("- 2018: 12,421 / 232,887 = 5.333...% ≈ 5.3%.") == []
+    assert len(wrong_steps("- 2018: 12,421 / 232,887 = 6.333...% ≈ 6.3%.")) == 1
+    assert unverified("- 2018: 12,421 / 232,887 = 5.333...% ≈ 5.3%.", [{"content": "Operating income 12,421; net sales 232,887"}]) == []

@@ -528,12 +528,13 @@ def test_messages_carry_no_internal_details(read_api, monkeypatch):
         trace_info={"understood": "AMD 2023", "alternatives": [{"document_id": "d2", "label": "Intel"}], "plan": "internal-plan", "prompt_version": "v2"},
         token_usage={"total_tokens": 5}, latency_ms=9, model_used="internal-model",
     )
-    monkeypatch.setattr(chat_api, "ChatRepository", _stored("ChatRepository", {"get_messages": [message]}))
+    monkeypatch.setattr(chat_api, "ChatRepository", _stored("ChatRepository", {"get_messages": [message], "retry_marks": {}}))
 
     response = read_api.get("/chat/messages/nb")
 
     body = response.json()[0]
-    assert set(body) == {"message_id", "notebook_id", "role", "content", "citations", "understood", "alternatives", "actions", "created_at", "user_rating", "click", "clicked"}  # user_rating: the reader's own report of wrong figures
+    # user_rating: the reader's own report of wrong figures; message_index: the position, to ask for the page before it (D7)
+    assert set(body) == {"message_id", "notebook_id", "role", "content", "citations", "understood", "alternatives", "actions", "created_at", "message_index", "user_rating", "click", "clicked"}
     assert set(body["citations"][0]) == {"citation_id", "document_id", "page", "snippet", "cited"}
     assert body["understood"] == "AMD 2023" and body["alternatives"] == [{"document_id": "d2", "label": "Intel"}]
     assert not any(word in response.text for word in ("internal-chunk", "internal-plan", "internal-model", "prompt_version"))

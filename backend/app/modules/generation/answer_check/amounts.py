@@ -43,6 +43,8 @@ CURRENCY_SYMBOLS = "$₫€£¥"
 SCALE_SUFFIXES = ("bn", "mn", "M", "B", "K", "m", "k")
 MULTIPLE_SUFFIXES = ("x", "X")  # "5.99x": a ratio written as a multiple is a figure like any other (L21); "6.25x3.5" (a product) and "6.25xyz" (a word) are not, because a letter or digit follows
 MINUS_SIGNS = "-−"
+# a scale or currency word right after a number makes it an amount: "(45) million" is no footnote, "1999 million" no year
+UNIT_WORD = re.compile(r"(?:million|billion|thousand|trillion|mn|bn|triệu|tỷ|nghìn|ngàn|USD|VND|đồng)(?!\w)", re.I)
 EN = "en"
 GROUP_SPACES = "    "  # space, no-break space, thin space, narrow no-break space: how financial statements group thousands ("89 913")
 
@@ -223,7 +225,9 @@ def find_amounts(text: str, locale: str = EN, space_groups: bool = False) -> Lis
             while follow < length and text[follow] in " 	 ":
                 follow += 1  # same line only, as in "(1) Includes ..."
             follower = text[follow] if follow < length else ""
-            followed_by_text = bool(follower) and (follower.isalpha() or follower in ":;")
+            # "(45) million", "(45) triệu": a small negative amount before its unit, not a clause marker like "(1) Includes ..." (19/11)
+            unit_after = bool(UNIT_WORD.match(text, follow))
+            followed_by_text = bool(follower) and (follower.isalpha() or follower in ":;") and not unit_after
             if (not has_grouping and not has_decimal and not currency and not negative and len(run) <= 2
                     and marker_before and followed_by_text):
                 index = close_paren + 1
@@ -233,7 +237,7 @@ def find_amounts(text: str, locale: str = EN, space_groups: bool = False) -> Lis
             # engine, and the canonical value must not. Bare 1-2 digit values such as "(5)" may be
             # footnote references, 4+ digit ones such as "(2020)" years: they keep the plain reading.
             parenthesised = True
-            if has_grouping or has_decimal or len(integer_digits) == 3:
+            if has_grouping or has_decimal or len(integer_digits) == 3 or (unit_after and len(integer_digits) <= 2):
                 negative = True
             elif len(integer_digits) <= 2 and not currency:
                 is_reference = True

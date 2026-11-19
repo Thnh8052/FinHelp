@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ArrowRight, Check, FileText, Minus, Plus, TrendingUp, TriangleAlert } from "lucide-react";
 import { FinHelpLogo } from "../../components/common/FinHelpLogo";
 import { useAuth } from "../../context/AuthContext";
@@ -23,6 +23,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const { t } = useLanguage();
   const { guestQuota } = useAuth();
   const l = t.landing;
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // System Status Check (Simple Operational Indicator)
   const [systemStatus, setSystemStatus] = useState<"checking" | "online" | "offline">("checking");
@@ -81,7 +82,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   );
 
   return (
-    <div className="fh-landing-root">
+    <div className="fh-landing-root" ref={rootRef}>
       {/* Background radial glow */}
       <div className="fh-hero-glow" />
 
@@ -93,8 +94,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Logo with clean emblem and generous spacing */}
           <FinHelpLogo
             size="sm"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="cursor-pointer"
+            onClick={() => rootRef.current?.scrollTo({ top: 0, behavior: "smooth" })} // the landing page scrolls inside this box, not the window
+            label={t.common.backToTop}
           />
 
           {/* Direct Nav Links with Balanced Spacing (SaaS Minimalist Layout) */}

@@ -127,3 +127,80 @@ def test_a_wrong_multiple_is_caught_and_a_right_one_is_not_flagged():
 def test_an_x_inside_a_word_or_a_product_or_a_count_is_not_a_multiple():
     for text in ("The 6.25xyz code.", "A6.25x sample.", "Sized 6.25x3.5 inches.", "The 6.25xs.", "About 2x as much, a 10x jump."):
         assert check_numbers(text, TURNOVER)["figures"] == [], text  # a word, a product of two sizes, or a small count: nothing to verify
+
+
+# ------------------------------------------------------------------ rounding of figures the answer derives (system test 18/11, D1)
+# An answer wrote "0.1417" for the change between margins printed as 3.3299 and 3.1883: the printed numbers give 0.1416, the unrounded margins give
+# 0.1417. The check called it unverified and the whole answer was written again (53.6 s). Two rounded numbers can be one unit of their last digit off.
+MARGINS = [{"content": "| | 2020 | 2015 |\n|---|---:|---:|\n| Operating margin (%) | 3.1883 | 3.3299 |"}]
+
+
+def test_a_difference_of_two_rounded_figures_may_be_one_unit_of_the_last_digit_off():
+    s = status("The margin was 3.3299 in 2015 and 3.1883 in 2020: it changed by 0.1417 points [1].", MARGINS)
+    assert s["0.1417"] == "derived"  # 3.3299 - 3.1883 = 0.1416 from the printed numbers
+    assert status("The margin was 3.3299 in 2015 and 3.1883 in 2020: it changed by 0.1416 points [1].", MARGINS)["0.1416"] == "derived"
+
+
+def test_a_difference_two_units_off_is_still_unverified():
+    s = status("The margin was 3.3299 in 2015 and 3.1883 in 2020: it changed by 0.1418 points [1].", MARGINS)
+    assert s["0.1418"] == "unverified"
+    assert status("The margin was 3.3299 in 2015 and 3.1883 in 2020: it changed by 0.1414 points [1].", MARGINS)["0.1414"] == "unverified"
+
+
+def test_a_whole_number_difference_must_still_be_exact():
+    # amounts printed in millions are exact table values: their difference has no rounding in it (2,321 - 2,197 = 124)
+    assert status("Operating income rose from $2,197M to $2,321M: +$124M.")["$124"] == "derived"
+    assert status("Operating income rose from $2,197M to $2,321M: +$125M.")["$125"] == "unverified"
+    assert status("Operating income rose from $2,197M to $2,321M: +$123M.")["$123"] == "unverified"
+
+
+def test_one_decimal_figures_keep_half_a_unit():
+    # at one decimal a whole unit (0.1) is wide: 55.1 matched the average of two other figures (55.0) by chance, and planted wrong figures
+    # (13.5, 25.3, 56.9) slipped through the same way in the replay of 923 stored answers
+    table = [{"content": "| Cost of sales (%) | 53.8 | 56.2 |"}]
+    assert status("Cost of sales was 53.8% and 56.2%; the figure was 55.1%.", table)["55.1%"] == "unverified"
+
+
+def test_a_whole_number_read_as_three_decimals_keeps_half_a_unit():
+    # "36,701" can be read as 36.701 (Vietnamese marks): that reading must not get the wider tolerance and match 36,700 = 34,300 + 2,400 at another scale
+    table = [{"content": "| Revenue | 34,300 | Other | 2,400 |"}]
+    assert status("Revenue was 34,300 and other income 2,400, in all 36,701.", table)["36,701"] == "unverified"
+
+
+# ---------------------------------------------------------------- references read as figures (system test 18/11, T3: replay of 923 stored answers)
+def test_pages_notes_items_and_short_fiscal_years_are_not_figures():
+    for answer in ("AMD's FY22 (year ended December 31, 2022) quick ratio was about 1.6x.",
+                   "Boeing's FY2022 10-K (Note 21, page 113) reports ongoing legal matters.",
+                   "The table of contents lists Item 3 at page 24; the text comes from page 25.",
+                   "Dividends: 10-K, page 68/92, and page 168; pages 108-109.",
+                   "Báo cáo FY22 (thuyết minh 21, trang 113) nêu các vụ kiện.",
+                   "Adjusted EPS (Diluted), Full Year 2022 % change: 3.6%"):
+        report = check_numbers(answer, TABLE)
+        assert not {"22", "21", "113", "24", "25", "68", "92", "168", "108", "109", "2022 %"} & set(report["unverified"]), answer
+    assert check_numbers("Adjusted EPS (Diluted), Full Year 2022 % change: 3.6%", TABLE)["unverified"] == ["3.6%"]
+
+
+def test_a_figure_after_a_reference_word_is_still_checked():
+    assert check_numbers("Note: revenue was $3,456 million (page 4).", TABLE)["unverified"] == ["$3,456"]
+    assert check_numbers("Ghi chú: doanh thu 3.456 triệu USD (trang 4).", TABLE)["unverified"] == ["3.456"]
+    assert check_numbers("Page views rose 113% in FY2019.", TABLE)["unverified"] == ["113%"]
+
+
+# ---------------------------------------------------------------- figures that were never checked (19/11)
+LOSS = [{"content": "| Net income (loss) | 1,725 | (45) |\n| Revenue | 1,999 | 1,725 |"}]
+
+
+def test_a_small_loss_in_brackets_before_a_unit_is_a_figure_not_a_clause_marker():
+    """"(45) million" was read like "(1) Includes ...": never checked, so a wrong "(47) million" went through."""
+    assert status("The company lost (45) million in 2019 [1].", LOSS) == {"(45)": "verified"}
+    assert status("Công ty lỗ (45) triệu USD năm 2019 [1].", LOSS) == {"(45)": "verified"}
+    assert check_numbers("The company lost (47) million in 2019 [1].", LOSS)["unverified"] == ["(47)"]
+    assert check_numbers("(1) Includes restructuring costs [1].", LOSS)["checked"] == 0  # a clause marker stays one
+
+
+def test_an_amount_written_like_a_year_before_a_unit_is_a_figure():
+    """"1999 million" was skipped as the year 1999."""
+    assert status("Revenue was 1999 million in 2019 [1].", LOSS) == {"1999": "verified"}
+    assert status("Doanh thu năm 2019 là 1999 triệu USD [1].", LOSS) == {"1999": "verified"}
+    assert check_numbers("Revenue was 1998 million in 2019 [1].", LOSS)["unverified"] == ["1998"]
+    assert check_numbers("In 2019 and 2020 revenue grew [1].", LOSS)["checked"] == 0  # years stay years

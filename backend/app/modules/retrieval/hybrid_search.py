@@ -189,6 +189,7 @@ class HybridSearchService:
                 "page": c.page,
                 "section": c.section,
                 "chunk_type": c.chunk_type,
+                "table_title": (getattr(c, "table_metadata", None) or {}).get("title") or "",  # generation/conflicts.py matches tables by title
                 "token_count": getattr(c, "token_count", 0) or 0,  # the stored BGE-M3 count (the windows of the reranker read it)
                 "score": scores.get(c.chunk_id, 0.0),
                 "content": c.content,

@@ -69,3 +69,18 @@ async def test_the_chat_endpoint_sends_the_interface_language(monkeypatch):
     await _ask(monkeypatch, NotebookRecord(notebook_id="nb", owner_id="u"),
                {"answer": "x", "intent": "reject_input", "citations": [], "charged": False, "trace": {}}, "?", ui_lang="vi", seen=seen)
     assert seen["ui_lang"] == "vi"
+
+
+# ------------------------------------------------------------------ the refusal says which limit (system test 18/11, C9)
+def test_a_too_short_question_is_told_it_is_too_short_not_too_long():
+    for ui in ("vi", "en"):
+        d = decide("?", [NIKE23], 1, ui_lang=ui)
+        assert d.action == "reject_input" and d.message == MSG["reject_input"][ui]
+    assert "ngắn" in MSG["reject_input"]["vi"] and "dài" not in MSG["reject_input"]["vi"]
+    assert "short" in MSG["reject_input"]["en"] and "long" not in MSG["reject_input"]["en"]
+
+
+def test_a_too_long_question_is_told_it_is_too_long_and_the_limit():
+    d = decide("What was revenue? " + "x" * 5000, [NIKE23], 1)
+    assert d.action == "reject_input" and d.message == MSG["reject_long"]["en"]
+    assert "5,000" in MSG["reject_long"]["en"] and "5.000" in MSG["reject_long"]["vi"] and "dài" in MSG["reject_long"]["vi"]

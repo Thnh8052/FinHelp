@@ -11,6 +11,8 @@ export interface TranslationSchema {
     signOut: string;
     getStarted: string;
     backToHome: string;
+    backToTop: string;
+    homePage: string;
     copy: string;
     copied: string;
     close: string;
@@ -148,6 +150,10 @@ export interface TranslationSchema {
     uploadingNotice: string;
     inputShortcuts: string;
     sourceCitationsTitle: string;
+    citationOpen: string;
+    loadOlder: string;
+    loadingOlder: string;
+    citationUnknown: string;
     /** What the system is doing now (the streamed chat says so), never which component does it. */
     loadingStages: { understanding: string; searching: string; writing: string; checking: string };
     loadingSlow: string;
@@ -242,7 +248,6 @@ export interface TranslationSchema {
     includeInAnalysis: string;
     queued: string;
     processingDots: string;
-    auditedFiling: string;
     pagesCount: string;
     tablesWarning: string;
     openInReader: string;

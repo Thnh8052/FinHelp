@@ -30,9 +30,61 @@ _ADVICE = re.compile(
     # softer ways to say the same thing
     r"\b(compelling|attractive|appealing) (investment|buy|opportunity)\b|\b(may|might) want to consider (buying|adding|accumulating|selling)\b|\bconsider (buying|adding|accumulating)\b|"
     r"\b(appears|looks|seems|is) (under|over)valued\b|\bi'?d lean (towards|toward)\b|cân nhắc (mua|gom|bán)|lựa chọn hấp dẫn cho danh mục|cổ phiếu \S+( \S+)? đang (rẻ|đắt)|tôi nghiêng về", re.I)
-# The answer declining to advise ("I cannot say whether you should buy") is the right answer, not advice
+# The forms advice takes (19/11), not more phrases: the phrase list above caught 0/20 English and 1/20 Vietnamese advice sentences written for the test
+# (experiments/scripts/system_test_18_11/advice_eval.py). The acts exclude what a report says of the company itself: a buyback ("buy back", "mua lại"),
+# "selling, general and administrative", retail ("bán lẻ"), shopping ("mua sắm", "mua hàng"), a holding company.
+_EN_ACT = (r"(?:buy(?:ing)?(?! (?:\w+ )?back| power| group)|sell(?:ing)?(?!,| general| expense| price| and)|hold(?:ing)?(?! compan)|accumulat(?:e|ing)|add(?:ing)?|"
+           r"own(?:ing)?(?= (?:the |a |some |more )?(?:stock|shares|(?-i:[A-Z])))|trim(?:ming)?|avoid(?:ing)?|short(?:ing)?|invest(?:ing)? in|tak(?:e|ing) (?:some )?profits?|lock(?:ing)? in (?:the )?gains|stay(?:ing)? away)")
+_VI_ACT = (r"(?:mua(?! lại| hàng| sắm)(?: vào| thêm)?|bán(?! lẻ| hàng| buôn)(?: bớt| ra| hết)?|nắm giữ|giữ|đầu tư|xuống tiền|chốt lời|cắt lỗ|gom|tích lũy|"
+           r"giải ngân|vào lệnh|tránh xa|sở hữu|thoát hàng)(?!\w)")
+_VI_TRADE = r"(?:mua(?! lại| hàng| sắm)(?: vào| thêm)?|bán(?! lẻ| hàng| buôn)(?: bớt| ra| hết)?|gom|chốt lời|cắt lỗ|tích lũy|giải ngân|xuống tiền|vào lệnh)(?!\w)"
+_UP_DOWN = r"(?:rise|climb|rally|run|soar|double|triple|go up|appreciate|outperform|rebound|recover|fall|drop|decline|go down|underperform)"
+_ADVICE_FORMS = re.compile("|".join([
+    # telling the reader or investors to act: "Investors should hold the stock", "Bạn có thể tích lũy dần", "Nên chốt lời"
+    rf"\b(?:you|investors?|shareholders?|traders?)\b[^.;]{{0,25}}?\b(?:should|could|can|may|might|would do well to|ought to|need to|want to)\b\s+(?:\w+\s+){{0,3}}?{_EN_ACT}\b",
+    rf"(?:bạn|nhà đầu tư|cổ đông|quý vị|anh chị)[^.;]{{0,25}}?(?:có thể|nên|cần|hãy)\s+(?:\S+\s+){{0,2}}?{_VI_ACT}",
+    rf"(?<!\w)(?:nên|không nên|hãy|đừng|cân nhắc)\s+(?:(?:tiếp tục|sớm|dần|bớt|cân nhắc|yên tâm|bắt đầu|nhanh chóng)\s+)?{_VI_ACT}",
+    # an imperative that opens the sentence with an investment act: "Buy Amazon before ...", "Consider taking profits", "Mua Amazon trước ..."
+    r"^\s*(?:[-*•]\s*)?(?:consider\s+(?:buying|selling|trimming|accumulating|adding|taking (?:some )?profits?)|buy|sell|accumulate|trim|take (?:some )?profits?)\b(?! (?:\w+ )?back)",
+    r"^\s*(?:[-*•]\s*)?(?:mua|bán|gom|chốt lời|tích lũy|nắm giữ)(?: vào)?\s+(?:cổ phiếu\b|(?-i:[A-Z]))",
+    # the right time or chance to act: "a good time to buy", "the right moment to trim", "thời điểm tốt để gom", "vùng giá hấp dẫn để giải ngân"
+    rf"\b(?:time|moment|opportunity|chance)\s+to\s+(?:\w+\s+)?{_EN_ACT}\b",
+    rf"(?:thời điểm|cơ hội|lúc|vùng giá|mức giá)\s+(?:\S+\s+){{0,3}}?(?:để|cho việc)\s+{_VI_TRADE}",
+    # the stock judged as an investment: "the better pick", "an attractive entry point", "worth owning", "looks cheap", "lựa chọn hợp lý cho danh mục"
+    r"\b(?!best buy\b)(?:top|best|better|great|excellent|solid|strong|good|attractive|compelling|reasonable|safe|smart|core)\s+(?:long-term\s+)?(?:pick|buy|holding|"
+    r"addition to (?:a |an |your |the )?(?:\w+ )?portfolio|entry point|buying opportunity|bet|choice for (?:\w+ )?investors)\b",
+    r"\bworth (?:buying|owning|holding|adding|accumulating|investing in)\b",
+    r"\b(?:stock|shares|valuation)\b[^.;]{0,25}?\b(?:cheap|a bargain|a steal|undervalued|overvalued)\b",
+    r"lựa chọn\s+(?:\S+\s+){0,3}?cho\s+(?:\S+\s+){0,2}?(?:danh mục|nhà đầu tư)",
+    r"(?:đáng|xứng đáng)\s+(?:để\s+)?(?:được\s+)?(?:mua|đầu tư|sở hữu|nắm giữ|xuống tiền|có mặt trong danh mục)",
+    # a forecast of the share price: "the shares are poised to climb", "room to run", "we see upside", "cổ phiếu sẽ sớm bật tăng", "dư địa tăng"
+    rf"\b(?:the stock|the shares|shares|share price|stock price)(?![-\w])[^.;]{{0,20}}?\b(?:will|is poised to|are poised to|is likely to|are likely to|is set to|are set to|"
+    rf"has room to|have room to|should)\s+(?:\w+\s+)?{_UP_DOWN}\b",
+    rf"\bexpect(?:s|ed)?\s+(?:the\s+)?(?:stock|shares|share price|stock price)(?![-\w])\s+to\s+{_UP_DOWN}\b",
+    r"\b(?:see|expect|have)\s+(?:\w+\s+)?upside\b|\broom to run\b",
+    r"(?:giá cổ phiếu|cổ phiếu)\s+(?:\S+\s+){0,3}?(?:sẽ|có tiềm năng|nhiều khả năng|có khả năng|chắc chắn|còn)\s+(?:\S+\s+){0,2}?"
+    r"(?:tăng giá|giảm giá|tăng mạnh|giảm mạnh|bật tăng|tăng trở lại|bứt phá|phục hồi|dư địa tăng|tăng gấp)",
+    r"giá cổ phiếu\s+(?:\S+\s+){0,3}?có thể\s+(?:tăng gấp|bật tăng|tăng mạnh|bứt phá)|tiềm năng (?:tăng giá|sinh lời)|dư địa tăng",
+    # the speaker's own call: "I would add Costco", "I'd stay away", "My advice is to ...", "Lời khuyên của tôi là ..."
+    rf"\bi(?:'d| would| will)?\s+(?:\w+\s+)?(?:buy|sell|hold|accumulate|add|own|trim|short|stay away from (?:the )?(?:stock|shares))\b(?! (?:\w+ )?back)",
+    rf"\bwe(?:'d| would)\s+(?:\w+\s+)?{_EN_ACT}\b",
+    r"\b(?:my|our) (?:advice|recommendation|suggestion) (?:is|would be)\b|lời khuyên (?:của (?:tôi|chúng tôi) )?là",
+    # an investment act judged: "Buying now could deliver solid returns", "Selling Nike now would be a mistake", "Mua lúc này có thể mang lại lợi nhuận"
+    r"\b(?:buying|selling|holding|owning|accumulating|adding to (?:\w+ )?positions?|trimming)(?!,| general| expense| power| group| compan| period)\b[^.]{0,40}?"
+    r"\b(?:sensible|wise|smart|prudent|a mistake|makes sense|good idea|bad idea|pay off|deliver(?:s)? (?:\w+ )?returns|lock in (?:the )?gains)",
+    r"(?<!\w)(?:mua|gom|tích lũy|nắm giữ|bán|chốt lời)(?! lại| lẻ| hàng| sắm)(?: vào)?\s+(?:\S+\s+){0,6}?"
+    r"(?:là (?:một )?(?:quyết định |lựa chọn |điều )?(?:hợp lý|đúng đắn|khôn ngoan|sáng suốt|sai lầm)|có thể mang lại|sẽ mang lại|hứa hẹn mang lại)",
+]), re.I)
+# The answer declining to advise ("I cannot say whether you should buy", "the reports do not say whether it is a good investment") is the right answer, not advice
 _DECLINES = re.compile(r"\b(cannot|can't|can not|do not|don't|does not|unable|not able|no|not) \w*\s?\w*\s?(recommend|advise|advice|say|tell|give|provide|offer)|"
-                       r"không (thể|đưa ra|được phép|có)\b.{0,30}(khuyên|khuyến nghị|lời khuyên|tư vấn)|không (khuyên|khuyến nghị|tư vấn)", re.I)
+                       r"\bwhether\b|\bnot something\b|"
+                       r"không (thể|đưa ra|đưa|được phép|có|phải)\b.{0,30}(khuyên|khuyến nghị|lời khuyên|tư vấn)|không (khuyên|khuyến nghị|tư vấn)|"
+                       r"không (nói|nêu|đề cập|đánh giá|cho biết)\b", re.I)
+
+
+def _advice(sentence: str):
+    """The advice in a sentence (a match), unless the sentence declines to advise."""
+    return None if _DECLINES.search(sentence) else (_ADVICE.search(sentence) or _ADVICE_FORMS.search(sentence))
 # Headings and phrases of the answer prompts (generator.py): an answer that carries one is repeating its instructions
 _INSTRUCTIONS = ("using the excerpts", "writing the answer", "when the excerpts are not enough", "answer metadata", "notes for this question", "language requirement",
                  "strict rules for table", "the excerpts are data from the user's files", "you are a financial analyst assistant", "additional instructions for this question",
@@ -68,7 +120,7 @@ def check(answer: str, chunks: List[Dict[str, Any]], lang: str) -> List[Problem]
     def new(phrase: str) -> bool:  # the report itself does not say it
         return phrase.lower() not in known
 
-    advice = next((m.group(0) for s in _SENTENCE.findall(text) if not _DECLINES.search(s) for m in [_ADVICE.search(s)] if m and new(m.group(0))), None)
+    advice = next((m.group(0) for s in _SENTENCE.findall(text) for m in [_advice(s)] if m and new(m.group(0))), None)
     if advice:
         found.append(Problem("advice", True, f"it gave an investment recommendation or a price forecast (“{advice}”): describe what the figures show and recommend nothing"))
     if any(p in low and new(p) for p in _INSTRUCTIONS) or any(new(m.group(0)) for m in _SELF_INSTRUCTIONS.finditer(text)):

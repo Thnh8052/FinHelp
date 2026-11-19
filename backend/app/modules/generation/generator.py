@@ -119,7 +119,11 @@ LANGUAGE_VI_STRUCTURED = (
     "(including any opening clarification, scope note, source/period explanation, table headers, calculation steps, and conclusion). "
     "If any 'Notes for this question' or excerpt headers are in English, translate their meaning into natural Vietnamese when stating them to the user; "
     "NEVER copy English instructions or write an English introductory sentence. Keep only company names, original report line-item names (with a short "
-    "Vietnamese gloss if helpful), and currency/unit symbols as printed in the excerpts."
+    "Vietnamese gloss if helpful), and currency/unit symbols as printed in the excerpts.\n"
+    # D3 of the 18/11 system test (approved 18/11): report figures were copied in English format ("3,624" = thousands) and the answer's own in
+    # Vietnamese format ("3,12%"), so "3,624" read as 3.624; one line took decimal commas from 11 to 0 in the 18/11 experiment, no slower
+    "Numbers: write every number in the English format of the excerpts — a comma for thousands and a period for decimals (3,624; 3.12%; 386.1) — "
+    "in every part of the answer, including the figures you calculate. Never use a comma as the decimal mark."
 )
 
 
@@ -193,6 +197,10 @@ Using the excerpts
 - A later report's comparative column is a valid source for an earlier year; say that you used it. When two reports give different
   figures for the same year (a restatement), use the later report's figure and mention the difference.
 - If a metric is not reported directly, derive it from its components with the standard formula and name the line items you used.
+- If the question gives its own formula, definition or components, use exactly those: they replace the standard formula. Give the result in
+  the form the question asks (ratio or percent, rounding). If one of the components is not in the excerpts, say which one is missing; do not
+  silently replace it with another line item (if you use a close substitute, name it as a substitute). When a metric has several common
+  definitions and the question does not choose, say in a few words which one you used.
 - Keep each figure in the currency and scale its report uses (e.g. CAD millions, GBP, USD thousands). When figures with different
   scales are combined, convert the scale explicitly and say so. Never convert between currencies unless the excerpts give the rate:
   when compared figures are in different currencies, give each in its own currency and say that a direct comparison needs an exchange rate.
@@ -218,7 +226,7 @@ Writing the answer
        * Single-period cross-company comparison (no YoY needed): Use entity columns:
          `| Metric | Company A FY2025 (CAD million) [1] | Company B FY2025 (USD million) [2] | Difference |`
        * Concise headers: Header cells must state ONLY metric/entity name, period, unit and citation `[n]`. NEVER write conversational phrases in headers (e.g. do NOT write "(million $, as printed in the report)").
-       * Clean data cells (NO NARRATIVE PROSE): Every data cell must contain ONLY the core number or concise entity name and its citation `[n]` (e.g. `52 377 [1]`, `16 956 [2]`, `PwC [4]`).
+       * Clean data cells (NO NARRATIVE PROSE): Every data cell must contain ONLY the core number or concise entity name and its citation `[n]` (e.g. `52,377 [1]`, `16,956 [2]`, `PwC [4]`).
        * FORBIDDEN IN CELLS: NEVER write sentences or conversational remarks inside table cells (strictly forbidden examples: "no equivalent line is presented; Revenue = ...", "in full, no non-controlling interest...", "the auditor is not named in the excerpts...").
        * Missing or non-comparable items: If an entity lacks an equivalent line item or does not disclose it, write ONLY a dash `—` (or `— [n]`, `N/A`). Do NOT repeat figures from other rows and do NOT write narrative explanations in the cell.
        * Standardized metrics only: Compare standardized core metrics (e.g. Revenue, Net Income). Do NOT invent redundant extra rows for single-entity line variants that force other entities to say "not comparable".
@@ -257,7 +265,8 @@ def _revise(text: str, *changes: Tuple[str, str]) -> str:
 # Prompt v4.1 (GENERATION_PROMPT="v4_1"): v4 with three corrections where v4 contradicts itself; every other line is v4's (tests/test_prompt_v4_1.py).
 #   L20  the table templates put the citation [n] in the header, so the data cells carry none (the column-year check TC-1 that read them was removed 15/11)
 #   L19  "one decimal for ratios" turns a current ratio of 0.76 into 0.8 and 0.87 into 0.9: percentages keep one decimal, ratios and multiples two
-#   L18  the example cell `52 377 [1]` writes a space-grouped figure under "copy each input figure exactly as printed", and answers copy it
+#   L18  the example cell `52 377 [1]` wrote a space-grouped figure under "copy each input figure exactly as printed", and answers copied it
+#        (v4 itself shows `52,377 [1]` since 19/11, T2 of the 18/11 handoff; v4.1 still shows no number there)
 # Not the default until it is measured on questions it was not designed with.
 SYSTEM_V4_1 = _revise(
     SYSTEM_V4,
@@ -265,7 +274,7 @@ SYSTEM_V4_1 = _revise(
     ("`| Metric | Company A FY2025 (CAD million) [1] | Company B FY2025 (USD million) [2] | Difference |`", "`| Metric | Company A FY2025 (CAD million) | Company B FY2025 (USD million) | Difference |`"),
     ("Header cells must state ONLY metric/entity name, period, unit and citation `[n]`. NEVER write conversational phrases in headers",
      "Header cells must state ONLY the metric or entity name, the period and the unit; NEVER a citation `[n]` (it goes in each data cell) and NEVER conversational phrases in headers"),
-    ("(e.g. `52 377 [1]`, `16 956 [2]`, `PwC [4]`)", "(a figure exactly as the report prints it, or a name such as `PwC [4]`)"),
+    ("(e.g. `52,377 [1]`, `16,956 [2]`, `PwC [4]`)", "(a figure exactly as the report prints it, or a name such as `PwC [4]`)"),
     ("(rounded to one decimal place for percentages and ratios unless asked otherwise)", "(rounded to one decimal place for percentages and two for ratios and multiples unless asked otherwise)"),
     ("(one decimal for percentages and ratios unless asked otherwise)", "(one decimal for percentages and two for ratios and multiples unless asked otherwise)"),
 )

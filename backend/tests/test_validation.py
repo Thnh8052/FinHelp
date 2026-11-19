@@ -16,7 +16,7 @@ CHUNKS = [{"chunk_id": "a", "document_id": "amd", "page": 50, "content": "Net re
 
 def test_good_citations_pass():
     out = check_citations("AMD revenue was $25,785 million in 2024 [1]. NVIDIA reported $60,922 million [2].", CHUNKS, [AMD, NV])
-    assert out == {"invalid": [], "wrong_company": [], "wrong_period": []}
+    assert out == {"invalid": [], "wrong_company": [], "wrong_period": [], "wrong_figure": []}
 
 
 def test_citation_to_no_excerpt_another_company_or_period_is_caught():
@@ -53,25 +53,24 @@ def _scope():
                            metadata=DocumentMetadata(company_name="NVIDIA Corporation", ticker="NVDA", fiscal_year=2024, years_covered=[2024, 2023]))]
 
 
-async def test_a_bad_answer_is_repaired_once(monkeypatch):
+async def test_a_bad_answer_is_written_once_and_flagged(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $99,999 million [1].", "AMD revenue was $25,785 million [1]."], monkeypatch)
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 2 and "$99,999" in calls[1][-1]
-    assert r["verification"]["passed"] and r["verification"]["repaired"] and "⚠️" not in r["answer"]
-    assert r["verification"]["first_issues"] and "$99,999" in r["verification"]["first_issues"][0]  # why the repair was tried
+    assert len(calls) == 1 and "$99,999" in r["answer"] and "⚠️" in r["answer"]
+    assert not r["verification"]["passed"] and r["verification"]["unverified_figures"] == ["$99,999"]
 
 
 async def test_what_stays_wrong_is_flagged_not_hidden(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $99,999 million [1]."], monkeypatch)
     r = await orch._answer_one("Doanh thu AMD và NVIDIA năm 2024", "nb", _scope(), Decision(lang="vi"))
-    assert len(calls) == 2 and not r["verification"]["passed"]
-    assert "⚠️ Lưu ý: số chưa kiểm chứng được trong đoạn trích: $99,999" in r["answer"]
+    assert len(calls) == 1 and not r["verification"]["passed"]
+    assert "⚠️ Lưu ý: số chưa đối chiếu được với đoạn trích hay phép tính trong câu trả lời: $99,999" in r["answer"]
 
 
 async def test_a_clean_answer_costs_no_second_call(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $25,785 million in 2024 [1]; NVIDIA $60,922 million [2]."], monkeypatch)
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 1 and r["verification"] == {"passed": True, "repaired": False, "unverified_figures": [], "first_issues": []}
+    assert len(calls) == 1 and r["verification"] == {"passed": True, "unverified_figures": []}
     assert r["understood"].startswith("I understood the question as about")
 
 
@@ -97,6 +96,34 @@ async def test_a_tagged_question_naming_an_unlisted_company_is_answered_for_the_
 
 def test_each_citation_is_checked_against_the_clause_it_closes():
     two = "Intel revenue was $11,715 million in 2024 [1]; NVIDIA reported $60,922 million for fiscal 2023 [2]."
-    assert check_citations(two, CHUNKS, [AMD, NV]) == {"invalid": [], "wrong_company": [], "wrong_period": []}
+    assert check_citations(two, CHUNKS, [AMD, NV]) == {"invalid": [], "wrong_company": [], "wrong_period": [], "wrong_figure": []}
     swapped = "AMD revenue was $25,785 million [2]; NVIDIA reported $60,922 million [1]."
     assert [w["n"] for w in check_citations(swapped, CHUNKS, [AMD, NV])["wrong_company"]] == [2, 1]
+
+
+def test_years_of_a_clause_are_checked_against_the_excerpts_cited_together():
+    """Live answer 19/11 (vi_table): "FY2015 ... 116,199 và FY2020 ... 166,761 [2][1]" cites the 2020 report and the 2015 report for their own years;
+    each marker was checked against both years and both were reported. A year is fine when one of the excerpts cited together covers it."""
+    chunks = [{"chunk_id": "c", "document_id": "c20", "page": 35, "content": "Total revenue 2020 166,761 2019 152,703"},
+              {"chunk_id": "o", "document_id": "c15", "page": 40, "content": "Total revenue 2015 116,199 2014 112,640"}]
+    c20 = ScopeDoc("c20", "Costco | 10-K | FY2020", {"entity": "Costco Wholesale Corporation", "ticker": "COST"},
+                   Filing("c20", "Costco Wholesale Corporation", "10-K", 2020), [2020, 2019, 2018])
+    c15 = ScopeDoc("c15", "Costco | 10-K | FY2015", {"entity": "Costco Wholesale Corporation", "ticker": "COST"},
+                   Filing("c15", "Costco Wholesale Corporation", "10-K", 2015), [2015, 2014, 2013])
+    for text in ("Tổng doanh thu của FY2015 là 116,199 và của FY2020 là 166,761 [2][1].", "Total revenue was 116,199 in FY2015 and 166,761 in FY2020 [1, 2]."):
+        assert check_citations(text, chunks, [c20, c15])["wrong_period"] == [], text
+    assert [w["n"] for w in check_citations("Total revenue was 116,199 in FY2015 [1].", chunks, [c20, c15])["wrong_period"]] == [1]
+
+
+def test_a_year_named_before_its_citation_counts_for_the_citation_before_it():
+    """Owner 19/11 (looser checks): "the FY2015 report [2] gives 116,199 for 2015, and the FY2020 report [1] gives 166,761 for 2020" names each report
+    before its figures, as for figures (test_cited_figures): the year 2015 of the text before [1] belongs to [2]."""
+    chunks = [{"chunk_id": "c", "document_id": "c20", "page": 35, "content": "Total revenue 2020 166,761 2019 152,703"},
+              {"chunk_id": "o", "document_id": "c15", "page": 40, "content": "Total revenue 2015 116,199 2014 112,640"}]
+    c20 = ScopeDoc("c20", "Costco | 10-K | FY2020", {"entity": "Costco Wholesale Corporation", "ticker": "COST"},
+                   Filing("c20", "Costco Wholesale Corporation", "10-K", 2020), [2020, 2019, 2018])
+    c15 = ScopeDoc("c15", "Costco | 10-K | FY2015", {"entity": "Costco Wholesale Corporation", "ticker": "COST"},
+                   Filing("c15", "Costco Wholesale Corporation", "10-K", 2015), [2015, 2014, 2013])
+    for text in ("The FY2015 report [2] gives 116,199 for 2015, and the FY2020 report [1] gives 166,761 for 2020.",
+                 "Báo cáo FY2015 [2] ghi 116,199 cho năm 2015, còn báo cáo FY2020 [1] ghi 166,761 cho năm 2020."):
+        assert check_citations(text, chunks, [c20, c15])["wrong_period"] == [], text

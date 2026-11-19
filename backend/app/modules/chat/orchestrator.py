@@ -4,7 +4,7 @@ import time
 from collections import Counter
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from qdrant_client import AsyncQdrantClient
@@ -22,9 +22,11 @@ from app.modules.query_router.input_policy import COMPARE_CUE, MSG, TERMINAL, De
 from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_from_focus, focus_view
 from app.modules.query_router import guard
 from app.modules.query_router.bridge import writer_note
+from app.modules.query_router.catalog_route import company_key
+from app.modules.generation.conflicts import ANNUAL_FORMS, Report, conflict_notes
 from app.modules.query_router.planner import PlanItem, unlisted_companies
 from app.modules.query_router.catalog_route import company_key
-from app.modules.query_router.target_scope import TargetDecision, decide_targets, understood_line
+from app.modules.query_router.target_scope import TargetDecision, decide_targets, merge_understood, understood_line
 from app.modules.generation.citation_generator import CitationGenerator
 from app.modules.generation.answer_check import policy, review
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
@@ -68,6 +70,7 @@ class QuestionPlan:
     followup: Optional[Dict[str, Any]] = None  # {"method": "focus" | "llm", "resolved": the rewrite}
     prefix: str = ""  # "I understood the question as ...", shown above the answer
     stop: Optional[Dict[str, Any]] = None  # a reply that ends the question here: nothing is searched
+    unselected: List[SourceInfo] = field(default_factory=list)  # the chat's ready reports not selected: a period they cover is named (B2, 18/11)
 
 
 @dataclass
@@ -148,7 +151,7 @@ class RAGWorkflowOrchestrator:
 
     async def retrieve_for_question(
         self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, mentions: Optional[List[str]] = None,
-        announce: bool = False, exclude: Optional[set] = None,
+        announce: bool = False, exclude: Optional[set] = None, asked: str = "",
     ) -> QuestionRetrieval:
         """The search for one question the input policy let through: the filings it is forced to (@file, a named company), the notes
         for the answer, and the excerpts. A question only about companies outside the selected sources is refused, unsearched.
@@ -170,9 +173,10 @@ class RAGWorkflowOrchestrator:
         search = asyncio.create_task(self.retrieve(query, notebook_id, scope, targets.document_ids, **({"exclude": exclude} if exclude else {})))
         search.add_done_callback(lambda t: t.cancelled() or t.exception())  # a cancelled or failed search is never left unread
         try:
-            if announce and targets.understood:
+            shown = merge_understood(asked, targets.understood, decision.lang == "vi")
+            if announce and shown:
                 await self._cleared()  # the understanding is shown only for a message the guard lets through (a refusal must not follow it on the screen); the search is already running
-                events.emit("understood", text=targets.understood, chooser=[])  # the chooser comes with the answer (answer_actions)
+                events.emit("understood", text=shown, chooser=[])  # the chooser comes with the answer (answer_actions)
             unlisted = await self.find_unlisted(query, scope)
         except BaseException:
             search.cancel()
@@ -191,11 +195,12 @@ class RAGWorkflowOrchestrator:
     # ------------------------------------------------------------------ input policy (docs/RESEARCH_NOTES_MULTIDOC.md, table F)
     async def _answer_one(
         self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, citation_offset: int = 0,
-        mentions: Optional[List[str]] = None, retry: bool = False, deeper: Optional[Dict[str, List[str]]] = None,
+        mentions: Optional[List[str]] = None, retry: bool = False, deeper: Optional[Dict[str, List[str]]] = None, asked: str = "",
     ) -> Dict[str, Any]:
         """The measured path for one question the input policy let through, with its notes for the answer. `retry`: the question was sent again by a
-        "search again" button; an answer that still falls short gets an apology and no button (one click only)."""
-        searched = await self.retrieve_for_question(query, notebook_id, scope, decision, mentions, announce=citation_offset == 0,
+        "search again" button; an answer that still falls short gets an apology and no button (one click only). `asked`: the standalone question a
+        follow-up was understood as, shown at the head of the understood line."""
+        searched = await self.retrieve_for_question(query, notebook_id, scope, decision, mentions, announce=citation_offset == 0, asked=asked,
                                                     **({"exclude": set(deeper["exclude"])} if deeper else {}))
         if searched.refusal:
             return searched.refusal
@@ -223,18 +228,20 @@ class RAGWorkflowOrchestrator:
         if found.missing:
             notes.append("No excerpt was found in: " + "; ".join(labels.get(d, d) for d in found.missing)
                          + ". Say that the figures of these sources could not be found in the documents; do not estimate them.")
+        # two annual reports printing different figures for one item and year (a restatement): the model is told, so the answer says so (owner 19/11)
+        reports = {d.document_id: Report(company_key(d.metadata.company_name or d.file_name), (d.metadata.report_type or "").lower() in ANNUAL_FORMS,
+                                         d.metadata.fiscal_year, labels.get(d.document_id, d.file_name)) for d in scope}
+        notes.extend(conflict_notes(retrieved, reports))
         docs = [scope_doc(d) for d in scope]
         t0 = time.perf_counter()
         answer, checked = await self._write_checked(query, retrieved, notes, docs, decision.lang)
         citations = [CitationGenerator.from_retrieved_chunk(chk, citation_offset + idx + 1) for idx, chk in enumerate(retrieved)]
-        left = [f for f in checked["final"] if f.severity != review.NOTE]
-        verification = {"passed": not left, "repaired": checked["outcome"] == "rewritten",
-                        "unverified_figures": [f.text for f in left if f.check == "figure"],
-                        "first_issues": [f.note for f in checked["first"] if f.severity != review.NOTE]}  # why a rewrite was asked, kept for the trace
+        left = [f for f in checked["findings"] if f.severity != review.NOTE]
+        verification = {"passed": not left, "unverified_figures": [f.text for f in left if f.check == "figure"]}
         text, meta = split_answer(answer)
         cited = cited_numbers(text)
         timings = {**found.timings, "generate": checked["seconds_first"], "verify_repair": round(time.perf_counter() - t0 - checked["seconds_first"], 2)}
-        # "The selected reports do not contain this": the conversation's topic stays where it was, and excerpts the answer does not use are not shown as its sources
+        # "The selected reports do not contain this": excerpts the answer does not use are not shown as its sources
         not_found = (meta or {}).get("status") == "not_found"
         # Fell short (docs/Version_3/fail_cases.md): partial, not found, or figures still unverified. Never the apology or the output policy's refusal (also not_found).
         # The added line goes after the machine block, which split_answer removes.
@@ -256,9 +263,12 @@ class RAGWorkflowOrchestrator:
         if not understood and len(scope) > 1 and plan:  # the planner chose: say which documents (CODE_MODEL_DECISIONS 2.2, option C)
             understood = understood_line([labels.get(d, d) for d in dict.fromkeys(d for p in plan for d in (p.document_ids or [x.document_id for x in found.scope]))],
                                          decision.lang == "vi")
+        understood = merge_understood(asked, understood, decision.lang == "vi")
         if not_found and not cited:
             citations = []
-        focus_docs = [] if not_found else targets.document_ids or [c.document_id for n, c in enumerate(citations, 1) if n in cited] or [c.document_id for c in citations]
+        # found nothing: the topic moves only to the documents the question named ("and Amazon?" that Amazon's report does not answer is still about Amazon, 18/11)
+        # (a blocked answer, the fixed reply to one that broke a safety rule, never moves it)
+        focus_docs = [] if unfinished == "blocked" else targets.document_ids if not_found else targets.document_ids or [c.document_id for n, c in enumerate(citations, 1) if n in cited] or [c.document_id for c in citations]
         return {
             "answer": answer,
             "intent": "retrieval_rag",
@@ -443,17 +453,23 @@ class RAGWorkflowOrchestrator:
                               f"Please confirm the document details before asking ({names}): the company or reporting period could not be verified in the text.",
                               {"decision": {"action": "ask_confirm_catalog", "documents": [d.document_id for d in unconfirmed]}})
             return p
-        p.ready_count = len(await self._ready_documents(notebook_id))
+        ready = await self._ready_documents(notebook_id)
+        p.ready_count = len(ready)
         p.infos = [source_info(d) for d in scope]
+        chosen = {d.document_id for d in scope}
+        p.unselected = unselected = [source_info(d) for d in ready if d.document_id not in chosen]
         history = history or []
         tagged = {**focus_state, "document_ids": mentions} if mentions and focus_state else focus_state  # @file names the company: the topic only gives the item and year
         p.focus = focus = focus_view(tagged, [d.document_id for d in scope], p.infos)
-        p.decision = decision = decide(query, p.infos, p.ready_count, history, focus, ui_lang)
+        p.decision = decision = decide(query, p.infos, p.ready_count, history, focus, ui_lang, unselected)
         # What the rules let through is still checked for what it is (small talk, an off-topic request, a request for advice...) by the guard,
         # beside the search (_guarded): the intent router that did it here was removed 17/11/2026 (TRIED.md DV-08)
         if decision.action == "rewrite_followup":  # "And the net income?" -> a standalone question, shown to the user
             filled = None if {"correction", "outside_name"} & set(decision.flags) else fill_from_focus(query, focus, p.infos, decision.lang)
-            topic = [{"role": "current topic", "content": f"{', '.join(focus.companies)}; {focus.years}; {METRICS[focus.metric][1] if focus.metric else 'no item yet'}"}] if focus else []
+            # the period of each selected report: a newly named company is asked about its own period, not the topic's (18/11)
+            reports = "; ".join(f"{s.company} FY{s.fiscal_year}" for s in p.infos if s.company and s.fiscal_year)
+            topic = [{"role": "current topic", "content": f"{', '.join(focus.companies)}; {focus.years}; {METRICS[focus.metric][1] if focus.metric else 'no item yet'}"
+                      + (f". Selected reports: {reports}" if reports else "")}] if focus else []
             rewritten = filled or await rewrite_followup(query, history + topic)
             if not rewritten:
                 p.stop = terminal("ask_clarify", MSG["ask_clarify"][decision.lang])
@@ -461,27 +477,30 @@ class RAGWorkflowOrchestrator:
             p.followup = {"method": "focus" if filled else "llm", "resolved": rewritten}
             p.prefix = (f"Tôi hiểu câu hỏi là: “{rewritten}”\n\n" if decision.lang == "vi" else f"I understood the question as: “{rewritten}”\n\n")
             p.query = rewritten
-            p.decision = decision = decide(rewritten, p.infos, p.ready_count, [])
+            p.decision = decision = decide(rewritten, p.infos, p.ready_count, [], unselected=unselected)
             if decision.action == "rewrite_followup":
                 p.stop = terminal("ask_clarify", MSG["ask_clarify"][decision.lang])
                 return p
         if decision.action in TERMINAL:
             message = sources_message(scope, decision.lang) if decision.action == "list_sources" else decision.message
             p.stop = terminal(decision.action, p.prefix + message, {"decision": {"action": decision.action, "available": decision.available}})
+            if decision.action in ("period_unavailable", "form_unavailable"):  # the reply asks for another period or form: the question goes back in the box (18/11)
+                p.stop["actions"] = {"chooser": [], "search_more": None, "edit_question": True, "try_again": False}
         return p
 
-    async def _split_parts(self, decision: Decision, infos: List[SourceInfo], ready_count: int) -> List[Tuple[str, Decision]]:
+    async def _split_parts(self, decision: Decision, infos: List[SourceInfo], ready_count: int,
+                           unselected: Sequence[SourceInfo] = ()) -> List[Tuple[str, Decision]]:
         """Each question of a message that asks several, decided on its own. A part that leans on an earlier one ("How about its total
         assets?") is rewritten with the earlier parts as the conversation: only their text is needed, never their answers."""
         parts: List[Tuple[str, Decision]] = []
         earlier: List[dict] = []
         for sub in decision.sub_questions:
             context = earlier + [{"role": "assistant", "content": "(answered above)"}] if earlier else []
-            sub_decision = decide(sub, infos, ready_count, context)
+            sub_decision = decide(sub, infos, ready_count, context, unselected=unselected)
             if sub_decision.action == "rewrite_followup":
                 rewritten = await rewrite_followup(sub, context)
                 if rewritten:
-                    sub, sub_decision = rewritten, decide(rewritten, infos, ready_count, [])
+                    sub, sub_decision = rewritten, decide(rewritten, infos, ready_count, [], unselected=unselected)
                 else:
                     sub_decision = Decision(action="ask_clarify", lang=sub_decision.lang, message=MSG["ask_clarify"][sub_decision.lang])
             earlier.append({"role": "user", "content": sub})
@@ -523,7 +542,7 @@ class RAGWorkflowOrchestrator:
         if decision.action == "use_previous_citations":
             out["parts"].append({"query": p.query, "chunks": _previews((await self._previous_chunks(p.scope, history))[1])})
             return out
-        questions = await self._split_parts(decision, p.infos, p.ready_count) if decision.action == "split_questions" else [(p.query, decision)]
+        questions = await self._split_parts(decision, p.infos, p.ready_count, p.unselected) if decision.action == "split_questions" else [(p.query, decision)]
         for sub, sub_decision in questions:
             if sub_decision.action in TERMINAL or sub_decision.action == "rewrite_followup":
                 out["parts"].append({"query": sub, "decision": sub_decision.action, "message": sub_decision.message or MSG["ask_clarify"][sub_decision.lang]})
@@ -553,8 +572,11 @@ class RAGWorkflowOrchestrator:
         retry: bool = False,
         deeper: Optional[Dict[str, List[str]]] = None,
         ui_lang: Optional[str] = None,
+        asked_as: str = "",
     ) -> Dict[str, Any]:
+        """`asked_as`: a click asks a follow-up again as it was first understood (chat.follow_up_of): that question is shown in the understood line."""
         p = await self.plan_question(query, notebook_id, document_id, document_ids, history, mentions, focus_state, ui_lang)
+        asked = p.followup["resolved"] if p.followup else asked_as  # shown once, in the understood line above the answer (D5)
         if GUARD.get() is not None and p.decision:
             GUARD.get().evidence = list(p.decision.evidence)  # the second key of the guard's off_topic label
             GUARD.get().ruled = True
@@ -570,7 +592,7 @@ class RAGWorkflowOrchestrator:
             events.no_answer_stream()  # numbered parts: the whole text arrives with the final event
             parts, citations, offset, charged, last_part, traced = [], [], 0, False, {}, []
             used = REQUEST_USAGE.get()
-            for n, (sub, sub_decision) in enumerate(await self._split_parts(decision, p.infos, p.ready_count), 1):
+            for n, (sub, sub_decision) in enumerate(await self._split_parts(decision, p.infos, p.ready_count, p.unselected), 1):
                 if sub_decision.action in TERMINAL or sub_decision.action == "rewrite_followup":
                     parts.append(f"{n}. {sub}\n{sub_decision.message or MSG['ask_clarify'][sub_decision.lang]}")
                     continue
@@ -588,13 +610,13 @@ class RAGWorkflowOrchestrator:
                       "charged": charged, "trace": {"decision": {"action": "split_questions", "sub_questions": decision.sub_questions}, "parts": traced},
                       "focus_docs": last_part.get("focus_docs"), "focus_query": last_part.get("focus_query")}
         else:  # proceed, answer_per_source_and_ask
-            result = await self._answer_one(query, notebook_id, scope, decision, mentions=mentions, retry=retry, deeper=deeper)
+            result = await self._answer_one(query, notebook_id, scope, decision, mentions=mentions, retry=retry, deeper=deeper, asked=asked)
         if result.get("focus_docs"):  # a searched question moves the focus; refusals, greetings and lists of sources do not
             years = {d.document_id: d.metadata.fiscal_year for d in scope}
-            result["focus"] = build_focus(result["focus_query"], result["focus_docs"], years, focus_state)
+            result["focus"] = build_focus(result["focus_query"], result["focus_docs"], years, p.infos)
         if p.followup:
             result.setdefault("trace", {})["followup"] = p.followup
-        if p.prefix:
+        if p.prefix and not (asked and asked in (result.get("understood") or "")):  # a reply with no understood line (a fixed one, a refusal) says it itself
             result["answer"] = p.prefix + result["answer"]
         result["answer"], meta = split_answer(result["answer"])  # prompt v3: the machine block goes to the trace, not to the user
         if meta is not None:
@@ -603,45 +625,28 @@ class RAGWorkflowOrchestrator:
 
     async def _write_checked(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]], docs: List[Any], lang: str,
                              max_tokens: int = 1200, figures: bool = True) -> Tuple[str, Dict[str, Any]]:
-        """The answer as it may be shown (answer_check/review.py): written once; every check runs once; at most ONE rewrite, told every problem found;
-        the rewrite is kept only when it is better (review.keep_rewrite); then a hard problem left means the fixed reply, other problems left mean a
-        "⚠️" line under the answer. A hard problem is always worth the rewrite; the others only with ANSWER_REPAIR_ENABLED. An apology (no model, cut
-        reply) and an answer without excerpts are not checked. A rewrite that cannot reach the model keeps the first answer (L22).
-        Returns (answer, {"first", "final": findings, "outcome": accepted | rewritten | kept | blocked, "trace", "seconds_first"})."""
+        """The answer as it may be shown (answer_check/review.py): written ONCE, every check run once (code only). A hard problem (safety) means the fixed
+        reply; figures, calculations and citations still wrong get one "⚠️" line under the answer; a wrong language is kept as it is. The one rewrite was
+        removed 19/11 (T4, owner 18/11): 4-54 s each, and 2 of 3 rewritten answers were right already. An apology (no model, cut reply) and an answer
+        without excerpts are not checked. Returns (answer, {"findings", "outcome": accepted | annotated | blocked, "trace", "seconds_first"})."""
         lang = "vi" if lang == "vi" else "en"
         t0 = time.perf_counter()
         answer = await self._answer(query, chunks, notes, max_tokens)
         seconds = round(time.perf_counter() - t0, 2)
         if isinstance(answer, Unfinished) or not chunks:
-            return answer, {"first": [], "final": [], "outcome": "accepted", "trace": {"first": [], "after_rewrite": None, "outcome": "accepted"}, "seconds_first": seconds}
+            return answer, {"findings": [], "outcome": "accepted", "trace": {"first": [], "outcome": "accepted"}, "seconds_first": seconds}
         answer = policy.clean(answer, chunks)
-        first = review.run_checks(answer, chunks, docs, lang, policy_checks=settings.OUTPUT_POLICY_ENABLED, figures=figures)
-        final, second, outcome = first, None, "accepted"
-        if review.has_hard(first) or (review.needs_rewrite(first) and settings.ANSWER_REPAIR_ENABLED):
-            events.stage("checking")
-            try:
-                again = policy.clean(await self._answer(query, chunks, list(notes or []) + [review.rewrite_note(first)], max_tokens, fallback=False), chunks)
-            except LLMUnavailableError:  # the rewrite is an extra (L22): the answer already written stands
-                again = None
-            if again is not None:
-                second = review.run_checks(again, chunks, docs, lang, policy_checks=settings.OUTPUT_POLICY_ENABLED, figures=figures)
-                if review.keep_rewrite(first, second):
-                    answer, final, outcome = again, second, "rewritten"
-                else:
-                    outcome = "kept"
-            else:
-                outcome = "kept"
-        if review.has_hard(final):
-            answer, outcome = policy.blocked(lang, settings.GENERATION_PROMPT in STRUCTURED_PROMPTS), "blocked"
-            logger.warning(f"Answer blocked: {[f.check for f in final if f.severity == review.HARD]}")
+        found = review.run_checks(answer, chunks, docs, lang, policy_checks=settings.OUTPUT_POLICY_ENABLED, figures=figures)
+        if review.has_hard(found):
+            shown, outcome = policy.blocked(lang, settings.GENERATION_PROMPT in STRUCTURED_PROMPTS), "blocked"
+            logger.warning(f"Answer blocked: {[f.check for f in found if f.severity == review.HARD]}")
         else:
-            answer = review.annotate(answer, final, lang)
-        trace = {"first": review.trace(first), "after_rewrite": review.trace(second) if second is not None else None, "outcome": outcome}
-        return answer, {"first": first, "final": final, "outcome": outcome, "trace": trace, "seconds_first": seconds}
+            shown = review.annotate(answer, found, lang)
+            outcome = "accepted" if shown == answer else "annotated"
+        return shown, {"findings": found, "outcome": outcome, "trace": {"first": review.trace(found), "outcome": outcome}, "seconds_first": seconds}
 
-    async def _answer(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]] = None, max_tokens: int = 1200, fallback: bool = True) -> str:
-        """The answer, or when the model cannot be reached the fixed apology with the first excerpts. `fallback=False` is for a second writing (the repair): an answer already
-        exists, so the failure is raised for the caller to keep it; the apology must never be taken for a better answer."""
+    async def _answer(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]] = None, max_tokens: int = 1200) -> str:
+        """The answer, or when the model cannot be reached the fixed apology with the first excerpts."""
         await self._cleared()
         vi = detect_language(query) == "vi"
         if not chunks:
@@ -651,8 +656,6 @@ class RAGWorkflowOrchestrator:
             return await generate_answer(query, chunks, notes, max_tokens)
         except LLMUnavailableError as exc:
             logger.warning(f"Answer generation unavailable: {exc.code}")
-            if not fallback:
-                raise
             excerpts = "\n\n".join(f"**{'Trang' if vi else 'Page'} {c['page']}**\n" + quoted(excerpt_preview(c["content"])) for c in chunks[:3])
             cut = isinstance(exc, LLMTruncatedError)  # the model could not finish within its limit (never "the reports do not contain this"), not an outage
             kind = CutShort if cut else Unfinished

@@ -78,7 +78,7 @@ def test_ratios_and_multiples_are_asked_for_with_two_decimals_and_percentages_wi
 
 # ------------------------------------------------------------------ L18: no space-grouped example
 def test_the_example_cell_no_longer_shows_a_space_grouped_figure():
-    assert "52 377" in SYSTEM_V4  # the contradiction v4 has
+    assert "52,377 [1]" in SYSTEM_V4  # v4 shows the excerpts' English format since 19/11 (T2); v4.1 shows no number at all
     assert not re.search(r"\d \d{3}\b", SYSTEM_V4_1)
     cells = next(line for line in SYSTEM_V4_1.splitlines() if "Clean data cells" in line)
     assert "as the report prints it" in cells or "as printed" in cells
@@ -90,7 +90,7 @@ def test_v4_1_differs_from_v4_in_these_lines_only_and_stays_neutral():
     changed = _changed_lines()
     assert len(changed) == 6  # two header templates, the header rule, the cell rule, two rounding rules
     for old, new in changed:
-        assert any(key in old for key in ("[n]", "[1]", "52 377", "decimal")), old  # the second template cites [1] and [2]
+        assert any(key in old for key in ("[n]", "[1]", "52,377", "decimal")), old  # the second template cites [1] and [2]
     assert not [ch for ch in SYSTEM_V4_1.lower() if ch in VIETNAMESE_LETTERS]  # the shared prompt holds no Vietnamese text
     assert "`*Notes:*` list (translate this label and the table headers into the question's language)" in SYSTEM_V4_1
     assert "<answer_meta>" in SYSTEM_V4_1 and SYSTEM_V4_1.rstrip().endswith("</answer_meta>")

@@ -77,7 +77,7 @@ export const AdminLayout: React.FC = () => {
   const sidebar = (inDrawer: boolean) => (
     <nav aria-label={p.nav.label} className="flex h-full flex-col">
       <div className="flex h-16 items-center justify-between gap-2 border-b border-line px-4">
-        <FinHelpLogo size="sm" onClick={() => navigate("/")} />
+        <FinHelpLogo size="sm" onClick={() => navigate("/")} label={t.common.homePage} />
         {inDrawer ? (
           <button
             type="button"

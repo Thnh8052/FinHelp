@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { AskMode, ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
 import { SourceCard } from "./SourceCard";
 import { AnswerActions } from "./AnswerActions";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { citedFigures } from "../notebook/locateExcerpt";
+import { pinnedAfterScroll, scrollAfterChange, ScrollSnapshot, snapshotOf } from "./scrollPolicy";
 import { ArrowUp, ChevronDown, Flag, Plus, Sparkles } from "lucide-react";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, FileTextIcon } from "../common/Icons";
 import "./chat.css";
@@ -32,9 +33,15 @@ interface ChatContainerProps {
   isProcessing?: boolean;
   /** Tài liệu nguồn đã chọn, để tag bằng @ (câu hỏi chỉ về các tài liệu được tag). */
   mentionOptions?: MentionOption[];
+  /** D7: a long chat shows its newest page; older messages come with "show earlier messages". */
+  hasOlder?: boolean;
+  isLoadingOlder?: boolean;
+  onLoadOlder?: () => void;
 }
 
 const STAGES: ChatStage[] = ["understanding", "searching", "writing", "checking"];
+/** The longest question the server takes (MAX_QUESTION_CHARS in backend query_router/input_policy.py); a longer one is refused after it was sent. */
+const MAX_QUESTION_CHARS = 5000;
 
 export const ChatContainer: React.FC<ChatContainerProps> = ({
   messages,
@@ -51,6 +58,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   hasSources = true,
   isProcessing = false,
   mentionOptions = [],
+  hasOlder = false,
+  isLoadingOlder = false,
+  onLoadOlder,
 }) => {
   const { t } = useLanguage();
   const [input, setInput] = useState("");
@@ -105,6 +115,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true); // the list is scrolled to its end: it stays there when the box under it grows
+  const lastTopRef = useRef(0); // where the list was at the last scroll event: only a move up unpins
   const promptsTrackRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
@@ -189,16 +200,33 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     stream?.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
   };
 
+  // The list moves only when a chat opens or a question is asked; a flag on an old answer or the text being written leaves a reader who scrolled up where they are (scrollPolicy.ts)
+  const lastSnapshot = useRef<ScrollSnapshot | null>(null);
   useEffect(() => {
-    // the start screen is read from the top; an answer from its end
-    if (messages.length === 0) {
-      pinnedRef.current = false;
-      streamRef.current?.scrollTo({ top: 0 });
-    } else {
-      pinnedRef.current = true;
-      scrollToBottom();
-    }
+    const next = snapshotOf(chatKey, messages);
+    const step = scrollAfterChange(lastSnapshot.current, next, pinnedRef.current);
+    lastSnapshot.current = next;
+    pinnedRef.current = step.pinned;
+    if (step.to === "top") streamRef.current?.scrollTo({ top: 0 });
+    else if (step.to === "bottom") scrollToBottom();
+  }, [messages, chatKey]);
+
+  // Older messages put above: the reader keeps seeing what was on screen (the list grows upwards by the height they add)
+  const olderAnchor = useRef<{ height: number; top: number } | null>(null);
+  const loadOlderHere = () => {
+    const s = streamRef.current;
+    if (s) olderAnchor.current = { height: s.scrollHeight, top: s.scrollTop };
+    onLoadOlder?.();
+  };
+  useLayoutEffect(() => {
+    const s = streamRef.current;
+    if (!olderAnchor.current || !s || s.scrollHeight === olderAnchor.current.height) return;
+    s.scrollTop = s.scrollHeight - olderAnchor.current.height + olderAnchor.current.top;
+    olderAnchor.current = null;
   }, [messages]);
+  useEffect(() => {
+    olderAnchor.current = null;  // another chat: nothing to keep
+  }, [chatKey]);
 
   // A growing question box (or a panel opening) shrinks the list: if it was at its end it stays at its end, so the last lines are not pushed out of view
   useEffect(() => {
@@ -346,11 +374,17 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         ref={streamRef}
         onScroll={(e) => {
           const s = e.currentTarget;
-          pinnedRef.current = s.scrollHeight - s.clientHeight - s.scrollTop < 48;
+          pinnedRef.current = pinnedAfterScroll(pinnedRef.current, { gap: s.scrollHeight - s.clientHeight - s.scrollTop, top: s.scrollTop, lastTop: lastTopRef.current });
+          lastTopRef.current = s.scrollTop;
         }}
       >
         {showStart && startScreen(pickQuestion)}
         <div className="chat-messages-column">
+          {hasOlder && onLoadOlder && (
+            <button type="button" className="chat-load-older" onClick={loadOlderHere} disabled={isLoadingOlder}>
+              {isLoadingOlder ? t.workspace.loadingOlder : t.workspace.loadOlder}
+            </button>
+          )}
           {messages.map((msg, index) => {
             const isUser = msg.role === "user";
             // Only the excerpts the answer uses, each keeping its own [n]
@@ -614,6 +648,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 }
                 disabled={isLoading || !hasSources || isProcessing}
                 rows={1}
+                maxLength={MAX_QUESTION_CHARS}
                 className="chat-input-textarea"
               />
 
@@ -638,6 +673,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
           <div className="chat-input-hint">
             <span>{t.workspace.inputShortcuts}</span>
+            {/* the box stops at the limit: a long paste is cut, so the count shows up before that happens */}
+            {input.length >= MAX_QUESTION_CHARS * 0.9 && <span role="status">{input.length} / {MAX_QUESTION_CHARS}</span>}
             <span>{t.workspace.checkFigures}</span>
           </div>
         </div>

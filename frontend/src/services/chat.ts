@@ -65,7 +65,11 @@ async function queryStream(body: QueryRequest, on: StreamHandlers): Promise<Quer
 }
 
 export const chatService = {
-  getMessages: (notebookId: string) => apiRequest<ChatMessage[]>(`/chat/messages/${notebookId}`),
+  /** The newest `limit` messages, or the `limit` before the message at `before` (its message_index): a long chat is read a page at a time (D7). */
+  getMessages: (notebookId: string, page: { limit?: number; before?: number } = {}) => {
+    const query = new URLSearchParams(Object.entries(page).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString();
+    return apiRequest<ChatMessage[]>(`/chat/messages/${notebookId}${query ? `?${query}` : ""}`);
+  },
 
   query: (body: QueryRequest) => apiRequest<QueryResponse>("/chat/query", { method: "POST", body: JSON.stringify(body) }),
 

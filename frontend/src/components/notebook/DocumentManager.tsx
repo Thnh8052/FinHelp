@@ -192,15 +192,17 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                       <span className="doc-card-name" title={doc.file_name}>
                         {doc.file_name}
                       </span>
-                      <span className="doc-card-tag">
-                        {doc.status === "pending"
+                      {/* A ready report shows what the catalog says it is (10-K, earnings release...); not yet catalogued: no label */}
+                      {(() => {
+                        const tag = doc.status === "pending"
                           ? t.sourcesDrawer.queued
                           : isProcessing
                           ? t.sourcesDrawer.processingDots
                           : isFailed
                           ? t.sourcesDrawer.failedBadge
-                          : t.sourcesDrawer.auditedFiling}
-                      </span>
+                          : doc.metadata?.report_type;
+                        return tag ? <span className="doc-card-tag">{tag}</span> : null;
+                      })()}
                     </div>
 
                     <div className="doc-card-meta">

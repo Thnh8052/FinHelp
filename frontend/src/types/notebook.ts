@@ -56,7 +56,11 @@ export const documentLabel = (d: DocumentRecord): string => {
 export const isDocProcessing = (d: DocumentRecord | null | undefined): boolean =>
   !!d && (d.status === "pending" || d.status === "processing");
 
-export const isDocFailed = (d: DocumentRecord | null | undefined): boolean => d?.status === "failed";
+/** Tài liệu được chọn khi mở một chat (và khi bấm "chọn tất cả"): mọi tài liệu đã xử lý xong, tối đa `maxSources` (giữ các tài liệu cuối). */
+export const defaultSelection = (docs: Pick<DocumentRecord, "document_id" | "status">[], maxSources: number): string[] =>
+  docs.filter((d) => d.status === "ready").map((d) => d.document_id).slice(-maxSources);
+
+export const isDocFailed =(d: DocumentRecord | null | undefined): boolean => d?.status === "failed";
 
 /** A legal name the document itself prints, with the pages it is on: the catalog form offers these first. */
 export interface NameCandidate {

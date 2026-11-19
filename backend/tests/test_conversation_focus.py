@@ -97,10 +97,39 @@ def test_the_focus_never_reaches_past_the_selected_documents():
 
 def test_building_the_state():
     years = {"d1": 2022, "d2": 2021}
-    assert build_focus("Intel revenue in 2021", ["d1"], years, None) == {"document_ids": ["d1"], "fiscal_years": [2021], "metric": "revenue"}
-    assert build_focus("Intel revenue", ["d1", "d2"], years, None)["fiscal_years"] == [2022, 2021]  # no year written: the documents' own
-    assert build_focus("Risks of Intel in 2021", ["d1"], years, {"metric": "revenue"})["metric"] == "revenue"  # what is not said is kept
-    assert build_focus("anything", [], years, None) is None
+    assert build_focus("Intel revenue in 2021", ["d1"], years, SOURCES) == {"document_ids": ["d1"], "fiscal_years": [2021], "metric": "revenue"}
+    assert build_focus("Intel revenue", ["d1", "d2"], years, SOURCES)["fiscal_years"] == [2022, 2021]  # no year written: the documents' own
+    assert build_focus("anything", [], years, SOURCES) is None
+
+
+@pytest.mark.parametrize("question, metric", [
+    ("What was the revenue of Intel in 2022?", "revenue"), ("Doanh thu của Intel năm 2022 là bao nhiêu?", "revenue"), ("Intel's net income in FY2021?", "net_income"),
+    ("Risks of Intel in 2021", None),  # no item: a later "and NVIDIA?" must not become NVIDIA's revenue
+    ("Why did Intel's revenue fall in 2022?", None),  # an item inside a question of its own: the topic is the question, not the figure
+    ("Doanh thu trên mỗi cửa hàng hiện hữu (Comparable Store Sales - Comps) tăng trưởng do đâu: Do lượng khách đến đông hơn (Traffic) hay do lạm phát làm tăng giá bán (Ticket size)?", None),
+])
+def test_the_topic_keeps_an_item_only_from_a_plain_figure_question(question, metric):
+    assert build_focus(question, ["d1"], {"d1": 2022}, SOURCES)["metric"] == metric
+
+
+COST15 = SourceInfo("Costco Wholesale Corporation", "10-K", 2015, None, "Costco | 10-K | FY2015", years_covered=[2015, 2014, 2013])
+AMZN18 = SourceInfo("Amazon.com, Inc.", "10-K", 2018, None, "Amazon | 10-K | FY2018", years_covered=[2018, 2017, 2016])
+COSTCO_REVENUE = Focus(["Costco Wholesale Corporation"], [2015], "revenue")
+
+
+@pytest.mark.parametrize("question, lang, expected", [
+    ("thế còn với amazon thì sao?", "vi", "Doanh thu của Amazon.com năm 2018 là bao nhiêu?"),
+    ("what about Amazon?", "en", "What was the revenue of Amazon.com in 2018?"),
+    ("còn Amazon năm 2017?", "vi", "Doanh thu của Amazon.com năm 2017 là bao nhiêu?"),  # a year written is kept
+])
+def test_a_new_company_takes_the_period_of_its_own_report(question, lang, expected):
+    assert fill_from_focus(question, COSTCO_REVENUE, [AMZN18, COST15], lang) == expected
+
+
+def test_a_new_company_whose_reports_disagree_on_the_period_goes_to_the_model():
+    amzn17 = SourceInfo("Amazon.com, Inc.", "10-K", 2017, None, "Amazon | 10-K | FY2017", years_covered=[2017, 2016, 2015])
+    amzn20 = SourceInfo("Amazon.com, Inc.", "10-K", 2020, None, "Amazon | 10-K | FY2020", years_covered=[2020, 2019, 2018])
+    assert fill_from_focus("còn Amazon?", Focus(["Costco Wholesale Corporation"], [2013], "revenue"), [amzn17, amzn20, COST15], "vi") is None
 
 
 # ---------------------------------------------------------------- through the orchestrator (no model: see test_input_policy._orchestrator)
@@ -118,7 +147,7 @@ async def test_a_follow_up_is_answered_without_the_model_and_moves_the_focus(mon
     orch, seen = _orchestrator(NIKE_DOCS, monkeypatch)
     monkeypatch.setattr(orch_mod, "rewrite_followup", never)
     r = await orch.execute_query("còn lợi nhuận ròng?", "nb", document_ids=["d1", "d2"], history=[{"role": "assistant", "content": "a"}], focus_state=STATE)
-    assert seen["answers"][0][0] == "Lợi nhuận ròng của NIKE năm 2023 là bao nhiêu?" and r["answer"].startswith("Tôi hiểu câu hỏi là: “Lợi nhuận ròng của NIKE năm 2023")
+    assert seen["answers"][0][0] == "Lợi nhuận ròng của NIKE năm 2023 là bao nhiêu?" and r["understood"].startswith("Tôi hiểu câu hỏi là: “Lợi nhuận ròng của NIKE năm 2023")  # D5 18/11
     assert r["trace"]["followup"]["method"] == "focus"
     assert r["focus"]["metric"] == "net_income" and r["focus"]["fiscal_years"] == [2023]
 
@@ -146,7 +175,51 @@ async def test_the_model_receives_the_topic_when_slots_are_not_enough(monkeypatc
     monkeypatch.setattr(orch_mod, "rewrite_followup", rewrite)
     r = await orch.execute_query("No, I meant the net income", "nb", document_ids=["d1", "d2"], history=[{"role": "assistant", "content": "a"}], focus_state=STATE)
     assert calls[0][-1]["role"] == "current topic" and "revenue" in calls[0][-1]["content"]
+    # the period of every selected report: a newly named company is asked about its own period (18/11, Costco 2015 -> Amazon 2015)
+    assert calls[0][-1]["content"].endswith("Selected reports: NIKE, Inc FY2019; NIKE, Inc FY2023")
     assert r["trace"]["followup"]["method"] == "llm"
+
+
+async def test_a_follow_up_to_a_question_of_its_own_goes_to_the_model(monkeypatch):
+    """18/11: "thế còn với amazon thì sao?" after a question on what drove Costco's comparable sales became Amazon's 2015 revenue."""
+    from app.modules.chat import orchestrator as orch_mod
+    from tests.test_input_policy import _doc
+
+    docs = [_doc("d1", "amzn.pdf", company_name="Amazon.com, Inc.", fiscal_year=2018, report_type="10-K"),
+            _doc("d2", "cost.pdf", company_name="Costco Wholesale Corporation", fiscal_year=2015, report_type="10-K")]
+    calls = []
+
+    async def rewrite(q, history):
+        calls.append(q)
+        return "Tăng trưởng doanh số cửa hàng hiện hữu của Amazon đến từ lượng khách hay giá bán mỗi lượt mua?"
+
+    orch, _ = _orchestrator(docs, monkeypatch)
+    monkeypatch.setattr(orch_mod, "rewrite_followup", rewrite)
+    first = await orch.execute_query("Doanh thu trên mỗi cửa hàng hiện hữu (Comparable Store Sales - Comps) của Costco tăng trưởng do đâu: lượng khách hay giá bán?",
+                                     "nb", document_ids=["d1", "d2"])
+    assert first["focus"]["metric"] is None
+    await orch.execute_query("thế còn với amazon thì sao?", "nb", document_ids=["d1", "d2"], history=[{"role": "assistant", "content": "a"}], focus_state=first["focus"])
+    assert calls == ["thế còn với amazon thì sao?"]
+
+
+@pytest.mark.parametrize("question", [
+    "What drove the comparable store sales growth of Amazon in 2018?", "Tăng trưởng doanh số cửa hàng hiện hữu của Amazon năm 2018 đến từ đâu?",
+])
+async def test_an_answer_that_finds_nothing_about_a_named_company_moves_the_topic_to_it(monkeypatch, question):
+    """18/11: "Amazon does not report comparable sales" left the topic on Costco FY2015, so a following "and the year before?" meant Costco."""
+    from app.modules.chat import orchestrator as orch_mod
+    from tests.test_input_policy import _doc
+
+    async def nothing(query, chunks, notes=None, max_tokens=1200):
+        return 'The report does not disclose this.\n<answer_meta>{"status": "not_found", "short_answer": "not disclosed", "citations": []}</answer_meta>'
+
+    docs = [_doc("d1", "amzn.pdf", company_name="Amazon.com, Inc.", fiscal_year=2018, report_type="10-K"),
+            _doc("d2", "cost.pdf", company_name="Costco Wholesale Corporation", fiscal_year=2015, report_type="10-K")]
+    orch, _ = _orchestrator(docs, monkeypatch)
+    monkeypatch.setattr(orch_mod, "generate_answer", nothing)
+    state = {"document_ids": ["d2"], "fiscal_years": [2015], "metric": None}
+    r = await orch.execute_query(question, "nb", document_ids=["d1", "d2"], focus_state=state)
+    assert r["focus"] == {"document_ids": ["d1"], "fiscal_years": [2018], "metric": None}
 
 
 async def test_a_refused_question_does_not_move_the_focus(monkeypatch):

@@ -64,8 +64,11 @@ class FakeChats:
     def __init__(self, db):
         pass
 
-    async def get_messages(self, notebook_id, limit=500):
+    async def get_messages(self, notebook_id, limit=500, before=None):
         return []
+
+    async def retry_marks(self, notebook_id):
+        return {}
 
     async def set_title(self, notebook_id, title):
         self.titles.append((notebook_id, title))
