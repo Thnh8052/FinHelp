@@ -64,7 +64,7 @@
 
 .chat-messages-column {
   width: 100%;
-  max-width: 704px;
+  max-width: 960px; /* 704px left wide empty margins on a desktop and squeezed 5-column tables (owner 19/11); keep equal to .chat-input-column */
   min-width: 0; /* a flex item is as wide as its widest word unless told otherwise: one long URL stretched the whole chat */
   display: flex;
   flex-direction: column;
@@ -240,7 +240,7 @@
 
 .chat-input-column {
   width: 100%;
-  max-width: 704px;
+  max-width: 960px; /* as .chat-messages-column */
   display: flex;
   flex-direction: column;
   gap: 10px;
