@@ -15,3 +15,4 @@ DOCUMENTS_COLLECTION = "documents"
 CHUNKS_COLLECTION = "chunks"
 MESSAGES_COLLECTION = "messages"
 INGESTION_JOBS_COLLECTION = "ingestion_jobs"
+DAILY_USAGE_COLLECTION = "daily_usage"  # one document per UTC day: the tokens of every chat question (config.DAILY_TOKEN_BUDGET)

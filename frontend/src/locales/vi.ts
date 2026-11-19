@@ -703,6 +703,7 @@ export const vi: TranslationSchema = {
     notebook_delete_failed: "Không thể xóa đầy đủ dữ liệu của đoạn chat. Vui lòng thử lại.",
     guest_allowance_used: "Bạn đã dùng hết lượt dùng thử của hôm nay. Vui lòng đăng nhập để tiếp tục.",
     question_quota_used: "Bạn đã dùng hết số câu hỏi của hôm nay. Vui lòng quay lại vào ngày mai.",
+    daily_budget_used: "Hệ thống đã dùng hết hạn mức xử lý của hôm nay. Vui lòng quay lại vào ngày mai.",
     unsupported_file_type: "Hệ thống hiện tại chỉ hỗ trợ định dạng tệp PDF.",
     file_too_large: "Dung lượng tệp vượt quá giới hạn {limit_mb} MB của tài khoản.",
     not_a_pdf: "Tệp này không phải là PDF hợp lệ.",

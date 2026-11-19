@@ -99,6 +99,21 @@ class FakeUsers:
         self.consumed.append((user_id, messages, tokens))
 
 
+class FakeUsage:
+    """The tokens of the day (chat_repo.DailyUsage), in memory."""
+    spent = 0
+    added = []
+
+    def __init__(self, db):
+        pass
+
+    async def spent_today(self):
+        return self.spent
+
+    async def add(self, tokens):
+        self.added.append(tokens)
+
+
 class Stop(Exception):
     """Raised by the faked orchestrator: the request got past every gate."""
 
@@ -109,6 +124,8 @@ def client(monkeypatch):
     monkeypatch.setattr(deps, "NotebookRepository", FakeNotebooks)
     monkeypatch.setattr(chat_api, "ChatRepository", FakeChats)
     monkeypatch.setattr(chat_api, "UserRepository", FakeUsers)
+    monkeypatch.setattr(chat_api, "DailyUsage", FakeUsage, raising=False)
+    FakeUsage.spent, FakeUsage.added = 0, []
 
     async def ready(db, notebook_id, ids):
         return None

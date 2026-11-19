@@ -57,3 +57,23 @@ class ChatRepository(BaseRepository):
 
     async def set_focus(self, notebook_id: str, focus: dict) -> None:
         await self.notebooks.update_one({"notebook_id": notebook_id}, {"$set": {"focus_state": focus}})
+
+
+class DailyUsage:
+    """The tokens of every chat question today (UTC), all accounts and guests together: one document per day in `daily_usage`
+    (config.DAILY_TOKEN_BUDGET, step 5 of docs/VERSION_4/GUARDRAILS_REDESIGN_2026-11-19.md)."""
+
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.collection = db[collections.DAILY_USAGE_COLLECTION]
+
+    @staticmethod
+    def today() -> str:
+        return get_utc_now().strftime("%Y-%m-%d")
+
+    async def spent_today(self) -> int:
+        doc = await self.collection.find_one({"_id": self.today()})
+        return int((doc or {}).get("tokens", 0))
+
+    async def add(self, tokens: int) -> None:
+        if tokens:
+            await self.collection.update_one({"_id": self.today()}, {"$inc": {"tokens": tokens}}, upsert=True)

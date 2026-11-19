@@ -103,6 +103,8 @@ def test_words_the_report_itself_prints_are_not_a_leak():
     ("Call 0912 345 678 or +84 912 345 678 [1].", "Call [hidden] or [hidden] [1]."),
     ("Write to jane.doe@gmail.com [1].", "Write to [hidden] [1]."),
     ("Số CCCD là 001099012345 [1].", "Số CCCD là [đã ẩn] [1]."),
+    ("The head office line is (028) 3822 1234 [1].", "The head office line is [hidden] [1]."),  # P1 20/11: a Vietnamese landline in brackets
+    ("Văn phòng: (024) 3936 5555 [1].", "Văn phòng: [đã ẩn] [1]."),
     ("The report lists ir@amd.com and (408) 749-4000 [1].", "The report lists ir@amd.com and (408) 749-4000 [1]."),  # printed in the excerpt
     ("Revenue was $6,475 million; 1,234,567 shares; 2018-12-29; 10-K [1].", "Revenue was $6,475 million; 1,234,567 shares; 2018-12-29; 10-K [1]."),
 ])
