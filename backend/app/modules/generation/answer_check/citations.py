@@ -23,6 +23,12 @@ def cited_numbers(answer: str) -> set:
     return {int(x) for m in CITE.finditer(answer) for x in re.split(r"\s*[,;]\s*", m.group(1))}
 
 
+def _covers(chunk: Dict[str, Any], doc: ScopeDoc, year: int) -> bool:
+    """The excerpt prints the year, its report covers it, or the report's years are unknown."""
+    covered = set(doc.years_covered) | ({doc.filing.fiscal_year} if doc.filing.fiscal_year else set())
+    return str(year) in chunk.get("content", "") or not covered or year in covered
+
+
 def check_citations(answer: str, chunks: Sequence[Dict[str, Any]], docs: Sequence[ScopeDoc]) -> Dict[str, Any]:
     """{"invalid": [n], "wrong_company": [{"n", "sentence"}], "wrong_period": [{"n", "year", "sentence"}], "wrong_figure": [{"n", "figure", "sentence"}]}."""
     by_id = {d.document_id: d for d in docs}
@@ -37,29 +43,29 @@ def check_citations(answer: str, chunks: Sequence[Dict[str, Any]], docs: Sequenc
         for m in CITE.finditer(sentence):
             if sentence[start:m.start()].strip():
                 segment = sentence[start:m.start()]
-                run = (segment, [])
+                # the run before it in the sentence: "the FY2017 report [2] gives 18,434, the FY2019 report [1] ..." names the report before its figure
+                run = (segment, [], run[1] if run is not None else [])
                 runs.append(run)
             start = m.end()
             if run is not None:
                 run[1].extend(int(x) for x in re.split(r"\s*[,;]\s*", m.group(1)))
             said = set(words(segment))
             named = {company_key(by_id[i].filing.company) for i, t in tokens.items() if t & said}
-            years = question_years(segment)
             for n in (int(x) for x in re.split(r"\s*[,;]\s*", m.group(1))):
                 if not 1 <= n <= len(chunks):
                     out["invalid"].append(n)
                     continue
-                chunk = chunks[n - 1]
-                doc = by_id.get(chunk.get("document_id"))
-                if doc is None:
-                    continue
-                short = segment.strip()[:160]
-                if named and company_key(doc.filing.company) not in named:
-                    out["wrong_company"].append({"n": n, "sentence": short})
-                covered = set(doc.years_covered) | ({doc.filing.fiscal_year} if doc.filing.fiscal_year else set())
-                for y in years:
-                    if str(y) not in chunk.get("content", "") and covered and y not in covered:
-                        out["wrong_period"].append({"n": n, "year": y, "sentence": short})
+                doc = by_id.get(chunks[n - 1].get("document_id"))
+                if doc is not None and named and company_key(doc.filing.company) not in named:
+                    out["wrong_company"].append({"n": n, "sentence": segment.strip()[:160]})
+    # a year of the text is checked against the excerpts cited together: "FY2015 ... and FY2020 ... [2][1]" cites each report for its own year
+    # (live answer 19/11: checked marker by marker, both were reported)
+    for segment, ns, before in runs:  # the run before it in the sentence counts too ("the FY2015 report [2] gives ... 2015, the FY2020 report [1] ...")
+        cited = [(n, chunks[n - 1], by_id.get(chunks[n - 1].get("document_id"))) for n in ns + before if 1 <= n <= len(chunks)]
+        cited = [(n, chunk, doc) for n, chunk, doc in cited if doc is not None]
+        for y in question_years(segment):
+            if cited and not any(_covers(chunk, doc, y) for _, chunk, doc in cited):
+                out["wrong_period"] += [{"n": n, "year": y, "sentence": segment.strip()[:160]} for n, _, _ in cited if n in ns]
     out["wrong_figure"] = [{"n": n, "figure": figure, "sentence": clause} for n, figure, clause in figures_off_their_citation(answer, chunks, runs)]
     return out
 

@@ -265,3 +265,11 @@ def test_a_step_that_mixes_scales_is_not_judged():
     assert wrong_steps("Interest expense: $1.4 billion − $848 million ≈ +$552 million [5].") == []
     assert len(wrong_steps("Chi phí lãi vay: 1.400 triệu − 848 triệu = 652 triệu USD [5].")) == 1
     assert len(wrong_steps("Interest expense: $1,400 million − $848 million = $652 million [5].")) == 1
+
+
+def test_three_dots_before_the_percent_are_an_ellipsis():
+    """Live answer 19/11 (vi_calc): "12,421 / 232,887 = 5.333...% ≈ 5.3%" lost its "%" at the dots and was reported as a wrong step."""
+    assert wrong_steps("- Năm 2018: 12,421 / 232,887 = 5.333...% ≈ 5.3%.") == []
+    assert wrong_steps("- 2018: 12,421 / 232,887 = 5.333...% ≈ 5.3%.") == []
+    assert len(wrong_steps("- 2018: 12,421 / 232,887 = 6.333...% ≈ 6.3%.")) == 1
+    assert unverified("- 2018: 12,421 / 232,887 = 5.333...% ≈ 5.3%.", [{"content": "Operating income 12,421; net sales 232,887"}]) == []

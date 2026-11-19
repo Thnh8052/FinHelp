@@ -26,13 +26,14 @@ GROUP = f"[{GROUP_SPACES}]"
 TOKEN = rf"(?:\d{{1,3}}(?:{GROUP}\d{{3}})+(?!\d)(?:[.,]\d+)?|\d(?:[.,]?\d)*)"
 NUMTOK = re.compile(TOKEN)
 CLOSE = r"(?:\s*\))*"  # closing brackets, also after a unit word read as spaces ("($373,396 million + $737 million)")
-NUM = rf"(?:\*\*)?\(*[-−+]?\$?{TOKEN}%?{CLOSE}%?…?(?:\*\*)?"  # bold included ("**6.91x**", "0.6836…"): Markdown bold is not multiplication;
+ELLIPSIS = r"(?:…|\.{3})"  # "0.6836…", "5.333...%": the digits go on
+NUM = rf"(?:\*\*)?\(*[-−+]?\$?{TOKEN}{ELLIPSIS}?%?{CLOSE}%?{ELLIPSIS}?(?:\*\*)?"  # bold included ("**6.91x**", "0.6836…"): Markdown bold is not multiplication;
 # "(9.7)%": a percent after its bracket; "= +0.1403": a result written with its sign (live chat answer 19/11)
 EXPR = rf"{NUM}(?:\s*[-+−–×x*/÷^]\s*{NUM})*"
 SEP = r"(?:=|≈|→)"  # "1.0150 → 101.0%" states a result as "=" does
 # a chain joined by "=", "≈" or "→": "(1,185 + 454) ÷ 1,513 = 1,639 ÷ 1,513 = 1.08"; never inside a date (4/6/2019) or a number
 CHAIN = re.compile(rf"(?<![\w/.,])({EXPR}(?:\s*{SEP}\s*{EXPR})+)(?![\d/])")
-SINGLE = re.compile(rf"(?:\*\*)?\(*[-−+]?\$?({TOKEN})%?{CLOSE}%?…?(?:\*\*)?")
+SINGLE = re.compile(rf"(?:\*\*)?\(*[-−+]?\$?({TOKEN}){ELLIPSIS}?%?{CLOSE}%?{ELLIPSIS}?(?:\*\*)?")
 # unit words after a number ("$4,258 million + $56 million", "= 52.60 days", "3,46 lần") are read as spaces of the same length: the calculation stays
 # one piece and every position in the text stays where it was (18/11: 33 figure findings of 923 stored answers came from these words)
 UNIT_WORDS = re.compile(r"(?<=[\d%])(?:\s+(?:million|billion|thousand|trillion|mn|bn|triệu|tỷ|nghìn|ngàn|USD|VND|đồng|days?|ngày|times|lần)(?!\w))+", re.I)
@@ -88,7 +89,7 @@ def readings_of(text: str) -> Tuple[str, ...]:
 
 def evaluate(expression: str, locale: str = EN, fraction: bool = False) -> Optional[Tuple[float, bool]]:
     """(value, whether the expression used percent inputs) or None. Thousands marks dropped; "12.5%" read as 12.5 (as 0.125 with `fraction`); "(33)" is −33."""
-    expr = expression.replace("**", "").replace("…", "").replace("$", "")
+    expr = expression.replace("**", "").replace("…", "").replace("...", "").replace("$", "")
     expr = NUMTOK.sub(lambda m: canon(m.group(0), locale) or m.group(0), expr)
     expr = expr.replace("−", "-").replace("–", "-").replace("×", "*").replace("÷", "/")
     # accounting notation: "337 − (33) = 370", "3.2% + (1.4%) = 1.8%"; not an exponent ("2^(3)")

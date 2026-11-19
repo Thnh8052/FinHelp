@@ -56,3 +56,30 @@ def test_the_review_turns_it_into_a_citation_finding():
 
 def test_an_accounting_standard_is_not_a_figure():
     assert check_numbers("Revenue is recognized under ASC 606 and Topic 842 [1].", CHUNKS)["checked"] == 0
+
+
+def test_a_citation_written_before_its_figure_is_read_as_such():
+    """Live answer 19/11 (Vietnamese restatement question): "the FY2017 10-K [2] reports 18,434 ..., while the FY2019 10-K [1] reports 18,365":
+    the citation names the report before its figure, so 18,434 belongs to [2], not to the [1] after it."""
+    assert wrong("NVIDIA's report [2] gives $60,922 million, while AMD's report [1] gives $25,785 million.") == []
+    assert wrong("Báo cáo của NVIDIA [2] ghi 60.922 triệu USD, trong khi báo cáo của AMD [1] ghi 25.785 triệu USD.") == []
+    assert wrong("Its revenue was $60,922 million [1].") == [(1, "$60,922")]  # no citation before it: still reported
+
+
+# ---------------------------------------------------------------- looser (owner 19/11: the model rarely cites wrong; report only what is surely wrong)
+SAME_REPORT = CHUNKS + [{"chunk_id": "a2", "document_id": "amd", "page": 51, "content": "Net revenue increased 14% in 2024, driven by the Data Center segment."}]
+
+
+def test_a_figure_from_another_page_of_the_same_report_is_not_reported():
+    """4 of the 5 wrong citations of 770 stored answers: a line mixing a table figure and a sentence of the same report, cited once, to the sentence
+    ("612.2 ÷ 3,140.5 = 19.5%; reported rate = 19.5% [2]"). The figure is right and in the right report: no warning for a page."""
+    assert wrong("AMD revenue grew 14% to $25,785 million in 2024 [3].", SAME_REPORT) == []
+    assert wrong("Doanh thu AMD năm 2024 tăng 14% lên 25.785 triệu USD [3].", SAME_REPORT) == []
+    assert wrong("2024: 25,785 ÷ 22,680 = 1.137; revenue increased 14% [3].", SAME_REPORT) == []
+    assert wrong("Its revenue was $60,922 million [3].", SAME_REPORT) == [(3, "$60,922")]  # another company's figure: still reported
+    assert wrong("Doanh thu của hãng là 60.922 triệu USD [3].", SAME_REPORT) == [(3, "60.922")]
+
+
+def test_without_document_ids_nothing_is_reported():
+    """A figure can only be shown to belong to another report when the excerpts say which report they are from."""
+    assert wrong("Revenue was 60,922 [1].", [{"content": "Revenue 25,785"}, {"content": "Revenue 60,922"}]) == []

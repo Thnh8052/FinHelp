@@ -99,3 +99,31 @@ def test_each_citation_is_checked_against_the_clause_it_closes():
     assert check_citations(two, CHUNKS, [AMD, NV]) == {"invalid": [], "wrong_company": [], "wrong_period": [], "wrong_figure": []}
     swapped = "AMD revenue was $25,785 million [2]; NVIDIA reported $60,922 million [1]."
     assert [w["n"] for w in check_citations(swapped, CHUNKS, [AMD, NV])["wrong_company"]] == [2, 1]
+
+
+def test_years_of_a_clause_are_checked_against_the_excerpts_cited_together():
+    """Live answer 19/11 (vi_table): "FY2015 ... 116,199 và FY2020 ... 166,761 [2][1]" cites the 2020 report and the 2015 report for their own years;
+    each marker was checked against both years and both were reported. A year is fine when one of the excerpts cited together covers it."""
+    chunks = [{"chunk_id": "c", "document_id": "c20", "page": 35, "content": "Total revenue 2020 166,761 2019 152,703"},
+              {"chunk_id": "o", "document_id": "c15", "page": 40, "content": "Total revenue 2015 116,199 2014 112,640"}]
+    c20 = ScopeDoc("c20", "Costco | 10-K | FY2020", {"entity": "Costco Wholesale Corporation", "ticker": "COST"},
+                   Filing("c20", "Costco Wholesale Corporation", "10-K", 2020), [2020, 2019, 2018])
+    c15 = ScopeDoc("c15", "Costco | 10-K | FY2015", {"entity": "Costco Wholesale Corporation", "ticker": "COST"},
+                   Filing("c15", "Costco Wholesale Corporation", "10-K", 2015), [2015, 2014, 2013])
+    for text in ("Tổng doanh thu của FY2015 là 116,199 và của FY2020 là 166,761 [2][1].", "Total revenue was 116,199 in FY2015 and 166,761 in FY2020 [1, 2]."):
+        assert check_citations(text, chunks, [c20, c15])["wrong_period"] == [], text
+    assert [w["n"] for w in check_citations("Total revenue was 116,199 in FY2015 [1].", chunks, [c20, c15])["wrong_period"]] == [1]
+
+
+def test_a_year_named_before_its_citation_counts_for_the_citation_before_it():
+    """Owner 19/11 (looser checks): "the FY2015 report [2] gives 116,199 for 2015, and the FY2020 report [1] gives 166,761 for 2020" names each report
+    before its figures, as for figures (test_cited_figures): the year 2015 of the text before [1] belongs to [2]."""
+    chunks = [{"chunk_id": "c", "document_id": "c20", "page": 35, "content": "Total revenue 2020 166,761 2019 152,703"},
+              {"chunk_id": "o", "document_id": "c15", "page": 40, "content": "Total revenue 2015 116,199 2014 112,640"}]
+    c20 = ScopeDoc("c20", "Costco | 10-K | FY2020", {"entity": "Costco Wholesale Corporation", "ticker": "COST"},
+                   Filing("c20", "Costco Wholesale Corporation", "10-K", 2020), [2020, 2019, 2018])
+    c15 = ScopeDoc("c15", "Costco | 10-K | FY2015", {"entity": "Costco Wholesale Corporation", "ticker": "COST"},
+                   Filing("c15", "Costco Wholesale Corporation", "10-K", 2015), [2015, 2014, 2013])
+    for text in ("The FY2015 report [2] gives 116,199 for 2015, and the FY2020 report [1] gives 166,761 for 2020.",
+                 "Báo cáo FY2015 [2] ghi 116,199 cho năm 2015, còn báo cáo FY2020 [1] ghi 166,761 cho năm 2020."):
+        assert check_citations(text, chunks, [c20, c15])["wrong_period"] == [], text

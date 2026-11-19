@@ -194,24 +194,30 @@ def _computed(f: Amount, value: float, status: List[str], used: List[float], res
     return any(any(_near(additive, v * s, _derived_tolerance(d) * s) for s in SCALES) or _near(ratio, v, _tolerance(d)) for v, d in readings)
 
 
-def figures_off_their_citation(answer: str, chunks: Sequence[Dict[str, Any]], runs: Sequence[Tuple[str, List[int]]]) -> List[Tuple[int, str, str]]:
-    """[(n, figure as printed, clause)]: a figure written before a run of citations ("[1]", "[1][2]", "[1, 2]") that none of those excerpts prints while
-    another excerpt does ("Its revenue was $60,922 million [1]" with 60,922 in [2] only): the citation points at the wrong excerpt. A figure printed in
-    no excerpt is the number check's, and a figure the answer computes (_computed) needs no excerpt of its own.
-    Measured 19/11 (experiments/scripts/system_test_18_11/cited_figures.py, 770 production-like stored answers + 80 dev chat answers): no answer
-    graded correct reported; every planted move of a citation whose clause holds a figure taken from the reports caught (786/786)."""
-    runs = [(clause, [n for n in ns if 1 <= n <= len(chunks)]) for clause, ns in runs]
-    runs = [(clause, ns) for clause, ns in runs if ns and clause.strip()]
+def figures_off_their_citation(answer: str, chunks: Sequence[Dict[str, Any]], runs: Sequence[Tuple[str, List[int], List[int]]]) -> List[Tuple[int, str, str]]:
+    """[(n, figure as printed, clause)]: a figure written before a run of citations ("[1]", "[1][2]", "[1, 2]") that belongs to ANOTHER REPORT than the
+    ones cited ("Its revenue was $60,922 million [1]" with 60,922 only in NVIDIA's report and [1] an AMD page): the citation points at the wrong source.
+    A figure printed in no excerpt is the number check's, and a figure the answer computes (_computed) needs no excerpt of its own.
+    Loosened 19/11 (owner: the model rarely cites wrong, report only what is surely wrong): a figure from another page of a cited report is not reported
+    (4 of the 5 wrong citations of 770 stored answers: "612.2 ÷ 3,140.5 = 19.5%; reported rate = 19.5% [2]", right figures, right report), the run
+    before the clause in the sentence counts too ("the FY2017 report [2] gives 18,434, the FY2019 report [1] ..."), and excerpts that do not say which
+    report they are from are never judged."""
+    # (clause, the run closing it, the run before it in the sentence): a figure may follow the citation that names its report (live answer 19/11)
+    runs = [(clause, [n for n in ns if 1 <= n <= len(chunks)], [n for n in before if 1 <= n <= len(chunks)]) for clause, ns, before in runs]
+    runs = [(clause, ns, before) for clause, ns, before in runs if ns and clause.strip()]
     if not runs:
         return []
     _, status, used = _statuses(answer, chunks)
     excerpts, results, out = [_printed([c]) for c in chunks], _results(answer), []
-    for clause, ns in runs:
-        cited = _printed([chunks[n - 1] for n in ns])
+    for clause, ns, before in runs:
+        reports = {chunks[n - 1].get("document_id") for n in ns + before}
+        if None in reports:
+            continue  # an excerpt that does not say which report it is from: nothing can be shown to come from another one
+        cited = _printed([c for c in chunks if c.get("document_id") in reports])  # every page of the cited reports
         for f in _figures(clause):
             if _match(f, cited) is not None:
                 continue
-            value = next((v for k, e in enumerate(excerpts, 1) if k not in ns for v in [_match(f, e)] if v is not None), None)
+            value = next((v for k, e in enumerate(excerpts, 1) if chunks[k - 1].get("document_id") not in reports | {None} for v in [_match(f, e)] if v is not None), None)
             if value is not None and not _computed(f, value, status, used, results):
                 out.append((ns[0], f.raw, " ".join(clause.split())[-160:]))
     return out
