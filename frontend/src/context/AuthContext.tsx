@@ -10,6 +10,8 @@ interface AuthContextType {
   isGuest: boolean;
   guestQuota: GuestQuota | null;
   isLoading: boolean;
+  /** The first check of a session kept in this browser is running (sessionGate.ts). */
+  checkingSession: boolean;
   login: (identifier: string, pass: string) => Promise<void>;
   register: (email: string, username: string, pass: string, fullName?: string) => Promise<void>;
   continueAsGuest: () => Promise<void>;
@@ -25,6 +27,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isGuest, setIsGuest] = useState<boolean>(!authService.hasSession());
   const [guestQuota, setGuestQuota] = useState<GuestQuota | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [checkingSession, setCheckingSession] = useState<boolean>(true);
 
   const fetchProfile = async () => {
     try {
@@ -67,6 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsGuest(true);
       }
       setIsLoading(false);
+      setCheckingSession(false);
     };
     init();
   }, [hasSession]);
@@ -122,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isGuest,
         guestQuota,
         isLoading,
+        checkingSession,
         login,
         register,
         continueAsGuest,

@@ -14,7 +14,11 @@ interface AuthModalProps {
   initialTab?: "signin" | "signup";
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTab = "signin" }) => {
+/** The dialog lives only while it is open: closing it drops what was typed, so a password typed before signing out is not waiting in the next
+ * dialog, and it opens again on its first tab (auth flow test 19/11). */
+export const AuthModal: React.FC<AuthModalProps> = (props) => (props.isOpen ? <AuthDialog {...props} /> : null);
+
+const AuthDialog: React.FC<AuthModalProps> = ({ onClose, initialTab = "signin" }) => {
   const { login, register, continueAsGuest } = useAuth();
   const { t } = useLanguage();
   const [tab, setTab] = useState<"signin" | "signup" | "forgot">(initialTab);
@@ -35,8 +39,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialTa
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  if (!isOpen) return null;
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

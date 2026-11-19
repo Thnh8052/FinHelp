@@ -338,6 +338,26 @@ export interface TranslationSchema {
     roleMember: string;
     maxDocs: string;
   };
+  /** The signed-in user's own account: change password (dialog opened from the account menu). */
+  account: {
+    changePassword: string;
+    title: string;
+    desc: string;
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+    hint: string;
+    save: string;
+    saving: string;
+    done: string;
+    doneDesc: string;
+    close: string;
+    currentMissing: string;
+    tooShort: string;
+    mismatch: string;
+    unchanged: string;
+    failed: string;
+  };
   auth: {
     signInTitle: string;
     signInDesc: string;

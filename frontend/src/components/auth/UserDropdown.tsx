@@ -2,19 +2,22 @@ import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
-import { LogOutIcon, ShieldIcon, UserIcon } from "../common/Icons";
+import { LockIcon, LogOutIcon, ShieldIcon, UserIcon } from "../common/Icons";
 import "./auth.css";
 
 interface UserDropdownProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenAuthModal: () => void;
+  /** Opens the change-password dialog (signed-in users). */
+  onChangePassword: () => void;
 }
 
 export const UserDropdown: React.FC<UserDropdownProps> = ({
   isOpen,
   onClose,
   onOpenAuthModal,
+  onChangePassword,
 }) => {
   const { user, isGuest, guestQuota, logout } = useAuth();
   const { t } = useLanguage();
@@ -120,6 +123,19 @@ export const UserDropdown: React.FC<UserDropdownProps> = ({
           >
             <ShieldIcon size={14} color="var(--accent-strong)" />
             <span>{t.userDropdown.adminDashboard}</span>
+          </button>
+        )}
+
+        {user && !isGuest && (
+          <button
+            onClick={() => {
+              onClose();
+              onChangePassword();
+            }}
+            className="dropdown-action-item"
+          >
+            <LockIcon size={14} />
+            <span>{t.account.changePassword}</span>
           </button>
         )}
 

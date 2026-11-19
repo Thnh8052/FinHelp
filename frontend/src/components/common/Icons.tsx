@@ -174,6 +174,12 @@ export const LogOutIcon: React.FC<IconProps> = ({ size = 15, color = "currentCol
     <line x1="21" y1="12" x2="9" y2="12" />
   </svg>
 );
+export const LockIcon: React.FC<IconProps> = ({ size = 14, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="11" width="16" height="10" rx="2" />
+    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </svg>
+);
 export const CopyIcon: React.FC<IconProps> = ({ size = 14, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />

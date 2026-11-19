@@ -20,6 +20,15 @@ def document_label(doc: DocumentRecord) -> str:
     return label + (" [identity typed by the user, not found in the document]" if m.user_override_unverified else "")
 
 
+def readable_label(doc: DocumentRecord) -> str:
+    """"Amazon.com, Inc. 10-K FY2019": how notes for the answer and the line above it name a report. The machine label (document_label, with its
+    "|" and dates) stays in the excerpt headers, where the dates map fiscal periods; in the notes the answers copied it word for word (prompt review 19/11)."""
+    m = doc.metadata
+    period = f"FY{m.fiscal_year}" + (f" Q{m.fiscal_quarter}" if m.fiscal_quarter else "") if m.fiscal_year else ""
+    label = " ".join(p for p in (clean_label(x) for x in (m.company_name, m.report_type, period) if x) if p) or clean_label(doc.file_name)
+    return label + (" [identity typed by the user, not found in the document]" if m.user_override_unverified else "")
+
+
 def catalog_entry(doc: DocumentRecord) -> CatalogEntry:
     m = doc.metadata
     period = f"FY{m.fiscal_year}" + (f" Q{m.fiscal_quarter}" if m.fiscal_quarter else "") if m.fiscal_year else ""
@@ -28,7 +37,7 @@ def catalog_entry(doc: DocumentRecord) -> CatalogEntry:
 
 def source_info(doc: DocumentRecord) -> SourceInfo:
     m = doc.metadata
-    return SourceInfo(m.company_name or "", m.report_type or "", m.fiscal_year, m.fiscal_quarter, document_label(doc), doc.page_count, doc.file_name,
+    return SourceInfo(m.company_name or "", m.report_type or "", m.fiscal_year, m.fiscal_quarter, readable_label(doc), doc.page_count, doc.file_name,
                       list(m.years_covered), list(m.aliases), m.ticker)
 
 
@@ -42,7 +51,7 @@ def catalog_card(doc: DocumentRecord) -> Dict[str, Any]:
 
 def scope_doc(doc: DocumentRecord) -> ScopeDoc:
     m = doc.metadata
-    return ScopeDoc(doc.document_id, document_label(doc), catalog_card(doc),
+    return ScopeDoc(doc.document_id, readable_label(doc), catalog_card(doc),
                     Filing(doc.document_id, m.company_name or doc.file_name, m.report_type or "", m.fiscal_year, m.fiscal_quarter,
                            m.comparable_year, m.period_end), list(m.years_covered))
 

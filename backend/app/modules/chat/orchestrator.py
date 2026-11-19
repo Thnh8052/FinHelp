@@ -18,7 +18,7 @@ from app.modules.documents.document_repo import DocumentRepository
 from app.modules.documents.document import DocumentRecord
 from app.modules.documents.catalog_edit import needs_confirmation
 from app.modules.generation.llm_client import REQUEST_USAGE, LLMTruncatedError, LLMUnavailableError
-from app.modules.query_router.input_policy import COMPARE_CUE, MSG, TERMINAL, Decision, SourceInfo, decide, detect_language, mentioned_sources, rewrite_followup
+from app.modules.query_router.input_policy import COMPARE_CUE, MSG, PRIOR_YEAR_NOTE, TERMINAL, Decision, SourceInfo, decide, detect_language, mentioned_sources, rewrite_followup
 from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_from_focus, focus_view
 from app.modules.query_router import guard
 from app.modules.query_router.bridge import writer_note
@@ -32,7 +32,7 @@ from app.modules.generation.answer_check import policy, review
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
 from app.modules.generation.replies import CHECK_SOURCES, DEGRADED_NOTE, EMPTY_PLAN_ANSWER, NO_DATA_ANSWER, RETRY_APOLOGY, RETRY_FIGURES_APOLOGY, excerpt_preview, sources_message, terminal, unlisted_message
 from app.modules.chat.retrieval_step import EMPTY_PLAN, RetrievalResult, retrieve_for_scope, search_with_retry
-from app.modules.chat.scope import catalog_entry, document_label, scope_doc, source_info
+from app.modules.chat.scope import catalog_entry, document_label, readable_label, scope_doc, source_info
 from app.modules.generation.answer_check.citations import cited_numbers
 from app.modules.retrieval.hybrid_search import HybridSearchService, excerpt_tokens
 
@@ -151,16 +151,17 @@ class RAGWorkflowOrchestrator:
 
     async def retrieve_for_question(
         self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, mentions: Optional[List[str]] = None,
-        announce: bool = False, exclude: Optional[set] = None, asked: str = "",
+        announce: bool = False, exclude: Optional[set] = None, asked: str = "", shown: bool = True,
     ) -> QuestionRetrieval:
         """The search for one question the input policy let through: the filings it is forced to (@file, a named company), the notes
         for the answer, and the excerpts. A question only about companies outside the selected sources is refused, unsearched.
         `announce`: the streamed chat shows how the question was understood as soon as code has chosen the filings, before the search
-        (a refusal that follows replaces it: its final event carries no understanding)."""
-        notes = list(decision.notes)
-        targets: TargetDecision = decide_targets(query, [scope_doc(d) for d in scope], mentions, decision.lang == "vi")
-        notes += targets.notes
-        typed = [document_label(d) for d in scope if d.metadata.user_override_unverified]
+        (a refusal that follows replaces it: its final event carries no understanding). `shown`: the answer gets the understood line above it, so
+        what that line says is not asked of the answer again (a part of a message with several questions has none)."""
+        targets: TargetDecision = decide_targets(query, [scope_doc(d) for d in scope], mentions, decision.lang == "vi", shown)
+        # the later report a year comes from is in the understood line and in the targets' note: the input policy's "... and say so" would make three
+        notes = [n for n in decision.notes if not (shown and targets.from_later and n == PRIOR_YEAR_NOTE)] + targets.notes
+        typed = [readable_label(d) for d in scope if d.metadata.user_override_unverified]
         if typed:
             if decision.lang == "vi":
                 notes.append("Thông tin nhận diện của các tài liệu này do người dùng nhập và không có trong tài liệu: " + "; ".join(typed)
@@ -195,12 +196,12 @@ class RAGWorkflowOrchestrator:
     # ------------------------------------------------------------------ input policy (docs/RESEARCH_NOTES_MULTIDOC.md, table F)
     async def _answer_one(
         self, query: str, notebook_id: str, scope: List[DocumentRecord], decision: Decision, citation_offset: int = 0,
-        mentions: Optional[List[str]] = None, retry: bool = False, deeper: Optional[Dict[str, List[str]]] = None, asked: str = "",
+        mentions: Optional[List[str]] = None, retry: bool = False, deeper: Optional[Dict[str, List[str]]] = None, asked: str = "", shown: bool = True,
     ) -> Dict[str, Any]:
         """The measured path for one question the input policy let through, with its notes for the answer. `retry`: the question was sent again by a
         "search again" button; an answer that still falls short gets an apology and no button (one click only). `asked`: the standalone question a
         follow-up was understood as, shown at the head of the understood line."""
-        searched = await self.retrieve_for_question(query, notebook_id, scope, decision, mentions, announce=citation_offset == 0, asked=asked,
+        searched = await self.retrieve_for_question(query, notebook_id, scope, decision, mentions, announce=citation_offset == 0, asked=asked, shown=shown,
                                                     **({"exclude": set(deeper["exclude"])} if deeper else {}))
         if searched.refusal:
             return searched.refusal
@@ -209,6 +210,7 @@ class RAGWorkflowOrchestrator:
             await self._cleared()  # a message the guard turns away gets the guard's reply instead
             return empty_plan_reply(scope, found, targets, decision, retry)
         plan, sub_queries, retrieved, labels = found.plan, found.sub_queries, found.retrieved, found.labels
+        names = {d.document_id: readable_label(d) for d in scope}  # how notes and the understood line name a report (labels keep the excerpt headers' form)
         if deeper and deeper.get("keep"):  # "search deeper": the excerpts the first answer cited, then the new ones, within the same budget
             kept = await self.hybrid_search._hydrate(list(deeper["keep"]), {})
             for c in kept:
@@ -226,11 +228,11 @@ class RAGWorkflowOrchestrator:
         if two_step:
             notes.append(two_step)
         if found.missing:
-            notes.append("No excerpt was found in: " + "; ".join(labels.get(d, d) for d in found.missing)
+            notes.append("No excerpt was found in: " + "; ".join(names.get(d, d) for d in found.missing)
                          + ". Say that the figures of these sources could not be found in the documents; do not estimate them.")
         # two annual reports printing different figures for one item and year (a restatement): the model is told, so the answer says so (owner 19/11)
         reports = {d.document_id: Report(company_key(d.metadata.company_name or d.file_name), (d.metadata.report_type or "").lower() in ANNUAL_FORMS,
-                                         d.metadata.fiscal_year, labels.get(d.document_id, d.file_name)) for d in scope}
+                                         d.metadata.fiscal_year, names.get(d.document_id, d.file_name)) for d in scope}
         notes.extend(conflict_notes(retrieved, reports))
         docs = [scope_doc(d) for d in scope]
         t0 = time.perf_counter()
@@ -261,7 +263,7 @@ class RAGWorkflowOrchestrator:
         actions = answer_actions(scope, found, targets, status, short, unfinished, retry)
         understood = targets.understood
         if not understood and len(scope) > 1 and plan:  # the planner chose: say which documents (CODE_MODEL_DECISIONS 2.2, option C)
-            understood = understood_line([labels.get(d, d) for d in dict.fromkeys(d for p in plan for d in (p.document_ids or [x.document_id for x in found.scope]))],
+            understood = understood_line([names.get(d, d) for d in dict.fromkeys(d for p in plan for d in (p.document_ids or [x.document_id for x in found.scope]))],
                                          decision.lang == "vi")
         understood = merge_understood(asked, understood, decision.lang == "vi")
         if not_found and not cited:
@@ -297,6 +299,7 @@ class RAGWorkflowOrchestrator:
                 "degraded": found.degraded,
                 "prompt": settings.GENERATION_PROMPT,
                 "decision": {"action": decision.action, "assumption": decision.assumption, "flags": decision.flags, "unlisted_companies": unlisted},
+                "notes": list(notes),  # what the answer prompt was told for this question (prompt review 19/11)
                 "review": checked["trace"],
                 "verification": verification,
                 "timings": timings,
@@ -366,7 +369,7 @@ class RAGWorkflowOrchestrator:
     async def _screen(self, query: str, notebook_id: str, document_id: Optional[str], document_ids: Optional[List[str]]) -> "guard.Verdict":
         """The guard's label for the message, with the labels of the selected reports (no selection or an unreadable one: the plain label)."""
         try:
-            labels = [source_info(d).label for d in await self.resolve_scope(notebook_id, document_ids, document_id)]
+            labels = [document_label(d) for d in await self.resolve_scope(notebook_id, document_ids, document_id)]  # the label form the guard was measured with
         except Exception:  # the question fails on its own with the right error; the guard only needs the list for context
             labels = []
         return await guard.classify(query, labels)
@@ -597,8 +600,8 @@ class RAGWorkflowOrchestrator:
                     parts.append(f"{n}. {sub}\n{sub_decision.message or MSG['ask_clarify'][sub_decision.lang]}")
                     continue
                 before = dict(used or {})
-                one = await self._answer_one(sub, notebook_id, scope, sub_decision, offset, mentions)
-                traced.append({"query": sub, "timings": one["trace"].get("timings"), "llm": {k: v - before.get(k, 0) for k, v in (used or {}).items() if v - before.get(k, 0)}})
+                one = await self._answer_one(sub, notebook_id, scope, sub_decision, offset, mentions, shown=False)  # numbered parts have no understood line
+                traced.append({"query": sub, "notes": one.get("trace", {}).get("notes"), "timings": one.get("trace", {}).get("timings"), "llm": {k: v - before.get(k, 0) for k, v in (used or {}).items() if v - before.get(k, 0)}})
                 # the part's [n] count from 1, but the UI opens citations[n - 1] of the whole list: continue after the earlier parts
                 text = re.sub(r"\[(\d+)\]", lambda m: f"[{int(m.group(1)) + offset}]", one["answer"]) if offset else one["answer"]
                 parts.append(f"{n}. {sub}\n{text}")

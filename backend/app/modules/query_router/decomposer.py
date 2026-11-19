@@ -7,9 +7,9 @@ from app.modules.generation.llm_client import LLMUnavailableError, chat_completi
 from app.modules.query_router.input_policy import detect_language
 
 # Prompt of the research (decomp150.py): keyword sub-queries, no company name or year (the search is already
-# restricted to the selected filing), no answering.
+# restricted to the selected filing), no answering. "2 to 4" since 19/11 (owner; it said "2 to 5" and SUBQUERY_COUNT keeps the first 3).
 SYSTEM = "You write search queries for retrieving passages from ONE company's financial report. Output strictly valid JSON."
-PROMPT = """The user asks a question about a single financial report. Write 2 to 5 short search queries that together retrieve every passage needed to answer it.
+PROMPT = """The user asks a question about a single financial report. Write 2 to 4 short search queries that together retrieve every passage needed to answer it.
 
 Rules:
 1. If the question names a financial metric or ratio, expand it with its standard definition and write one query per financial statement that holds its inputs. Each query lists the input line items as they are usually labelled in financial statements (US GAAP, IFRS or UK GAAP), including common label variants (e.g. "purchases of property and equipment / capital expenditures").
