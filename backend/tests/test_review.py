@@ -61,9 +61,9 @@ def test_advice_is_hard_wrong_language_is_repairable_and_a_missing_source_is_onl
     assert kinds(review.run_checks("Net sales were 10,000 in the latest year." + META, EXCERPT, [], "en")) == [("status", review.NOTE)]
 
 
-def test_citations_to_no_excerpt_or_to_another_company_are_repairable():
+def test_only_a_citation_to_no_excerpt_is_a_citation_finding():
     found = review.run_checks("AMD revenue was $60,922 million [2]. See also [7]." + META, CHUNKS, [AMD, NV], "en")
-    assert [f.check for f in found] == ["citation", "citation"] and all(f.severity == review.REPAIRABLE for f in found)
+    assert [(f.check, f.text) for f in found] == [("citation", "[7]")]
 
 
 def test_the_policy_checks_can_be_left_out():
@@ -77,20 +77,10 @@ def test_there_is_no_rewrite_any_more():
     assert not hasattr(settings, "ANSWER_REPAIR_ENABLED")
 
 
-def test_the_note_under_the_answer_shows_only_a_wrong_written_calculation():
-    """Owner 19/11 (week12 audit of the 200 E2E planner answers): of 24 warning lines, 1 pointed at a real problem and none at the real error of a
-    wrong answer; the figure and citation findings were mostly the checker's own misreadings. The user now sees the line only for a written
-    calculation whose result is wrong (585 of 592 planted wrong results caught; 7 of 7 reports real on 923 stored answers, 15/11). Figure and
-    citation findings stay in the trace and the admin review queue."""
-    calc = review.Finding("arithmetic", review.REPAIRABLE, "1 + 1 = 3", "")
-    hidden = [review.Finding("figure", review.REPAIRABLE, "$99,999", ""), review.Finding("citation", review.REPAIRABLE, "[7]", ""),
-              review.Finding("language", review.REPAIRABLE, "", "")]
-    vi = review.annotate("Câu trả lời." + META, hidden + [calc], "vi")
-    assert "⚠️ Lưu ý: có phép tính viết ra cho kết quả khác với kết quả đã ghi." in vi and vi.index("⚠️") < vi.index("<answer_meta>")
-    assert "$99,999" not in vi and "trích dẫn" not in vi and "số chưa đối chiếu" not in vi
-    assert review.annotate("An answer.", [calc], "en").endswith("⚠️ Note: a written calculation gives a different result than the one stated.")
-    assert review.annotate("An answer.", hidden, "en") == "An answer."
-    assert review.annotate("Câu trả lời." + META, hidden, "vi") == "Câu trả lời." + META
+def test_nothing_is_written_under_the_answer():
+    """Owner 19/11 (simplify the final checks, report to the admin): no warning line is added to an answer any more. Every finding but a safety
+    one stays in the trace (verification, review.first) and the admin review queue lists the answer ("not_traced")."""
+    assert not hasattr(review, "annotate")
 
 
 # ---------------------------------------------------------------- the orchestrator: one writing, then blocked, annotated or accepted
@@ -126,13 +116,13 @@ async def test_a_safety_problem_is_blocked_at_once_without_a_second_writing(monk
     assert len(calls) == 1 and r["answer"].startswith(policy.BLOCKED["vi"]) and r["trace"]["review"]["outcome"] == "blocked"
 
 
-async def test_a_wrong_written_result_is_noted_under_the_answer_not_rewritten(monkeypatch):
+async def test_a_wrong_written_result_is_recorded_not_shown_and_not_rewritten(monkeypatch):
     orch, _ = _orchestrator([], monkeypatch)
     calls = _model(orch, monkeypatch, "AMD revenue grew from 22,680 to 25,785 [1]: (25,785 − 22,680) ÷ 22,680 = 20.0%.")
     r = await orch._answer_one("How much did AMD revenue grow in 2024?", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 1 and "20.0%" in r["answer"] and "⚠️ Note: a written calculation gives a different result" in r["answer"]
+    assert len(calls) == 1 and "20.0%" in r["answer"] and "⚠️" not in r["answer"]
     assert not r["verification"]["passed"]
-    assert r["trace"]["review"]["first"][0]["check"] == "arithmetic" and r["trace"]["review"]["outcome"] == "annotated"
+    assert r["trace"]["review"]["first"][0]["check"] == "arithmetic" and r["trace"]["review"]["outcome"] == "accepted"
 
 
 async def test_a_clean_answer_is_written_once_and_the_trace_says_so(monkeypatch):

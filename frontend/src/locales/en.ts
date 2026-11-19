@@ -467,7 +467,6 @@ export const en: TranslationSchema = {
       problemsLabel: "Problem",
       labels: {
         user_report: "Reported by user",
-        warning: "Warning shown",
         not_traced: "Not traced",
         blocked: "Blocked",
         not_found: "Not found",
@@ -479,8 +478,7 @@ export const en: TranslationSchema = {
       },
       hints: {
         user_report: "The user pressed \"Report wrong figures\".",
-        warning: "The answer was shown with a warning: a written calculation gives a different result than the one stated.",
-        not_traced: "The checks could not trace a figure or a citation to the excerpts. The user was not shown this; check the answer against its sources.",
+        not_traced: "The checks found a figure, a calculation or a citation they could not confirm. The user was not shown this; check the answer against its sources.",
         blocked: "The answer broke a safety rule and was replaced by a fixed reply.",
         not_found: "The selected reports were judged not to contain the answer.",
         partial: "Part of the question was answered; a figure or a period was missing.",

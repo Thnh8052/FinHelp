@@ -23,8 +23,7 @@ check("the guests filter is sent as it is", () => assert.equal(reviewPath({ days
 check("a user id is escaped", () => assert.match(reviewPath({ days: 7, user: "a&b", label: "", status: "open" }), /user=a%26b$/));
 check("what the user reported or what was blocked is red; a warning or a partial answer amber; the rest neutral", () => {
   assert.deepEqual(["user_report", "blocked"].map(labelTone), ["negative", "negative"]);
-  assert.deepEqual(["warning", "partial", "not_found", "refused", "degraded", "slow"].map(labelTone), ["warn", "warn", "warn", "warn", "neutral", "neutral"]);
-  assert.equal(labelTone("not_traced"), "warn"); // figures or citations the checks could not trace: hidden from the user since 19/11, so the admin looks
+  assert.deepEqual(["not_traced", "partial", "not_found", "refused", "degraded", "slow"].map(labelTone), ["warn", "warn", "warn", "warn", "neutral", "neutral"]);
   assert.equal(labelTone("safety"), "neutral");
 });
 

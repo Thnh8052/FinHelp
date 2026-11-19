@@ -1,5 +1,6 @@
 """The review of a written answer (docs/Version_3/RAG_REDESIGN_SPEC.md section 4). Every check returns Findings of one shape; the orchestrator writes
-the answer ONCE, then blocks it (a hard finding) or shows it with one "⚠️" line for what is still wrong (annotate). Code only, no model.
+the answer ONCE, then blocks it (a hard finding: safety) or shows it as written. Code only, no model. Since 19/11 (owner) nothing is written
+under an answer: every other finding stays in the trace and the admin review queue lists the answer ("not_traced").
 The one rewrite was removed 19/11 (T4, owner's decision of 18/11): it cost 4-54 s and 2 of 3 rewritten answers were right already.
 
 Checks (each reuses the module that measures it):
@@ -80,30 +81,11 @@ def run_checks(answer: str, chunks: Sequence[Dict[str, Any]], docs: Sequence[Any
     cites = check_citations(text, chunks, docs)
     for n in sorted(set(cites["invalid"])):
         found.append(Finding("citation", REPAIRABLE, f"[{n}]", f"citation [{n}] points at no excerpt"))
-    for w in cites["wrong_company"]:
-        found.append(Finding("citation", REPAIRABLE, f"[{w['n']}]", f"excerpt [{w['n']}] is from a different company than the sentence says: \"{w['sentence']}\""))
-    for w in cites["wrong_period"]:
-        found.append(Finding("citation", REPAIRABLE, f"[{w['n']}]", f"excerpt [{w['n']}] does not cover {w['year']}: \"{w['sentence']}\""))
-    for w in cites["wrong_figure"]:
-        found.append(Finding("citation", REPAIRABLE, f"[{w['n']}]", f"the figure {w['figure']} is not in excerpt [{w['n']}] but in another one: \"{w['sentence']}\""))
     return found
 
 
 def has_hard(findings: Sequence[Finding]) -> bool:
     return any(f.severity == HARD for f in findings)
-
-
-def annotate(answer: str, findings: Sequence[Finding], lang: str) -> str:
-    """The answer with one "⚠️" line when a written calculation gives a different result than the one stated (before its machine block); unchanged
-    otherwise. Owner 19/11 (week12 audit of 200 E2E planner answers): of 24 lines that also listed untraced figures and citations, 1 pointed at a real
-    problem and none at the real error of a wrong answer, so figure and citation findings stay in the trace and the admin review queue only."""
-    if not any(f.check == "arithmetic" for f in findings):
-        return answer
-    vi = lang == "vi"
-    line = "\n\n⚠️ " + ("Lưu ý: có phép tính viết ra cho kết quả khác với kết quả đã ghi." if vi
-                         else "Note: a written calculation gives a different result than the one stated.")
-    cut = answer.find(META_OPEN)
-    return answer + line if cut < 0 else answer[:cut].rstrip() + line + "\n" + answer[cut:]
 
 
 def trace(findings: Sequence[Finding]) -> List[Dict[str, Any]]:

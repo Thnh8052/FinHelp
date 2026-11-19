@@ -17,8 +17,7 @@ SAFETY_REPLIES = ["refuse_advice", "refuse_sensitive", "refuse_instruction", "re
 
 PROBLEMS: Dict[str, Dict[str, Any]] = {
     "user_report": {"user_rating": -1},  # the user pressed "Report wrong figures"
-    "warning": {"trace_info.review.outcome": {"$in": ["annotated", "rewritten"]}},  # shown with a ⚠️ line (since 19/11: a wrong written calculation)
-    # a figure or citation the checks could not trace: kept in the trace, not shown to the user since 19/11 (owner), so the admin looks instead
+    # a figure, calculation or citation the checks could not trace: kept in the trace, never shown to the user (owner 19/11), so the admin looks
     "not_traced": {"trace_info.verification.passed": False},
     "blocked": {"trace_info.review.outcome": "blocked"},  # replaced by the fixed reply of the safety check
     "not_found": {"trace_info.answer_meta.status": "not_found"},

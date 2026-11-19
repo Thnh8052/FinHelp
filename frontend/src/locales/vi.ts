@@ -467,7 +467,6 @@ export const vi: TranslationSchema = {
       problemsLabel: "Vấn đề",
       labels: {
         user_report: "Người dùng báo sai",
-        warning: "Có cảnh báo",
         not_traced: "Chưa đối chiếu được",
         blocked: "Bị chặn",
         not_found: "Không tìm thấy",
@@ -479,8 +478,7 @@ export const vi: TranslationSchema = {
       },
       hints: {
         user_report: "Người dùng đã bấm \"Báo số liệu sai\".",
-        warning: "Câu trả lời hiện kèm dòng cảnh báo: có phép tính viết ra cho kết quả khác với kết quả đã ghi.",
-        not_traced: "Bước kiểm chưa đối chiếu được một số liệu hoặc trích dẫn với đoạn trích. Người dùng không thấy dòng này; hãy đối chiếu câu trả lời với nguồn.",
+        not_traced: "Bước kiểm thấy một số liệu, phép tính hoặc trích dẫn chưa xác nhận được. Người dùng không thấy điều này; hãy đối chiếu câu trả lời với nguồn.",
         blocked: "Câu trả lời vi phạm quy tắc an toàn và đã được thay bằng câu trả lời cố định.",
         not_found: "Hệ thống kết luận các báo cáo đã chọn không có câu trả lời.",
         partial: "Mới trả lời được một phần; thiếu một số liệu hoặc một kỳ.",
