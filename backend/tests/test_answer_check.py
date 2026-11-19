@@ -215,3 +215,7 @@ def test_a_year_heading_an_amount_with_its_currency_is_a_year():
         assert check_numbers(text, chunks)["unverified"] == [], text
     assert check_numbers("Later years: 2023 USD 169 million [6].", chunks)["unverified"] == ["169"]  # the amount itself is still checked
     assert check_numbers("Revenue was 1998 USD million in 2019 [1].", LOSS)["unverified"] == ["1998"]
+
+
+def test_an_accounting_standard_is_not_a_figure():
+    assert check_numbers("Revenue is recognized under ASC 606 and Topic 842 [1].", [{"content": "Revenue 25,785"}])["checked"] == 0

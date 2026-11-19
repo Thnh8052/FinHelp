@@ -12,10 +12,6 @@ RETRY_APOLOGY = {"vi": "Xin lỗi, trong giới hạn hiện tại hệ thống 
                  "en": "Sorry, within its current limits the system could not find enough of this information. " + CHECK_SOURCES["en"]}
 # Appended to the answer of a "search again" click that found the information but still has figures or citations it could not verify (the "⚠️" line):
 # the problem is the figures, never "not found" (behavior check 17/11/2026, tests/test_failure_replies.py)
-RETRY_FIGURES_APOLOGY = {"vi": "Xin lỗi, sau lần tìm lại vẫn còn chi tiết trong câu trả lời chưa kiểm chứng được với đoạn trích (đánh dấu ⚠️). "
-                               "Hãy đối chiếu với trang được trích trước khi sử dụng.",
-                         "en": "Sorry, after searching again some details of the answer still could not be verified against the excerpts (marked ⚠️). "
-                               "Please check them against the cited pages before using them."}
 # A step of the search was dropped for time or failure (retrieval_step degraded): said without naming any component, and without naming a button
 # (its label follows the interface language, this line the question's), in place of "check your sources": the sources are not the cause
 DEGRADED_NOTE = {"vi": "Lần tìm này có thể chưa đầy đủ vì hệ thống đang chậm. Bạn có thể thử tìm lại sau ít phút.",

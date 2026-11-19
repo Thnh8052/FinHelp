@@ -26,7 +26,6 @@ def _answer(i, notebook="nb_u1", **fields):
 # ------------------------------------------------------------------ which answers have a problem, and which
 @pytest.mark.parametrize("fields, label", [
     ({"user_rating": -1}, "user_report"),
-    ({"trace_info__review__outcome": "annotated", "trace_info__verification__passed": True}, "warning"),
     # owner 19/11: untraced figures and mismatched citations are no longer shown to the user; the trace keeps them and the admin gets them here
     ({"trace_info__verification__passed": False}, "not_traced"),
     ({"trace_info__review__outcome": "blocked"}, "blocked"),
@@ -110,8 +109,7 @@ def _db(messages):
 
 
 MESSAGES = [_answer(1), _answer(2, user_rating=-1), _answer(3, "nb_u2", trace_info__answer_meta__status="not_found"),
-            _answer(4, "nb_g", trace_info__intent="period_unavailable"), _answer(5, "nb_u2", latency_ms=80000, trace_info__review__outcome="annotated",
-                    trace_info__verification__passed=False),
+            _answer(4, "nb_g", trace_info__intent="period_unavailable"), _answer(5, "nb_u2", latency_ms=80000, trace_info__verification__passed=False),
             _answer(40 * 24, trace_info__answer_meta__status="partial")]  # 40 days old: outside a 14-day window
 
 
@@ -119,8 +117,8 @@ async def test_the_queue_lists_open_problem_answers_of_the_window_newest_first_w
     out = await R.review_queue(_db([dict(m) for m in MESSAGES]), days=14, now=NOW)
     assert [i["message_id"] for i in out["items"]] == ["m2", "m3", "m4", "m5"]
     assert out["items"][0]["labels"] == ["user_report"] and out["items"][0]["question"] == "question of m2"
-    assert out["items"][2]["owner_type"] == "guest" and out["items"][3]["labels"] == ["warning", "not_traced", "slow"]
-    assert out["counts"] == {"user_report": 1, "warning": 1, "not_traced": 1, "blocked": 0, "not_found": 1, "partial": 0, "degraded": 0, "refused": 1, "safety": 0, "slow": 1}
+    assert out["items"][2]["owner_type"] == "guest" and out["items"][3]["labels"] == ["not_traced", "slow"]
+    assert out["counts"] == {"user_report": 1, "not_traced": 1, "blocked": 0, "not_found": 1, "partial": 0, "degraded": 0, "refused": 1, "safety": 0, "slow": 1}
     assert out["open_total"] == 4
 
 

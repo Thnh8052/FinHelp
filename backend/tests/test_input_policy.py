@@ -435,9 +435,9 @@ async def test_citation_numbers_of_later_parts_continue_after_the_earlier_parts_
     assert len(parts) == 3 and all("query" in p and "timings" in p and "llm" in p for p in parts)
 
 
-async def test_a_wrong_written_result_is_not_rewritten_and_is_flagged_under_the_answer(monkeypatch):
+async def test_a_wrong_written_result_is_not_rewritten_and_is_recorded_for_the_admin(monkeypatch):
     """Code no longer rewrites a figure (measured 14/11: it never acted with the model's thinking on). The wrong result is reported by the number check,
-    and flagged under the answer; the model is not asked again (T4, 19/11)."""
+    and recorded in the trace for the admin review queue (nothing is shown since 19/11); the model is not asked again (T4, 19/11)."""
     from app.modules.chat import orchestrator as orch_mod
 
     calls = []
@@ -451,7 +451,7 @@ async def test_a_wrong_written_result_is_not_rewritten_and_is_flagged_under_the_
     r = await orch.execute_query("What is a quarter of Nike's revenue in FY2023?", "nb", document_ids=["d2"])
     assert "51,217 ÷ 4 = 13,000" in r["answer"] and "12,804" not in r["answer"]  # not rewritten
     assert len(calls) == 1  # written once
-    assert "⚠" in r["answer"] and "calculator" not in r["verification"]
+    assert "⚠" not in r["answer"] and not r["verification"]["passed"] and "calculator" not in r["verification"]
 
 
 async def test_overview_searches_each_source_and_widens_the_context(monkeypatch):

@@ -12,4 +12,4 @@ export type LabelTone = "negative" | "warn" | "neutral";
 
 /** How loud a problem label is: a user's report or a blocked answer is red; an answer that may be wrong or incomplete amber; slowness neutral. */
 export const labelTone = (label: ReviewLabel): LabelTone =>
-  label === "user_report" || label === "blocked" ? "negative" : ["warning", "not_traced", "partial", "not_found", "refused"].includes(label) ? "warn" : "neutral";
+  label === "user_report" || label === "blocked" ? "negative" : ["not_traced", "partial", "not_found", "refused"].includes(label) ? "warn" : "neutral";

@@ -293,6 +293,28 @@ def test_secret_key_has_no_default(monkeypatch):
         Settings(_env_file=None)
 
 
+SECRET_SETTINGS = ("SECRET_KEY", "ADMIN_PASSWORD", "MONGODB_URI", "QDRANT_API_KEY", "R2_ENDPOINT_URL", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
+                   "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "SENDGRID_API_KEY", "REMOTE_GPU_URL")
+
+
+def test_the_settings_never_print_a_secret(monkeypatch):
+    """19/11: a test that set a setting the code did not have printed the whole Settings object, every key of backend/.env included
+    (monkeypatch, pytest and any traceback show an object by its repr). The GPU worker has no password: its address is a key too."""
+    values = {name: f"{name.lower()}-must-stay-hidden" for name in SECRET_SETTINGS}
+    s = Settings(_env_file=None, **values)
+    for shown in (repr(s), str(s)):
+        assert "must-stay-hidden" not in shown and "PROJECT_NAME" in shown
+    with pytest.raises(AttributeError) as refused:
+        monkeypatch.setattr(s, "NOT_A_SETTING", 1)
+    assert "must-stay-hidden" not in str(refused.value)
+    assert s.DEEPSEEK_API_KEY == "deepseek_api_key-must-stay-hidden"  # still read as before
+
+
+def test_every_setting_named_like_a_secret_is_hidden():
+    named = {n for n in Settings.model_fields if any(w in n for w in ("KEY", "PASSWORD", "SECRET", "TOKEN_VALUE")) or n.endswith("_URI")}
+    assert named <= set(SECRET_SETTINGS) and all(not Settings.model_fields[n].repr for n in SECRET_SETTINGS)
+
+
 def test_placeholder_secret_is_refused_outside_development():
     placeholder = "change_this_to_a_very_secure_random_secret_key_in_production"
     Settings(_env_file=None, SECRET_KEY=placeholder, ENVIRONMENT="development")

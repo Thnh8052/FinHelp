@@ -30,7 +30,7 @@ from app.modules.query_router.target_scope import TargetDecision, decide_targets
 from app.modules.generation.citation_generator import CitationGenerator
 from app.modules.generation.answer_check import policy, review
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
-from app.modules.generation.replies import CHECK_SOURCES, DEGRADED_NOTE, EMPTY_PLAN_ANSWER, NO_DATA_ANSWER, RETRY_APOLOGY, RETRY_FIGURES_APOLOGY, excerpt_preview, sources_message, terminal, unlisted_message
+from app.modules.generation.replies import CHECK_SOURCES, DEGRADED_NOTE, EMPTY_PLAN_ANSWER, NO_DATA_ANSWER, RETRY_APOLOGY, excerpt_preview, sources_message, terminal, unlisted_message
 from app.modules.chat.retrieval_step import EMPTY_PLAN, RetrievalResult, retrieve_for_scope, search_with_retry
 from app.modules.chat.scope import catalog_entry, document_label, readable_label, scope_doc, source_info
 from app.modules.generation.answer_check.citations import cited_numbers
@@ -111,7 +111,7 @@ _REFUSAL_STOPS = frozenset({"refuse_advice", "refuse_sensitive", "refuse_instruc
 class RAGWorkflowOrchestrator:
     """One question, end to end (execute_query): plan_question (sources, rules, follow-up rewrite; may end the question here), retrieve_for_question
     (which documents, the search: retrieval_step.retrieve_for_scope), then _answer_one: the answer from those excerpts only (_answer writes it), the review of it
-    (_write_checked: answer_check/review.py, every check once, at most one rewrite, then kept, blocked or annotated). The guard (query_router/guard.py)
+    (_write_checked: answer_check/review.py, every check once, then kept or blocked; findings go to the trace). The guard (query_router/guard.py)
     runs beside all of it and turns a message away before any answer is written."""
 
     def __init__(self, db: AsyncIOMotorDatabase, qdrant: AsyncQdrantClient):
@@ -247,8 +247,8 @@ class RAGWorkflowOrchestrator:
         not_found = (meta or {}).get("status") == "not_found"
         # Fell short (docs/Version_3/fail_cases.md): partial, not found, or figures still unverified. Never the apology or the output policy's refusal (also not_found).
         # The added line goes after the machine block, which split_answer removes.
-        # Only a shown problem counts: a figure or citation finding stays in the trace (verification) and the admin queue, not on the screen (owner 19/11)
-        short = ((meta or {}).get("status") in ("partial", "not_found") or checked["outcome"] == "annotated") and not isinstance(answer, Unfinished) and text not in policy.BLOCKED.values()
+        # the check findings stay in the trace (verification) and the admin review queue, not on the screen (owner 19/11)
+        short = (meta or {}).get("status") in ("partial", "not_found") and not isinstance(answer, Unfinished) and text not in policy.BLOCKED.values()
         lang = "vi" if decision.lang == "vi" else "en"
         status = (meta or {}).get("status")
         # read before a line is added ("+=" makes a plain str). "blocked": the fixed reply that replaced an answer breaking a safety rule twice (advice...):
@@ -258,7 +258,7 @@ class RAGWorkflowOrchestrator:
         if found.degraded:  # a step was dropped: the slow system is the cause, not the sources, even after a click
             answer += "\n\n" + DEGRADED_NOTE[lang]
         elif short and retry:  # the one click did not do better: no further button
-            answer += "\n\n" + (RETRY_APOLOGY if status in ("partial", "not_found") else RETRY_FIGURES_APOLOGY)[lang]
+            answer += "\n\n" + RETRY_APOLOGY[lang]
         elif short and not_found:  # S2
             answer += "\n\n" + CHECK_SOURCES[lang]
         actions = answer_actions(scope, found, targets, status, short, unfinished, retry)
@@ -632,7 +632,7 @@ class RAGWorkflowOrchestrator:
         """The answer as it may be shown (answer_check/review.py): written ONCE, every check run once (code only). A hard problem (safety) means the fixed
         reply; figures, calculations and citations still wrong get one "⚠️" line under the answer; a wrong language is kept as it is. The one rewrite was
         removed 19/11 (T4, owner 18/11): 4-54 s each, and 2 of 3 rewritten answers were right already. An apology (no model, cut reply) and an answer
-        without excerpts are not checked. Returns (answer, {"findings", "outcome": accepted | annotated | blocked, "trace", "seconds_first"})."""
+        without excerpts are not checked. Returns (answer, {"findings", "outcome": accepted | blocked, "trace", "seconds_first"})."""
         lang = "vi" if lang == "vi" else "en"
         t0 = time.perf_counter()
         answer = await self._answer(query, chunks, notes, max_tokens)
@@ -645,8 +645,7 @@ class RAGWorkflowOrchestrator:
             shown, outcome = policy.blocked(lang, settings.GENERATION_PROMPT in STRUCTURED_PROMPTS), "blocked"
             logger.warning(f"Answer blocked: {[f.check for f in found if f.severity == review.HARD]}")
         else:
-            shown = review.annotate(answer, found, lang)
-            outcome = "accepted" if shown == answer else "annotated"
+            shown, outcome = answer, "accepted"
         return shown, {"findings": found, "outcome": outcome, "trace": {"first": review.trace(found), "outcome": outcome}, "seconds_first": seconds}
 
     async def _answer(self, query: str, chunks: List[Dict[str, Any]], notes: Optional[List[str]] = None, max_tokens: int = 1200) -> str:

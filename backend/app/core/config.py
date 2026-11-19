@@ -25,16 +25,18 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
+    # Every secret below has repr=False: printing the settings (a traceback, pytest's monkeypatch, a log line) never shows it (19/11: a test error
+    # printed every key of backend/.env). tests/test_auth_security.py checks that each setting named like a secret is hidden.
     # JWT Security. SECRET_KEY has no default: the server does not start without one (and not with the .env.example placeholder
     # outside ENVIRONMENT=development).
-    SECRET_KEY: str = Field(min_length=16)
+    SECRET_KEY: str = Field(min_length=16, repr=False)
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
     # Password of the `admin` account: created / reset to it at startup. Unset: no admin is created and an existing one is left alone.
-    ADMIN_PASSWORD: Optional[str] = Field(default=None, min_length=8)
+    ADMIN_PASSWORD: Optional[str] = Field(default=None, min_length=8, repr=False)
 
     # MongoDB
-    MONGODB_URI: str = "mongodb://localhost:27017"
+    MONGODB_URI: str = Field(default="mongodb://localhost:27017", repr=False)  # an Atlas address carries the password
     MONGODB_DB_NAME: str = "datn_finance"
 
     # Qdrant Vector Search. QDRANT_PATH (a folder) runs Qdrant embedded in-process: no Docker needed.
@@ -43,7 +45,7 @@ class Settings(BaseSettings):
     QDRANT_GRPC_PORT: int = 6334
     QDRANT_PATH: Optional[str] = None
     QDRANT_COLLECTION_NAME: str = "financial_chunks_m3"  # new name: the old 768-dim collection is left untouched
-    QDRANT_API_KEY: Optional[str] = None
+    QDRANT_API_KEY: Optional[str] = Field(default=None, repr=False)
 
     # Storage paths & Cloudflare R2
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
@@ -53,18 +55,18 @@ class Settings(BaseSettings):
 
     # Cloudflare R2 / S3 Object Storage
     STORAGE_BACKEND: str = "local"  # "local" | "r2"
-    R2_ENDPOINT_URL: Optional[str] = None
-    R2_ACCESS_KEY_ID: Optional[str] = None
-    R2_SECRET_ACCESS_KEY: Optional[str] = None
+    R2_ENDPOINT_URL: Optional[str] = Field(default=None, repr=False)  # names the Cloudflare account
+    R2_ACCESS_KEY_ID: Optional[str] = Field(default=None, repr=False)
+    R2_SECRET_ACCESS_KEY: Optional[str] = Field(default=None, repr=False)
     R2_BUCKET_NAME: Optional[str] = "finhelp-storage"
     R2_PUBLIC_DOMAIN: Optional[str] = None
 
     # LLM Settings (DeepSeek chat-completions API)
-    OPENROUTER_API_KEY: Optional[str] = None
-    DEEPSEEK_API_KEY: Optional[str] = None
-    ANTHROPIC_API_KEY: Optional[str] = None
-    OPENAI_API_KEY: Optional[str] = None
-    GEMINI_API_KEY: Optional[str] = None
+    OPENROUTER_API_KEY: Optional[str] = Field(default=None, repr=False)
+    DEEPSEEK_API_KEY: Optional[str] = Field(default=None, repr=False)
+    ANTHROPIC_API_KEY: Optional[str] = Field(default=None, repr=False)
+    OPENAI_API_KEY: Optional[str] = Field(default=None, repr=False)
+    GEMINI_API_KEY: Optional[str] = Field(default=None, repr=False)
     DEFAULT_LLM_MODEL: str = "deepseek-flash"
     LLM_BASE_URL: str = "https://api.deepseek.com"
     # deepseek-flash reasons before answering and its reasoning counts against max_tokens: every call gets at least this budget,
@@ -80,7 +82,7 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS_CEILING: int = 32000
 
     # Email Service (SendGrid)
-    SENDGRID_API_KEY: Optional[str] = None
+    SENDGRID_API_KEY: Optional[str] = Field(default=None, repr=False)
     SENDGRID_FROM_EMAIL: Optional[str] = "noreply@finhelp.ai"
     FRONTEND_URL: str = "http://localhost:3000"
 
@@ -199,8 +201,11 @@ class Settings(BaseSettings):
     GUEST_DAILY_NOTEBOOKS: int = 10
     GUEST_DAILY_UPLOADS: int = 10
     GUEST_DAILY_QUESTIONS: int = 30
+    # Accounts one IP address may open per day (each gets its own daily questions): without it a script opened 25 accounts in a row (red-team 19/11).
+    # Raise it like the guest limits for a demo where everyone registers from one network.
+    REGISTRATIONS_PER_IP_DAILY: int = 10
     # Remote GPU Worker (e.g. Google Colab / Kaggle T4 GPU via Cloudflare Tunnel)
-    REMOTE_GPU_URL: Optional[str] = None
+    REMOTE_GPU_URL: Optional[str] = Field(default=None, repr=False)  # the worker has no password: whoever has the address can use it
 
     DEVICE: str = "auto"  # auto | cuda | cpu, for the embedding and reranker models
     # auto: both models stay on the GPU until the first out-of-memory error, then they take turns (small cards);

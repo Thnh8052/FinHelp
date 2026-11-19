@@ -473,8 +473,8 @@ export interface TranslationSchema {
       statusLabel: string;
       allProblems: string;
       problemsLabel: string;
-      labels: Record<"user_report" | "warning" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow", string>;
-      hints: Record<"user_report" | "warning" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow", string>;
+      labels: Record<"user_report" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow", string>;
+      hints: Record<"user_report" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow", string>;
       why: string;
       unverified: string;
       degraded: string;
