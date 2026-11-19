@@ -264,6 +264,7 @@ async def _ask(monkeypatch, nb, result, query="q", seen=None, **extra):
     monkeypatch.setattr(chat_api, "can_chat", lambda *a: True)
     monkeypatch.setattr(chat_api, "ensure_documents_ready", none)
     monkeypatch.setattr(chat_api, "UserRepository", lambda db: types.SimpleNamespace(reserve_quota=_true, consume_quota=none))
+    monkeypatch.setattr(chat_api, "DailyUsage", lambda db: types.SimpleNamespace(spent_today=_zero, add=none))  # the system's tokens of the day
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "__init__", lambda self, db, qdrant: None)
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "resolve_scope", none)
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
@@ -305,6 +306,10 @@ async def test_a_question_that_is_too_long_is_refused_before_anything_is_stored(
 
 async def _value(v):
     return v
+
+
+async def _zero(*a, **k):
+    return 0
 
 
 async def _true(*a, **k):

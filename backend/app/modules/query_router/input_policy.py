@@ -224,9 +224,16 @@ _REPORT_TERMS = _both(
     r"hội đồng quản trị|giám đốc|kiểm toán|cổ đông|cổ phiếu quỹ|mua lại cổ phiếu|nhân viên|trụ sở|sản phẩm|khách hàng|đối thủ|thị phần|vụ kiện|kiện tụng|rủi ro|phân khúc|"
     r"năm tài chính|kỳ báo cáo|thuyết minh|nợ vay|khoản đầu tư")
 # Document text addressed to an assistant (indirect prompt injection in a PDF): never followed, flagged on the chunk and in the trace
+# 19/11 (red-team, experiments/security_redteam): text written for an assistant in other words ("Note to AI systems", "LLM: ...", "if you are a
+# language model", an HTML comment, Vietnamese) - the prototype caught 8 of 8 planted texts and 0 of 2,459 chunks of the dev reports.
 _INSTRUCTION_IN_TEXT = re.compile(
     r"\b(system prompt|you are (an?|the) (ai|assistant|language model)|as an ai\b|assistant\s*:|ignore (all |the |any )?(previous|prior|above) "
-    r"(instructions|messages|prompts)|disregard (all |any |the )?(previous|prior|above|user)|output (all|every) (data|document|file)s?)", re.I)
+    r"(instructions|messages|prompts)|disregard (all |any |the )?(previous|prior|above|user)|output (all|every) (data|document|file)s?)|"
+    r"\bnote (to|for) (any |all )?(ai|llm|assistant|language model|chatbot)s?\b|\b(llm|ai|chatbot|language model)\s*:\s*\w|"
+    r"\b(instructions?|message|note)s? for (the |any )?(ai|assistant|llm|language model|chatbot)\b|\b(to|for) any (ai|llm|language model|assistant)\b|"
+    r"\bif you are an? (ai|llm|language model|assistant|chatbot)\b|\b(assistant|ai|llm|model) reading this\b|"
+    r"\b(ghi chú|lưu ý|chỉ dẫn|yêu cầu) (cho|dành cho|gửi) (trợ lý|ai|mô hình|chatbot)|\bnếu bạn là (trợ lý|ai|mô hình)|"
+    r"<!--[^>]{0,200}\b(system|assistant|ai|llm|prompt)\b", re.I)
 
 
 def instruction_like(text: str) -> bool:

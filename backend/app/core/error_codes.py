@@ -37,6 +37,7 @@ class Code:
     RETRY_USED = "retry_used"  # a "search again" button can be used once per answer (docs/Version_3/fail_cases.md, S3)
     GUEST_ALLOWANCE_USED = "guest_allowance_used"
     QUESTION_QUOTA_USED = "question_quota_used"
+    DAILY_BUDGET_USED = "daily_budget_used"
     # documents
     UNSUPPORTED_FILE_TYPE = "unsupported_file_type"
     FILE_TOO_LARGE = "file_too_large"

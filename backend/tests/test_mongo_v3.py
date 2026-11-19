@@ -156,7 +156,11 @@ async def _ask_together(monkeypatch, repo, requests, execute):
     async def notebook(*a, **k):
         return types.SimpleNamespace(title="T", focus_state=None)
 
+    async def zero(*a, **k):
+        return 0
+
     monkeypatch.setattr(chat_api, "UserRepository", lambda db: repo)
+    monkeypatch.setattr(chat_api, "DailyUsage", lambda db: types.SimpleNamespace(spent_today=zero, add=none))  # the system's tokens of the day
     monkeypatch.setattr(chat_api, "ChatRepository", Chats)
     monkeypatch.setattr(chat_api, "require_notebook", notebook)
     monkeypatch.setattr(chat_api, "can_chat", lambda *a: True)

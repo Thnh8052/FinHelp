@@ -691,6 +691,7 @@ export interface TranslationSchema {
     notebook_delete_failed: string;
     guest_allowance_used: string;
     question_quota_used: string;
+    daily_budget_used: string;
     unsupported_file_type: string;
     file_too_large: string;
     not_a_pdf: string;

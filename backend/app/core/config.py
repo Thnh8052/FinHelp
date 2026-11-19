@@ -204,6 +204,10 @@ class Settings(BaseSettings):
     # Accounts one IP address may open per day (each gets its own daily questions): without it a script opened 25 accounts in a row (red-team 19/11).
     # Raise it like the guest limits for a demo where everyone registers from one network.
     REGISTRATIONS_PER_IP_DAILY: int = 10
+    # Tokens every chat question of the day may spend together (UTC day; all accounts and guests; guard, planner and answer calls): past it no new question
+    # starts until the next day (429 daily_budget_used). Per-account limits alone let many accounts spend without end (red-team 19/11, LLM10). A question
+    # measured 19/11 used about 18,000 tokens, so 20,000,000 is about 1,100 questions, a few dollars at most. 0 = no ceiling.
+    DAILY_TOKEN_BUDGET: int = 20_000_000
     # Remote GPU Worker (e.g. Google Colab / Kaggle T4 GPU via Cloudflare Tunnel)
     REMOTE_GPU_URL: Optional[str] = Field(default=None, repr=False)  # the worker has no password: whoever has the address can use it
 

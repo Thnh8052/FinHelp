@@ -433,13 +433,22 @@ def split_answer(raw: str) -> Tuple[str, Optional[Dict[str, Any]]]:
     }
 
 
+# The prompt's own markers at the start of a line of document text: an excerpt header, the question line, the excerpts heading. A PDF that prints one
+# could pass its text off as another excerpt or as the user's question (red-team 19/11); a dash or a colon is enough to defuse it, the words stay.
+_FAKE_MARKER = re.compile(r"^(\s*)(?:-{3}(?=\s*Excerpt \[)|Question(?= \()|Excerpts from the selected reports(?=:))", re.M)
+
+
+def _defused(text: str) -> str:
+    return _FAKE_MARKER.sub(lambda m: m.group(1) + ("—" if m.group(0).strip().startswith("-") else "(document text) " + m.group(0).strip()), text)
+
+
 def build_context(chunks: List[Dict[str, Any]]) -> str:
     def document(c: Dict[str, Any]) -> str:
         label = c.get("document_label")
         return f"{label} [{c['document_id']}]" if label else c["document_id"]
 
     return "\n\n".join(
-        f"--- Excerpt [{j}] (Document: {document(c)}, Page: {c['page']}) ---\n{c['content']}"
+        f"--- Excerpt [{j}] (Document: {document(c)}, Page: {c['page']}) ---\n{_defused(c['content'])}"
         for j, c in enumerate(chunks, 1)
     )
 

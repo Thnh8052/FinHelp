@@ -15,6 +15,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Annotated, Any, List, Literal, Optional, Tuple, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -31,7 +32,8 @@ from app.core.logging import logger
 from app.modules.chat import events
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
-from app.modules.chat.chat_repo import ChatRepository
+from app.modules.chat.chat_repo import ChatRepository, DailyUsage
+from app.shared.common import get_utc_now
 from app.modules.documents.document import ACTIVE_STATUSES
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.auth.user_repo import UserRepository
@@ -250,6 +252,13 @@ async def _admit(request: Request, req: "QueryRequest", user_id: Optional[str], 
     # 1. Các lượt trước (để hiểu câu hỏi nối tiếp như "còn lợi nhuận thì sao?")
     history = await load_history(db, req.notebook_id)
 
+    # The whole system's tokens of the day (config.DAILY_TOKEN_BUDGET): past them no question starts, before any quota or model is used
+    if settings.DAILY_TOKEN_BUDGET and await DailyUsage(db).spent_today() >= settings.DAILY_TOKEN_BUDGET:
+        now = get_utc_now()
+        until_tomorrow = int((now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1) - now).total_seconds()) + 1
+        # 429, a quota like question_quota_used: the interface shows its sentence (it shows "busy" for any 5xx)
+        raise api_error(status_code=429, code=Code.DAILY_BUDGET_USED, headers={"Retry-After": str(until_tomorrow)})
+
     # 2. Giữ chỗ hạn mức ngay trước pipeline, không phải sau: các câu gửi cùng lúc không thể cùng thấy "còn lượt"
     users = UserRepository(db)
     if user_id is None:
@@ -328,6 +337,7 @@ async def _record(adm: _Admitted, req: "QueryRequest", user_id: Optional[str], d
     prompt_tokens, completion_tokens = llm.get("prompt_tokens", 0), llm.get("completion_tokens", 0)
     if user_id is not None:
         await users.consume_quota(user_id, messages=0 if result.get("charged", True) else -1, tokens=prompt_tokens + completion_tokens)
+    await DailyUsage(db).add(prompt_tokens + completion_tokens)  # guests' tokens count too
 
     # 5. Lưu câu trả lời của AI kèm trích dẫn và số liệu thực nghiệm vào MongoDB
     answer_id = f"msg_{uuid.uuid4().hex[:8]}"

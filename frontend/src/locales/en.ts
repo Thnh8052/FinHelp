@@ -703,6 +703,7 @@ export const en: TranslationSchema = {
     notebook_delete_failed: "The chat's data could not be fully deleted. Please try again.",
     guest_allowance_used: "You have used today's free trial allowance. Sign in to continue.",
     question_quota_used: "You have used today's questions. Come back tomorrow.",
+    daily_budget_used: "FinHelp has reached today's usage limit. Please come back tomorrow.",
     unsupported_file_type: "Only PDF files are supported.",
     file_too_large: "This file is larger than your account's limit of {limit_mb} MB.",
     not_a_pdf: "This file is not a valid PDF.",
