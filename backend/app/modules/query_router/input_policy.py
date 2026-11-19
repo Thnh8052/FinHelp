@@ -235,7 +235,12 @@ def _msg(key: str, lang: str) -> str:
     return MSG[key][lang]
 
 
-def _period_message(lang: str, years: List[int], avail: Dict[str, List[int]]) -> str:
+def _period_message(lang: str, years: List[int], avail: Dict[str, List[int]], in_chat: Sequence[int] = ()) -> str:
+    """`in_chat`: the years asked that a ready report of the same company in this chat covers, though it is not selected (B2, system test 18/11)."""
+    if in_chat:
+        wanted = ", ".join(f"FY{y}" for y in in_chat)
+        return (f"Báo cáo cho {wanted} có trong chat nhưng chưa được chọn: hãy chọn nó trong danh sách nguồn rồi hỏi lại." if lang == "vi"
+                else f"The {wanted} report is in this chat but not selected: select it in the sources and ask again.")
     have = "; ".join(f"{name}: " + ", ".join(f"FY{y}" for y in ys) for name, ys in avail.items())
     wanted = ", ".join(f"FY{y}" for y in years)
     return (f"Các nguồn đã chọn không có kỳ {wanted} ({have}). Hãy chọn thêm tài liệu của kỳ đó hoặc hỏi về kỳ đang có." if lang == "vi"
@@ -298,8 +303,9 @@ def _leans_on_focus(q: str, words_: Sequence[str], named: Set[int], outsiders: b
 
 
 def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, history: Optional[Sequence[dict]] = None, focus: Optional[Focus] = None,
-           ui_lang: Optional[str] = None) -> Decision:
-    """`ui_lang`: the interface language, for a message too short to show its own ("?") on a chat with no earlier question."""
+           ui_lang: Optional[str] = None, unselected: Sequence[SourceInfo] = ()) -> Decision:
+    """`ui_lang`: the interface language, for a message too short to show its own ("?") on a chat with no earlier question. `unselected`: the chat's
+    ready reports the user did not select (a period they cover is named in the reply instead of "add the report")."""
     q = (question or "").strip()
     history = history or []
     lang = detect_language(q)
@@ -420,7 +426,8 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
                 via_later = True
         if bad:
             avail = {g[0].company or g[0].file_name: sorted({s.fiscal_year for s in g}) for g in groups.values()}
-            d.action, d.message, d.available = "period_unavailable", _period_message(lang, bad, avail), [f"FY{y}" for ys in avail.values() for y in ys]
+            in_chat = [y for y in bad if any(_company_key(u) in groups and y in set(u.years_covered) | {u.fiscal_year} for u in unselected)]
+            d.action, d.message, d.available = "period_unavailable", _period_message(lang, bad, avail, in_chat), [f"FY{y}" for ys in avail.values() for y in ys]
             return d
         # Each named company on its own: another company's report showing the year says nothing about this one. Only a company that shows NONE of
         # the years asked is reported, since the question does not say which year goes with which company ("Lockheed in FY2019 and Boeing in

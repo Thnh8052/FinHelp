@@ -446,12 +446,15 @@ class RAGWorkflowOrchestrator:
                               f"Please confirm the document details before asking ({names}): the company or reporting period could not be verified in the text.",
                               {"decision": {"action": "ask_confirm_catalog", "documents": [d.document_id for d in unconfirmed]}})
             return p
-        p.ready_count = len(await self._ready_documents(notebook_id))
+        ready = await self._ready_documents(notebook_id)
+        p.ready_count = len(ready)
         p.infos = [source_info(d) for d in scope]
+        chosen = {d.document_id for d in scope}
+        unselected = [source_info(d) for d in ready if d.document_id not in chosen]  # a period they cover is named in the reply (B2, 18/11)
         history = history or []
         tagged = {**focus_state, "document_ids": mentions} if mentions and focus_state else focus_state  # @file names the company: the topic only gives the item and year
         p.focus = focus = focus_view(tagged, [d.document_id for d in scope], p.infos)
-        p.decision = decision = decide(query, p.infos, p.ready_count, history, focus, ui_lang)
+        p.decision = decision = decide(query, p.infos, p.ready_count, history, focus, ui_lang, unselected)
         # What the rules let through is still checked for what it is (small talk, an off-topic request, a request for advice...) by the guard,
         # beside the search (_guarded): the intent router that did it here was removed 17/11/2026 (TRIED.md DV-08)
         if decision.action == "rewrite_followup":  # "And the net income?" -> a standalone question, shown to the user
@@ -467,7 +470,7 @@ class RAGWorkflowOrchestrator:
             p.followup = {"method": "focus" if filled else "llm", "resolved": rewritten}
             p.prefix = (f"Tôi hiểu câu hỏi là: “{rewritten}”\n\n" if decision.lang == "vi" else f"I understood the question as: “{rewritten}”\n\n")
             p.query = rewritten
-            p.decision = decision = decide(rewritten, p.infos, p.ready_count, [])
+            p.decision = decision = decide(rewritten, p.infos, p.ready_count, [], unselected=unselected)
             if decision.action == "rewrite_followup":
                 p.stop = terminal("ask_clarify", MSG["ask_clarify"][decision.lang])
                 return p
