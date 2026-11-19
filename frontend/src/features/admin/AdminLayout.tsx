@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from "react-router-dom";
-import { ArrowLeft, Coins, FileText, LayoutDashboard, LogOut, Menu, MessagesSquare, RefreshCw, ShieldCheck, Users, X } from "lucide-react";
+import { NavLink, Outlet, useLocation, useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Coins, FileText, LayoutDashboard, ListChecks, LogOut, Menu, MessagesSquare, RefreshCw, ShieldCheck, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
@@ -17,15 +17,19 @@ type WindowDays = (typeof WINDOWS)[number];
 export interface AdminContext {
   data: AdminOverview | null;
   loading: boolean;
+  days: number; // the window chosen in the header
+  user: string; // the user filter: a user id, "guests", or "" for everyone
+  reload: () => void; // reads the overview again (the review page calls it after a verdict, for the badge)
 }
 
 export const useAdminData = () => useOutletContext<AdminContext>();
 
-type NavKey = "overview" | "documents" | "audit" | "tokens" | "users";
+type NavKey = "overview" | "documents" | "audit" | "review" | "tokens" | "users";
 const NAV: { key: NavKey; to: string; icon: LucideIcon }[] = [
   { key: "overview", to: "/admin", icon: LayoutDashboard },
   { key: "documents", to: "/admin/documents", icon: FileText },
   { key: "audit", to: "/admin/audit", icon: MessagesSquare },
+  { key: "review", to: "/admin/review", icon: ListChecks },
   { key: "tokens", to: "/admin/tokens", icon: Coins },
   { key: "users", to: "/admin/users", icon: Users },
 ];
@@ -42,22 +46,24 @@ export const AdminLayout: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const userFilter = params.get("user") ?? ""; // in the address, so it stays when the admin moves between pages
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setData(await apiRequest<AdminOverview>(`/auth/admin/overview?days=${days}`));
+      setData(await apiRequest<AdminOverview>(`/auth/admin/overview?days=${days}${userFilter ? `&user=${encodeURIComponent(userFilter)}` : ""}`));
     } catch (err) {
       setError(errorText(err, t, p.loadFailed));
     } finally {
       setLoading(false);
     }
-  }, [days, t, p.loadFailed]);
+  }, [days, userFilter, t, p.loadFailed]);
 
   useEffect(() => {
     load();
-  }, [days]); // eslint-disable-line react-hooks/exhaustive-deps -- reload on a new window, not on a language change
+  }, [days, userFilter]); // eslint-disable-line react-hooks/exhaustive-deps -- reload on a new window or user, not on a language change
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
   useEffect(() => {
@@ -71,7 +77,15 @@ export const AdminLayout: React.FC = () => {
   const badges: Partial<Record<NavKey, number>> = {
     documents: data ? data.totals.documents.processing + data.totals.documents.failed : 0,
     audit: data?.totals.flagged_total ?? 0,
+    review: data?.review_open ?? 0,
   };
+  const chooseUser = (value: string) =>
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set("user", value);
+      else next.delete("user");
+      return next;
+    });
 
   /** In the phone drawer the close button takes the place of the Admin tag. */
   const sidebar = (inDrawer: boolean) => (
@@ -99,7 +113,7 @@ export const AdminLayout: React.FC = () => {
         {NAV.map(({ key, to, icon: Icon }) => (
           <li key={key}>
             <NavLink
-              to={to}
+              to={{ pathname: to, search: location.search }}
               end={to === "/admin"}
               className={({ isActive }) =>
                 `group flex h-10 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${
@@ -181,6 +195,23 @@ export const AdminLayout: React.FC = () => {
             <p className="truncate text-[13px] text-muted">{p.subtitles[current.key]}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-panel px-2.5 text-[13px] text-fg-2">
+              <Users size={14} aria-hidden className="text-muted" />
+              <span className="sr-only">{p.userFilter}</span>
+              <select
+                value={userFilter}
+                onChange={(e) => chooseUser(e.target.value)}
+                className="max-w-40 truncate bg-panel text-fg outline-none"
+              >
+                <option value="">{p.userAll}</option>
+                <option value="guests">{p.userGuests}</option>
+                {(data?.users ?? []).map((u) => (
+                  <option key={u.user_id} value={u.user_id}>
+                    {u.username}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Segmented
               label={p.window}
               value={days}
@@ -211,7 +242,7 @@ export const AdminLayout: React.FC = () => {
                 </button>
               </div>
             )}
-            <Outlet context={{ data, loading } satisfies AdminContext} />
+            <Outlet context={{ data, loading, days: Number(days), user: userFilter, reload: load } satisfies AdminContext} />
             {data && (
               <p className="text-right text-xs text-dim">{fill(p.updatedAt, { time: fmt.dateTime(data.generated_at) })}</p>
             )}

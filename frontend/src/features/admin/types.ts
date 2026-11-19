@@ -86,4 +86,35 @@ export interface AdminOverview {
   recent_answers: AdminAnswer[];
   users: AdminUser[];
   services: Record<string, number | null>; // latency in ms, null when the service did not answer
+  user: string | null; // the user filter: a user id, "guests", or null for everyone
+  review_open: number; // answers waiting in the review queue
+}
+
+/** GET /auth/admin/review (backend/app/modules/admin/review.py): answers with a problem, found from what the chat stores with each answer. */
+export const REVIEW_LABELS = ["user_report", "warning", "not_traced", "blocked", "not_found", "partial", "degraded", "refused", "safety", "slow"] as const;
+export type ReviewLabel = (typeof REVIEW_LABELS)[number];
+export type ReviewStatus = "open" | "reviewed" | "all";
+
+export interface ReviewState {
+  status: "ok" | "needs_fix";
+  note: string;
+  by: string;
+  at: string;
+}
+
+export interface ReviewItem extends AdminAnswer {
+  labels: ReviewLabel[];
+  review: ReviewState | null;
+  intent: string | null; // how the chat handled it (retrieval_rag, period_unavailable, refuse_advice...)
+  status: string | null; // answered | partial | not_found | clarify
+  unverified: string[]; // figures the answer check could not trace
+  notes: string[]; // what the answer prompt was told for this question
+  degraded: string[]; // steps dropped because they were too slow
+}
+
+export interface ReviewQueue {
+  items: ReviewItem[];
+  counts: Record<ReviewLabel, number>;
+  open_total: number;
+  window_days: number;
 }

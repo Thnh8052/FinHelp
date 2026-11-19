@@ -2,7 +2,7 @@
 recent PDF, the answers users marked wrong, recent answers for audit and the user list. One request feeds every page of the dashboard."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -19,9 +19,18 @@ def _day_start(moment: datetime) -> datetime:
     return moment.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-async def _window_totals(messages, start: datetime, end: datetime) -> Dict[str, Any]:
+async def user_scope(db: AsyncIOMotorDatabase, user: Optional[str]) -> Dict[str, Any]:
+    """The messages / documents filter of one user's chats ("guests": every guest chat); {} for everyone (owner 19/11: filter the dashboard by user)."""
+    if not user:
+        return {}
+    owner = {"owner_type": "guest"} if user == "guests" else {"owner_type": "user", "owner_id": user}
+    notebooks = await db[collections.NOTEBOOKS_COLLECTION].find(owner, {"notebook_id": 1}).to_list(None)
+    return {"notebook_id": {"$in": [n["notebook_id"] for n in notebooks]}}
+
+
+async def _window_totals(messages, start: datetime, end: datetime, scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     rows = await messages.aggregate([
-        {"$match": {"role": "assistant", "created_at": {"$gte": start, "$lt": end}}},
+        {"$match": {"role": "assistant", "created_at": {"$gte": start, "$lt": end}, **(scope or {})}},
         {"$group": {
             "_id": None,
             "questions": {"$sum": 1},
@@ -47,8 +56,10 @@ async def _owner_labels(db: AsyncIOMotorDatabase, notebook_ids: List[str]) -> Di
     }
 
 
-async def _answers(db: AsyncIOMotorDatabase, query: Dict[str, Any], limit: int, newest_by: str = "created_at") -> List[Dict[str, Any]]:
-    """Assistant answers matching `query`, newest first by `newest_by`, each with the question asked just before it and who asked."""
+async def _answers(db: AsyncIOMotorDatabase, query: Dict[str, Any], limit: int, newest_by: str = "created_at",
+                   extra: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """Assistant answers matching `query`, newest first by `newest_by`, each with the question asked just before it and who asked. `extra` adds fields
+    read from the stored answer (the review queue: its problem labels and review)."""
     messages = db[collections.MESSAGES_COLLECTION]
     answers = await messages.find({"role": "assistant", **query}).sort(newest_by, -1).limit(limit).to_list(limit)
     if not answers:
@@ -71,20 +82,23 @@ async def _answers(db: AsyncIOMotorDatabase, query: Dict[str, Any], limit: int, 
             "citations": len(a.get("citations") or []),
             "created_at": a.get("created_at"),
             **owners.get(a["notebook_id"], {"owner_type": "unknown", "username": None, "notebook_title": None}),
+            **(extra(a) if extra else {}),
         }
         for a in answers
     ]
 
 
-async def build_overview(db: AsyncIOMotorDatabase, days: int) -> Dict[str, Any]:
+async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str] = None) -> Dict[str, Any]:
+    """`user` narrows questions, tokens, documents and answers to one user's chats ("guests": the guest chats); the user list stays whole."""
     now = datetime.now(timezone.utc)
+    scope = await user_scope(db, user)
     since = _day_start(now) - timedelta(days=days - 1)
     previous = since - timedelta(days=days)
     messages = db[collections.MESSAGES_COLLECTION]
 
     # Questions and tokens per day of the window (days without a question are filled with zeros)
     per_day = await messages.aggregate([
-        {"$match": {"role": "assistant", "created_at": {"$gte": since}}},
+        {"$match": {"role": "assistant", "created_at": {"$gte": since}, **scope}},
         {"$group": {
             "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}},
             "questions": {"$sum": 1},
@@ -107,16 +121,16 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int) -> Dict[str, Any]:
         })
 
     by_model = await messages.aggregate([
-        {"$match": {"role": "assistant", "created_at": {"$gte": since}}},
+        {"$match": {"role": "assistant", "created_at": {"$gte": since}, **scope}},
         {"$group": {"_id": "$model_used", "questions": {"$sum": 1}, "tokens": {"$sum": {"$ifNull": ["$token_usage.total_tokens", 0]}}}},
         {"$sort": {"tokens": -1}},
     ]).to_list(None)
 
     # Documents: count per status, then the newest with their processing job and owner
     documents = db[collections.DOCUMENTS_COLLECTION]
-    status_rows = await documents.aggregate([{"$group": {"_id": "$status", "count": {"$sum": 1}}}]).to_list(None)
+    status_rows = await documents.aggregate([{"$match": scope}, {"$group": {"_id": "$status", "count": {"$sum": 1}}}]).to_list(None)
     status_counts = {row["_id"]: row["count"] for row in status_rows}
-    recent_docs = await documents.find({}).sort("created_at", -1).limit(DOCUMENT_LIMIT).to_list(DOCUMENT_LIMIT)
+    recent_docs = await documents.find(scope).sort("created_at", -1).limit(DOCUMENT_LIMIT).to_list(DOCUMENT_LIMIT)
     jobs = await db[collections.INGESTION_JOBS_COLLECTION].find(
         {"document_id": {"$in": [d["document_id"] for d in recent_docs]}}
     ).to_list(None)
@@ -135,11 +149,12 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int) -> Dict[str, Any]:
 
     return {
         "window_days": days,
+        "user": user,
         "generated_at": now,
         "totals": {
-            "current": await _window_totals(messages, since, now + timedelta(seconds=1)),
-            "previous": await _window_totals(messages, previous, since),
-            "flagged_total": await messages.count_documents({"role": "assistant", "user_rating": -1}),
+            "current": await _window_totals(messages, since, now + timedelta(seconds=1), scope),
+            "previous": await _window_totals(messages, previous, since, scope),
+            "flagged_total": await messages.count_documents({"role": "assistant", "user_rating": -1, **scope}),
             "users_total": await users.count_documents({}),
             "users_active": await users.count_documents({"is_active": True}),
             "documents": {
@@ -173,8 +188,8 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int) -> Dict[str, Any]:
             }
             for d in recent_docs
         ],
-        "flagged": await _answers(db, {"user_rating": -1}, FLAGGED_LIMIT, newest_by="rated_at"),
-        "recent_answers": await _answers(db, {"created_at": {"$gte": since}}, MESSAGE_LIMIT),
+        "flagged": await _answers(db, {"user_rating": -1, **scope}, FLAGGED_LIMIT, newest_by="rated_at"),
+        "recent_answers": await _answers(db, {"created_at": {"$gte": since}, **scope}, MESSAGE_LIMIT),
         "users": [
             {
                 "user_id": u["user_id"],

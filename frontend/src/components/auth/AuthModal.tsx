@@ -6,6 +6,7 @@ import { errorText } from "../../services/api";
 import { LanguageToggle } from "../common/LanguageToggle";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { CloseIcon, SparklesIcon } from "../common/Icons";
+import { SignUpForm } from "./SignUpForm";
 import "./auth.css";
 
 interface AuthModalProps {
@@ -26,9 +27,6 @@ const AuthDialog: React.FC<AuthModalProps> = ({ onClose, initialTab = "signin" }
   // Form states
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [fullName, setFullName] = useState("");
 
   // Forgot password states
   const [forgotStep, setForgotStep] = useState<1 | 2>(1);
@@ -54,19 +52,6 @@ const AuthDialog: React.FC<AuthModalProps> = ({ onClose, initialTab = "signin" }
     }
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      await register(email, username, password, fullName);
-      onClose();
-    } catch (err: unknown) {
-      setError(errorText(err, t, t.auth.errorRegisterFallback));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleForgotStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -220,82 +205,13 @@ const AuthDialog: React.FC<AuthModalProps> = ({ onClose, initialTab = "signin" }
           {/* TAB 2: SIGN UP */}
           {tab === "signup" && (
             <div>
-              <form onSubmit={handleSignUp} className="auth-form-dense">
-                <div className="auth-field">
-                  <label className="auth-label" htmlFor="modal-reg-email">
-                    {t.auth.emailAddress} <span className="auth-required">*</span>
-                  </label>
-                  <input
-                    id="modal-reg-email"
-                    autoComplete="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@company.com"
-                    className="auth-input"
-                  />
-                </div>
-
-                <div className="auth-field">
-                  <label className="auth-label" htmlFor="modal-reg-username">
-                    {t.auth.username} <span className="auth-required">*</span>
-                  </label>
-                  <input
-                    id="modal-reg-username"
-                    autoComplete="username"
-                    type="text"
-                    required
-                    pattern="[A-Za-z0-9._\-]{3,32}"
-                    title={t.auth.usernameRule}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder={t.auth.exampleUsername}
-                    className="auth-input"
-                  />
-                </div>
-
-                <div className="auth-field">
-                  <label className="auth-label" htmlFor="modal-reg-password">
-                    {t.auth.passwordMin} <span className="auth-required">*</span>
-                  </label>
-                  <input
-                    id="modal-reg-password"
-                    autoComplete="new-password"
-                    type="password"
-                    required
-                    minLength={8}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="auth-input"
-                  />
-                </div>
-
-                <div className="auth-field">
-                  <label className="auth-label" htmlFor="modal-reg-full-name">
-                    {t.auth.fullNameOptional}
-                  </label>
-                  <input
-                    id="modal-reg-full-name"
-                    autoComplete="name"
-                    type="text"
-                    maxLength={120}
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder={t.auth.exampleName}
-                    className="auth-input"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="auth-submit-btn spaced"
-                >
-                  {loading ? t.auth.creatingAccount : t.auth.completeRegistration}
-                </button>
-              </form>
+              <SignUpForm
+                idPrefix="modal-reg"
+                onSubmit={async (email, username, password, fullName) => {
+                  await register(email, username, password, fullName);
+                  onClose();
+                }}
+              />
 
               <div className="auth-footer-switch">
                 {t.auth.haveAccount}{" "}

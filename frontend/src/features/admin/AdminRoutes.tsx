@@ -4,6 +4,7 @@ import { AdminLayout } from "./AdminLayout";
 import { AuditPage } from "./AuditPage";
 import { DocumentsPage } from "./DocumentsPage";
 import { OverviewPage } from "./OverviewPage";
+import { ReviewPage } from "./ReviewPage";
 import { TokensPage } from "./TokensPage";
 import { UsersPage } from "./UsersPage";
 
@@ -14,6 +15,7 @@ const AdminRoutes: React.FC = () => (
       <Route index element={<OverviewPage />} />
       <Route path="documents" element={<DocumentsPage />} />
       <Route path="audit" element={<AuditPage />} />
+      <Route path="review" element={<ReviewPage />} />
       <Route path="tokens" element={<TokensPage />} />
       <Route path="users" element={<UsersPage />} />
     </Route>
