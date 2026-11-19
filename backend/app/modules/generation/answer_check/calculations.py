@@ -136,8 +136,20 @@ def steps(text: str) -> List[Tuple[str, str, int]]:
         for (left, lstart), (right, rstart) in zip(exprs, exprs[1:]):
             if len(_scales(text[lstart:rstart + len(right) + 16])) > 1:
                 continue  # "1,4 tỷ − 848 triệu ≈ 552 triệu": read without its unit words it is 1.4 − 848 (held-out chat answer 19/11)
+            if _year_range(left):
+                continue  # "thay đổi 2015–2020 ≈ +3.8": a range of years, not 2015 − 2020 (v4/v5 measurement 19/11)
             out.append((left.strip(), right.strip(), rstart + (len(right) - len(right.lstrip()))))
     return out
+
+
+YEAR_RANGE = re.compile(r"(?:.*\s)?(?:FY\s?)?((?:19|20)\d{2})\s*[-−–—]\s*(?:FY\s?)?((?:19|20)\d{2})", re.I)
+
+
+def _year_range(left: str) -> bool:
+    """The left side ends with an earlier year, a dash and a later year ("2015–2020", "over 2015 - 2020", "FY2018–FY2020"). A subtraction of years is
+    written later minus earlier ("2020 − 2015") and stays a calculation."""
+    m = YEAR_RANGE.fullmatch(left.strip())
+    return bool(m) and int(m.group(1)) < int(m.group(2))
 
 
 SCALE_WORDS = {"million": "m", "mn": "m", "triệu": "m", "billion": "b", "bn": "b", "tỷ": "b", "thousand": "k", "nghìn": "k", "ngàn": "k", "trillion": "t"}

@@ -139,6 +139,14 @@ def _years(question: str) -> List[int]:
     return sorted({int(m.group(1)) for m in _YEAR.finditer(question)})
 
 
+# B8: words that date an amount given in a report (a debt maturing, a payment due or scheduled, an expectation), up to 80 characters before the year
+_SCHEDULE_CUE = re.compile(r"\b(matur\w*|due|scheduled|expir\w*|expect\w*|payable|guidance|forecast\w*|commit\w*)\b|đáo hạn|đến hạn|dự kiến|cam kết|kế hoạch", re.I)
+
+
+def _scheduled(question: str, year: int) -> bool:
+    return any(_SCHEDULE_CUE.search(question[max(0, m.start() - 80):m.start()]) for m in re.finditer(str(year), question))
+
+
 # ---------------------------------------------------------------- patterns
 _GREETING_WORDS = frozenset(w for word in "hello hi hey thanks thank you good morning afternoon evening xin chào chao cảm ơn cám ơn bạn ạ nhé nha ok okay bye tạm biệt buổi sáng trưa chiều tối".split()
                             for w in (word, unaccented(word)))
@@ -275,6 +283,9 @@ MSG: Dict[str, Dict[str, str]] = {
 
 # Left out of the answer prompt when the line above the answer already says which later report a year comes from (orchestrator, prompt review 19/11)
 PRIOR_YEAR_NOTE = "Some requested years are not the report's own fiscal year: take them from the comparative columns of the later report and say so."
+# B8 (owner 19/11, the short note proposed that day): a year no selected report shows, asked next to years that are shown
+PARTIAL_PERIOD_NOTE = ("The selected reports do not show {wanted}: say those figures are not in the selected sources, answer the rest, never use another "
+                       "year's figure instead.")
 
 
 def _msg(key: str, lang: str) -> str:
@@ -468,13 +479,21 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
         # answerable SEC questions and 0/176 non-SEC refused). Otherwise only years that are too OLD are refused (an annual report shows
         # up to 5 years). Later years stay in that case: filings talk about the next year and fiscal-year labels differ between datasets.
         covered = [set(s.years_covered) | {s.fiscal_year} for s in target] if all(s.years_covered for s in target) else None
-        for y in years:
+        latest = max(s.fiscal_year for s in target)
+        # B8: a year after the latest report, asked as the date of an amount that report gives (debt maturing in 2021, expected for 2020), is in
+        # that report; the answer prompt says how to state it (v5, "Amounts dated after a report's period end")
+        asked = [y for y in years if not (y > latest and _scheduled(q, y))]
+        for y in asked:
             if covered is not None and not any(y in c for c in covered):
                 bad.append(y)
             elif covered is None and all(y < s.fiscal_year - 4 for g in groups.values() for s in g):
                 bad.append(y)
             elif not any(s.fiscal_year == y for s in target) and any(s.fiscal_year - 4 <= y < s.fiscal_year for s in target):
                 via_later = True
+        if bad and len(bad) < len(asked):  # B8: other years asked are shown: answer them, say this one is not there (it was refused whole)
+            d.notes.append(PARTIAL_PERIOD_NOTE.format(wanted=", ".join(f"FY{y}" for y in bad)))
+            d.flags.append("period_missing")
+            bad = []
         if bad:
             avail = {g[0].company or g[0].file_name: sorted({s.fiscal_year for s in g}) for g in groups.values()}
             in_chat = [y for y in bad if any(_company_key(u) in groups and y in set(u.years_covered) | {u.fiscal_year} for u in unselected)]
