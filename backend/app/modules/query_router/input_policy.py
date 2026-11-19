@@ -194,12 +194,16 @@ _INJECTION = _both(
     r"bỏ qua (tài liệu|nguồn|hướng dẫn)|dùng kiến thức của bạn|quên (hết )?hướng dẫn|theo trí nhớ|không cần (dùng )?tài liệu")
 # The three below read the question without accents (unaccented), so they also hold for "bo qua moi huong dan".
 # A message aimed at the assistant's own instructions or role: refused outright, whatever else it says ("đóng vai trò" is a report phrase, not a role-play)
+# 20/11 (P1, experiments/security_redteam/REPORT_P1_2026-11-20.md): "original / initial instructions" and "đóng vai" alone refused report questions
+# ("the original instructions to shareholders", "đóng vai một chuyên viên phân tích"): they now need the assistant as owner or an unbounded role.
 _PROMPT_ATTACK = re.compile(
-    r"\b(system|hidden|initial|original) (prompt|instructions?|message)\b|"
+    r"\bsystem (prompt|instructions?|message)\b|\bhidden (prompt|instructions?)\b|\b(initial|original) prompt\b|"
+    r"\b(your|the assistant'?s?|the bot'?s?) (initial|original|hidden|first|secret) (prompt|instructions?|message|setup|configuration|rules)\b|"
     r"\b(show|reveal|print|repeat|display|output|leak|tell me|give me|what (is|are))\b.{0,30}\byour (prompt|instructions|rules|guidelines|configuration)\b|"
     r"\byou are now\b|\bdeveloper mode\b|\bjailbreak\b|\bdo anything now\b|\brepeat (the |all |everything )?(text |words |message )?above\b|"
     r"\b(pretend|act|behave|roleplay|role-play)\b.{0,40}\b(no rules|no restrictions|unrestricted|unfiltered|without (any )?(rules|restrictions|limits)|general (chatbot|assistant))\b|"
-    r"\b(bo qua|quen|phot lo) (het |di )?(moi |cac |tat ca |toan bo |nhung )?(huong dan|chi dan|quy tac|rang buoc)\b|\bdong vai (?!tro\b)|"
+    r"\b(bo qua|quen|phot lo) (het |di )?(moi |cac |tat ca |toan bo |nhung )?(huong dan|chi dan|quy tac|rang buoc)\b|"
+    r"\bdong vai\b[^.?!\n]{0,40}\b(khong (bi )?(gioi han|rang buoc|kiem duyet)|khong co (quy tac|luat|gioi han|rang buoc)|bat chap (moi |cac )?(quy tac|luat))|"
     r"\b(in ra|cho (toi|minh) (xem|biet)|tiet lo|hien thi|doc lai)\b.{0,25}\b(prompt|(huong dan|chi dan|quy tac) (he thong|cua ban|noi bo|ban dau))\b|"  # "hướng dẫn" alone is a company's guidance
     r"\btu (gio|bay gio|nay)\b.{0,25}\btra loi (moi|tat ca|bat ky)\b")
 _DAN = re.compile(r"\bDAN\b")  # the jailbreak persona, in capitals only
@@ -230,10 +234,15 @@ _INSTRUCTION_IN_TEXT = re.compile(
     r"\b(system prompt|you are (an?|the) (ai|assistant|language model)|as an ai\b|assistant\s*:|ignore (all |the |any )?(previous|prior|above) "
     r"(instructions|messages|prompts)|disregard (all |any |the )?(previous|prior|above|user)|output (all|every) (data|document|file)s?)|"
     r"\bnote (to|for) (any |all )?(ai|llm|assistant|language model|chatbot)s?\b|\b(llm|ai|chatbot|language model)\s*:\s*\w|"
-    r"\b(instructions?|message|note)s? for (the |any )?(ai|assistant|llm|language model|chatbot)\b|\b(to|for) any (ai|llm|language model|assistant)\b|"
+    r"\b(instructions?|message|note)s? for (the |any )?(ai|assistant|llm|language model|chatbot)\b|\bto any (ai|llm|language model|assistant)\b|"
     r"\bif you are an? (ai|llm|language model|assistant|chatbot)\b|\b(assistant|ai|llm|model) reading this\b|"
     r"\b(ghi chú|lưu ý|chỉ dẫn|yêu cầu) (cho|dành cho|gửi) (trợ lý|ai|mô hình|chatbot)|\bnếu bạn là (trợ lý|ai|mô hình)|"
-    r"<!--[^>]{0,200}\b(system|assistant|ai|llm|prompt)\b", re.I)
+    r"<!--[^>]{0,200}\b(system|assistant|ai|llm|prompt)\b|"
+    # 20/11 (P1): a model named or addressed by its role ("Hey ChatGPT", "AI reviewers:", "language models must state", "any automated reader")
+    r"\b(dear|hey|hi|hello)\b,? (chatgpt|claude|gemini|gpt|copilot|llama|deepseek|bard|ai|llm)\b|\bai (reviewers?|readers?|agents?|systems?|models?|assistants?)\s*:|"
+    r"\b(language models?|llms?|ai (models?|systems?|assistants?)) (must|should|shall|are (required|instructed) to) (state|say|write|answer|reply|output|ignore|include|not)\b|"
+    r"\bif an? (ai|llm|language model|chatbot) (is|reads|summari[sz]es|processes)\b|\bautomated (reader|system|summari[sz]er)s?\b|"
+    r"\b(gửi|thưa|kính gửi) (các )?(trợ lý|ai|mô hình|chatbot)", re.I)
 
 
 def instruction_like(text: str) -> bool:

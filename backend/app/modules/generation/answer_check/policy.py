@@ -111,7 +111,8 @@ _SENTENCE = re.compile(r"[^.!?\n]+[.!?]?")
 # Personal data: e-mail addresses, Vietnamese phone numbers (0..., +84...), North American ones ((408) 749-4000), 12-digit ID numbers (CCCD).
 # Digits grouped by commas are amounts, never a phone number.
 _EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b")
-_PHONE = re.compile(r"(?<![\w,.])(?:\+84[ .-]?|0)(?:\d[ .-]?){8,10}\d(?![\w,]|\.\d)|(?<![\w,])\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?![\w,]|\.\d)")
+_PHONE = re.compile(r"(?<![\w,.])(?:\+84[ .-]?|0)(?:\d[ .-]?){8,10}\d(?![\w,]|\.\d)|(?<![\w,])\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?![\w,]|\.\d)|"
+                    r"(?<![\w,])\(0\d{1,3}\)[ .-]?\d{3,4}[ .-]?\d{3,4}(?![\w,]|\.\d)")  # a Vietnamese landline with its area code in brackets: (028) 3822 1234
 _ID12 = re.compile(r"(?<![\w,.])\d{12}(?![\w,]|\.\d)")
 _PUNCT = re.compile(r"[\s().+-]")
 
