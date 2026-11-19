@@ -56,15 +56,16 @@ def _scope():
 async def test_a_bad_answer_is_written_once_and_flagged(monkeypatch):
     orch, calls = _orchestrator(["AMD revenue was $99,999 million [1].", "AMD revenue was $25,785 million [1]."], monkeypatch)
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 1 and "$99,999" in r["answer"] and "⚠️" in r["answer"]
+    # owner 19/11: an untraced figure is recorded for the admin queue, not shown (only a wrong written calculation gets the ⚠️ line)
+    assert len(calls) == 1 and "$99,999" in r["answer"] and "⚠️" not in r["answer"]
     assert not r["verification"]["passed"] and r["verification"]["unverified_figures"] == ["$99,999"]
 
 
-async def test_what_stays_wrong_is_flagged_not_hidden(monkeypatch):
-    orch, calls = _orchestrator(["AMD revenue was $99,999 million [1]."], monkeypatch)
+async def test_a_wrong_written_calculation_is_flagged_not_hidden(monkeypatch):
+    orch, calls = _orchestrator(["Doanh thu AMD: 25,000 + 785 = 26,785 triệu USD [1]."], monkeypatch)
     r = await orch._answer_one("Doanh thu AMD và NVIDIA năm 2024", "nb", _scope(), Decision(lang="vi"))
     assert len(calls) == 1 and not r["verification"]["passed"]
-    assert "⚠️ Lưu ý: số chưa đối chiếu được với đoạn trích hay phép tính trong câu trả lời: $99,999" in r["answer"]
+    assert "⚠️ Lưu ý: có phép tính viết ra cho kết quả khác với kết quả đã ghi." in r["answer"]
 
 
 async def test_a_clean_answer_costs_no_second_call(monkeypatch):

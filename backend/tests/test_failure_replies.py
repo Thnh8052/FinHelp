@@ -34,10 +34,25 @@ async def run(monkeypatch, lang="en", reply=None, raises=None, retry=False, degr
     return await orch._answer_one(Q[lang], "nb", _scope(), Decision(lang=lang), retry=retry)
 
 
+WRONG_CALC = "AMD net revenue: 25,000 + 785 = 26,785 [1].\n" + META % ("answered", "[1]")
+
+
 @pytest.mark.parametrize("lang", ["en", "vi"])
-async def test_a_click_that_leaves_only_unverified_figures_says_sorry_for_the_figures_not_for_missing_information(monkeypatch, lang):
-    r = await run(monkeypatch, lang, UNVERIFIED, retry=True)
+async def test_a_click_that_leaves_a_wrong_calculation_says_sorry_for_the_figures_not_for_missing_information(monkeypatch, lang):
+    r = await run(monkeypatch, lang, WRONG_CALC, retry=True)
     assert RETRY_FIGURES_APOLOGY[lang] in r["answer"] and RETRY_APOLOGY[lang] not in r["answer"]
+
+
+@pytest.mark.parametrize("retry", [False, True])
+async def test_an_unverified_figure_is_kept_in_the_trace_but_not_shown(monkeypatch, retry):
+    """Owner 19/11: only a wrong written calculation reaches the user. A figure the checks could not trace adds no warning line, no apology and does
+    not make "search deeper" prominent; the trace still records it, so the admin review queue lists the answer."""
+    r = await run(monkeypatch, "en", UNVERIFIED, retry=retry)
+    assert "⚠️" not in r["answer"] and RETRY_FIGURES_APOLOGY["en"] not in r["answer"]
+    assert r["trace"]["verification"] == {"passed": False, "unverified_figures": ["$99,999"]}
+    assert r["trace"]["review"]["outcome"] == "accepted" and r["trace"]["review"]["first"][0]["check"] == "figure"
+    if not retry:
+        assert r["actions"]["search_more"] == {"prominent": False}
 
 
 async def test_a_click_that_still_finds_nothing_keeps_the_not_found_apology(monkeypatch):

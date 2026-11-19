@@ -204,3 +204,14 @@ def test_an_amount_written_like_a_year_before_a_unit_is_a_figure():
     assert status("Doanh thu năm 2019 là 1999 triệu USD [1].", LOSS) == {"1999": "verified"}
     assert check_numbers("Revenue was 1998 million in 2019 [1].", LOSS)["unverified"] == ["1998"]
     assert check_numbers("In 2019 and 2020 revenue grew [1].", LOSS)["checked"] == 0  # years stay years
+
+
+def test_a_year_heading_an_amount_with_its_currency_is_a_year():
+    """E2E planner fb_expert_012 (19/11): "the table adds later years: 2023 USD 159 million, 2024 USD 473 million" put 2023 and 2024 on the warning
+    line: the "USD" after the year belongs to the amount that follows it, so the year stays a year. "1999 million" / "1999 USD" stay amounts."""
+    chunks = [{"content": "| 2023 | 2024 | Thereafter |\n| 159 | 473 | 7,708 |"}]
+    for text in ("The table adds later years: 2023 USD 159 million, 2024 USD 473 million and USD 7,708 million thereafter [6].",
+                 "Later years: 2023 USD 159m and 2024 $473m [6].", "Các năm sau: 2023 USD 159 triệu, 2024 USD 473 triệu [6]."):
+        assert check_numbers(text, chunks)["unverified"] == [], text
+    assert check_numbers("Later years: 2023 USD 169 million [6].", chunks)["unverified"] == ["169"]  # the amount itself is still checked
+    assert check_numbers("Revenue was 1998 USD million in 2019 [1].", LOSS)["unverified"] == ["1998"]

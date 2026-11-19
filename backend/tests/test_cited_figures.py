@@ -51,7 +51,8 @@ def test_an_amount_is_explained_by_a_written_calculation_only():
 def test_the_review_turns_it_into_a_citation_finding():
     found = review.run_checks("Its revenue was $60,922 million [1].", CHUNKS, [AMD, NV], "en", policy_checks=False)
     assert [(f.check, f.text) for f in found] == [("citation", "[1]")] and "$60,922" in found[0].note
-    assert "some citations do not match their source" in review.annotate("Its revenue was $60,922 million [1].", found, "en")
+    # kept for the trace and the admin queue, not shown to the user (owner 19/11: the line shows only a wrong written calculation)
+    assert review.annotate("Its revenue was $60,922 million [1].", found, "en") == "Its revenue was $60,922 million [1]."
 
 
 def test_an_accounting_standard_is_not_a_figure():

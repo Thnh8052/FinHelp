@@ -247,7 +247,8 @@ class RAGWorkflowOrchestrator:
         not_found = (meta or {}).get("status") == "not_found"
         # Fell short (docs/Version_3/fail_cases.md): partial, not found, or figures still unverified. Never the apology or the output policy's refusal (also not_found).
         # The added line goes after the machine block, which split_answer removes.
-        short = ((meta or {}).get("status") in ("partial", "not_found") or not verification["passed"]) and not isinstance(answer, Unfinished) and text not in policy.BLOCKED.values()
+        # Only a shown problem counts: a figure or citation finding stays in the trace (verification) and the admin queue, not on the screen (owner 19/11)
+        short = ((meta or {}).get("status") in ("partial", "not_found") or checked["outcome"] == "annotated") and not isinstance(answer, Unfinished) and text not in policy.BLOCKED.values()
         lang = "vi" if decision.lang == "vi" else "en"
         status = (meta or {}).get("status")
         # read before a line is added ("+=" makes a plain str). "blocked": the fixed reply that replaced an answer breaking a safety rule twice (advice...):

@@ -29,8 +29,11 @@ YEAR_PERCENT = re.compile(r"(?:19|20)\d\d\s+%")  # "Full Year 2022 % change": a 
 
 
 def _year(a: Amount, text: str) -> bool:
-    """A year, unless a scale or currency word follows it: "1999 million" is an amount (19/11)."""
-    return a.is_year and not UNIT_WORD.match(text[a.end:].lstrip())
+    """A year, unless a scale or currency word follows it: "1999 million" is an amount (19/11). A currency word followed by a number belongs to that
+    number: "2023 USD 159 million" is the year 2023 (E2E planner fb_expert_012, 19/11)."""
+    rest = text[a.end:].lstrip()
+    unit = UNIT_WORD.match(rest)
+    return a.is_year and (not unit or bool(re.match(r"\s*[$€£]?\s*\d", rest[unit.end():])))
 
 
 def _figures(answer: str) -> List[Amount]:

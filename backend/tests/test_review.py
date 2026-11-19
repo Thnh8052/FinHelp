@@ -77,15 +77,20 @@ def test_there_is_no_rewrite_any_more():
     assert not hasattr(settings, "ANSWER_REPAIR_ENABLED")
 
 
-def test_the_note_under_the_answer_lists_what_stays_wrong_in_the_answers_language():
-    found = [review.Finding("figure", review.REPAIRABLE, "$99,999", ""), review.Finding("arithmetic", review.REPAIRABLE, "1 + 1 = 3", ""),
-             review.Finding("citation", review.REPAIRABLE, "[7]", ""), review.Finding("language", review.REPAIRABLE, "", "")]
-    vi = review.annotate("Câu trả lời." + META, found, "vi")
-    assert "⚠️ Lưu ý: số chưa đối chiếu được với đoạn trích hay phép tính trong câu trả lời: $99,999" in vi and "phép tính viết ra cho kết quả khác" in vi
-    assert "trích dẫn không khớp nguồn" in vi and vi.index("⚠️") < vi.index("<answer_meta>")
-    en = review.annotate("An answer.", found[:1], "en")
-    assert en.endswith("⚠️ Note: figures not traced to the excerpts or to a calculation in the answer: $99,999.")
-    assert review.annotate("An answer.", [review.Finding("language", review.REPAIRABLE, "", "")], "en") == "An answer."
+def test_the_note_under_the_answer_shows_only_a_wrong_written_calculation():
+    """Owner 19/11 (week12 audit of the 200 E2E planner answers): of 24 warning lines, 1 pointed at a real problem and none at the real error of a
+    wrong answer; the figure and citation findings were mostly the checker's own misreadings. The user now sees the line only for a written
+    calculation whose result is wrong (585 of 592 planted wrong results caught; 7 of 7 reports real on 923 stored answers, 15/11). Figure and
+    citation findings stay in the trace and the admin review queue."""
+    calc = review.Finding("arithmetic", review.REPAIRABLE, "1 + 1 = 3", "")
+    hidden = [review.Finding("figure", review.REPAIRABLE, "$99,999", ""), review.Finding("citation", review.REPAIRABLE, "[7]", ""),
+              review.Finding("language", review.REPAIRABLE, "", "")]
+    vi = review.annotate("Câu trả lời." + META, hidden + [calc], "vi")
+    assert "⚠️ Lưu ý: có phép tính viết ra cho kết quả khác với kết quả đã ghi." in vi and vi.index("⚠️") < vi.index("<answer_meta>")
+    assert "$99,999" not in vi and "trích dẫn" not in vi and "số chưa đối chiếu" not in vi
+    assert review.annotate("An answer.", [calc], "en").endswith("⚠️ Note: a written calculation gives a different result than the one stated.")
+    assert review.annotate("An answer.", hidden, "en") == "An answer."
+    assert review.annotate("Câu trả lời." + META, hidden, "vi") == "Câu trả lời." + META
 
 
 # ---------------------------------------------------------------- the orchestrator: one writing, then blocked, annotated or accepted
@@ -138,15 +143,17 @@ async def test_a_clean_answer_is_written_once_and_the_trace_says_so(monkeypatch)
     assert r["verification"] == {"passed": True, "unverified_figures": []}
 
 
-async def test_an_unverified_figure_is_noted_under_the_answer_in_its_language(monkeypatch):
+async def test_an_unverified_figure_is_traced_but_not_shown_in_either_language(monkeypatch):
+    """Owner 19/11: a figure the checks could not trace stays in the trace (verification, review findings) for the admin queue; no line is shown."""
     orch, _ = _orchestrator([], monkeypatch)
     calls = _model(orch, monkeypatch, "AMD revenue was $99,999 million [1].")
     r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
-    assert len(calls) == 1 and "⚠️ Note: figures not traced to the excerpts or to a calculation in the answer: $99,999" in r["answer"]
-    assert r["trace"]["review"]["outcome"] == "annotated" and not r["verification"]["passed"] and r["verification"]["unverified_figures"] == ["$99,999"]
+    assert len(calls) == 1 and "⚠️" not in r["answer"]
+    assert r["trace"]["review"]["outcome"] == "accepted" and not r["verification"]["passed"] and r["verification"]["unverified_figures"] == ["$99,999"]
+    assert [f["check"] for f in r["trace"]["review"]["first"]] == ["figure"]
     calls = _model(orch, monkeypatch, "Doanh thu AMD là 99,999 triệu USD [1].")
     r = await orch._answer_one("Doanh thu AMD năm 2024 là bao nhiêu?", "nb", _scope(), Decision(lang="vi"))
-    assert len(calls) == 1 and "⚠️ Lưu ý: số chưa đối chiếu được với đoạn trích hay phép tính trong câu trả lời: 99,999" in r["answer"]
+    assert len(calls) == 1 and "⚠️" not in r["answer"] and r["verification"]["unverified_figures"] == ["99,999"]
 
 
 async def test_an_answer_in_the_wrong_language_is_kept_as_it_is(monkeypatch):
