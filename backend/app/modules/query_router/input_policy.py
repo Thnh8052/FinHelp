@@ -583,7 +583,7 @@ async def rewrite_followup(question: str, history: Sequence[dict]) -> Optional[s
     turns = "\n".join(f"{h['role']}: {str(h.get('content', ''))[:(500 if i == last_answer else 300) if h.get('role') == 'assistant' else 400]}" for i, h in enumerate(recent))
     for _ in range(3):
         try:
-            raw = await chat_completion([{"role": "user", "content": REWRITE_PROMPT.format(history=turns, q=question)}], max_tokens=200, json_mode=True)
+            raw = await chat_completion([{"role": "user", "content": REWRITE_PROMPT.format(history=turns, q=question)}], max_tokens=200, json_mode=True, purpose="rewrite_followup")
         except LLMUnavailableError as exc:
             logger.warning(f"Follow-up rewrite skipped: {type(exc).__name__}")
             return None

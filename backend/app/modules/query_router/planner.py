@@ -161,7 +161,7 @@ async def _plan(question: str, catalog: Sequence[CatalogEntry], template: str) -
     for _ in range(2):
         try:
             raw = await chat_completion(
-                [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}], max_tokens=1500, json_mode=True
+                [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}], max_tokens=1500, json_mode=True, purpose="plan"
             )
         except LLMUnavailableError as exc:
             logger.warning(f"Multi-document planning skipped: {type(exc).__name__}")
@@ -237,7 +237,7 @@ async def unlisted_companies(question: str, catalog: Sequence[CatalogEntry]) -> 
     prompt = GUARD_PROMPT.format(catalog="\n".join(f"- {line}" for line in lines), q=question, terms=", ".join(terms))
     for _ in range(3):
         try:
-            raw = await chat_completion([{"role": "user", "content": prompt}], max_tokens=200, json_mode=True)
+            raw = await chat_completion([{"role": "user", "content": prompt}], max_tokens=200, json_mode=True, purpose="unlisted_check")
         except LLMUnavailableError as exc:
             logger.warning(f"Scope check skipped: {type(exc).__name__}")
             return []
