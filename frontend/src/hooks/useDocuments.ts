@@ -3,6 +3,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { ApiError, errorText, signInHelps } from "../services/api";
 import { documentService } from "../services/documents";
 import { defaultSelection, DocumentRecord, isDocFailed, isDocProcessing } from "../types/notebook";
+import { mergeProblems, UploadProblem } from "../utils/uploadProblems";
 import { ShowToast } from "./useToast";
 
 /**
@@ -95,21 +96,27 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
       documents.filter((d) => !isDocFailed(d)).map((d) => d.file_name.toLowerCase())
     );
 
-    // One toast at a time: a file left out is said last, so the "uploaded" message cannot hide it (the list shows what was uploaded)
-    let problem: Parameters<ShowToast> | null = null;
+    // One toast at a time, and one message for every file left out (mergeProblems): it is said last, so the "uploaded" message cannot hide it
+    // (the list shows what was uploaded)
+    const problems: UploadProblem[] = [];
+    const showProblems = () => {
+      const merged = mergeProblems(problems, { several: t.toasts.someNotUploaded, more: t.toasts.andMore });
+      if (merged) showToast(merged.message, merged.level, merged.actionLabel, merged.onAction);
+      return merged !== null;
+    };
     const filesToUpload: File[] = [];
     for (const f of uniqueFiles) {
       if (existingActiveNames.has(f.name.toLowerCase())) {
-        problem = [t.toasts.duplicateSkipped.replace("{name}", f.name), "warning"];
+        problems.push({ message: t.toasts.duplicateSkipped.replace("{name}", f.name), level: "warning" });
       } else if (f.size > maxFileSizeMb * 1024 * 1024) {
-        problem = [t.toasts.tooLarge.replace("{name}", f.name).replace("{mb}", String(maxFileSizeMb)), "warning"];
+        problems.push({ message: t.toasts.tooLarge.replace("{name}", f.name).replace("{mb}", String(maxFileSizeMb)), level: "warning" });
       } else {
         filesToUpload.push(f);
       }
     }
 
     if (filesToUpload.length === 0) {
-      if (problem) showToast(...problem);
+      showProblems();
       return;
     }
     filesToUpload.sort((a, b) => a.size - b.size);  // tải lần lượt nên file nhẹ vào hàng trước và xong trước
@@ -136,22 +143,20 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
             const detail = errorText(fileErr, t, t.toasts.uploadFailed.replace("{name}", file.name));
             // Signing in helps only on 401 or for a guest's limit; a signed-in account at its limit gets a plain warning
             if (signInHelps(fileErr)) {
-              problem = [detail, "warning", t.toasts.signInNow, onLoginRequired];
+              problems.push({ message: detail, level: "warning", actionLabel: t.toasts.signInNow, onAction: onLoginRequired });
               break;
             } else if (fileErr.status === 403) {  // the notebook is full: the next files would be refused the same way
-              problem = [detail, "warning"];
+              problems.push({ message: detail, level: "warning" });
               break;
             } else if (fileErr.status === 409) {
-              problem = [detail, "warning"];
+              problems.push({ message: detail, level: "warning" });
             } else {
-              problem = [detail, "error"];
+              problems.push({ message: detail, level: "error" });
             }
           }
         }
       }
-      if (problem) {
-        showToast(...problem);
-      } else if (successCount > 0) {
+      if (!showProblems() && successCount > 0) {
         showToast(t.toasts.uploaded.replace("{n}", String(successCount)), "success");
       }
     } finally {

@@ -655,6 +655,8 @@ export interface TranslationSchema {
     allReady: string;
     duplicateSkipped: string;
     tooLarge: string;
+    someNotUploaded: string; // a batch left several files out: "{n} files were not uploaded:" then one line each
+    andMore: string; // "and {n} more" after the first three lines
     uploaded: string;
     docDeleted: string;
     docErrorsNoQuery: string;

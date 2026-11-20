@@ -31,12 +31,15 @@ interface MarkdownRendererProps {
   content: string;
   citations?: CitationItem[];
   onSelectCitation?: (citation: CitationItem) => void;
+  /** The number each [n] of the text is shown with (utils/citationNumbers); without it the text's own numbers are shown. */
+  numbering?: Map<number, number>;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   citations = [],
   onSelectCitation,
+  numbering,
 }) => {
   const { t } = useLanguage();
   // Helper to render text with clickable citation badges [n]
@@ -73,7 +76,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             }
           }}
         >
-          {citeNum}
+          {numbering?.get(citeNum) ?? citeNum}
         </button>
       );
 
