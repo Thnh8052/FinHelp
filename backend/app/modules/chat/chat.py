@@ -185,9 +185,12 @@ async def retried_message(chat_repo: Any, notebook_id: str, retry_of: Optional[s
 
 
 def deeper_of(message: MessageRecord) -> Dict[str, List[str]]:
-    """What a "search deeper" click on `message` leaves out (every excerpt it sent: the trace's chunk_ids, else its citations) and keeps (the ones it cited)."""
+    """What a "search deeper" click on `message` leaves out of the new search (every excerpt it sent: the trace's chunk_ids, else its citations), keeps (the ones it
+    cited) and may keep besides (`also`: the others it sent, in the order sent, the best first; the answer takes as many as DEEPER_KEEP_SENT_SHARE allows)."""
     sent = [c.chunk_id for c in message.citations if c.chunk_id]
-    return {"exclude": list((message.trace_info or {}).get("chunk_ids") or sent), "keep": [c.chunk_id for c in message.citations if c.cited and c.chunk_id]}
+    exclude = list((message.trace_info or {}).get("chunk_ids") or sent)
+    keep = [c.chunk_id for c in message.citations if c.cited and c.chunk_id]
+    return {"exclude": exclude, "keep": keep, "also": [i for i in exclude if i not in set(keep)]}
 
 
 def uses_answer_documents(req: "QueryRequest") -> bool:

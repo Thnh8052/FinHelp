@@ -212,12 +212,13 @@ class RAGWorkflowOrchestrator:
             return empty_plan_reply(scope, found, targets, decision, retry)
         plan, sub_queries, retrieved, labels = found.plan, found.sub_queries, found.retrieved, found.labels
         names = {d.document_id: readable_label(d) for d in scope}  # how notes and the understood line name a report (labels keep the excerpt headers' form)
-        if deeper and deeper.get("keep"):  # "search deeper": the excerpts the first answer cited, then the new ones, within the same budget
-            kept = await self.hybrid_search._hydrate(list(deeper["keep"]), {})
-            for c in kept:
+        if deeper and (deeper.get("keep") or deeper.get("also")):  # "search deeper": the cited excerpts, the best of the others sent, then the new ones, within the same budget
+            kept = await self.hybrid_search._hydrate(list(deeper.get("keep") or []), {}) if deeper.get("keep") else []
+            also = await self.hybrid_search._hydrate(list(deeper["also"]), {}) if deeper.get("also") and settings.DEEPER_KEEP_SENT_SHARE > 0 else []
+            for c in kept + also:
                 c["document_label"] = labels.get(c["document_id"], c["document_id"])
             retrieved = found.retrieved = kept_then_new(kept, retrieved, settings.MULTIDOC_PLANNED_MAX_TOKENS,
-                                                        lambda c: excerpt_tokens(c["content"], c.get("token_count") or 0))
+                                                        lambda c: excerpt_tokens(c["content"], c.get("token_count") or 0), also, settings.DEEPER_KEEP_SENT_SHARE)
         # flagged at upload, or by today's rules (they grew 19/11: a document uploaded before is read again, a regex over the few excerpts used)
         flagged = [n for n, c in enumerate(retrieved, 1) if "suspicious_instruction" in (c.get("flags") or []) or instruction_like(c.get("content", ""))]
         if flagged:
@@ -692,11 +693,21 @@ def empty_plan_reply(scope: List[DocumentRecord], found: RetrievalResult, target
                       "decision": {"action": decision.action, "assumption": decision.assumption, "flags": decision.flags}, "timings": dict(found.timings)}}
 
 
-def kept_then_new(kept: List[Dict[str, Any]], new: List[Dict[str, Any]], budget: int, count: Callable[[Dict[str, Any]], int]) -> List[Dict[str, Any]]:
-    """The context of a "search deeper" answer: every kept excerpt (the ones the first answer cited) first, then the new ones while the tokens stay within
-    `budget` (a new excerpt equal to a kept one is dropped)."""
+def kept_then_new(kept: List[Dict[str, Any]], new: List[Dict[str, Any]], budget: int, count: Callable[[Dict[str, Any]], int],
+                  also: Sequence[Dict[str, Any]] = (), also_share: float = 0.0) -> List[Dict[str, Any]]:
+    """The context of a "search deeper" answer: every kept excerpt (the ones the first answer cited) first; then the best of the others it was sent (`also`, in the
+    order sent) while the kept and these use at most `also_share` of `budget`; then the new ones while the tokens stay within `budget` (a new excerpt equal to one
+    already in is dropped)."""
     out, used = list(kept), sum(count(c) for c in kept)
     held = {c.get("chunk_id") for c in kept}
+    for c in also:
+        if c.get("chunk_id") in held:
+            continue
+        if used + count(c) > budget * also_share:
+            break
+        out.append(c)
+        held.add(c.get("chunk_id"))
+        used += count(c)
     for c in new:
         if c.get("chunk_id") in held:
             continue
