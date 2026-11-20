@@ -2,6 +2,7 @@
 export interface UploadProblem {
   message: string;
   level: "warning" | "error";
+  file?: string; // the file a server error is about (its message does not name it); shown before the message when several problems are listed
   actionLabel?: string;
   onAction?: () => void;
 }
@@ -13,14 +14,16 @@ export interface ProblemTexts {
 
 const LISTED = 3;
 
-/** null for no problem; the problem itself for one; for several, one message that lists the first three (each said once) and counts the rest.
- * The worst level wins and the first action (sign in) is kept. */
+const line = (p: UploadProblem) => (p.file ? `${p.file}: ${p.message}` : p.message);
+
+/** null for no problem; the problem itself for one; for several, one message that lists the first three (each said once, with its file's name when the
+ * message does not carry it) and counts the rest. The worst level wins and the first action (sign in) is kept. */
 export function mergeProblems(problems: UploadProblem[], texts: ProblemTexts): UploadProblem | null {
-  const unique = problems.filter((p, i) => problems.findIndex((q) => q.message === p.message) === i);
+  const unique = problems.filter((p, i) => problems.findIndex((q) => line(q) === line(p)) === i);
   if (unique.length === 0) return null;
   if (unique.length === 1) return unique[0];
   const rest = unique.length - LISTED;
-  const lines = unique.slice(0, LISTED).map((p) => `• ${p.message}`);
+  const lines = unique.slice(0, LISTED).map((p) => `• ${line(p)}`);
   if (rest > 0) lines.push(texts.more.replace("{n}", String(rest)));
   const action = unique.find((p) => p.actionLabel);
   return {

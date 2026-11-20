@@ -43,6 +43,13 @@ check("the same message twice is said once", () => {
   const out = mergeProblems([warn("a.pdf already exists"), warn("a.pdf already exists"), warn("b.pdf is too large")], texts);
   assert.equal(out.message, "2 files were not uploaded:\n• a.pdf already exists\n• b.pdf is too large");
 });
+check("a problem that names its file (a server error) shows the name in the list, so each line says which file; alone it stays as it is", () => {
+  const bad = (file, message) => ({ message, level: "warning", file });
+  const out = mergeProblems([bad("notes.txt", "Only PDF files are supported."), bad("fake.pdf", "This file is not a valid PDF."), bad("second.pdf", "This file is not a valid PDF.")], texts);
+  assert.equal(out.message, ["3 files were not uploaded:", "• notes.txt: Only PDF files are supported.", "• fake.pdf: This file is not a valid PDF.", "• second.pdf: This file is not a valid PDF."].join("\n"));
+  const alone = bad("fake.pdf", "This file is not a valid PDF.");
+  assert.equal(mergeProblems([alone], texts).message, "This file is not a valid PDF.");
+});
 check("a sign-in action is kept, so the button still shows", () => {
   const onAction = () => {};
   const out = mergeProblems([warn("a"), { message: "guest limit", level: "warning", actionLabel: "Sign in", onAction }], texts);

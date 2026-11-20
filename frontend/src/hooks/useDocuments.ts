@@ -143,15 +143,15 @@ export function useDocuments(notebookId: string, maxSources: number, maxFileSize
             const detail = errorText(fileErr, t, t.toasts.uploadFailed.replace("{name}", file.name));
             // Signing in helps only on 401 or for a guest's limit; a signed-in account at its limit gets a plain warning
             if (signInHelps(fileErr)) {
-              problems.push({ message: detail, level: "warning", actionLabel: t.toasts.signInNow, onAction: onLoginRequired });
+              problems.push({ message: detail, level: "warning", file: file.name, actionLabel: t.toasts.signInNow, onAction: onLoginRequired });
               break;
             } else if (fileErr.status === 403) {  // the notebook is full: the next files would be refused the same way
-              problems.push({ message: detail, level: "warning" });
+              problems.push({ message: detail, level: "warning", file: file.name });
               break;
             } else if (fileErr.status === 409) {
-              problems.push({ message: detail, level: "warning" });
+              problems.push({ message: detail, level: "warning", file: file.name });
             } else {
-              problems.push({ message: detail, level: "error" });
+              problems.push({ message: detail, level: "error", file: file.name });
             }
           }
         }
