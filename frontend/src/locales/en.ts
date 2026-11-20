@@ -666,6 +666,8 @@ export const en: TranslationSchema = {
     allReady: "All documents are ready. You can now ask questions.",
     duplicateSkipped: "Document \"{name}\" already exists in this notebook. Skipping duplicate file.",
     tooLarge: "File \"{name}\" exceeds the {mb} MB limit of your account.",
+    someNotUploaded: "{n} files were not uploaded:",
+    andMore: "and {n} more",
     uploaded: "Uploaded {n} report(s)! Extracting document layout.",
     docDeleted: "Document deleted successfully.",
     docErrorsNoQuery: "This document encountered processing errors and cannot be queried. Please re-upload.",

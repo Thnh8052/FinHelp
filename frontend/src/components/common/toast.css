@@ -51,6 +51,7 @@
   line-height: 1.4;
   font-weight: 500;
   color: inherit;
+  white-space: pre-line; /* a batch of rejected files lists one per line */
 }
 
 .toast-action-btn {
