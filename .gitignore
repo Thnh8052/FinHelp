@@ -62,3 +62,6 @@ review_gold_200.html
 
 # Tài liệu báo cáo + demo tuần 12 (bản sao kết quả, audit), không đẩy lên repo
 week12/
+
+# a review sheet of the gold set, kept on disk but out of the repository
+/Review*.csv
