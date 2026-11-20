@@ -68,6 +68,8 @@ Mở `backend/.env` và đặt ít nhất:
 
 Các biến khác (MongoDB, Qdrant, lưu trữ, mô hình, email) đã có giá trị mặc định đúng với `docker-compose.yml` và được giải thích ngay trong `.env.example`. Muốn thử nhanh với PDF: `PARSER_ENGINE=pymupdf` (nhanh, bảng kém hơn Docling).
 
+**Đường nhẹ, không cài mô hình** (máy GPU từ xa: Kaggle, Colab): bỏ hai dòng `pip install torch ...` và `pip install -r requirements-ml.txt` ở trên, chỉ cài `requirements.txt` (đã có `pymupdf`, `transformers` và `docling-core`), rồi đặt `REMOTE_GPU_URL=<địa chỉ đường hầm>` trong `backend/.env`. Backend khởi động, nạp PDF (Docling và BGE-M3 chạy trên máy từ xa) và trả lời được; đã kiểm ngày 20/11 trên bản clone sạch: tải một báo cáo 6 trang mất 16 đến 30 giây, câu hỏi đầu tiên trả lời sau 11 giây.
+
 ```bash
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
@@ -95,7 +97,7 @@ Mở http://localhost:5173. Vite chuyển `/api` sang `127.0.0.1:8000`; cần ba
 ## Kiểm thử
 
 ```bash
-cd backend && python -m pytest -q          # test backend, không cần mạng, GPU hay khóa API
+cd backend && python -m pytest -q          # test backend, không cần mạng, GPU hay khóa API (3 test về GPU bị bỏ qua nếu chưa cài torch)
 cd frontend && npm run build               # kiểm tra kiểu TypeScript và dựng bản build
 cd frontend && npm run test:highlight      # test thuật toán tô sáng trích dẫn (Node 22.18+)
 ```
