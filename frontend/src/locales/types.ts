@@ -495,6 +495,23 @@ export interface TranslationSchema {
       emptyHint: string;
       emptyReviewed: string;
     };
+    /** What the system did for one answer, step by step (backend admin/steps.py); a code with no words shows as it is. */
+    steps: {
+      title: string;
+      loading: string;
+      failed: string;
+      none: string;
+      stoppedAt: string;
+      total: string;
+      calls: string;
+      callLine: string;
+      tokens: string;
+      outcomes: Record<"ok" | "warn" | "stopped" | "skipped", string>;
+      names: Record<"gate" | "input" | "guard" | "scope" | "plan" | "search" | "write" | "check" | "buttons", string>;
+      facts: Record<string, string>;
+      codes: Record<string, Record<string, string>>;
+      purposes: Record<string, string>;
+    };
     kpi: {
       questions: string;
       tokens: string;
