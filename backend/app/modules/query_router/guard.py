@@ -121,7 +121,7 @@ async def classify(message: str, reports: Sequence[str]) -> Verdict:
     try:
         raw = await asyncio.wait_for(
             chat_completion([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}], max_tokens=60, json_mode=True,
-                            timeout=settings.GUARD_TIMEOUT_SECONDS, retries=1, thinking=False),
+                            timeout=settings.GUARD_TIMEOUT_SECONDS, retries=1, thinking=False, purpose="guard"),
             settings.GUARD_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         return Verdict(_without_call(), time.perf_counter() - t0, "timeout")

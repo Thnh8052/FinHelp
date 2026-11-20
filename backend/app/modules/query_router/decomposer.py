@@ -42,6 +42,7 @@ async def decompose_query(question: str) -> Tuple[str, List[str]]:
             [{"role": "system", "content": SYSTEM}, {"role": "user", "content": (PROMPT_VI if vi else PROMPT).format(q=question)}],
             max_tokens=400,
             json_mode=True,
+            purpose="decompose",
         )
         parsed = json.loads(raw)
         queries = [q for q in parsed.get("queries", []) if isinstance(q, str) and q.strip()]

@@ -21,6 +21,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from app.infrastructure.database.collections import MESSAGES_COLLECTION  # noqa: E402
 from app.infrastructure.database.mongodb import MongoManager  # noqa: E402
+from app.modules.chat.trace_stats import calls_by_purpose  # noqa: E402
 
 # understood / first_text: when the streamed chat first showed the understanding line and the answer text (seconds from the start)
 STAGES = ("understood", "first_text", "plan", "search", "generate", "verify_repair", "total")
@@ -50,6 +51,12 @@ async def main(last: int):
         group = [t["timings"] for t in traces if t.get("routing") == route]
         first, total = [g["first_text"] for g in group if "first_text" in g], [g["total"] for g in group]
         print(f"| {route} | {len(group)} | {pct(first, 50)} / {pct(first, 95)} | {pct(total, 50)} / {pct(total, 95)} |")
+    rows = calls_by_purpose(traces)
+    if rows:  # answers stored since 20/11/2026 list each call (trace_info.llm_calls)
+        print("\n| call | n | not ok | seconds p50 / p90 / max | first piece p50 s | prompt tokens (mean) | completion tokens (mean) |\n|---|---|---|---|---|---|---|")
+        for r in rows:
+            print(f"| {r['purpose']} | {r['n']} | {r['failed']} | {r['seconds_p50']} / {r['seconds_p90']} / {r['seconds_max']} | {r['first_piece_p50'] if r['first_piece_p50'] is not None else '-'} | "
+                  f"{r['prompt_tokens_mean']} | {r['completion_tokens_mean']} |")
     calls = [t.get("llm", {}).get("calls", 0) for t in traces]
     toks = [t.get("llm", {}).get("prompt_tokens", 0) + t.get("llm", {}).get("completion_tokens", 0) for t in traces]
     print(f"\nLLM calls / question: mean {np.mean(calls):.2f}, p95 {pct(calls, 95)}, max {max(calls)}")

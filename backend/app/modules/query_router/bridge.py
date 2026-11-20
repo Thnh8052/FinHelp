@@ -94,7 +94,7 @@ async def continue_plan(question: str, then: str, chunks: Sequence[Dict[str, Any
     excerpts = "\n\n".join(f"[{n}] {c.get('document_label') or c['document_id']}\n{c['content']}" for n, c in enumerate(chunks, 1))
     prompt = TEMPLATE.format(catalog="\n".join(e.line(alias) for alias, e in ids.items()), q=question, then=then, excerpts=excerpts)
     try:
-        raw = await asyncio.wait_for(chat_completion([{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}], max_tokens=1500, json_mode=True),
+        raw = await asyncio.wait_for(chat_completion([{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}], max_tokens=1500, json_mode=True, purpose="bridge"),
                                      settings.MULTIHOP_BRIDGE_TIMEOUT_SECONDS)
     except (LLMUnavailableError, asyncio.TimeoutError) as exc:
         logger.warning(f"Second step skipped: {type(exc).__name__}")

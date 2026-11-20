@@ -17,7 +17,7 @@ from app.modules.chat import events
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.documents.document import DocumentRecord
 from app.modules.documents.catalog_edit import needs_confirmation
-from app.modules.generation.llm_client import REQUEST_USAGE, LLMTruncatedError, LLMUnavailableError
+from app.modules.generation.llm_client import REQUEST_CALLS, REQUEST_USAGE, LLMTruncatedError, LLMUnavailableError
 from app.modules.query_router.input_policy import (COMPARE_CUE, MSG, PRIOR_YEAR_NOTE, TERMINAL, Decision, SourceInfo, decide, detect_language, instruction_like,
                                                    mentioned_sources, rewrite_followup)
 from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_from_focus, focus_view
@@ -353,14 +353,17 @@ class RAGWorkflowOrchestrator:
         """The whole question, with its cost in the trace (P7): LLM calls and tokens of this request, total seconds, and what the
         user was shown as the understanding (kept with the message so a reloaded chat shows it again)."""
         usage: Counter = Counter()
-        token = REQUEST_USAGE.set(usage)
+        calls: List[Dict[str, Any]] = []
+        token, token_calls = REQUEST_USAGE.set(usage), REQUEST_CALLS.set(calls)
         t0 = time.perf_counter()
         try:
             result = await self._guarded(query, notebook_id, **kwargs)
         finally:
             REQUEST_USAGE.reset(token)
+            REQUEST_CALLS.reset(token_calls)
         trace = result.setdefault("trace", {})
         trace["llm"] = dict(usage)
+        trace["llm_calls"] = calls  # one record per call: what it was for, seconds, tokens (llm_client.REQUEST_CALLS)
         trace.setdefault("timings", {})["total"] = round(time.perf_counter() - t0, 2)
         trace["timings"].update(events.first_seen(t0))  # streamed chat: when the user first saw the understanding and the answer text
         if result.get("understood") or result.get("alternatives"):  # the buttons of an answer that fell short come without an understanding

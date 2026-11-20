@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from collections import Counter
 from contextvars import ContextVar
 from typing import Callable, Dict, List, Optional, Tuple
@@ -17,6 +18,11 @@ RETRYABLE_STATUS = {408, 409, 425, 429}
 USAGE: Counter = Counter()
 # The same counts for the request being served (set by the orchestrator, None elsewhere): calls and tokens go into its trace.
 REQUEST_USAGE: ContextVar = ContextVar("request_usage", default=None)
+# One record per call of the request being served (set by the orchestrator, None elsewhere; goes into its trace as llm_calls): what the call was for (`purpose`),
+# seconds with retries, seconds to the first piece of a streamed one, attempts, how it ended, tokens. REQUEST_USAGE keeps only the sum.
+REQUEST_CALLS: ContextVar = ContextVar("request_calls", default=None)
+_CALL: ContextVar = ContextVar("llm_call", default=None)  # the token counts of the call being made, to put in its record
+TOKEN_KEYS = ("prompt_tokens", "completion_tokens", "reasoning_tokens", "prompt_cache_hit_tokens", "prompt_cache_miss_tokens")
 
 
 class LLMUnavailableError(DomainException):
@@ -36,6 +42,8 @@ def _record_usage(usage: Optional[Dict]) -> None:
     USAGE.update(counts)
     if REQUEST_USAGE.get() is not None:
         REQUEST_USAGE.get().update(counts)
+    if _CALL.get() is not None:
+        _CALL.get().update(counts)
 
 
 def _drop(piece: str) -> None:
@@ -79,8 +87,10 @@ async def chat_completion(
     on_delta: Optional[Callable[[str], None]] = None,
     thinking: bool = True,
     stream: bool = False,
+    purpose: str = "",
 ) -> str:
-    """Call the DeepSeek chat-completions API (temperature 0) with timeout and exponential backoff.
+    """What the call is for (`purpose`: guard, plan, answer...) and how long it took go into the request's llm_calls (REQUEST_CALLS).
+    Call the DeepSeek chat-completions API (temperature 0) with timeout and exponential backoff.
     `max_tokens` is raised to LLM_MIN_MAX_TOKENS: the reasoning of deepseek-flash counts against it, and a small budget made the
     planner come back empty on ambiguous questions (finish_reason 'length', no content). A cut reply is retried with twice the budget.
     With `on_delta` the first attempt's pieces are passed to it as they arrive; a retry is not passed on (the caller receives the whole text
@@ -89,6 +99,32 @@ async def chat_completion(
     14/11, a non-streamed generation sends no byte until it ends (a 39 s one: headers at 0.5 s, the whole body at 39.0 s), so the read timeout then limits the whole
     generation (80 s is about 17,000 tokens) and a longer answer would time out, be asked again the same way, and fail. A stream sends bytes all along: the timeout
     only counts silence."""
+    started = time.perf_counter()
+    note: Dict = {"attempts": 0, "status": "failed", "first": None}
+    listener = on_delta
+    if REQUEST_CALLS.get() is not None and (on_delta is not None or stream):  # a streamed call: when its first piece arrived, the listener still gets every piece
+        def on_delta(piece: str) -> None:
+            if note["first"] is None:
+                note["first"] = time.perf_counter()
+            (listener or _drop)(piece)
+    counts: Counter = Counter()
+    token = _CALL.set(counts)
+    try:
+        return await _complete(messages, max_tokens, json_mode, timeout, retries, on_delta, thinking, stream, note)
+    except asyncio.CancelledError:  # the guard gives up on a slow call
+        note["status"] = "cancelled"
+        raise
+    finally:
+        _CALL.reset(token)
+        record = REQUEST_CALLS.get()
+        if record is not None:
+            record.append({"purpose": purpose, "seconds": round(time.perf_counter() - started, 2), "attempts": note["attempts"], "status": note["status"],
+                           "first_piece_seconds": None if note["first"] is None else round(note["first"] - started, 2), "thinking": thinking,
+                           **{k: counts.get(k, 0) for k in TOKEN_KEYS}})
+
+
+async def _complete(messages: List[Dict[str, str]], max_tokens: int, json_mode: bool, timeout: float, retries: int, on_delta: Optional[Callable[[str], None]],
+                    thinking: bool, stream: bool, note: Dict) -> str:
     if not settings.DEEPSEEK_API_KEY:
         raise LLMUnavailableError(Code.LLM_NOT_CONFIGURED)
 
@@ -109,6 +145,7 @@ async def chat_completion(
     streaming = stream or on_delta is not None
     async with httpx.AsyncClient(timeout=timeout) as client:
         for attempt in range(1, retries + 1):
+            note["attempts"] = attempt
             sink, on_delta = on_delta, None  # pieces go to the listener for the first attempt only: those of a second one would repeat the first
             try:
                 if streaming:
@@ -128,10 +165,13 @@ async def chat_completion(
                             payload["max_tokens"] = min(payload["max_tokens"] * 2, settings.LLM_MAX_TOKENS_CEILING)
                             continue
                         logger.warning(f"LLM reply still cut at max_tokens={payload['max_tokens']}, the ceiling: no usable result")
+                        note["status"] = "truncated"
                         raise LLMTruncatedError(Code.LLM_UNAVAILABLE)  # not the empty or half text: no caller may take it for an answer
+                    note["status"] = "ok"
                     return content
                 if status < 500 and status not in RETRYABLE_STATUS:
                     # Auth / bad-request errors do not heal by retrying.
+                    note["status"] = "rejected"
                     raise LLMUnavailableError(Code.LLM_REJECTED, status=status)
                 logger.warning(f"LLM call attempt {attempt}/{retries}: HTTP {status}")
             except (httpx.HTTPError, json.JSONDecodeError) as exc:
