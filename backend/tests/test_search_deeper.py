@@ -91,9 +91,9 @@ def test_what_a_clicked_answer_sent_and_cited():
                            citations=[{"citation_id": "c1", "chunk_id": "a1", "document_id": "d1", "page": 1, "snippet": "x", "cited": True},
                                       {"citation_id": "c2", "chunk_id": "a2", "document_id": "d1", "page": 2, "snippet": "y", "cited": False}],
                            trace_info={"chunk_ids": ["a1", "a2", "a3"]})
-    assert chat_api.deeper_of(traced) == {"exclude": ["a1", "a2", "a3"], "keep": ["a1"]}
+    assert chat_api.deeper_of(traced) == {"exclude": ["a1", "a2", "a3"], "keep": ["a1"], "also": ["a2", "a3"]}  # also: sent and not cited, in the order sent
     older = traced.model_copy(update={"trace_info": {}})  # an answer stored before the trace kept chunk ids: its citations list what was sent
-    assert chat_api.deeper_of(older) == {"exclude": ["a1", "a2"], "keep": ["a1"]}
+    assert chat_api.deeper_of(older) == {"exclude": ["a1", "a2"], "keep": ["a1"], "also": ["a2"]}
 
 
 async def test_a_deeper_click_reaches_the_orchestrator():
@@ -107,7 +107,7 @@ async def test_a_deeper_click_reaches_the_orchestrator():
     clicked = MessageRecord(message_id="m2", notebook_id="nb", role="assistant", content="...", trace_info={"chunk_ids": ["a1"]})
     adm = chat_api._Admitted(types.SimpleNamespace(focus_state={}), ["d1"], [], Orchestrator(), [], None, retry_of=clicked)
     await chat_api._answered(adm, chat_api.QueryRequest(notebook_id="nb", query="q", document_ids=["d1"], retry_of="m2", deeper=True), "u1")
-    assert seen["retry"] is True and seen["deeper"] == {"exclude": ["a1"], "keep": []}
+    assert seen["retry"] is True and seen["deeper"] == {"exclude": ["a1"], "keep": [], "also": ["a1"]}
     seen.clear()
     await chat_api._answered(adm, chat_api.QueryRequest(notebook_id="nb", query="q", document_ids=["d1"], retry_of="m2"), "u1")
     assert seen["retry"] is True and seen.get("deeper") is None  # a chooser click: a new search over the ticked documents, nothing left out
@@ -217,3 +217,76 @@ async def test_an_answer_that_was_not_a_follow_up_is_asked_as_it_was():
     await chat_api._answered(adm, chat_api.QueryRequest(notebook_id="nb", query="What was revenue?", document_ids=["d1"], retry_of="m2", deeper=True), "u1")
     assert seen["query"] == "What was revenue?" and seen["history"] == [{"role": "user", "content": "h"}] and seen["focus_state"] == {"topic": "t"}
     assert "asked_as" not in seen
+
+
+# ------------------------------------------------------------------ the best excerpts the first answer did not cite stay (C2, 20/11)
+def _c(i, tokens=10):
+    return {"chunk_id": i, "document_id": "d1", "page": 1, "content": f"text of {i}", "token_count": tokens}
+
+
+def test_the_best_uncited_excerpts_stay_within_their_share_of_the_budget():
+    from app.modules.chat.orchestrator import kept_then_new
+
+    kept = [_c("k")]
+    also = [_c("u1"), _c("u2"), _c("u3")]  # the order they were sent: the best first
+    new = [_c(f"n{i}") for i in range(6)]
+    out = kept_then_new(kept, new, budget=60, count=lambda c: c["token_count"], also=also, also_share=0.5)
+    # the cited one (10) and uncited ones up to half the budget (30): k, u1, u2; the new ones take the other half
+    assert [c["chunk_id"] for c in out] == ["k", "u1", "u2", "n0", "n1", "n2"]
+    assert sum(c["token_count"] for c in out) <= 60
+
+
+def test_without_a_share_nothing_uncited_stays_and_a_duplicate_is_dropped():
+    from app.modules.chat.orchestrator import kept_then_new
+
+    kept, also, new = [_c("k")], [_c("u1")], [_c("u1"), _c("n0")]
+    assert [c["chunk_id"] for c in kept_then_new(kept, new, budget=40, count=lambda c: c["token_count"], also=also, also_share=0.0)] == ["k", "u1", "n0"]  # u1 comes back only as a new one
+    assert [c["chunk_id"] for c in kept_then_new(kept, new, budget=40, count=lambda c: c["token_count"], also=also, also_share=0.5)] == ["k", "u1", "n0"]
+    assert [c["chunk_id"] for c in kept_then_new(kept, [], budget=40, count=lambda c: c["token_count"])] == ["k"]  # no also given: as before
+
+
+def test_cited_excerpts_alone_may_pass_the_share_but_nothing_uncited_is_added_then():
+    from app.modules.chat.orchestrator import kept_then_new
+
+    kept = [_c("k1", 20), _c("k2", 20)]  # 40 of 60: already past half
+    out = kept_then_new(kept, [_c("n0")], budget=60, count=lambda c: c["token_count"], also=[_c("u1")], also_share=0.5)
+    assert [c["chunk_id"] for c in out] == ["k1", "k2", "n0"]
+
+
+async def test_a_click_writes_from_the_cited_the_best_uncited_and_the_new_excerpts(monkeypatch):
+    import types
+
+    from app.modules.chat import orchestrator as orch_mod
+    from app.modules.query_router.input_policy import Decision
+    from tests.test_input_policy import _doc, _orchestrator
+
+    docs = [_doc("d1", "alpha.pdf", company_name="Alpha Inc.", fiscal_year=2023, report_type="10-K")]
+    orch, _ = _orchestrator(docs, monkeypatch)
+    store = {i: _c(i) for i in ("k", "u1", "u2", "u3")}
+    seen = {}
+
+    async def hydrate(ids, scores, notebook_id=None):
+        return [dict(store[i]) for i in ids]
+
+    async def retrieve(query, notebook_id, scope, forced=None, exclude=None):
+        seen["exclude"] = set(exclude or ())
+        return orch_mod.RetrievalResult(scope, {"d1": "Alpha | 10-K | FY2023"}, [], [], [dict(_c(f"n{i}"), document_id="d1") for i in range(5)], "targets_single")
+
+    async def generate(question, chunks, notes=None, max_tokens=1200):
+        seen["context"] = [c["chunk_id"] for c in chunks]
+        return "Alpha revenue was 5 [1]."
+
+    orch.hybrid_search = types.SimpleNamespace(_hydrate=hydrate)
+    monkeypatch.setattr(orch, "retrieve", retrieve)
+    orch.__dict__.pop("_answer", None)
+    monkeypatch.setattr(orch_mod, "generate_answer", generate)
+    monkeypatch.setattr(settings, "MULTIDOC_TOKEN_UNIT", "stored")
+    monkeypatch.setattr(settings, "MULTIDOC_PLANNED_MAX_TOKENS", 80)
+    monkeypatch.setattr(settings, "DEEPER_KEEP_SENT_SHARE", 0.5)
+    await orch._answer_one("What was Alpha's revenue?", "nb", docs, Decision(lang="en"), retry=True, deeper={"exclude": ["k", "u1", "u2", "u3"], "keep": ["k"], "also": ["u1", "u2", "u3"]})
+    assert seen["exclude"] == {"k", "u1", "u2", "u3"}  # the new search still leaves everything sent out
+    assert seen["context"] == ["k", "u1", "u2", "u3", "n0", "n1", "n2", "n3"]  # 4 kept (40 of the 80), 4 new
+    seen.clear()
+    monkeypatch.setattr(settings, "DEEPER_KEEP_SENT_SHARE", 0.0)  # the old rule: only the cited stay
+    await orch._answer_one("What was Alpha's revenue?", "nb", docs, Decision(lang="en"), retry=True, deeper={"exclude": ["k", "u1", "u2", "u3"], "keep": ["k"], "also": ["u1", "u2", "u3"]})
+    assert seen["context"] == ["k", "n0", "n1", "n2", "n3", "n4"]

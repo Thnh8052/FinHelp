@@ -147,6 +147,10 @@ class Settings(BaseSettings):
     MULTIDOC_QUESTION_POOL: int = 15
     MULTIDOC_QUESTION_KEEP: int = 3
     MULTIDOC_QUESTION_LANE_PER_DOC: bool = True
+    # "Search deeper" keeps the excerpts the first answer cited, and after them the best of the others it was sent (in the order sent) while they use at most this share
+    # of MULTIDOC_PLANNED_MAX_TOKENS; the new search takes the rest. 0 = only the cited ones stay (the rule before 20/11: C2 measured that the click then dropped the evidence
+    # page of 11 of 23 answers that had it all, though the answer itself got no worse).
+    DEEPER_KEEP_SENT_SHARE: float = 0.5
     MULTIDOC_MAX_TOKENS: int = 8192  # without a plan (allocate)
     MULTIDOC_PLANNED_MAX_TOKENS: int = 13000  # with a plan (planned_ceilings)
     MULTIDOC_TOKEN_UNIT: str = "cl100k"  # "cl100k": what the answer call reads; "stored": the BGE-M3 count stored with each chunk (before TK-46)
