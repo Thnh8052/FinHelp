@@ -4,6 +4,7 @@ import { AskMode, ChatMessage, ChatStage, CitationItem, MentionOption } from "..
 import { SourceCard } from "./SourceCard";
 import { AnswerActions } from "./AnswerActions";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { barIndex, STAGES, waitingText } from "./waiting";
 import { citedFigures } from "../notebook/locateExcerpt";
 import { pinnedAfterScroll, scrollAfterChange, ScrollSnapshot, snapshotOf } from "./scrollPolicy";
 import { ArrowUp, ChevronDown, Flag, Plus, Sparkles } from "lucide-react";
@@ -39,7 +40,6 @@ interface ChatContainerProps {
   onLoadOlder?: () => void;
 }
 
-const STAGES: ChatStage[] = ["understanding", "searching", "writing", "checking"];
 /** The longest question the server takes (MAX_QUESTION_CHARS in backend query_router/input_policy.py); a longer one is refused after it was sent. */
 const MAX_QUESTION_CHARS = 5000;
 
@@ -81,8 +81,17 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
   // The real stage of the answer; a stage that lasts long says so, so the user knows nothing hung
   const stageName = loadingStage ?? "understanding";
-  const stageIndex = STAGES.indexOf(stageName);
+  const stageIndex = barIndex(stageName);
   const [isSlow, setIsSlow] = useState(false);
+  // "analyzing" (the model's first reasoning piece arrived): the seconds are counted from there
+  const [analyzingSeconds, setAnalyzingSeconds] = useState(0);
+  useEffect(() => {
+    setAnalyzingSeconds(0);
+    if (!isLoading || stageName !== "analyzing") return;
+    const since = Date.now();
+    const timer = setInterval(() => setAnalyzingSeconds(Math.floor((Date.now() - since) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [isLoading, stageName]);
   useEffect(() => {
     setIsSlow(false);
     if (!isLoading) return;
@@ -302,7 +311,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     <div className="chat-loading-card">
       <p className="chat-loading-status" role="status">
         <span className="chat-spinner" aria-hidden />
-        {isSlow ? t.workspace.loadingSlow : waitingClick && (stageName === "understanding" || stageName === "searching") ? t.workspace.clickStage[waitingClick] : t.workspace.loadingStages[stageName]}
+        {waitingText({ stage: stageName, slow: isSlow, click: waitingClick, seconds: analyzingSeconds, texts: { stages: t.workspace.loadingStages, slow: t.workspace.loadingSlow, click: t.workspace.clickStage } })}
       </p>
       <div className="chat-skeleton" aria-hidden>
         <i /><i /><i />

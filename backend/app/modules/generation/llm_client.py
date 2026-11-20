@@ -50,10 +50,12 @@ def _drop(piece: str) -> None:
     """The listener of a stream that nobody shows piece by piece."""
 
 
-async def _streamed(client: httpx.AsyncClient, url: str, headers: Dict, payload: Dict, on_delta: Callable[[str], None]) -> Tuple[int, str, Optional[str]]:
+async def _streamed(client: httpx.AsyncClient, url: str, headers: Dict, payload: Dict, on_delta: Callable[[str], None],
+                    on_thinking: Optional[Callable[[], None]] = None) -> Tuple[int, str, Optional[str]]:
     """(status, content, finish_reason) of a streamed call; every piece of content goes to `on_delta` as it arrives. The reasoning
-    of a thinking model (reasoning_content) is not passed on."""
+    of a thinking model (reasoning_content) is not passed on, only that it started: `on_thinking` is called once, at its first piece."""
     parts: List[str] = []
+    thinking_told = False
     finish: Optional[str] = None
     async with client.stream("POST", url, headers=headers, json={**payload, "stream": True, "stream_options": {"include_usage": True}}) as resp:
         if resp.status_code != 200:
@@ -69,6 +71,9 @@ async def _streamed(client: httpx.AsyncClient, url: str, headers: Dict, payload:
             if chunk.get("usage"):
                 _record_usage(chunk["usage"])
             for choice in chunk.get("choices") or []:
+                if on_thinking and not thinking_told and (choice.get("delta") or {}).get("reasoning_content"):
+                    thinking_told = True
+                    on_thinking()
                 piece = (choice.get("delta") or {}).get("content")
                 if piece:
                     parts.append(piece)
@@ -88,6 +93,7 @@ async def chat_completion(
     thinking: bool = True,
     stream: bool = False,
     purpose: str = "",
+    on_thinking: Optional[Callable[[], None]] = None,
 ) -> str:
     """What the call is for (`purpose`: guard, plan, answer...) and how long it took go into the request's llm_calls (REQUEST_CALLS).
     Call the DeepSeek chat-completions API (temperature 0) with timeout and exponential backoff.
@@ -110,7 +116,7 @@ async def chat_completion(
     counts: Counter = Counter()
     token = _CALL.set(counts)
     try:
-        return await _complete(messages, max_tokens, json_mode, timeout, retries, on_delta, thinking, stream, note)
+        return await _complete(messages, max_tokens, json_mode, timeout, retries, on_delta, thinking, stream, note, on_thinking)
     except asyncio.CancelledError:  # the guard gives up on a slow call
         note["status"] = "cancelled"
         raise
@@ -124,7 +130,7 @@ async def chat_completion(
 
 
 async def _complete(messages: List[Dict[str, str]], max_tokens: int, json_mode: bool, timeout: float, retries: int, on_delta: Optional[Callable[[str], None]],
-                    thinking: bool, stream: bool, note: Dict) -> str:
+                    thinking: bool, stream: bool, note: Dict, on_thinking: Optional[Callable[[], None]] = None) -> str:
     if not settings.DEEPSEEK_API_KEY:
         raise LLMUnavailableError(Code.LLM_NOT_CONFIGURED)
 
@@ -147,9 +153,10 @@ async def _complete(messages: List[Dict[str, str]], max_tokens: int, json_mode: 
         for attempt in range(1, retries + 1):
             note["attempts"] = attempt
             sink, on_delta = on_delta, None  # pieces go to the listener for the first attempt only: those of a second one would repeat the first
+            told, on_thinking = on_thinking, None  # so does the news that the model started thinking
             try:
                 if streaming:
-                    status, content, finish = await _streamed(client, url, headers, payload, sink or _drop)
+                    status, content, finish = await _streamed(client, url, headers, payload, sink or _drop, **({"on_thinking": told} if told else {}))
                 else:
                     resp = await client.post(url, headers=headers, json=payload)
                     status, content, finish = resp.status_code, "", None

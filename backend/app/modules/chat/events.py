@@ -2,7 +2,8 @@
 
 The streamed route attaches a ChatStream to its request; everywhere else emit() and answer_sink() do nothing, so the plain
 /chat/query, the inspector and the evaluation scripts behave exactly as before. Events are (kind, data) pairs:
-  stage      {"name": "understanding" | "searching" | "writing" | "checking"}   what the system is doing now (never which component)
+  stage      {"name": "understanding" | "searching" | "writing" | "analyzing" | "checking"}   what the system is doing now (never which component);
+             "analyzing" is the model's first reasoning piece: the page says so and counts the seconds from there (T6a)
   understood {"text", "chooser"}                                               how the question was understood, before the answer
   delta      {"text"}                                                            the next piece of the answer as the model writes it
   done / error                                                                    sent by the route once the answer is recorded or failed
@@ -20,6 +21,7 @@ class ChatStream:
         self.queue: "asyncio.Queue[Event]" = asyncio.Queue()
         self.answer_streamed = False  # only the first answer written for the request streams: a rewrite or a second part does not
         self.answer_stream_off = False
+        self.analyzing_sent = False  # the "analyzing" stage is told once per request
         self.first: Dict[str, float] = {}  # kind -> time.perf_counter() of its first event (what the user waited for, into the trace)
 
     def emit(self, kind: str, data: Dict[str, Any]) -> None:
@@ -53,6 +55,14 @@ def writing() -> None:
     stream = _STREAM.get()
     if stream is not None and not stream.answer_streamed:
         stream.emit("stage", {"name": "writing"})
+
+
+def analyzing() -> None:
+    """The model of the answer started to think (its first reasoning piece arrived): the "analyzing" stage, told once per request."""
+    stream = _STREAM.get()
+    if stream is not None and not stream.analyzing_sent:
+        stream.analyzing_sent = True
+        stream.emit("stage", {"name": "analyzing"})
 
 
 def retract() -> None:

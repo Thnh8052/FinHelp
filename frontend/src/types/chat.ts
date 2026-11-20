@@ -58,7 +58,8 @@ export interface AnswerActions {
   search_all?: boolean;
 }
 
-export type ChatStage = "understanding" | "searching" | "writing" | "checking";
+/** "analyzing": the model of the answer started to think (T6a); the page counts the seconds from there. */
+export type ChatStage = "understanding" | "searching" | "writing" | "analyzing" | "checking";
 
 /** Một tài liệu nguồn có thể tag bằng @ trong ô chat. */
 export interface MentionOption {

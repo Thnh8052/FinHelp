@@ -152,7 +152,7 @@ export const en: TranslationSchema = {
     loadOlder: "Show earlier messages",
     loadingOlder: "Loading…",
     citationUnknown: "Source citation [{n}]",
-    loadingStages: { understanding: "Reading your question...", searching: "Searching the documents...", writing: "Analyzing the figures and writing the answer...", checking: "Checking the answer..." },
+    loadingStages: { understanding: "Reading your question...", searching: "Searching the documents...", writing: "Writing the answer...", analyzing: "Analyzing the figures · {s} s", checking: "Checking the answer..." },
     loadingSlow: "This question needs a little more time, please wait...",
     systemBusy: "The system is busy. Please try again in a few minutes.",
     reportWrong: "Report wrong figures",

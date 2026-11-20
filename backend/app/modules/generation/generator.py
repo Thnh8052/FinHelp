@@ -543,7 +543,8 @@ async def generate_answer(question: str, chunks: List[Dict[str, Any]], notes: Op
         from app.modules.generation.answer_check.policy import checked_stream  # here, not at the top: policy imports this module
         sink = checked_stream(sink, chunks, detect_language(question), events.retract)
     answer = await chat_completion(build_messages(build_context(chunks), question, multi_doc, notes), max_tokens=max_tokens,
-                                   on_delta=hold_meta(sink) if sink else None, stream=True, purpose="answer")  # a stream even for a second writing: it may write as long as the first answer
+                                   on_delta=hold_meta(sink) if sink else None, stream=True, purpose="answer",
+                                   on_thinking=events.analyzing if sink else None)  # a stream even for a second writing: it may write as long as the first answer
     if not answer and settings.GENERATION_PROMPT in STRUCTURED_PROMPTS:
         return refusal(question) + "\n" + META_OPEN + json.dumps({"status": "not_found", "short_answer": refusal(question), "citations": []}) + META_CLOSE
     return answer or refusal(question)
