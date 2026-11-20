@@ -91,7 +91,7 @@ export interface AdminOverview {
 }
 
 /** GET /auth/admin/review (backend/app/modules/admin/review.py): answers with a problem, found from what the chat stores with each answer. */
-export const REVIEW_LABELS = ["user_report", "not_traced", "blocked", "not_found", "partial", "degraded", "refused", "safety", "slow"] as const;
+export const REVIEW_LABELS = ["user_report", "not_traced", "blocked", "not_found", "partial", "degraded", "refused", "safety", "slow", "guard_sample"] as const;
 export type ReviewLabel = (typeof REVIEW_LABELS)[number];
 export type ReviewStatus = "open" | "reviewed" | "all";
 

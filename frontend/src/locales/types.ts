@@ -475,8 +475,8 @@ export interface TranslationSchema {
       statusLabel: string;
       allProblems: string;
       problemsLabel: string;
-      labels: Record<"user_report" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow", string>;
-      hints: Record<"user_report" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow", string>;
+      labels: Record<"user_report" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow" | "guard_sample", string>;
+      hints: Record<"user_report" | "not_traced" | "blocked" | "not_found" | "partial" | "degraded" | "refused" | "safety" | "slow" | "guard_sample", string>;
       why: string;
       unverified: string;
       degraded: string;
@@ -494,6 +494,40 @@ export interface TranslationSchema {
       empty: string;
       emptyHint: string;
       emptyReviewed: string;
+    };
+    /** What the system did for one answer, step by step (backend admin/steps.py); a code with no words shows as it is. */
+    /** The steps of many answers added up (backend admin/steps_summary.py). */
+    stepsSummary: {
+      title: string;
+      note: string;
+      empty: string;
+      failed: string;
+      questions: string;
+      stoppedHere: string;
+      step: string;
+      median: string;
+      p90: string;
+      guardTitle: string;
+      guardWait: string;
+      degradedTitle: string;
+      deeperTitle: string;
+      deeperLine: string;
+    };
+    steps: {
+      title: string;
+      loading: string;
+      failed: string;
+      none: string;
+      stoppedAt: string;
+      total: string;
+      calls: string;
+      callLine: string;
+      tokens: string;
+      outcomes: Record<"ok" | "warn" | "stopped" | "skipped", string>;
+      names: Record<"gate" | "input" | "guard" | "scope" | "plan" | "search" | "write" | "check" | "buttons", string>;
+      facts: Record<string, string>;
+      codes: Record<string, Record<string, string>>;
+      purposes: Record<string, string>;
     };
     kpi: {
       questions: string;
