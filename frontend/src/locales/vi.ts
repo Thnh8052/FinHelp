@@ -131,7 +131,7 @@ export const vi: TranslationSchema = {
     reportsSelectedMany: "Đã chọn {n} báo cáo",
     scopeChipOne: "{n} báo cáo trong phạm vi",
     scopeChipMany: "{n} báo cáo trong phạm vi",
-    checkFigures: "Hãy đối chiếu các số liệu quan trọng với nguồn. Số giữ cách viết của báo cáo: dấu phẩy ngăn hàng nghìn (11,715 là mười một nghìn bảy trăm mười lăm), dấu chấm là thập phân.",
+    checkFigures: "Hãy đối chiếu các số liệu quan trọng với nguồn.",
     sourceRefsOne: "{n} nguồn tham chiếu",
     sourceRefsMany: "{n} nguồn tham chiếu",
     copyAnswer: "Sao chép câu trả lời",
