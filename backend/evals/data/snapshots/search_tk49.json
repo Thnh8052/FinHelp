@@ -1,0 +1,1688 @@
+{
+"source": "stored TK-49 search (retrieval_plan_r5_tk49_backend.json), page rule, gold v2",
+"rows": [
+{
+"id": "mdg_b01_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12978,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b01_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 12274,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b01_005",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12132,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b01_006",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 10155,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b01_007",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 12,
+"ctx_tokens": 10254,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13077,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b01_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12511,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b01_010",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12911,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b01_013",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 13401,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b01_014",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 13077,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 11197,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_004",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12633,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_005",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 21,
+"ctx_tokens": 12360,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b02_006",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 10595,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_007",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 10,
+"ctx_tokens": 8206,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_008",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 9368,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 20,
+"ctx_tokens": 11825,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_010",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 10092,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 11320,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_012",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 11843,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_016",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 11483,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_017",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 11567,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b02_018",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 12468,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b03_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 13340,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b03_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 11959,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b03_004",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12058,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b03_005",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12078,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b03_010",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 11921,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b03_011",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12247,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b03_016",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 13343,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b04_001",
+"split": "test",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 12776,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b04_002",
+"split": "test",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 10444,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b04_003",
+"split": "test",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12485,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b04_004",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12406,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b04_005",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 13675,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b04_006",
+"split": "test",
+"routing": "planner",
+"n_chunks": 11,
+"ctx_tokens": 7172,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b04_007",
+"split": "test",
+"routing": "planner",
+"n_chunks": 13,
+"ctx_tokens": 9506,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b04_008",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13288,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b04_009",
+"split": "test",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12044,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_003",
+"split": "test",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 13082,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b04_011",
+"split": "test",
+"routing": "planner",
+"n_chunks": 10,
+"ctx_tokens": 8191,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b04_015",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13101,
+"comp": false,
+"R": false
+},
+{
+"id": "mdg_b04_016",
+"split": "test",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12366,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b04_017",
+"split": "test",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12530,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_020",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12292,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_013",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 11019,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b05_003",
+"split": "test",
+"routing": "planner",
+"n_chunks": 20,
+"ctx_tokens": 12621,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b05_004",
+"split": "test",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 13248,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b05_006",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12930,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_004",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 11895,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b05_011",
+"split": "test",
+"routing": "planner",
+"n_chunks": 12,
+"ctx_tokens": 8510,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b05_014",
+"split": "test",
+"routing": "planner",
+"n_chunks": 20,
+"ctx_tokens": 12869,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b06_001",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 11988,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b06_004",
+"split": "test",
+"routing": "planner",
+"n_chunks": 12,
+"ctx_tokens": 8691,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_004",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 11086,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_005",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 11,
+"ctx_tokens": 9121,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_006",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12870,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b06_011",
+"split": "test",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 14376,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b21_001",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13514,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b07_005",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12874,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b07_006",
+"split": "test",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 12941,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b07_008",
+"split": "test",
+"routing": "planner",
+"n_chunks": 8,
+"ctx_tokens": 5805,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_007",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12703,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b07_012",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13280,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12515,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 12096,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13706,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b08_004",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12995,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_005",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 2,
+"ctx_tokens": 1639,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_006",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 10,
+"ctx_tokens": 7946,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_007",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 10819,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_008",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 13,
+"ctx_tokens": 9460,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 10,
+"ctx_tokens": 7333,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_008",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12503,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_011",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 12652,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_012",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 9,
+"ctx_tokens": 7410,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 13091,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_016",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 10,
+"ctx_tokens": 7470,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b08_017",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12757,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b09_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 12458,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b09_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 10785,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b09_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12372,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b09_004",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 11337,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_010",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13139,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_026",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 10215,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b09_010",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 8,
+"ctx_tokens": 4501,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b09_013",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 12973,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b10_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 23,
+"ctx_tokens": 11724,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 11971,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 11721,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_004",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 21,
+"ctx_tokens": 12298,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_005",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 12324,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_006",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 13,
+"ctx_tokens": 8026,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_007",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 11778,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_008",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 11232,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_011",
+"split": "test",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 12739,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_012",
+"split": "test",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 13403,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_011",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 11,
+"ctx_tokens": 7744,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_015",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 12714,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b10_016",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 11798,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b11_001",
+"split": "test",
+"routing": "planner",
+"n_chunks": 9,
+"ctx_tokens": 6908,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b11_002",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12437,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b11_003",
+"split": "test",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12329,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b11_004",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12181,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b11_005",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13116,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b11_006",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12357,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_013",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 10,
+"ctx_tokens": 8307,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_007",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12724,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b11_010",
+"split": "test",
+"routing": "planner",
+"n_chunks": 11,
+"ctx_tokens": 7635,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_014",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 14133,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_015",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13142,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b12_007",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 6,
+"ctx_tokens": 3946,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b12_008",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 12,
+"ctx_tokens": 7072,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b12_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 20,
+"ctx_tokens": 14091,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b12_010",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 2,
+"ctx_tokens": 1487,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b13_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12528,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b13_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12158,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b13_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 11740,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b13_008",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 11918,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b13_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 12387,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b13_012",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 11301,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b13_013",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 13157,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b13_014",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 13,
+"ctx_tokens": 10551,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b13_015",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12281,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_016",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12430,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b14_001",
+"split": "test",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12014,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b14_002",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12132,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b14_003",
+"split": "test",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 11018,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b14_004",
+"split": "test",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 9406,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b14_005",
+"split": "test",
+"routing": "planner",
+"n_chunks": 12,
+"ctx_tokens": 7776,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b14_007",
+"split": "test",
+"routing": "planner",
+"n_chunks": 4,
+"ctx_tokens": 2627,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b14_008",
+"split": "test",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 12935,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b14_009",
+"split": "test",
+"routing": "planner",
+"n_chunks": 13,
+"ctx_tokens": 8692,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b15_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 11963,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b15_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 13006,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b15_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13482,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b15_004",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 13,
+"ctx_tokens": 9547,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12985,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_006",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 10255,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_023",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12966,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b15_012",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 21,
+"ctx_tokens": 12926,
+"comp": false,
+"R": false
+},
+{
+"id": "mdg_b15_013",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 22,
+"ctx_tokens": 13388,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b16_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12867,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b16_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 12698,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b16_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 11599,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 12680,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b16_005",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 6,
+"ctx_tokens": 5025,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b16_007",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 10,
+"ctx_tokens": 7913,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_017",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 12,
+"ctx_tokens": 10598,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b16_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 12838,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b16_010",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12214,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b17_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12702,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b17_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 12,
+"ctx_tokens": 9495,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b17_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12583,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_018",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 8,
+"ctx_tokens": 5302,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b17_005",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 10853,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b17_007",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12675,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b17_008",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 18,
+"ctx_tokens": 13127,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b17_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 8,
+"ctx_tokens": 5789,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_021",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 13,
+"ctx_tokens": 7935,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b18_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12181,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b18_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 12,
+"ctx_tokens": 10332,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b18_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 8,
+"ctx_tokens": 6173,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b21_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 11851,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_017",
+"split": "test",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 8547,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b18_006",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12423,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_b18_007",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 15,
+"ctx_tokens": 11180,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_sup_029",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12409,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b18_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 19,
+"ctx_tokens": 13939,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b18_010",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 11759,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b19_001",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12663,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b19_002",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12415,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b19_003",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 13005,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b19_004",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12938,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b19_005",
+"split": "test",
+"routing": "planner",
+"n_chunks": 11,
+"ctx_tokens": 8187,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b19_006",
+"split": "test",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 12143,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b19_007",
+"split": "test",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12587,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_019",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 11928,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b21_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 13916,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b20_001",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 12950,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b20_002",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 14,
+"ctx_tokens": 11527,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b20_003",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12994,
+"comp": false,
+"R": true
+},
+{
+"id": "mdg_sup_011",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 17,
+"ctx_tokens": 12345,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b20_005",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13222,
+"comp": true,
+"R": true
+},
+{
+"id": "fb_expert_020",
+"split": "test",
+"routing": "planner",
+"n_chunks": 16,
+"ctx_tokens": 13084,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b20_007",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 6,
+"ctx_tokens": 5115,
+"comp": true,
+"R": true
+},
+{
+"id": "mdg_b20_009",
+"split": "dev",
+"routing": "planner",
+"n_chunks": 10,
+"ctx_tokens": 8648,
+"comp": true,
+"R": true
+}
+]
+}

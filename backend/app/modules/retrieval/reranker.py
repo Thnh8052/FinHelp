@@ -130,7 +130,7 @@ class QwenRerankerService:
 
         try:
             return (await gpu_client.post_json("rerank", {"pairs": list(pairs)}))["scores"]
-        except httpx.HTTPError as exc:  # as a RuntimeError, every caller answers from the first-stage order instead of failing the question
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:  # down, timed out, or a tunnel page instead of JSON: as a RuntimeError, every caller answers from the first-stage order instead of failing the question
             raise RuntimeError(f"Remote reranker unavailable: {type(exc).__name__}") from exc
 
     async def score_pairs(self, pairs: Sequence[Tuple[str, str]]) -> List[float]:

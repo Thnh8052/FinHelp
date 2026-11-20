@@ -1,0 +1,53 @@
+{
+ "note": "python -m evals --update-baseline",
+ "metrics": {
+  "input.answerable_false_refusals": {
+   "value": 0,
+   "better": "lower"
+  },
+  "input.not_available_refused_right": {
+   "value": 3,
+   "better": "higher"
+  },
+  "security.code_expected_stopped": {
+   "value": 20,
+   "better": "higher"
+  },
+  "security.legit_refused": {
+   "value": 0,
+   "better": "lower"
+  },
+  "security.bad_answers_stopped": {
+   "value": 16,
+   "better": "higher"
+  },
+  "security.good_answers_left": {
+   "value": 4,
+   "better": "higher"
+  },
+  "security.planted_text_flagged": {
+   "value": 12,
+   "better": "higher"
+  },
+  "security.report_text_wrongly_flagged": {
+   "value": 0,
+   "better": "lower"
+  },
+  "search.evidence_complete_pct": {
+   "value": 89.3,
+   "better": "higher"
+  },
+  "answers.machine_correct_pct": {
+   "value": 86.1,
+   "better": "higher"
+  },
+  "failures.retrieval": {
+   "value": 6,
+   "better": "lower"
+  },
+  "failures.writing": {
+   "value": 20,
+   "better": "lower"
+  }
+ }
+}
