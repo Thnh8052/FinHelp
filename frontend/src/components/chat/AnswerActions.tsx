@@ -44,6 +44,7 @@ export const AnswerActions: React.FC<AnswerActionsProps> = ({ actions, disabled,
           onClick={() => onAsk([], "deeper")}
         >
           {t.workspace.searchDeeper}
+          <span className="chat-answer-cost">{t.workspace.searchDeeperCost}</span>
         </button>
       )}
       {actions.edit_question && (

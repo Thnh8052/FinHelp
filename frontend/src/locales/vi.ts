@@ -170,6 +170,7 @@ export const vi: TranslationSchema = {
     askAgainWith: "Hỏi lại ({n} tài liệu đã chọn)",
     chooseSourcesLegend: "Chọn tài liệu để hỏi lại",
     searchDeeper: "Tìm kỹ hơn",
+    searchDeeperCost: "tính 1 lượt hỏi, khoảng 25 giây",
     tryAgain: "Thử lại",
     searchAll: "Vẫn tìm trong mọi nguồn",
     clickAsk: { deeper: "Tìm kỹ hơn", again: "Thử lại", chooser: "Hỏi lại với tài liệu đã chọn", everywhere: "Vẫn tìm trong mọi nguồn", retry: "Hỏi lại" },

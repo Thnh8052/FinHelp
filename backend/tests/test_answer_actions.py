@@ -91,3 +91,23 @@ def test_a_click_gets_no_more_clicks_and_editing_the_question_when_it_still_fall
 
 def test_nothing_searched_offers_no_search_more():
     assert actions([CVS], found([CVS], retrieved=()))["search_more"] is None
+
+
+def labelled(scope, labels, plan=()):
+    return RetrievalResult(list(scope), dict(labels), list(plan), [], [CHUNK], "planner", {})
+
+
+def test_two_files_that_print_the_same_label_are_told_apart_by_file_name_in_the_chooser():
+    # production check 20/11: a report saved twice under two names gave two identical rows, so nobody could tell which file was which
+    a, b = _doc("a", "Intel Corporation", 2023), _doc("b", "Intel Corporation", 2023)
+    a.file_name, b.file_name = "INTEL_2023Q1_EARNINGS.pdf", "INTEL_2023Q1_resaved.pdf"
+    same = "Intel Corporation | 10-K | FY2023"
+    targets = TargetDecision(["a"], "I understood...", [{"document_id": "b", "label": same}], rule="resolved")
+    rows = actions([a, b, AMD], labelled([a, b, AMD], {"a": same, "b": same, "amd": "AMD | 10-K | FY2023"}, [PlanItem("revenue", ["a"])]), targets)["chooser"]
+    assert [r["label"] for r in rows] == [f"{same} — INTEL_2023Q1_EARNINGS.pdf", f"{same} — INTEL_2023Q1_resaved.pdf", "AMD | 10-K | FY2023"]
+
+
+def test_files_with_different_labels_keep_their_labels_without_a_file_name():
+    targets = TargetDecision(["cvs"], "I understood...", [{"document_id": "jnj", "label": "JNJ"}], rule="resolved")
+    rows = actions([CVS, JNJ], labelled([CVS, JNJ], {"cvs": "CVS | 10-K | FY2019", "jnj": "JNJ | 10-K | FY2018"}, [PlanItem("revenue", ["cvs"])]), targets)["chooser"]
+    assert [r["label"] for r in rows] == ["CVS | 10-K | FY2019", "JNJ | 10-K | FY2018"]

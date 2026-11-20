@@ -729,7 +729,10 @@ def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets:
     chose_for_user = (targets.rule == "resolved" and bool(targets.alternatives)) or (
         targets.rule == "none" and bool(found.plan) and len({company[d] for d in used if d in company}) < len(set(company.values())))
     show = len(scope) > 1 and (chose_for_user or short or status == "clarify")
-    chooser = [{"document_id": d.document_id, "label": found.labels.get(d.document_id) or document_label(d), "checked": d.document_id in used} for d in scope] if show else []
+    labels = {d.document_id: found.labels.get(d.document_id) or document_label(d) for d in scope}
+    twins = Counter(labels.values())  # a report saved under two names prints one label twice: the file name tells the rows apart
+    chooser = [{"document_id": d.document_id, "label": labels[d.document_id] + (f" — {d.file_name}" if twins[labels[d.document_id]] > 1 else ""),
+                "checked": d.document_id in used} for d in scope] if show else []
     search_more = {"prominent": bool(short or found.degraded)} if found.retrieved and ids and not unfinished else None
     return {"chooser": chooser, "search_more": search_more, "edit_question": status == "clarify" or rephrase, "try_again": unfinished == "outage"}
 

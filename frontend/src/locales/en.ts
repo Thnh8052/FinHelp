@@ -170,6 +170,7 @@ export const en: TranslationSchema = {
     askAgainWith: "Ask again ({n} selected)",
     chooseSourcesLegend: "Choose the sources to ask again",
     searchDeeper: "Search deeper",
+    searchDeeperCost: "uses 1 question, about 25 s",
     tryAgain: "Try again",
     searchAll: "Search all sources anyway",
     clickAsk: { deeper: "Search deeper", again: "Try again", chooser: "Ask again with the selected sources", everywhere: "Search all sources anyway", retry: "Asked again" },
