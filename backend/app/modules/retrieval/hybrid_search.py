@@ -25,6 +25,16 @@ from app.modules.retrieval.term_cache import TERMS
 SEARCH_PARTS: ContextVar = ContextVar("search_parts", default=None)
 
 
+SEARCH_COUNTS: ContextVar = ContextVar("search_counts", default=None)  # how much each stage of the search handled: candidates, reranker pairs, excerpts kept...
+
+
+def count_done(name: str, n: int) -> None:
+    """Record that stage `name` of this question's search handled `n` items (admin steps page); no collector set (a call outside a question): nothing happens."""
+    counts = SEARCH_COUNTS.get()
+    if counts is not None:
+        counts[name] = counts.get(name, 0) + int(n)
+
+
 def part_done(name: str, since: float) -> float:
     """Add the time since `since` to part `name` of this question's search; returns the new clock reading."""
     now = time.perf_counter()
@@ -246,6 +256,7 @@ class HybridSearchService:
             vectors, notebook_id, scope_document_ids, settings.MULTIDOC_CANDIDATE_LIMIT, per_vector_documents=[item.document_ids for item in items]
         )
         t = part_done("vector", t)
+        count_done("candidates", sum(len(hits) for hits in ranked))
         counts, tokens = await self._term_counts(documents)
         t = part_done("mongo_text", t)
         scores: Dict[str, float] = {}
@@ -261,6 +272,11 @@ class HybridSearchService:
         t = part_done("rerank", t)
         max_chunks, max_tokens = planned_ceilings(len(documents))
         chosen = allocate_planned(lanes, tokens, max_chunks, max_tokens)
+        count_done("documents", len(documents))
+        count_done("searches", len(items))
+        count_done("chosen", len(chosen))
+        count_done("tokens", sum(tokens.get(c, 0) for c in chosen))
+        count_done("max_tokens", max_tokens)
         logger.info(f"Planned search, {len(items)} searches, {len(documents)} documents: {len(chosen)} chunks (ceiling {max_chunks} / {max_tokens} tokens) in {time.perf_counter() - t0:.2f}s")
         hydrated = await self._hydrate(chosen, scores)
         part_done("hydrate", t)
@@ -350,6 +366,7 @@ class HybridSearchService:
                for item, head in zip(plan, heads) for cid in head if cid in long_text}
         win_pairs = [(q, w) for (q, _), ws in win.items() for w in ws]
         sent = [(q, text[cid]) for q, cid in pairs] + win_pairs
+        count_done("rerank_pairs", len(sent))
         got = await asyncio.wait_for(self.reranker.score_pairs(sent), rerank_deadline(len(sent)))
         score = dict(zip(pairs, got[: len(pairs)]))
         win_score = dict(zip(win_pairs, got[len(pairs):]))

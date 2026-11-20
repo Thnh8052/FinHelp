@@ -5,6 +5,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useAdminData } from "./AdminLayout";
 import { AnswerList } from "./AuditPage";
 import { DocumentsTable } from "./DocumentsPage";
+import { StepsSummaryCard } from "./StepsSummaryCard";
 import { UsageCharts } from "./UsageCharts";
 import type { AdminOverview } from "./types";
 import { Card, CardHeader, KpiCard, Skeleton, fill, useFormat } from "./ui";
@@ -100,6 +101,8 @@ export const OverviewPage: React.FC = () => {
         <CardHeader title={p.chart.title} subtitle={fill(p.kpi.inDays, { n: days })} icon={Activity} action={<ViewAll to="/admin/tokens" label={p.nav.tokens} />} />
         <UsageCharts series={data.series} />
       </Card>
+
+      <StepsSummaryCard />
 
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-5">
         <Card className="min-w-0 2xl:col-span-3">

@@ -26,6 +26,7 @@ PROBLEMS: Dict[str, Dict[str, Any]] = {
     "refused": {"trace_info.intent": {"$in": INPUT_REFUSALS}},
     "safety": {"trace_info.intent": {"$in": SAFETY_REPLIES}},
     "slow": {"latency_ms": {"$gt": SLOW_MS}},
+    "guard_sample": {"trace_info.guard.sampled": True},  # a small sample of what the guard let through (GUARD_SAMPLE_RATE): the admin looks for what it missed
 }
 LABELS = list(PROBLEMS)
 REVIEW_STATES = ("ok", "needs_fix")

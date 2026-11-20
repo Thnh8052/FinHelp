@@ -238,6 +238,9 @@ class Settings(BaseSettings):
     # with a safety label (crisis, harmful, personal data, attack on the instructions, politics, personal advice) is turned away before any
     # answer is written. Measured in experiments/guardrail_eval/llm_guard_v2.py (docs/Version_2/plans/plan_guardrails_h4.md section 6.1).
     GUARD_ENABLED: bool = True
+    # The share of the messages the guard lets through that are marked in their trace (guard.sampled) and reach the admin review queue (label guard_sample): a miss can only be
+    # found by looking at some of what passed. Every message it turns away is in the queue already.
+    GUARD_SAMPLE_RATE: float = 0.02
     # The label off_topic also turns a message away, only when the rules found nothing that ties it to a report ("two keys": 0 of 234 wrongly turned away).
     GUARD_OFF_TOPIC_ENABLED: bool = True
     GUARD_TIMEOUT_SECONDS: float = 3.0  # the guard failing or taking longer lets the message through (recorded in the trace)

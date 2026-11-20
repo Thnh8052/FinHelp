@@ -65,7 +65,8 @@ def explain(trace: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if guard:
         raw = guard.get("outcome")
         outcome = "stopped" if stop == "guard" else "skipped" if raw == "not_waited" else "warn" if guard.get("error") or raw == "unchecked" else "ok"
-        steps["guard"] = _step("guard", outcome, guard.get("label"), guard.get("seconds"), result=raw, where=guard.get("where"), error=guard.get("error"))
+        steps["guard"] = _step("guard", outcome, guard.get("label"), guard.get("seconds"), result=raw, where=guard.get("where"), error=guard.get("error"),
+                                waited_seconds=_num(guard.get("waited_seconds")))
 
     if targets or t.get("unlisted_companies") or stop == "scope":
         steps["scope"] = _step("scope", "stopped" if stop == "scope" else "ok", targets.get("rule"), documents=len(targets.get("documents") or []) or None, routing=t.get("routing"),
@@ -78,8 +79,10 @@ def explain(trace: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
     if timings.get("search") is not None or t.get("chunk_ids"):
         parts = {f"{k}_seconds": _num(timings.get(f"search_{k}")) for k in ("embed", "vector", "bm25", "mongo_text", "rerank", "hydrate")}
+        funnel = t.get("search_counts") or {}
         steps["search"] = _step("search", "warn" if degraded else "ok", None, timings.get("search"), excerpts=len(t.get("chunk_ids") or []), pages=len(t.get("retrieved_pages") or []),
-                                degraded=list(degraded), **parts)
+                                degraded=list(degraded), candidates=funnel.get("candidates"), rerank_pairs=funnel.get("rerank_pairs"), tokens=funnel.get("tokens"),
+                                max_tokens=funnel.get("max_tokens"), **parts)
 
     if timings.get("generate") is not None or _answer_call(t):
         call = _answer_call(t)
@@ -99,7 +102,7 @@ def explain(trace: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         more = actions.get("search_more")
         steps["buttons"] = _step("buttons", "ok", None, None, search_more=("prominent" if more.get("prominent") else "quiet") if more else None,
                                  chooser=len(actions.get("chooser") or []) or None, edit_question=True if actions.get("edit_question") else None,
-                                 try_again=True if actions.get("try_again") else None)
+                                 try_again=True if actions.get("try_again") else None, why=t.get("actions_why"))
 
     ordered = [steps[n] for n in ORDER if n in steps]
     if stop:

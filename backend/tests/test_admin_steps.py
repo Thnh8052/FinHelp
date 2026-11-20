@@ -173,3 +173,19 @@ async def test_the_steps_of_a_stored_answer_come_with_its_id_and_latency_and_a_m
     out = await answer_steps(db, "m1")
     assert out["message_id"] == "m1" and out["latency_ms"] == 15500 and out["steps"][0]["step"] == "gate" and out["stopped_at"] is None
     assert await answer_steps(db, "nope") is None
+
+
+# ------------------------------------------------------------------ slice 2: the guard's wait, the funnel of the search, the reasons of the buttons
+def test_the_guard_wait_the_search_funnel_and_the_button_reasons_show_in_their_steps():
+    s = by_step(explain(trace(
+        guard={"label": "ok", "seconds": 1.13, "outcome": "passed", "waited_seconds": 0.4},
+        search_counts={"documents": 2, "searches": 5, "candidates": 120, "rerank_pairs": 160, "chosen": 9, "tokens": 8800, "max_tokens": 13000},
+        actions={"chooser": [{"document_id": "a"}], "search_more": {"prominent": True}, "edit_question": False, "try_again": False}, actions_why=["short"])))
+    assert s["guard"]["facts"]["waited_seconds"] == 0.4
+    assert {k: s["search"]["facts"][k] for k in ("candidates", "rerank_pairs", "tokens", "max_tokens")} == {"candidates": 120, "rerank_pairs": 160, "tokens": 8800, "max_tokens": 13000}
+    assert s["buttons"]["facts"]["why"] == ["short"]
+
+
+def test_a_trace_without_the_new_fields_still_explains_itself():
+    s = by_step(explain(trace()))
+    assert "waited_seconds" not in s["guard"]["facts"] and "candidates" not in s["search"]["facts"] and "why" not in s["buttons"]["facts"]

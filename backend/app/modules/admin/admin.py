@@ -24,6 +24,7 @@ from app.modules.auth.user import UserRecord
 from app.modules.admin.overview import build_overview
 from app.modules.admin.review import LABELS, open_count, review_queue, set_review
 from app.modules.admin.steps import answer_steps
+from app.modules.admin.steps_summary import steps_summary
 
 router = APIRouter(prefix="/auth/admin", tags=["Admin"])
 
@@ -96,6 +97,18 @@ async def get_answer_steps(
     if steps is None:
         raise api_error(status_code=404, code=Code.MESSAGE_NOT_FOUND)
     return steps
+
+
+@router.get("/steps-summary")
+async def get_steps_summary(
+    days: int = Query(14, ge=1, le=90),
+    user: Optional[str] = Query(None, max_length=64, description="One user's id, or \"guests\"; every user when left out"),
+    current_user: UserRecord = Depends(require_admin),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """The steps of the newest answers of the window added up: where questions stopped, seconds per step (median, p90), the guard's labels and waits, steps dropped for time,
+    how often "Search deeper" was offered and clicked."""
+    return await steps_summary(db, days=days, user=user)
 
 
 class ReviewRequest(BaseModel):
