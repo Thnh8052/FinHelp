@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
-from app.modules.query_router.catalog_route import QNUM, QPAIR, company_key, company_matches, question_years
+from app.modules.query_router.catalog_route import company_key, company_matches, question_years, quarter_pairs
 from app.modules.query_router.target_resolver import Filing, Target, alignment_note, resolve
 
 FISCAL = re.compile(r"\bfy\s?\d{2,4}\b|\bfiscal\b|năm tài chính", re.I)
@@ -127,7 +127,7 @@ def from_names(question: str, docs: Sequence[ScopeDoc], vi: bool, shown: bool = 
         return TargetDecision()
     by_id = {d.document_id: d for d in docs}
     basis = "fiscal" if FISCAL.search(question) else ("calendar" if CALENDAR.search(question) else "unspecified")
-    pairs = list(dict.fromkeys((int(y), QNUM[q]) for q, y in QPAIR.findall(question.lower())))  # (year, quarter), several per question
+    pairs = quarter_pairs(question)  # (year, quarter), several per question
     years = set(question_years(question, ranges=True))
     if RELATIVE.search(question):
         years |= {y - 1 for y in years}

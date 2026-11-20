@@ -981,6 +981,17 @@ button.chat-scope-chip:hover {
   font-weight: 600;
 }
 
+/* what the click costs, in the button itself: one question of the day and the usual wait */
+.chat-answer-cost {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.chat-answer-cost::before {
+  content: "·";
+  margin-right: 6px;
+}
+
 .chat-answer-btn:disabled {
   cursor: default;
   opacity: 0.5;

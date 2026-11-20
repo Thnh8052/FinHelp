@@ -6,8 +6,17 @@ import re
 
 STOP = {"inc", "corp", "corporation", "company", "co", "ltd", "limited", "plc", "the", "holdings", "group", "and", "&", "of", "international", "incorporated"}
 YEAR = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")  # not \b: "FY2015" has no word boundary before the year
-QPAIR = re.compile(r"(q[1-4]|first|second|third|fourth)\s*(?:quarter)?\s*(?:of\s*)?(?:fiscal\s*(?:year\s*)?)?(?:fy)?\s*((?:19|20)\d{2})")
-QNUM = {"q1": 1, "q2": 2, "q3": 3, "q4": 4, "first": 1, "second": 2, "third": 3, "fourth": 4}
+# A quarter and its year, in English ("Q2 2023", "second quarter of fiscal year 2023") and Vietnamese ("quý 2 năm 2023", "quý II/2023",
+# "quý hai năm tài chính 2023"; diacritics optional). Group 1 = the quarter word, group 2 = the year.
+QPAIR = re.compile(r"(q[1-4]|first|second|third|fourth|qu[ýy]\s*(?:[1-4]|iv|i{1,3}|một|hai|ba|tư|bốn))"
+                   r"(?:\s*quarter)?\s*(?:of\s*|của\s*)?(?:(?:fiscal|n[ăa]m|t[àa]i\s*ch[íi]nh)\s*)*(?:year\s*)?(?:fy)?\s*[/-]?\s*((?:19|20)\d{2})")
+QNUM = {"q1": 1, "q2": 2, "q3": 3, "q4": 4, "first": 1, "second": 2, "third": 3, "fourth": 4,
+        "1": 1, "2": 2, "3": 3, "4": 4, "i": 1, "ii": 2, "iii": 3, "iv": 4, "một": 1, "hai": 2, "ba": 3, "tư": 4, "bốn": 4}  # the last row: what follows "quý"
+
+
+def quarter_pairs(text):
+    """Every (year, quarter) the text names, in order, each once: "Q2 2023" and "quý 2 năm 2023" are both (2023, 2)."""
+    return list(dict.fromkeys((int(y), QNUM[re.sub(r"^qu[ýy]\s*", "", q)]) for q, y in QPAIR.findall(text.lower())))
 # Ordinary words of a financial question: never a company name on their own
 QUESTION_WORDS = frozenset("""
 how which what who whom whose when where why in on at of for by from to between among using based please compare calculate determine true false
@@ -212,9 +221,9 @@ def year_rule(question, ws, cards):
     if any(c is None for c in cov):
         return []
     missing = [y for y in sorted(qy) if not any(y in c for c in cov)]
-    for qn, y in QPAIR.findall(question.lower()):
+    for y, q in quarter_pairs(question):
         cs = [cards.get(d, {}) for d in named]
-        has = any(c.get("fiscal_year") == int(y) and c.get("fiscal_quarter") in (QNUM[qn], None) for c in cs)
+        has = any(c.get("fiscal_year") == y and c.get("fiscal_quarter") in (q, None) for c in cs)
         if not has and all(c.get("fiscal_year") for c in cs):
-            missing.append(f"Q{QNUM[qn]} FY{y}")
+            missing.append(f"Q{q} FY{y}")
     return missing

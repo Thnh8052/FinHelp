@@ -174,6 +174,8 @@ export interface TranslationSchema {
     askAgainWith: string;
     chooseSourcesLegend: string;
     searchDeeper: string;
+    /** What a click on "search deeper" costs, shown on the button: one question of the day, about this many seconds. */
+    searchDeeperCost: string;
     tryAgain: string;
     searchAll: string;
     clickAsk: Record<ClickKind, string>;
