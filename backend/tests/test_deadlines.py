@@ -4,6 +4,8 @@ the result says what was degraded, so the answer can show the "search more" butt
 import asyncio
 import types
 
+import pytest
+
 from app.core.config import settings
 from app.modules.query_router.planner import PlanItem
 from app.modules.retrieval.hybrid_search import SEARCH_PARTS, HybridSearchService
@@ -48,6 +50,7 @@ async def test_a_reranker_past_its_deadline_leaves_the_first_stage_order_and_say
 
 
 async def test_the_single_document_search_has_the_same_deadline(monkeypatch):
+    pytest.importorskip("torch")  # the single-document search reaches app.modules.retrieval.gpu, which imports torch
     monkeypatch.setattr(settings, "RERANK_ENABLED", True)
     monkeypatch.setattr(settings, "RERANK_DEADLINE_SECONDS", 0.05)
     monkeypatch.setattr(settings, "RERANK_SECONDS_PER_PAIR", 0.0)

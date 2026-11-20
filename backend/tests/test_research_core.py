@@ -175,6 +175,7 @@ def _fake_gpu(monkeypatch):
 
 
 async def test_gpu_oom_releases_other_model_retries_and_keeps_swapping(monkeypatch):
+    pytest.importorskip("torch")
     gpu, released = _fake_gpu(monkeypatch)
     calls = []
 
@@ -192,6 +193,7 @@ async def test_gpu_oom_releases_other_model_retries_and_keeps_swapping(monkeypat
 
 
 async def test_gpu_second_oom_and_other_errors_propagate(monkeypatch):
+    pytest.importorskip("torch")
     gpu, _ = _fake_gpu(monkeypatch)
 
     def always_oom():
