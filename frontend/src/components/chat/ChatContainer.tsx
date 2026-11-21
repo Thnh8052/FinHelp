@@ -3,6 +3,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { AskMode, ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
 import { SourceCard } from "./SourceCard";
 import { AnswerActions } from "./AnswerActions";
+import { displayNumbers, renumber } from "../../utils/citationNumbers";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { barIndex, STAGES, waitingText } from "./waiting";
 import { citedFigures } from "../notebook/locateExcerpt";
@@ -400,6 +401,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             const used = (msg.citations || [])
               .map((cite, idx) => ({ cite, index: idx + 1 }))
               .filter(({ cite }) => cite.cited !== false);
+            // Shown as 1, 2, 3 in the order the text meets them; the excerpt behind each number keeps its own (utils/citationNumbers)
+            const numbering = displayNumbers(msg.content, used.map((u) => u.index));
+            const shownUsed = [...used].sort((a, b) => (numbering.get(a.index) ?? 0) - (numbering.get(b.index) ?? 0));
 
             return (
               <div
@@ -442,6 +446,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                       content={msg.content}
                       citations={msg.citations}
                       onSelectCitation={onSelectCitation}
+                      numbering={numbering}
                     />
                   )}
                   {!isUser && waitingInMessage && index === messages.length - 1 && waitingBlock}
@@ -466,11 +471,11 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     <div className="chat-citations-container">
                       <span className="chat-citations-title">{t.workspace.sourceCitationsTitle}</span>
                       <div className="chat-citations-list">
-                        {used.map(({ cite, index }) => (
+                        {shownUsed.map(({ cite, index }) => (
                           <SourceCard
                             key={cite.citation_id}
                             citation={cite}
-                            index={index}
+                            index={numbering.get(index) ?? index}
                             fileName={documentNames[cite.document_id]}
                             onClick={() => onSelectCitation({ ...cite, figures: citedFigures(msg.content, index) })}
                           />
@@ -499,7 +504,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                         <div className="chat-message-actions">
                           <button
                             type="button"
-                            onClick={() => handleCopy(msg.content, msg.message_id)}
+                            onClick={() => handleCopy(renumber(msg.content, numbering), msg.message_id)}
                             className={`chat-action-btn chat-copy-btn ${copiedMsgId === msg.message_id ? "copied" : ""}`}
                             title={t.workspace.copyAnswer}
                           >

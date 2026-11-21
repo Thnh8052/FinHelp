@@ -1,4 +1,5 @@
 import asyncio
+import random
 import re
 import time
 from collections import Counter
@@ -91,6 +92,7 @@ class _GuardState:
     evidence: List[str] = field(default_factory=list)  # what the rules found tying the message to the reports (set once they ran): the second key of off_topic
     ruled: bool = False  # the rules ran and `evidence` is known: a chat label can then stop the search at once
     cleared: bool = False  # the label was read and the message may be answered
+    waited: Optional[float] = None  # seconds the answer waited for the label once it was ready to be written (0: the label came first)
 
 
 class GuardBlocked(Exception):
@@ -264,7 +266,8 @@ class RAGWorkflowOrchestrator:
             answer += "\n\n" + RETRY_APOLOGY[lang]
         elif short and not_found:  # S2
             answer += "\n\n" + CHECK_SOURCES[lang]
-        actions = answer_actions(scope, found, targets, status, short, unfinished, retry)
+        why: List[str] = []
+        actions = answer_actions(scope, found, targets, status, short, unfinished, retry, why=why)
         understood = targets.understood
         if not understood and len(scope) > 1 and plan:  # the planner chose: say which documents (CODE_MODEL_DECISIONS 2.2, option C)
             understood = understood_line([names.get(d, d) for d in dict.fromkeys(d for p in plan for d in (p.document_ids or [x.document_id for x in found.scope]))],
@@ -307,6 +310,8 @@ class RAGWorkflowOrchestrator:
                 "review": checked["trace"],
                 "verification": verification,
                 "timings": timings,
+                "search_counts": dict(found.counts),  # candidates, reranker pairs, excerpts kept, token budget (admin steps page)
+                "actions_why": why,  # why each button under the answer is there
             },
         }
 
@@ -392,7 +397,9 @@ class RAGWorkflowOrchestrator:
         state = GUARD.get()
         if state is None or state.cleared:
             return
+        asked = time.perf_counter()
         verdict = await state.task
+        state.waited = round(time.perf_counter() - asked, 2)
         state.cleared = True
         if verdict.blocks(state.evidence):
             raise GuardBlocked(verdict)
@@ -434,7 +441,9 @@ class RAGWorkflowOrchestrator:
                     return self._guard_reply(verdict, lang, "replaced_reply")
             verdict = state.task.result() if state.task.done() else None
             outcome = "not_waited" if verdict is None else "unchecked" if not verdict.label else "passed" if verdict.label == "ok" else "kept"
-            result.setdefault("trace", {})["guard"] = verdict.trace(outcome) if verdict else {"outcome": outcome}
+            result.setdefault("trace", {})["guard"] = ({**verdict.trace(outcome), **({"waited_seconds": state.waited} if state.waited is not None else {}),
+                                                        **({"sampled": True} if outcome == "passed" and random.random() < settings.GUARD_SAMPLE_RATE else {})}
+                                                       if verdict else {"outcome": outcome})
             return result
         except GuardBlocked as blocked:
             return self._guard_reply(blocked.verdict, lang, "before_answer")
@@ -723,18 +732,22 @@ def kept_then_new(kept: List[Dict[str, Any]], new: List[Dict[str, Any]], budget:
 
 
 def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets: TargetDecision, status: Optional[str], short: bool, unfinished: str,
-                   retry: bool) -> Dict[str, Any]:
+                   retry: bool, why: Optional[List[str]] = None) -> Dict[str, Any]:
     """The buttons under an answer (docs/VERSION_4/CODE_MODEL_DECISIONS_2026-11-17.md 4.2; tests/test_answer_actions.py). `chooser`: every selected document,
     the ones the answer used ticked, several may be ticked (they become @ tags of a new search); `search_more`: a full search again that leaves out what
     was sent, prominent when the answer fell short or a step was dropped; `edit_question`: put the question back in the box; `try_again`: the same question
     again, nothing left out. `unfinished` ("" | "outage" | "cut", Unfinished.kind, | "blocked"): a model that could not be reached gets try_again (search_more would
     leave out the best excerpts), a reply cut at the limit gets edit_question (its apology asks to split the question); neither gets search_more.
     "blocked" (an answer replaced by the fixed reply for breaking a safety rule) gets only edit_question: the reply asks to rephrase.
-    One click only: an answer to a click offers none of them, but the question box when it still fell short or was cut."""
+    One click only: an answer to a click offers none of them, but the question box when it still fell short or was cut.
+    `why` (a list, when given): the reasons the buttons are there, as codes (click, blocked, cut, outage, short, degraded, chose_for_user, clarify), for the admin steps page."""
+    reasons = why if why is not None else []
     rephrase = unfinished in ("cut", "blocked")
     if retry:
+        reasons += ["click"] + (["short"] if short else []) + ([unfinished] if rephrase else [])
         return {"chooser": [], "search_more": None, "edit_question": short or rephrase, "try_again": False}
     if unfinished == "blocked":
+        reasons.append("blocked")
         return {"chooser": [], "search_more": None, "edit_question": True, "try_again": False}
     ids = [d.document_id for d in scope]
     planned = [d for d in dict.fromkeys(d for p in found.plan for d in (p.document_ids or [x.document_id for x in found.scope]))]
@@ -748,6 +761,8 @@ def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets:
     chooser = [{"document_id": d.document_id, "label": labels[d.document_id] + (f" — {d.file_name}" if twins[labels[d.document_id]] > 1 else ""),
                 "checked": d.document_id in used} for d in scope] if show else []
     search_more = {"prominent": bool(short or found.degraded)} if found.retrieved and ids and not unfinished else None
+    reasons += [code for code, on in (("short", short and (show or search_more)), ("degraded", bool(found.degraded) and search_more), ("chose_for_user", chose_for_user and show),
+                                     ("clarify", status == "clarify"), ("cut", unfinished == "cut"), ("outage", unfinished == "outage")) if on]
     return {"chooser": chooser, "search_more": search_more, "edit_question": status == "clarify" or rephrase, "try_again": unfinished == "outage"}
 
 

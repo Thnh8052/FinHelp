@@ -23,6 +23,8 @@ from app.modules.auth.user_repo import UserRepository
 from app.modules.auth.user import UserRecord
 from app.modules.admin.overview import build_overview
 from app.modules.admin.review import LABELS, open_count, review_queue, set_review
+from app.modules.admin.steps import answer_steps
+from app.modules.admin.steps_summary import steps_summary
 
 router = APIRouter(prefix="/auth/admin", tags=["Admin"])
 
@@ -82,6 +84,31 @@ async def get_review_queue(
     """The answers with a problem (review.PROBLEMS: reported by the user, shown with a warning, blocked, not found, partial, degraded, turned away,
     slow), newest first, with the number of open ones per problem."""
     return await review_queue(db, days=days, label=label, user=user, status=status)
+
+
+@router.get("/steps/{message_id}")
+async def get_answer_steps(
+    message_id: str,
+    current_user: UserRecord = Depends(require_admin),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """What the system did for one answer, step by step (gate, input rules, guard, documents, plan, search, writer, checks, buttons), read from its stored trace."""
+    steps = await answer_steps(db, message_id)
+    if steps is None:
+        raise api_error(status_code=404, code=Code.MESSAGE_NOT_FOUND)
+    return steps
+
+
+@router.get("/steps-summary")
+async def get_steps_summary(
+    days: int = Query(14, ge=1, le=90),
+    user: Optional[str] = Query(None, max_length=64, description="One user's id, or \"guests\"; every user when left out"),
+    current_user: UserRecord = Depends(require_admin),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """The steps of the newest answers of the window added up: where questions stopped, seconds per step (median, p90), the guard's labels and waits, steps dropped for time,
+    how often "Search deeper" was offered and clicked."""
+    return await steps_summary(db, days=days, user=user)
 
 
 class ReviewRequest(BaseModel):

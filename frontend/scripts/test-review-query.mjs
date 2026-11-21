@@ -25,6 +25,7 @@ check("what the user reported or what was blocked is red; a warning or a partial
   assert.deepEqual(["user_report", "blocked"].map(labelTone), ["negative", "negative"]);
   assert.deepEqual(["not_traced", "partial", "not_found", "refused", "degraded", "slow"].map(labelTone), ["warn", "warn", "warn", "warn", "neutral", "neutral"]);
   assert.equal(labelTone("safety"), "neutral");
+  assert.equal(labelTone("guard_sample"), "neutral"); // a sample to look at, not a problem
 });
 
 if (failed) {

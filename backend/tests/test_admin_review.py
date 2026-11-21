@@ -118,7 +118,7 @@ async def test_the_queue_lists_open_problem_answers_of_the_window_newest_first_w
     assert [i["message_id"] for i in out["items"]] == ["m2", "m3", "m4", "m5"]
     assert out["items"][0]["labels"] == ["user_report"] and out["items"][0]["question"] == "question of m2"
     assert out["items"][2]["owner_type"] == "guest" and out["items"][3]["labels"] == ["not_traced", "slow"]
-    assert out["counts"] == {"user_report": 1, "not_traced": 1, "blocked": 0, "not_found": 1, "partial": 0, "degraded": 0, "refused": 1, "safety": 0, "slow": 1}
+    assert out["counts"] == {"user_report": 1, "not_traced": 1, "blocked": 0, "not_found": 1, "partial": 0, "degraded": 0, "refused": 1, "safety": 0, "slow": 1, "guard_sample": 0}
     assert out["open_total"] == 4
 
 

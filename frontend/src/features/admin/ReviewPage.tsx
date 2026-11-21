@@ -5,6 +5,7 @@ import { apiRequest, errorText } from "../../services/api";
 import { MarkdownRenderer } from "../../components/chat/MarkdownRenderer";
 import "../../components/chat/chat.css";
 import { useAdminData } from "./AdminLayout";
+import { AnswerStepsPanel } from "./AnswerStepsPanel";
 import { labelTone, reviewPath } from "./reviewQuery";
 import type { ReviewItem, ReviewLabel, ReviewQueue, ReviewStatus } from "./types";
 import { REVIEW_LABELS } from "./types";
@@ -162,6 +163,7 @@ const ReviewEntry: React.FC<{ item: ReviewItem; onDecide: (id: string, verdict: 
           {item.notes.length > 0 && <Fact term={r.notes} items={item.notes} />}
         </dl>
       </details>
+      <AnswerStepsPanel messageId={item.message_id} />
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label htmlFor={noteId} className="sr-only">
           {r.noteLabel}

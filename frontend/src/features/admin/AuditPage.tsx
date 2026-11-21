@@ -4,6 +4,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { MarkdownRenderer } from "../../components/chat/MarkdownRenderer";
 import "../../components/chat/chat.css";
 import { useAdminData } from "./AdminLayout";
+import { AnswerStepsPanel } from "./AnswerStepsPanel";
 import type { AdminAnswer } from "./types";
 import { Card, CardHeader, EmptyState, OwnerLabel, SearchField, Segmented, Skeleton, fill, useFormat } from "./ui";
 
@@ -39,6 +40,7 @@ export const AnswerList: React.FC<{ answers: AdminAnswer[]; emptyTitle: string; 
               <MarkdownRenderer content={item.answer} />
             </div>
           </details>
+          <AnswerStepsPanel messageId={item.message_id} />
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-muted">
             <span className="inline-flex items-center gap-1">
               <Coins size={12} aria-hidden />

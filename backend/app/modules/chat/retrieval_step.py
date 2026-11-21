@@ -18,7 +18,7 @@ from app.modules.query_router.bridge import continue_plan
 from app.modules.query_router.input_policy import _split, detect_language, needs_lookup
 from app.modules.query_router.planner import PlanItem, PlanUnavailable, plan_multi_doc, plan_with_then
 from app.modules.chat.scope import catalog_card, catalog_entry, document_label, text_years
-from app.modules.retrieval.hybrid_search import SEARCH_PARTS, HybridSearchService
+from app.modules.retrieval.hybrid_search import SEARCH_COUNTS, SEARCH_PARTS, HybridSearchService
 
 
 T = TypeVar("T")
@@ -55,6 +55,7 @@ class RetrievalResult:
     missing: List[str] = field(default_factory=list)  # targeted documents with no retrieved chunk
     hop: Dict[str, Any] = field(default_factory=dict)  # MULTIHOP_ENABLED: the dependent part and what the second step did (empty when there was none)
     degraded: List[str] = field(default_factory=list)  # "plan_deadline", "plan_unavailable", "rerank_skipped": a step dropped for time or failure (the answer shows "search more")
+    counts: Dict[str, int] = field(default_factory=dict)  # what each stage of the planned search handled (hybrid_search.count_done): candidates, reranker pairs, excerpts kept, token budget
 
 
 PLAN_FAILURES = ("plan_deadline", "plan_unavailable")
@@ -134,6 +135,8 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
     t0 = time.perf_counter()
     parts: Dict[str, float] = {}  # seconds in each part of the search (hybrid_search.part_done), kept in the trace as search_<part>
     SEARCH_PARTS.set(parts)
+    counts: Dict[str, int] = {}  # how much each stage handled, kept in the trace as search_counts
+    SEARCH_COUNTS.set(counts)
     then = ""
     degraded: List[str] = []
     if multi and settings.MULTIHOP_ENABLED:
@@ -192,4 +195,4 @@ async def retrieve_for_scope(hybrid_search: HybridSearchService, query: str, not
             chunk["document_label"] = labels[chunk["document_id"]]
     timings = {"plan": round(t_plan, 2), "search": round(time.perf_counter() - t0 - t_plan, 2)} | {f"search_{k}": v for k, v in parts.items()}
     degraded += ["rerank_skipped"] if parts.get("rerank_skipped") else []
-    return RetrievalResult(scope, labels, plan, sub_queries, retrieved, routing, timings, missing, hop, degraded)
+    return RetrievalResult(scope, labels, plan, sub_queries, retrieved, routing, timings, missing, hop, degraded, counts)
