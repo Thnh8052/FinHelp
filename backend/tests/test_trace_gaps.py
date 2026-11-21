@@ -1,5 +1,5 @@
 """Slice 2 of the admin trace (owner 20/11): what the steps page (admin/steps.py) could not say about real traces.
-1. the guard runs beside the search: the trace now says how long the answer waited for it (0 when its label was ready first);
+1. the guard runs beside the search: the trace now says how long the question waited for its label the first time it needed it, before the "understood" line (0 when the label was ready first; the search runs meanwhile; live trial 21/11: 0.7 to 0.9 s);
 2. the planned search kept only its seconds: it now keeps how many candidates, how many pairs went to the reranker, how many excerpts it kept and the token budget;
 3. the buttons: why each one is there (the answer fell short, a step was dropped, the system chose among files, the model asked to clarify, a click, an outage...).
 No model, no worker: fakes as in test_multidoc.py and test_guard.py."""
@@ -16,7 +16,7 @@ from tests.test_input_policy import NIKE_DOCS, _orchestrator
 from tests.test_multidoc import _planned
 
 
-# ------------------------------------------------------------------ 1. how long the answer waited for the guard
+# ------------------------------------------------------------------ 1. how long the question waited for the guard label
 async def test_a_slow_guard_shows_how_long_the_answer_waited_for_it(monkeypatch):
     orch, _ = _orchestrator(NIKE_DOCS, monkeypatch)
     fake_guard(monkeypatch, "ok", delay=0.3)  # slower than the whole fake search: the answer cannot be written before the label is known

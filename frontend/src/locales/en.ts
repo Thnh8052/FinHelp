@@ -519,7 +519,7 @@ export const en: TranslationSchema = {
       median: "Median (s)",
       p90: "p90 (s)",
       guardTitle: "Guard",
-      guardWait: "The answer waited more than half a second for the guard: {over} of {n}",
+      guardWait: "Waited more than half a second for the guard label before going on: {over} of {n}",
       degradedTitle: "Steps dropped for time",
       deeperTitle: "Search deeper button",
       deeperLine: "Offered on {offered} answers (prominent on {prominent}), clicked {clicks} times ({share} of the answers that had it)",
@@ -548,13 +548,13 @@ export const en: TranslationSchema = {
       },
       facts: {
         signals: "Signals", assumption: "Assumption", flags: "Flags", unlisted: "Companies not in the sources", available: "Available in the reports", parts: "Sub-questions",
-        result: "Guard result", where: "Stopped when", error: "Error", documents: "Documents", routing: "Chosen by", alternatives: "Other matching documents",
+        result: "Guard result", reply: "Fixed reply", where: "Stopped when", error: "Error", documents: "Documents", routing: "Chosen by", alternatives: "Other matching documents",
         items: "Search items", queries: "Queries", excerpts: "Excerpts sent to the model", pages: "Pages", embed_seconds: "Embedding the question", vector_seconds: "Vector search",
         bm25_seconds: "Keyword search (BM25)", mongo_text_seconds: "Text search", rerank_seconds: "Rerank", hydrate_seconds: "Loading the text", degraded: "Steps dropped for time",
         first_text_seconds: "To the first text", prompt_tokens: "Tokens in", completion_tokens: "Tokens out", reasoning_tokens: "Thinking tokens", notes: "Notes sent to the model",
         status: "Status", attempts: "Attempts", findings: "Findings", unverified_figures: "Figures not matched", search_more: "Search deeper button",
         chooser: "Documents to switch", edit_question: "Edit the question button", try_again: "Try again button",
-        waited_seconds: "Answer waited for the guard", candidates: "Candidates found", rerank_pairs: "Pairs sent to rerank", tokens: "Tokens used", max_tokens: "Token budget",
+        waited_seconds: "Waited for the guard label before going on", candidates: "Candidates found", rerank_pairs: "Pairs sent to rerank", tokens: "Tokens used", max_tokens: "Token budget",
         why: "Why it is there",
       },
       codes: {
@@ -570,7 +570,7 @@ export const en: TranslationSchema = {
           personal_advice: "Personal advice", off_topic: "Off topic", small_talk: "Small talk", assistant_meta: "About the assistant", finance_concept: "Finance concept",
         },
         scope: { resolved: "Code chose by company name", mentions: "User tagged with @", none: "Left to the planner" },
-        plan: { planned: "Planned", empty: "Empty plan" },
+        plan: { planned: "Planned", split: "Question split into queries", empty: "Empty plan" },
         check: { accepted: "Accepted", annotated: "Has findings", blocked: "Blocked" },
         reasons: {
           not_waited: "not waited for", passed: "let through", kept: "kept the label and refused", unchecked: "not checked (the guard failed or was late)",

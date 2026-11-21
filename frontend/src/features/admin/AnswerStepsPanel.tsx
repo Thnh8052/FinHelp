@@ -40,7 +40,7 @@ export const AnswerStepsPanel: React.FC<{ messageId: string }> = ({ messageId })
           <>
             <ol className="grid gap-2.5">
               {data.steps.map((step) => {
-                const facts = describeFacts(step.facts, s.facts, s.codes.reasons);
+                const facts = describeFacts(step.facts, s.facts, { ...s.codes.input, ...s.codes.reasons });
                 return (
                   <li key={step.step}>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
