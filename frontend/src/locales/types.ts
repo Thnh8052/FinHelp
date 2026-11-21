@@ -155,7 +155,7 @@ export interface TranslationSchema {
     loadingOlder: string;
     citationUnknown: string;
     /** What the system is doing now (the streamed chat says so), never which component does it. */
-    loadingStages: { understanding: string; searching: string; writing: string; checking: string };
+    loadingStages: { understanding: string; searching: string; writing: string; analyzing: string; checking: string }; // analyzing carries {s}: the seconds since the model started thinking
     loadingSlow: string;
     systemBusy: string;
     reportWrong: string;
