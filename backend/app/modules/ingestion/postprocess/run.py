@@ -9,6 +9,7 @@ from app.modules.ingestion.postprocess.text_lines import join_broken_lines, tidy
 from app.modules.ingestion.postprocess.small_caps import build_vocabulary, fix_small_caps
 from app.modules.ingestion.postprocess.grids import load_table_grids
 from app.modules.ingestion.postprocess.table_regrid import unspan_tables
+from app.modules.ingestion.postprocess.table_rebuild import rebuild_lost_tables
 from app.modules.ingestion.postprocess.table_continued import carry_header, carry_title, continued_table, page_items, table_heading
 from app.modules.ingestion.postprocess.footnotes_captions import move_footnotes, split_captions
 from app.modules.ingestion.postprocess.headings import apply_heading_levels, drop_nav_header, load_headings, load_lost_titles, nav_headers_of, repaired_pages, restore_titles
@@ -18,9 +19,11 @@ from app.modules.ingestion.postprocess.headings import apply_heading_levels, dro
 # Giữ vì: thứ tự quan trọng (unspan_tables đầu tiên vì cần chữ ô nguyên văn; tidy_spaces sau join_broken_lines); một chỗ duy nhất để thêm
 #   lỗi mới. `grids` = các bảng Docling của trang, None khi không có docling.json (bỏ qua lỗi 3).
 #   `headings` = (tiêu đề Docling của trang, {loại: cấp}), None khi thiếu docling.json hoặc PDF (bỏ qua lỗi 5).
-def fix_page(text: str, evidence, vocabulary: Counter, grids, nav_headers: set, headings, report: dict) -> str:
+def fix_page(text: str, evidence, vocabulary: Counter, grids, nav_headers: set, headings, report: dict, number: int | None = None) -> str:
     if grids is not None:
         text = unspan_tables(text, grids, report["tables"], evidence.boxes if evidence is not None else ())
+    if evidence is not None and number is not None:  # F3: a table the parse lost is rebuilt from the PDF words (repair only, table_rebuild.py)
+        text = rebuild_lost_tables(text, grids or [], evidence.boxes, number, report["tables"])
     if evidence is not None and evidence.nav_key in nav_headers:
         text = drop_nav_header(text, evidence.nav_key, report["nav_header"])
     if headings is not None:
@@ -105,7 +108,7 @@ def process(doc_dir: Path, pdf_dir: Path, fixed_dir: Path) -> dict:
         source = repaired.get(pdf_page, raw)
         text = fix_page(source, page_evidence(pdf, cache, pdf_page), vocabulary,
                         None if grids is None else grids.get(pdf_page, []), nav_headers,
-                        None if heading_levels is None else (heading_entries.get(pdf_page, []), heading_levels), report)
+                        None if heading_levels is None else (heading_entries.get(pdf_page, []), heading_levels), report, pdf_page)
         if report["tables"]["unmatched"] > unmatched:
             report["unmatched_table_pages"].append(pdf_page)
         continues = False
