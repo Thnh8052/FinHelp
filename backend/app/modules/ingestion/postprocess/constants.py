@@ -44,6 +44,8 @@ TRAILING_PUNCT = ",.;:)\"”]!?"
 # Giữ vì: đo trên 10 tài liệu, 27 cột bản sao có cột kề trái không chữ số; giá trị của các cột đó: "$" 92, "#" 2, ngoài ra "High" (hàng
 #   header lặp trong thân, AMD p32) và "-" (AMD p57). "%" và ")" không có vì đứng SAU số, nhãn đã ở cột số.
 SYMBOL_CELLS = frozenset("$€£¥#")
+# Ý nghĩa: ký hiệu tiền tệ (SYMBOL_CELLS bỏ "#"); từ PDF có một ký hiệu này dính sau chữ số là hai từ (`split_signs`, phần mở rộng 2026-10-20 của lỗi 12).
+CURRENCY_SIGNS = SYMBOL_CELLS - {"#"}
 
 
 # Ý nghĩa: ký hiệu đứng TRƯỚC giá trị ("$", "(") dính vào từ kế tiếp, ký hiệu đứng SAU ("%", ")") dính vào từ liền trước khi gom từ PDF thành giá trị.

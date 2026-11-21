@@ -3,7 +3,7 @@ from collections import Counter
 from app.modules.ingestion.postprocess.constants import LABEL_COLUMN_TOLERANCE, PHRASE_GAP, ROW_MISMATCH, TEXT_FOLD, VALUE_GAP_TOLERANCE
 from app.modules.ingestion.postprocess.evidence import glue_superscripts, is_footnote_ref, normalise, sits_on
 from app.modules.ingestion.postprocess.grids import row_cells, table_blocks
-from app.modules.ingestion.postprocess.table_values import RegridSkip, attach_continuations, distance_to_column, first_value_column, group_value_words, is_numeric_table, is_span_copy, label_hosts, label_key, match_grid, phrase_cells, split_lines, value_columns, value_words, wrap_rows
+from app.modules.ingestion.postprocess.table_values import RegridSkip, attach_continuations, column_layouts, distance_to_column, first_value_column, group_value_words, is_numeric_table, is_span_copy, label_hosts, label_key, match_grid, phrase_cells, split_lines, value_columns, value_words, wrap_rows
 from app.modules.ingestion.postprocess.tokens import is_marker, is_number
 
 
@@ -119,11 +119,11 @@ def body_rows(rows: list, grid, headers: int, first: int, page_words: list, coun
     return [(labels(k, row), group_value_words(by_row.get(row, []))) for k, row in enumerate(range(headers, len(grid)))], False, Counter()
 
 
-# Ý nghĩa: các cụm giá trị chỉ chứa chỉ số chú thích ("(i)", "(f)(g)") thay cho giá trị: tập chỉ số trong `columns`. `groups`: các giá trị (x0, x1, [từ]) của mọi hàng.
+# Ý nghĩa: các cụm giá trị chỉ chứa chỉ số chú thích ("(i)", "(f)(g)") thay cho giá trị: tập chỉ số trong `columns`. `groups`: các giá trị (x0, x1, [từ], đầu số) của mọi hàng.
 def marker_columns(columns: list, groups: list) -> set:
     flags: dict = {}
-    for x0, x1, tokens in groups:
-        flags.setdefault(next(i for i, column in enumerate(columns) if column[0] <= x0 and x1 <= column[1]), []).append(is_marker("".join(tokens)))
+    for _, x1, tokens, start in groups:
+        flags.setdefault(next(i for i, column in enumerate(columns) if column[0] <= start and x1 <= column[1]), []).append(is_marker("".join(tokens)))
     return {index for index, found in flags.items() if all(found)}
 
 
@@ -197,9 +197,12 @@ def join_names(names: list) -> str:
 #   một nhãn lá rơi vào từ hai cụm số trở lên (Docling gộp "Settlements (h)" và "Transfers into level 3" làm một ô, JPM p183) thì tách theo cụm, với điều kiện các mảnh ghép lại
 #   đúng bằng chữ của ô; hộp nhãn chứa trọn hai cụm số mà không tách được thì bỏ. Trả danh sách tên theo cụm hoặc ném RegridSkip("columns").
 # Giữ vì: chỉ thử sau khi ghép chặt thất bại nên bảng đã dựng lại đúng không đổi; thứ tự cụm của các nhãn lá không giảm, cụm không nhãn để trống tên.
+#   `phrase_split` (bảng không dựng lại hàng): chỉ được tách nhãn ở khoảng trắng từ PHRASE_GAP trở lên giữa hai từ cùng dòng. Nhãn nhóm một dòng in giữa hai cột con
+#   ("Change 2022 vs. 2021" trên cột số tiền và cột %, American Express 2022 p49) nếu tách theo cụm gần nhất sẽ thành "Change 2022 vs." | "2021"; hai nhãn cột thật bị Docling
+#   gộp thì cách nhau xa ("Total Corning Incorporated" ... "Non-", Corning 2020 p74).
 # Giới hạn: tên của nhãn lá vẫn là chữ Docling gộp nên thành phần nhóm của header có thể sai ("Selected metrics" ở cột "Criticized nonperforming", JPM p121); nhãn nằm giữa hai
 #   cụm số (cách nhau chưa đủ ngưỡng) hoặc mảnh tách không ghép lại đúng thì bỏ.
-def relaxed_names(rows: list, cells: tuple, headers: int, leaves: list, columns: list, markers: set, page_words: list) -> list:
+def relaxed_names(rows: list, cells: tuple, headers: int, leaves: list, columns: list, markers: set, page_words: list, phrase_split: bool = False) -> list:
     real = [j for j in range(len(columns)) if j not in markers]
     if not real:
         raise RegridSkip("columns")
@@ -216,6 +219,9 @@ def relaxed_names(rows: list, cells: tuple, headers: int, leaves: list, columns:
         ordered = [word for line in split_lines(inside) for word in line]
         owners = [nearest((x0 + x1) / 2) for _, x0, x1, _ in ordered]
         if len(set(owners)) > 1:
+            if phrase_split and any(nearest((a[1] + a[2]) / 2) != nearest((b[1] + b[2]) / 2) and b[1] - a[2] < PHRASE_GAP
+                                    for line in split_lines(inside) for a, b in zip(line, line[1:])):
+                raise RegridSkip("columns")
             pieces = {j: " ".join(word for (_, _, _, word), owner in zip(ordered, owners) if owner == j) for j in sorted(set(owners))}
             if sorted("".join(pieces.values()).translate(TEXT_FOLD).replace(" ", "")) != sorted("".join(label.text.translate(TEXT_FOLD).split())):
                 raise RegridSkip("columns")
@@ -258,6 +264,45 @@ def render_table(table: list) -> list[str]:
     return [render(table[0]), "|" + "|".join("-" * (width + 2) for width in widths) + "|"] + [render(line) for line in table[1:]]
 
 
+# Ý nghĩa: cột `col` có phải chỉ là chỗ bắt đầu của một nhãn nhóm không: mọi ô header bắt đầu ở cột đó đều phủ nhiều cột, và trong phần mỗi ô phủ có cột lá (`leaves`) mang nhãn
+#   riêng một cột, mọi nhãn riêng đó nằm ở hàng header thấp hơn ô phủ.
+# Giữ vì: Docling tách "$" thành cột riêng nên ô nhóm "Other Postretirement Benefit Plans" bắt đầu ở cột "$", không có nhãn lá nào, còn "2022" / "2021" nằm ở hàng dưới (Coca-Cola 2022 p98);
+#   tâm ô nhóm rơi giữa các cột năm nên bị tính là nhãn lá thứ ba, tranh cột với "2022" (`regrid_skip_columns`). Tên nhóm đã có trong tên các cột lá bên dưới ("Other Postretirement
+#   Benefit Plans - 2022") nên bỏ cột đó không mất chữ. Nhãn riêng cùng hàng với ô phủ là header Docling xé sai, không phải nhóm (Corning 2022 p61: "Year ended 2021" phủ hai cột
+#   cạnh "December 31,"; "2021" là tên thật của cột): giữ nguyên.
+def is_group_heading(cells: tuple, headers: int, col: int, leaves: list) -> bool:
+    spans = [c for c in cells if c.row < headers and c.col == col and c.text]
+    own = lambda k: [c for c in cells if c.row < headers and c.col == k and c.col_span == 1 and c.text]
+    return bool(spans) and all(span.col_span > 1 for span in spans) and all(
+        any(k in leaves and own(k) for k in range(col + 1, col + span.col_span))
+        and all(c.row > span.row for k in range(col + 1, col + span.col_span) if k in leaves for c in own(k)) for span in spans)
+
+
+# Ý nghĩa: có hàng thân nào đặt hai giá trị vào cùng một cột của `columns` không (giá trị chỉ là chỉ số chú thích không tính). `body`: [(nhãn, các giá trị của hàng)] như `body_rows`.
+# Giữ vì: tên cột nới lỏng (`relaxed_names`) ở bảng không dựng lại hàng có thể nhận một cách chia đã chập hai cột ("27 % $ 2,864" ở American Express 2022 p54, "19 % $ 4,262" ở Nike 2021
+#   p41); một hàng PDF không bao giờ có hai số trong một cột thật.
+def crowded_columns(columns: list, body: list) -> bool:
+    for _, row_groups in body:
+        found = [next(i for i, column in enumerate(columns) if column[0] <= start and x1 <= column[1])
+                 for _, x1, tokens, start in row_groups if not is_footnote_ref("".join(tokens))]
+        if len(found) != len(set(found)):
+            return True
+    return False
+
+
+# Ý nghĩa: tên cột khi ghép chặt được: mỗi nhãn lá (tâm `centres`) về cột có tầm với (`reach`) gần nhất, các cột khác nhau theo đúng thứ tự trái sang phải; khi có cột thừa (chỉ số
+#   chú thích) thì tâm mỗi nhãn phải nằm trong tầm với cột của nó. Trả tên theo cột (cột không nhãn để trống) hoặc None.
+def strict_names(rows: list, leaves: list, centres: list, reach: list):
+    assigned = [min(range(len(reach)), key=lambda j: distance_to_column(centre, reach[j])) for centre in centres]
+    spare = len(reach) > len(leaves)
+    if not leaves or assigned != sorted(set(assigned)) or (spare and any(distance_to_column(c, reach[j]) for c, j in zip(centres, assigned))):
+        return None
+    names = [""] * len(reach)
+    for leaf, index in zip(leaves, assigned):
+        names[index] = rows[0][leaf]
+    return names
+
+
 # Ý nghĩa: lỗi 12. Dựng lại các cột giá trị của một bảng số liệu từ vị trí chữ trong PDF; trả các dòng Markdown mới (cùng số dòng với khối cũ,
 #   trừ bảng có hàng dựng lại từ dòng chữ PDF: lỗi 13, `body_rows`) hoặc None khi không áp dụng, bảng đã đúng, hoặc bị loại (đếm lý do vào
 #   `counts`: regridded, reflowed, regrid_same, regrid_skip_<lý do>, reflow_skip_<lý do>).
@@ -268,8 +313,14 @@ def render_table(table: list) -> list[str]:
 # Giới hạn: các nhãn phải ghép vào các cột khác nhau theo đúng thứ tự trái sang phải; cột còn thừa (chỉ số chú thích "(1)") để trống nhãn, và khi
 #   có cột thừa thì tâm mỗi nhãn phải nằm trong cột của nó (nhãn nằm giữa số và chỉ số chú thích thì không biết thuộc cột nào). Chữ phải khớp
 #   từng hàng (value_words); hàng bị Docling gộp hai dòng hoặc giá trị sai hàng thì dựng lại hàng từ dòng chữ PDF (lỗi 13) nếu bảng số thuần,
-#   không được thì bị loại. Ô gộp trong thân bị loại; header sai số cột chỉ được sửa (relaxed_names, lỗi 13b) ở bảng đã dựng lại hàng, còn lại bị loại (`regrid_skip_columns`).
+#   không được thì bị loại. Ô gộp trong thân bị loại. Thử lần lượt các cách chia cột của `column_layouts` (cách cũ trước, rồi chia theo phần số khi "$" in xa số làm cột chập):
+#   mỗi cách ghép chặt trước; header sai số cột được sửa bằng tên nới lỏng (relaxed_names, lỗi 13b) ở bảng đã dựng lại hàng với mọi cách chia, ở bảng khác chỉ với cách chia theo phần
+#   số (nên chỉ bảng có "$" đứng riêng trước số: bảng mốc năm Boeing 2018 p31 xếp lại theo tên nới lỏng thì sai), tách nhãn chỉ ở khoảng trắng lớn và không hàng nào hai giá trị
+#   một cột (`crowded_columns`); không cách nào ghép được thì bị loại (`regrid_skip_columns`).
+#   Ô header nhóm bắt đầu ở cột "$" không phải nhãn lá (`is_group_heading`).
 #   Với bảng dựng lại hàng, ô giá trị chữ lấy đúng chữ ô Docling cùng khóa (label_key), từ Docling nhét vào header được bỏ khỏi header (strip_moved).
+#   Phần mở rộng 2026-10-20 (column_layouts, is_group_heading, strict_names, crowded_columns, phrase_split, split_signs) đưa từ bản nghiên cứu sang backend ngày 21/11/2026:
+#   thiếu nó, postprocess của backend cho bảng kém hơn bản nghiên cứu ở 67 trang của 23 trong 134 tài liệu (đo 20/11).
 def regrid_block(rows: list, grid, headers: int, page_words: list, counts: Counter, ghosts: list = ()):
     cells = getattr(grid, "cells", ())
     ncols = len(grid[0])
@@ -279,10 +330,10 @@ def regrid_block(rows: list, grid, headers: int, page_words: list, counts: Count
     try:
         body, reflowed, moved_out = body_rows(rows, grid, headers, first, page_words, counts)
         groups = [group for _, row_groups in body for group in row_groups]
-        columns = value_columns(groups)
         header = grid[:headers]
         copies = [col for col in range(ncols) if is_span_copy(header, col)]
         leaves = [col for col in range(first, ncols) if col not in copies and (col not in ghosts or col + 1 in copies) and any(row[col][0] for row in header)]
+        leaves = [col for col in leaves if not is_group_heading(cells, headers, col, leaves)]
         centres = []
         for leaf in leaves:
             labels = [c for c in cells if c.row < headers and c.col == leaf and c.text]
@@ -290,18 +341,25 @@ def regrid_block(rows: list, grid, headers: int, page_words: list, counts: Count
                 raise RegridSkip("columns")
             label = min(labels, key=lambda c: (c.col_span, -c.row))
             centres.append((label.l + label.r) / 2)
-        if ghosts and len(columns) > len(leaves):
-            raise RegridSkip("ghost")
-        assigned = [min(range(len(columns)), key=lambda j: distance_to_column(centre, columns[j])) for centre in centres]
-        spare = len(columns) > len(leaves)
-        names = [""] * len(columns)
-        if leaves and assigned == sorted(set(assigned)) and not (spare and any(distance_to_column(c, columns[j]) for c, j in zip(centres, assigned))):
-            for leaf, index in zip(leaves, assigned):
-                names[index] = rows[0][leaf]
-        elif reflowed:
-            names = relaxed_names(rows, cells, headers, leaves, columns, marker_columns(columns, groups), page_words)
-        else:
-            raise RegridSkip("columns")
+        layouts = column_layouts(groups)
+        found = None
+        for k, (columns, reach) in enumerate(layouts):
+            if ghosts and len(columns) > len(leaves):
+                continue
+            names = strict_names(rows, leaves, centres, reach)
+            if names is None and (reflowed or k):
+                try:
+                    names = relaxed_names(rows, cells, headers, leaves, reach, marker_columns(columns, groups), page_words, not reflowed)
+                except RegridSkip:
+                    names = None
+                if names is not None and not reflowed and crowded_columns(columns, body):
+                    names = None
+            if names is not None:
+                found = columns, names
+                break
+        if found is None:
+            raise RegridSkip("ghost" if ghosts and len(layouts[0][0]) > len(leaves) else "columns")
+        columns, names = found
     except RegridSkip as skip:
         counts[f"regrid_skip_{skip.reason}"] += 1
         return None
@@ -314,8 +372,8 @@ def regrid_block(rows: list, grid, headers: int, page_words: list, counts: Count
     table[0] = [strip_moved(cell, moved_out) for cell in table[0]]
     for row_labels, row_groups in body:
         values = [""] * len(columns)
-        for x0, x1, tokens in row_groups:
-            index = next(i for i, column in enumerate(columns) if column[0] <= x0 and x1 <= column[1])
+        for _, x1, tokens, start in row_groups:
+            index = next(i for i, column in enumerate(columns) if column[0] <= start and x1 <= column[1])
             values[index] = f"{values[index]} {' '.join(tokens)}".strip()
         table.append(row_labels + [spelling.get(label_key(value), value) for value in values])
     if table == [rows[0]] + rows[2:]:

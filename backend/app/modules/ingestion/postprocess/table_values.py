@@ -1,4 +1,4 @@
-from app.modules.ingestion.postprocess.constants import BOUNDARY_MARGIN, NUMERIC_TABLE_MIN_SHARE, PHRASE_GAP, SYMBOL_CELLS, TEXT_FOLD, VALUE_GAP_TOLERANCE, VALUE_LINE_TOLERANCE, VALUE_PREFIXES, VALUE_SUFFIXES
+from app.modules.ingestion.postprocess.constants import BOUNDARY_MARGIN, CURRENCY_SIGNS, NUMERIC_TABLE_MIN_SHARE, PHRASE_GAP, SYMBOL_CELLS, TEXT_FOLD, VALUE_GAP_TOLERANCE, VALUE_LINE_TOLERANCE, VALUE_PREFIXES, VALUE_SUFFIXES
 from app.modules.ingestion.postprocess.tokens import is_marker, is_number, is_placeholder, is_value_token
 
 
@@ -71,16 +71,30 @@ def is_numeric_table(body: list, first: int, ncols: int) -> bool:
     return bool(texts) and sum(all(is_value_token(token) for token in text.split()) for text in texts) >= NUMERIC_TABLE_MIN_SHARE * len(texts)
 
 
+# Ý nghĩa: các từ PDF (x0, x1, chữ) với từ có ký hiệu tiền dính sau chữ số ("(29.8)$") tách thành hai từ chạm nhau: số rồi ký hiệu, ranh giới chia theo số ký tự.
+# Giữ vì: ký hiệu đó là "$" của giá trị cột kế bên, PDF in sát không cách (General Mills 2022 p62 "(29.8)$ -": 29 từ, chỉ ở tài liệu này); để nguyên thì nó đi theo số cột trước ("$ (29.8)$").
+def split_signs(words: list) -> list:
+    out: list = []
+    for x0, x1, text in words:
+        if len(text) > 1 and text[-1] in CURRENCY_SIGNS and any(ch.isdigit() for ch in text):
+            cut = x0 + (x1 - x0) * (len(text) - 1) / len(text)
+            out += [(x0, cut, text[:-1]), (cut, x1, text[-1])]
+        else:
+            out.append((x0, x1, text))
+    return out
+
+
 # Ý nghĩa: gom các từ PDF của một hàng (x0, x1, chữ) thành giá trị theo thứ tự trái sang phải: "$" và "(" dính vào từ kế tiếp, "%" và ")"
-#   dính vào từ liền trước. Trả [(x0, x1, [từ])] với chữ đã qua TEXT_FOLD.
+#   dính vào từ liền trước. Trả [(x0, x1, [từ], đầu số)] với chữ đã qua TEXT_FOLD; `đầu số` là x0 của từ đầu tiên không phải tiền tố ("$ 43,004" bắt đầu ở "43,004").
 def group_value_words(words: list) -> list:
     groups: list = []
-    for x0, x1, text in sorted(words):
+    for x0, x1, text in sorted(split_signs(words)):
         text = text.translate(TEXT_FOLD)
         if groups and (groups[-1][2][-1] in VALUE_PREFIXES or text in VALUE_SUFFIXES):
-            groups[-1] = (min(groups[-1][0], x0), max(groups[-1][1], x1), groups[-1][2] + [text])
+            start = x0 if all(token in VALUE_PREFIXES for token in groups[-1][2]) else groups[-1][3]
+            groups[-1] = (min(groups[-1][0], x0), max(groups[-1][1], x1), groups[-1][2] + [text], start)
         else:
-            groups.append((x0, x1, [text]))
+            groups.append((x0, x1, [text], x0))
     return groups
 
 
@@ -96,6 +110,25 @@ def value_columns(groups: list, gap: float = VALUE_GAP_TOLERANCE) -> list:
         else:
             columns.append([x0, x1])
     return columns
+
+
+# Ý nghĩa: các cách chia cột giá trị để thử ghép nhãn header, theo thứ tự: [(cột, tầm với)]. Thứ nhất là hợp khoảng ngang của cả giá trị kể cả "$" (cách cũ; tầm với là chính cột).
+#   Thứ hai là hợp khoảng ngang chỉ của phần số (từ `đầu số`); tầm với của mỗi cột kéo sang trái tới "$" xa nhất của nó, dùng để so với tâm nhãn header. Cách thứ hai chỉ có khi
+#   khoảng ngang khác cách thứ nhất, tức là có giá trị mang "$" (hoặc "(") là từ riêng đứng trước số; bảng không có ký hiệu đó (mốc năm, số trang) chỉ có cách thứ nhất.
+#   Cách thứ hai bị bỏ khi "$" của một cột vươn sang trái quá mép phải phần số của cột trước (chạm đúng mép thì được: từ PDF dính "(29.8)$" tách ra chạm nhau).
+# Giữ vì: báo cáo in "$" sát lề trái cột, cách số 30-60 điểm (Coca-Cola 2022 p63: "$" của 2021 cách số 2022 chưa tới VALUE_GAP_TOLERANCE) nên "$ 38,655" chồng lên cột năm trước,
+#   ba năm chập thành hai cột và bảng bị bỏ (41 bảng `regrid_skip_columns` ở Coca-Cola 2022). Cách cũ đứng trước nên bảng đã dựng lại được không đổi (Corning 2020 p86 có hai
+#   khối in lệch nhau, chỉ cách cũ đúng). "$" vươn qua số của cột trước nghĩa là chia theo phần số đã xé một cột thật làm hai (3M 2018 p106: khối 2017 in lệch phải 12 điểm so với
+#   khối 2018, "$ 197" phủ cả số 53 của cột kia).
+def column_layouts(groups: list) -> list:
+    whole = value_columns(groups)
+    numbers = value_columns([(start, x1) for _, x1, _, start in groups])
+    if numbers == whole:
+        return [(whole, whole)]
+    reach = [[min(x0 for x0, x1, _, start in groups if column[0] <= start and x1 <= column[1]), column[1]] for column in numbers]
+    if any(reach[j][0] < numbers[j - 1][1] for j in range(1, len(numbers))):
+        return [(whole, whole)]
+    return [(whole, whole), (numbers, reach)]
 
 
 # Ý nghĩa: từ PDF của từng hàng giá trị: {hàng lưới: [(x0, x1, chữ)]}; ném RegridSkip nếu chữ PDF không khớp chữ các ô giá trị của Docling.
