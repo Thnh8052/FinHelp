@@ -1,5 +1,5 @@
 """The steps of many answers added up (slice 3 of the admin trace, owner 20/11): where questions stop, how long each step takes, what the guard decided and whether the
-answer waited for it, the steps dropped for time, and how often "Search deeper" was offered and clicked. `summarize` is pure (a list of stored traces in, numbers out);
+question waited for its label, the steps dropped for time, and how often "Search deeper" was offered and clicked. `summarize` is pure (a list of stored traces in, numbers out);
 `steps_summary` reads the traces of a time window and a user scope from the messages."""
 from collections import Counter
 from datetime import datetime, timedelta, timezone

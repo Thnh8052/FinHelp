@@ -92,7 +92,7 @@ class _GuardState:
     evidence: List[str] = field(default_factory=list)  # what the rules found tying the message to the reports (set once they ran): the second key of off_topic
     ruled: bool = False  # the rules ran and `evidence` is known: a chat label can then stop the search at once
     cleared: bool = False  # the label was read and the message may be answered
-    waited: Optional[float] = None  # seconds the answer waited for the label once it was ready to be written (0: the label came first)
+    waited: Optional[float] = None  # seconds the question waited for the label the first time it needed it: before the "understood" line, or before the answer when there is none (0: the label came first); the search runs meanwhile
 
 
 class GuardBlocked(Exception):

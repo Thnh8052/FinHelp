@@ -59,14 +59,14 @@ def explain(trace: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
     if decision.get("action"):
         parts = len(t.get("parts") or decision.get("sub_questions") or []) if decision["action"] == "split_questions" else None
-        steps["input"] = _step("input", "stopped" if stop == "input" else "ok", decision["action"], assumption=_text(decision["assumption"]) if decision.get("assumption") else None,
+        steps["input"] = _step("input", "stopped" if stop == "input" else "ok", "proceed" if stop == "guard" else decision["action"], assumption=_text(decision["assumption"]) if decision.get("assumption") else None,
                                flags=decision.get("flags"), unlisted=(decision.get("unlisted_companies") or [])[:MAX_LISTED], available=(decision.get("available") or [])[:8], parts=parts)
 
     if guard:
         raw = guard.get("outcome")
         outcome = "stopped" if stop == "guard" else "skipped" if raw == "not_waited" else "warn" if guard.get("error") or raw == "unchecked" else "ok"
         steps["guard"] = _step("guard", outcome, guard.get("label"), guard.get("seconds"), result=raw, where=guard.get("where"), error=guard.get("error"),
-                                waited_seconds=_num(guard.get("waited_seconds")))
+                                waited_seconds=_num(guard.get("waited_seconds")), reply=decision.get("action") if stop == "guard" else None)
 
     if targets or t.get("unlisted_companies") or stop == "scope":
         steps["scope"] = _step("scope", "stopped" if stop == "scope" else "ok", targets.get("rule"), documents=len(targets.get("documents") or []) or None, routing=t.get("routing"),
@@ -74,7 +74,7 @@ def explain(trace: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
     if "plan" in t or "sub_queries" in t or stop == "plan":
         plan = t.get("plan") or []
-        steps["plan"] = _step("plan", "stopped" if stop == "plan" else "warn" if "plan_deadline" in degraded else "ok", "empty" if not plan else "planned", timings.get("plan"),
+        steps["plan"] = _step("plan", "stopped" if stop == "plan" else "warn" if "plan_deadline" in degraded else "ok", "planned" if plan else "empty" if stop == "plan" else "split", timings.get("plan"),
                               items=len(plan), queries=[_text(p.get("query", "")) for p in plan[:MAX_LISTED]])
 
     if timings.get("search") is not None or t.get("chunk_ids"):

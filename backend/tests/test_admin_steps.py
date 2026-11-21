@@ -80,7 +80,8 @@ def test_the_guard_stops_a_question_with_its_label(guard, outcome_where):
     out = explain({"intent": "refuse_sensitive", "guard": guard, "decision": {"action": "refuse_sensitive"}, "timings": {"total": 1.46}})
     s = by_step(out)
     assert out["stopped_at"] == "guard" and names(out) == ["gate", "input", "guard"]
-    assert s["input"]["outcome"] == "ok"  # the rules let it through: the label is what turned it away
+    assert s["input"]["outcome"] == "ok" and s["input"]["code"] == "proceed"  # the rules let it through: the label is what turned it away, not the reply's action
+    assert s["guard"]["facts"]["reply"] == "refuse_sensitive"  # the reply the label led to
     assert (s["guard"]["outcome"], s["guard"]["code"], s["guard"]["seconds"]) == ("stopped", guard["label"], 1.46)
     assert s["guard"]["facts"].get("where") == outcome_where
 
@@ -189,3 +190,10 @@ def test_the_guard_wait_the_search_funnel_and_the_button_reasons_show_in_their_s
 def test_a_trace_without_the_new_fields_still_explains_itself():
     s = by_step(explain(trace()))
     assert "waited_seconds" not in s["guard"]["facts"] and "candidates" not in s["search"]["facts"] and "why" not in s["buttons"]["facts"]
+
+
+def test_a_single_document_question_has_no_plan_but_a_split_of_the_question_and_that_is_not_an_empty_plan():
+    # live trial 21/11: the one-report path has no planner, its query split is what takes the "plan" seconds; it showed as "empty plan"
+    s = by_step(explain(trace(routing="targets_single", plan=[], sub_queries=["consolidated statements of income"])))
+    assert (s["plan"]["code"], s["plan"]["outcome"]) == ("split", "ok")
+    assert by_step(explain(trace(intent="empty_plan", plan=[], sub_queries=[])))["plan"]["code"] == "empty"  # only a stop at the plan is an empty plan

@@ -519,7 +519,7 @@ export const vi: TranslationSchema = {
       median: "Trung vị (giây)",
       p90: "p90 (giây)",
       guardTitle: "Guard",
-      guardWait: "Câu trả lời phải chờ guard hơn nửa giây: {over} trên {n} câu",
+      guardWait: "Phải chờ nhãn guard hơn nửa giây trước khi đi tiếp: {over} trên {n} câu",
       degradedTitle: "Bước bị bỏ vì chậm",
       deeperTitle: "Nút Tìm kỹ hơn",
       deeperLine: "Hiện ở {offered} câu (nổi bật ở {prominent}), được bấm {clicks} lần ({share} số câu có nút)",
@@ -548,13 +548,13 @@ export const vi: TranslationSchema = {
       },
       facts: {
         signals: "Tín hiệu", assumption: "Giả định", flags: "Cờ", unlisted: "Công ty ngoài danh sách", available: "Có trong tài liệu", parts: "Số câu con",
-        result: "Kết quả của guard", where: "Dừng khi", error: "Lỗi", documents: "Số tài liệu", routing: "Cách chọn", alternatives: "Tài liệu thay thế",
+        result: "Kết quả của guard", reply: "Câu trả lời cố định", where: "Dừng khi", error: "Lỗi", documents: "Số tài liệu", routing: "Cách chọn", alternatives: "Tài liệu thay thế",
         items: "Số lượt tìm", queries: "Truy vấn", excerpts: "Đoạn gửi cho mô hình", pages: "Số trang", embed_seconds: "Mã hóa câu hỏi", vector_seconds: "Tìm theo vectơ",
         bm25_seconds: "Tìm theo từ khóa (BM25)", mongo_text_seconds: "Tìm chữ", rerank_seconds: "Chấm lại", hydrate_seconds: "Lấy nội dung", degraded: "Bước bị bỏ vì chậm",
         first_text_seconds: "Tới chữ đầu tiên", prompt_tokens: "Token vào", completion_tokens: "Token ra", reasoning_tokens: "Token suy nghĩ", notes: "Ghi chú gửi cho mô hình",
         status: "Trạng thái", attempts: "Số lần thử", findings: "Điểm cần xem", unverified_figures: "Số chưa đối chiếu được", search_more: "Nút Tìm kỹ hơn",
         chooser: "Tài liệu để đổi", edit_question: "Nút Sửa câu hỏi", try_again: "Nút Thử lại",
-        waited_seconds: "Câu trả lời chờ guard", candidates: "Ứng viên tìm được", rerank_pairs: "Cặp gửi chấm lại", tokens: "Token đã dùng", max_tokens: "Ngân sách token",
+        waited_seconds: "Chờ nhãn guard trước khi đi tiếp", candidates: "Ứng viên tìm được", rerank_pairs: "Cặp gửi chấm lại", tokens: "Token đã dùng", max_tokens: "Ngân sách token",
         why: "Vì sao có",
       },
       codes: {
@@ -570,7 +570,7 @@ export const vi: TranslationSchema = {
           personal_advice: "Lời khuyên cá nhân", off_topic: "Ngoài chủ đề", small_talk: "Chào hỏi", assistant_meta: "Hỏi về trợ lý", finance_concept: "Khái niệm tài chính",
         },
         scope: { resolved: "Mã chọn theo tên công ty", mentions: "Người dùng gắn thẻ @", none: "Để bộ lập kế hoạch chọn" },
-        plan: { planned: "Có kế hoạch", empty: "Kế hoạch rỗng" },
+        plan: { planned: "Có kế hoạch", split: "Tách câu hỏi thành truy vấn", empty: "Kế hoạch rỗng" },
         check: { accepted: "Chấp nhận", annotated: "Có điểm cần xem", blocked: "Bị chặn" },
         reasons: {
           not_waited: "không chờ guard", passed: "cho qua", kept: "giữ nhãn và từ chối", unchecked: "chưa kiểm được (guard lỗi hoặc quá hạn)",
