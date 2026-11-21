@@ -3,6 +3,7 @@ from collections import Counter
 from app.modules.ingestion.postprocess.constants import LABEL_COLUMN_TOLERANCE, PHRASE_GAP, ROW_MISMATCH, TEXT_FOLD, VALUE_GAP_TOLERANCE
 from app.modules.ingestion.postprocess.evidence import glue_superscripts, is_footnote_ref, normalise, sits_on
 from app.modules.ingestion.postprocess.grids import row_cells, table_blocks
+from app.modules.ingestion.postprocess.table_continued import is_data_row
 from app.modules.ingestion.postprocess.table_values import RegridSkip, attach_continuations, column_layouts, distance_to_column, first_value_column, group_value_words, is_numeric_table, is_span_copy, label_hosts, label_key, match_grid, phrase_cells, split_lines, value_columns, value_words, wrap_rows
 from app.modules.ingestion.postprocess.tokens import is_marker, is_number
 
@@ -384,11 +385,45 @@ def regrid_block(rows: list, grid, headers: int, page_words: list, counts: Count
     return render_table(table)
 
 
+# Ý nghĩa: F2. Tên cột `col` mà bộ ghi Markdown của Docling viết cho `headers` hàng header đầu của lưới: chữ khác rỗng của từng hàng từ trên xuống, nối bằng " - ",
+#   chữ bằng chữ hàng ngay trên chỉ viết một lần.
+# Giữ vì: đo 21/11 trên 2.670 bảng có từ hai hàng header (60 tài liệu đầu): cả 2.670 khớp từng ô với Markdown của Docling.
+def header_name(grid, headers: int, col: int) -> str:
+    out: list = []
+    for r in range(headers):
+        text = grid[r][col][0]
+        if text and (not out or out[-1] != text):
+            out.append(text)
+    return " - ".join(out)
+
+
+# Ý nghĩa: F2. Hàng dữ liệu mà TableFormer gắn cờ header cột: trong `headers` hàng header đầu của lưới (khối Markdown `rows`: header, dòng ngăn, thân), hàng đầu tiên là
+#   hàng dữ liệu theo lỗi 14 (`is_data_row`: nhãn chữ rồi chỉ giá trị, không năm), khi mọi hàng header từ đó xuống là hàng dữ liệu hoặc chỉ có nhãn, được trả về thân bảng.
+#   Trả (các hàng Markdown mới của khối, số hàng header mới, có dựng lại cột được không, số hàng trả về) hoặc None. Nếu mọi hàng header là hàng dữ liệu thì hàng đầu được viết
+#   thành dòng header Markdown như Docling viết bảng không có header, không dựng lại cột (không có tên cột), để lỗi 14 (`carry_header`) chép header của trang trước hoặc chèn header trống.
+# Giữ vì: Docling viết mọi hàng header thành MỘT dòng nên giá trị của hàng dữ liệu nằm trong tên cột: Amazon 2017 p37 "Year Ended December 31, - 2015 - $ 14,557" (tiền đầu kỳ),
+#   Pfizer 2021 p57 "... - 2021 - $ 81,288" (doanh thu), Walmart 2019 p78 "6,005 - 5,680" (hai hàng dữ liệu nối nhau). Đo 21/11 trên 134 tài liệu: 20 bảng, 19 thật.
+# Giới hạn: PG&E 2022 p242 (giá cổ phiếu "$ 2.00", "$ 4.00" là tên cột thật của bảng make-whole) cũng bị trả về thân (chữ không mất). Bảng chỉ có một hàng header là hàng dữ liệu
+#   không đổi (lỗi 14 lo). Hàng header dữ liệu nằm trên một hàng header thật không đổi. Các bước sau ghép lưới theo Markdown gốc (`source`) nên vẫn đếm số hàng header cũ
+#   (tỉ lệ chữ đậm của header ở lỗi 14).
+def demote_data_rows(rows: list, grid, headers: int):
+    if headers < 2:
+        return None
+    texts = [[text for text, _ in grid[r]] for r in range(headers)]
+    first = next((r for r in range(headers) if is_data_row(texts[r])), None)
+    if first is None or not all(is_data_row(texts[r]) or not any(texts[r][1:]) for r in range(first, headers)):
+        return None
+    if first == 0:
+        return [texts[0], rows[1]] + texts[1:] + rows[2:], 1, False, headers
+    return [[header_name(grid, first, col) for col in range(len(grid[0]))], rows[1]] + texts[first:] + rows[2:], first, True, headers - first
+
+
 # Ý nghĩa: lỗi 3. Với mỗi khối bảng Markdown của trang: ghép với bảng Docling, xóa chữ ở các ô bản sao của ô gộp ngang (thay bằng đúng
 #   ngần ấy dấu cách để bảng giữ nguyên căn cột). Lỗi 11: ở header, nhãn của cột "$" được chuyển sang cột số kề phải (`label_hosts`) thay vì
 #   bị bỏ ở cột số. Lỗi 12: bảng số liệu có chữ PDF (`page_words`) và hộp bao ô được dựng lại cột (`regrid_block`) trước, bảng đã dựng lại không
 #   qua hai bước kia. Lỗi 13: hàng dựng lại từ dòng chữ PDF làm đổi số dòng của khối, các khối sau được dịch theo. Đếm vào `counts`: blocks,
 #   matched, unmatched, tables_changed, cells_blanked, labels_moved, regridded, reflowed, regrid_same, regrid_skip_* (kể cả `wrapped`: chữ xuống dòng), reflow_skip_*.
+#   F2: trước các bước đó, hàng dữ liệu bị gắn cờ header được trả về thân bảng (`demote_data_rows`; counts `header_rows_demoted`).
 # Giữ vì: "Consolidated Statements of Income" lặp 3 lần trên một hàng làm phình token chunk bảng và lệch trọng số BM25 về phía nhãn.
 # Giới hạn: chạy TRƯỚC mọi bước sửa chữ khác (cần chữ ô còn nguyên văn để so khớp). Ô gộp theo hàng không xử lý. Khối không ghép được
 #   thì giữ nguyên, không đoán.
@@ -408,9 +443,19 @@ def unspan_tables(text: str, grids: list, counts: Counter, page_words: list = ()
         candidates.remove(grid)
         counts["matched"] += 1
         headers = len(grid) - (len(block) - 2)
+        demoted = demote_data_rows(rows, grid, headers)
+        regrid_ok = True
+        if demoted is not None:
+            new_rows, headers, regrid_ok, moved = demoted
+            rendered = render_table([new_rows[0]] + new_rows[2:])
+            lines[block[0]:block[-1] + 1] = rendered
+            shift += len(rendered) - len(block)
+            block = list(range(block[0], block[0] + len(rendered)))
+            rows = [row_cells(lines[i]) for i in block]
+            counts["header_rows_demoted"] += moved
         first = first_value_column(grid[headers:], len(grid[0]))
         ghosts = ghost_columns(getattr(grid, "cells", ()), headers, first, len(grid[0]), page_words, rows[0]) if first is not None else []
-        regridded = regrid_block(rows, grid, headers, glued, counts, ghosts)
+        regridded = regrid_block(rows, grid, headers, glued, counts, ghosts) if regrid_ok else None
         if regridded:
             lines[block[0]:block[-1] + 1] = regridded
             shift += len(regridded) - len(block)
