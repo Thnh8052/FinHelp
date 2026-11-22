@@ -44,9 +44,18 @@ class SourceSelectionError(DomainException):
 
 
 def ocr_note(numbers: List[int]) -> str:
-    """The note for excerpts whose page was read by the OCR fallback (chunk flag "ocr", ingestion/page_quality.py): the figures may be misread."""
-    return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + " were read by OCR from scanned pages: a figure may be misread. When you use a figure from them, "
+    """The note for excerpts whose page was read again by the OCR fallback (chunk flag "ocr", ingestion/page_quality.py: a scan, garbled text, lost text or
+    a lost table, owner 22/11): the figures may be misread."""
+    return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + " were read again by OCR: a figure may be misread. When you use a figure from them, "
             "say that it comes from OCR text and should be checked against the page.")
+
+
+def figure_note(numbers: List[int]) -> str:
+    """The note for excerpts holding a picture described by the vision model (chunk flag "figure", ingestion/figures.py, owner 22/11): a value read
+    from an axis is marked "~" and is an estimate."""
+    return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + ' contain a description of a chart or picture read from the image (it starts with "[Figure read '
+            'from the image"). Its figures were copied from the picture; a value marked "~" was read from an axis and is an estimate. When you use a figure from it, '
+            'say that it comes from a chart, and give a "~" value as approximate.')
 
 
 class Unfinished(str):
@@ -229,6 +238,9 @@ class RAGWorkflowOrchestrator:
         ocr_flagged = [n for n, c in enumerate(retrieved, 1) if "ocr" in (c.get("flags") or [])]
         if ocr_flagged:
             notes.append(ocr_note(ocr_flagged))
+        figure_flagged = [n for n, c in enumerate(retrieved, 1) if "figure" in (c.get("flags") or [])]
+        if figure_flagged:
+            notes.append(figure_note(figure_flagged))
         two_step = writer_note(found.hop)  # MULTIHOP_ENABLED: the first step's result and its excerpts, to check and state before the second step
         if two_step:
             notes.append(two_step)
@@ -298,6 +310,7 @@ class RAGWorkflowOrchestrator:
                 "targets": {"rule": targets.rule, "documents": targets.document_ids},
                 "suspicious_excerpts": flagged,
                 "ocr_excerpts": ocr_flagged,
+                "figure_excerpts": figure_flagged,
                 "plan": [{"query": p.query, "documents": [labels.get(d, d) for d in p.document_ids] or "all"} for p in plan],
                 "sub_queries": sub_queries,
                 **({"multihop": found.hop} if found.hop else {}),

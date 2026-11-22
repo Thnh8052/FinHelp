@@ -89,11 +89,20 @@ class Settings(BaseSettings):
     # --- Research core (FinanceBench 118-121/150 configuration) -----------------------------------------
     # Ingestion: Docling (TableFormer ACCURATE) + postprocess in a subprocess, or "pymupdf" for a fast, lower-quality parse.
     PARSER_ENGINE: str = "docling"
-    # OCR fallback (spec L8; stage 1 of 14/11): Docling runs with do_ocr=False, so a scanned page gives no text. Pages it reads badly (a scan, garbled text, text it lost; ingestion/
-    # page_quality.py) are read again, those pages only, by an OCR backend named here (a key of page_quality.READERS; none exists until stage 2). Off until a backend is measured.
-    OCR_FALLBACK_ENABLED: bool = False
-    OCR_BACKEND: str = ""
-    OCR_FALLBACK_MAX_PAGES: int = 30  # at most this many pages of one document are sent to the backend: the rest keep Docling's text (time and money)
+    # OCR fallback (spec L8): Docling runs with do_ocr=False, so a scanned page gives no text. Pages it reads badly (a scan, garbled text, text it lost, a table F3 could not
+    # rebuild; ingestion/page_quality.py) are read again, those pages only, by the OCR backend named here (a key of page_quality.READERS). Datalab Chandra since 22/11:
+    # 97.1 % of 648 true table rows on 40 scanned IFRS pages vs 92.0 % for Docling with OCR, 3 dollars per 1,000 pages (ocr_scan_2026-11-22.md). No page cap (owner 22/11).
+    # No DATALAB_API_KEY: no request, Docling's pages stand.
+    OCR_FALLBACK_ENABLED: bool = True
+    OCR_BACKEND: str = "chandra"
+    DATALAB_API_KEY: Optional[str] = Field(default=None, repr=False)
+    DATALAB_MODE: str = "balanced"  # the measured mode
+    # Pictures whose figures are only in the pixels (ingestion/figures.py) are described by a vision model through the OpenAI API (OPENAI_API_KEY; none: no request).
+    # gpt-4.1-mini: label next to its value 92 % on 34 pictures, NO_DATA on 5 of 5 logos/photos, about 0.5 dollar per 1,000 pictures (vlm_bench_2026-11-22.md).
+    FIGURE_READER_ENABLED: bool = True
+    FIGURE_MODEL: str = "gpt-4.1-mini"
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    API_READ_CONCURRENCY: int = 4  # requests in flight at once for one document (Chandra pages, pictures)
     DOCLING_MODE: str = "accurate"  # "accurate" | "fast"
     DOCLING_DEVICE: str = "auto"  # auto | cuda | cpu
     DOCLING_TIMEOUT_SECONDS: int = 3600
