@@ -2,6 +2,8 @@
 excerpts came from OCR. Production runs Docling with do_ocr=False, so a scanned page used to give an empty text (spec L8). Since 22/11 the reader is Datalab Chandra
 (api_readers.py, tested in test_api_readers.py), there is no page cap, and a table F3 could not rebuild is a fourth reason; here a fake reader is used.
 The PDFs are made here with PyMuPDF: a text page, a page that is only a picture of a text page (a scan), a cover with a small logo, a blank page."""
+import asyncio
+
 import fitz
 import pytest
 
@@ -105,7 +107,7 @@ async def test_only_the_bad_pages_are_sent_and_what_comes_back_is_marked(tmp_pat
     assert sent == [[2]]
     assert out[0] is pages[0] and out[2] is pages[2] and "ocr" not in out[0]
     assert out[1] == {"page_number": 2, "text": "| Revenue line 0 | 1,000 | 2,000 |", "tables": [], "ocr": True}
-    assert report == {"bad": {2: "scanned"}, "sent": [2], "replaced": [2]}
+    assert report == {"bad": {2: "scanned"}, "early": [], "sent": [2], "replaced": [2]}
 
 
 async def test_no_bad_page_costs_no_call(tmp_path):
@@ -204,7 +206,7 @@ async def test_the_switch_on_rescues_and_reports_into_the_timings(tmp_path, monk
     info = {}
     out = await rescue_if_enabled(pdf, [page(1, TABLE), page(2, "")], info)
     assert [p.get("ocr", False) for p in out] == [False, True]
-    assert info == {"ocr_bad_pages": 1, "ocr_replaced_pages": 1}
+    assert info == {"ocr_bad_pages": 1, "ocr_early_pages": 0, "ocr_replaced_pages": 1}
 
 
 def test_the_defaults_turn_the_rescue_on_with_chandra_and_no_cap():
@@ -280,7 +282,149 @@ async def test_excerpts_read_by_ocr_are_announced_to_the_answer(monkeypatch):
     finally:
         CHUNKS[1].pop("flags")
     assert r["trace"]["ocr_excerpts"] == [2]
-    note = next(n for n in calls[0] if "read by OCR" in n)
-    assert note.startswith("Excerpts [2] were read by OCR from scanned pages") and "check" in note
+    note = next(n for n in calls[0] if "read again by OCR" in n)
+    # owner 22/11: OCR now also reads garbled pages, pages with lost text and lost tables, not only scans
+    assert note == ("Excerpts [2] were read again by OCR: a figure may be misread. When you use a figure from them, "
+                    "say that it comes from OCR text and should be checked against the page.")
     clean = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
     assert clean["trace"]["ocr_excerpts"] == []
+
+
+async def test_excerpts_holding_a_picture_description_are_announced_to_the_answer(monkeypatch):
+    """Owner 22/11: a value the vision model read from an axis is marked "~"; the answer must give it as approximate and say it comes from a chart."""
+    from app.modules.query_router.input_policy import Decision
+    from tests.test_validation import CHUNKS, _orchestrator, _scope
+
+    orch, calls = _orchestrator(["AMD revenue was $25,785 million in 2024 [1]."], monkeypatch)
+    CHUNKS[0]["flags"] = ["figure"]
+    try:
+        r = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
+    finally:
+        CHUNKS[0].pop("flags")
+    assert r["trace"]["figure_excerpts"] == [1] and r["trace"]["ocr_excerpts"] == []
+    note = next(n for n in calls[0] if "read from the image" in n)
+    assert note == ('Excerpts [1] contain a description of a chart or picture read from the image (it starts with "[Figure read from the image"). '
+                    'Its figures were copied from the picture; a value marked "~" was read from an axis and is an estimate. When you use a figure from it, '
+                    'say that it comes from a chart, and give a "~" value as approximate.')
+    assert not any("read again by OCR" in n for n in calls[0])
+    clean = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
+    assert clean["trace"]["figure_excerpts"] == []
+
+
+# ---------------------------------------------------------------- scanned pages are read while Docling runs (owner 22/11)
+# A scan is known from the PDF alone (no text layer, pictures cover the page), so those pages go to the reader as soon as the file arrives;
+# the reasons that need Docling's text (garbled, missing, lost_table) are still checked after it. A page read early is never sent again.
+def test_scanned_pages_are_found_from_the_pdf_alone(tmp_path):
+    pdf = make_pdf(tmp_path / "s1.pdf", ["text", "scan", "logo", "scan", "blank"])
+    assert page_quality.scanned_pages(pdf) == [2, 4]
+
+
+async def test_the_early_read_sends_only_the_scanned_pages(tmp_path, monkeypatch):
+    pdf = make_pdf(tmp_path / "s2.pdf", ["text", "scan", "scan"])
+    sent = []
+
+    async def read(path, numbers):
+        sent.append(list(numbers))
+        return {n: "| Revenue | 1,000 |" for n in numbers}
+
+    monkeypatch.setitem(page_quality.READERS, "fake", read)
+    monkeypatch.setattr(settings, "OCR_BACKEND", "fake")
+    monkeypatch.setattr(settings, "OCR_FALLBACK_ENABLED", True)
+    assert await page_quality.start_early_ocr(pdf) == ([2, 3], {2: "| Revenue | 1,000 |", 3: "| Revenue | 1,000 |"})
+    assert sent == [[2, 3]]
+
+
+async def test_no_early_read_when_the_fallback_is_off_or_has_no_reader(tmp_path, monkeypatch):
+    pdf = tmp_path / "never_opened.pdf"
+    monkeypatch.setattr(settings, "OCR_FALLBACK_ENABLED", False)
+    assert page_quality.start_early_ocr(pdf) is None
+    monkeypatch.setattr(settings, "OCR_FALLBACK_ENABLED", True)
+    monkeypatch.setattr(settings, "OCR_BACKEND", "")
+    assert page_quality.start_early_ocr(pdf) is None
+
+
+async def test_pages_read_early_are_not_sent_again_and_the_others_still_are(tmp_path):
+    pdf = make_pdf(tmp_path / "s3.pdf", ["scan", "text", "scan"])
+    lost_text = "\n".join(TABLE.splitlines()[:10])  # page 2: "missing", known only after Docling
+    pages = [page(1, ""), page(2, lost_text), page(3, "")]
+    early = ([1, 3], {1: "| Revenue line 0 | 1,000 | 2,000 |"})  # page 3 came back empty early: it is not asked again
+    sent = []
+
+    async def read(path, numbers):
+        sent.append(list(numbers))
+        return {2: TABLE}
+
+    out, report = await rescue_pages(pdf, pages, read, early=early)
+    assert sent == [[2]]
+    assert [p.get("ocr", False) for p in out] == [True, True, False]
+    assert report == {"bad": {1: "scanned", 2: "missing", 3: "scanned"}, "early": [1, 3], "sent": [2], "replaced": [1, 2]}
+
+
+async def test_a_failure_after_docling_keeps_what_the_early_read_gave(tmp_path):
+    pdf = make_pdf(tmp_path / "s4.pdf", ["scan", "text"])
+    pages = [page(1, ""), page(2, "\n".join(TABLE.splitlines()[:10]))]
+
+    async def read(path, numbers):
+        raise RuntimeError("the OCR service is down")
+
+    out, report = await rescue_pages(pdf, pages, read, early=([1], {1: "| Revenue | 1,000 |"}))
+    assert out[0]["ocr"] is True and out[1] is pages[1]
+    assert report["error"] == "RuntimeError" and report["replaced"] == [1]
+
+
+async def test_a_failed_early_read_means_the_scanned_pages_are_read_after_docling(tmp_path, monkeypatch):
+    pdf = make_pdf(tmp_path / "s5.pdf", ["scan"])
+    sent = []
+
+    async def read(path, numbers):
+        sent.append(list(numbers))
+        return {1: "| Revenue | 1,000 |"}
+
+    async def broken():
+        raise RuntimeError("early read crashed")
+
+    monkeypatch.setitem(page_quality.READERS, "fake", read)
+    monkeypatch.setattr(settings, "OCR_BACKEND", "fake")
+    monkeypatch.setattr(settings, "OCR_FALLBACK_ENABLED", True)
+    info = {}
+    out = await rescue_if_enabled(pdf, [page(1, "")], info, early=asyncio.ensure_future(broken()))
+    assert sent == [[1]] and out[0]["ocr"] is True
+    assert info == {"ocr_bad_pages": 1, "ocr_early_pages": 0, "ocr_replaced_pages": 1}
+
+
+def test_the_pipeline_reads_scanned_pages_while_docling_parses(tmp_path, monkeypatch):
+    """The fake Docling waits until the reader has started: it only finishes if the early read runs during the parse."""
+    from app.modules.ingestion import pipeline as ingestion
+    from tests.test_ingestion_remote import _prepared_pipeline
+
+    pdf = make_pdf(tmp_path / "s6.pdf", ["text", "scan"])
+    monkeypatch.setattr(settings, "REMOTE_GPU_URL", None)
+    monkeypatch.setattr(settings, "OCR_BACKEND", "fake")
+    monkeypatch.setattr(settings, "OCR_FALLBACK_ENABLED", True)
+    events = []
+
+    async def scenario():
+        started = asyncio.Event()
+
+        async def read(path, numbers):
+            events.append(("read", list(numbers)))
+            started.set()
+            return {n: "| Revenue line 0 | 1,000 | 2,000 |" for n in numbers}
+
+        monkeypatch.setitem(page_quality.READERS, "fake", read)
+        pipeline, job = _prepared_pipeline(monkeypatch, events)
+        job.pdf_path = pdf
+
+        async def extract(pdf_path, document_id, session, info):
+            await asyncio.wait_for(started.wait(), timeout=2)  # Docling is still "running" when the scan is read
+            events.append("parse")
+            return [page(1, TABLE), page(2, "")], "docling"
+
+        monkeypatch.setattr(ingestion.PDFParserService, "extract_pages", extract)
+        assert await pipeline._prepare(job, None) is True
+        return job
+
+    job = asyncio.run(scenario())
+    assert events == ["processing", ("read", [2]), "parse"]  # read once, before the parse ended; nothing sent after it
+    assert [p.get("ocr", False) for p in job.pages] == [False, True]
+    assert job.timings["ocr_early_pages"] == 1 and job.timings["ocr_replaced_pages"] == 1

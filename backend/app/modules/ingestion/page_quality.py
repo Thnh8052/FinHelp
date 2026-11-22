@@ -57,6 +57,16 @@ def _image_share(pdf_page) -> float:
     return min(1.0, covered / area)
 
 
+def _scanned(pdf_page) -> bool:
+    return len(re.sub(r"\s", "", pdf_page.get_text())) < MIN_LAYER_CHARS and _image_share(pdf_page) >= SCAN_IMAGE_SHARE
+
+
+def scanned_pages(pdf_path: Path) -> List[int]:
+    """The scanned pages, known from the PDF alone (no Docling text needed): they can be read while Docling runs."""
+    with fitz.open(str(pdf_path)) as doc:
+        return [n for n, pdf_page in enumerate(doc, 1) if _scanned(pdf_page)]
+
+
 def bad_pages(pdf_path: Path, pages: Sequence[Dict[str, Any]]) -> Dict[int, str]:
     """{page number: "garbled" | "scanned" | "missing" | "lost_table"} for the pages Docling's text (`pages`: [{"page_number", "text"}]) does not do justice to. A page number outside the PDF is ignored."""
     out: Dict[int, str] = {}
@@ -82,22 +92,42 @@ def bad_pages(pdf_path: Path, pages: Sequence[Dict[str, Any]]) -> Dict[int, str]
     return out
 
 
-async def rescue_pages(pdf_path: Path, pages: List[Dict[str, Any]], read: OcrReader) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """(pages with the OCR text of the rescued ones, report {"bad": {page: reason}, "sent": [pages], "replaced": [pages], "error"?: type name})."""
+Early = Tuple[List[int], Dict[int, str]]  # (pages sent before Docling ended, what came back)
+
+
+async def _read_early(pdf_path: Path, read: OcrReader) -> Early:
+    pages = await asyncio.to_thread(scanned_pages, pdf_path)
+    return pages, (await read(pdf_path, pages) if pages else {})
+
+
+def start_early_ocr(pdf_path: Path) -> Optional["asyncio.Task[Early]"]:
+    """Owner 22/11: the scanned pages go to the reader as soon as the file arrives, while Docling parses (a 44-page scan: about 45 s of reading no longer
+    waits for the parse). None when the fallback is off or has no reader. The caller awaits the task through rescue_if_enabled(early=...)."""
+    read = READERS.get(settings.OCR_BACKEND)
+    if not settings.OCR_FALLBACK_ENABLED or read is None:
+        return None
+    return asyncio.ensure_future(_read_early(pdf_path, read))
+
+
+async def rescue_pages(pdf_path: Path, pages: List[Dict[str, Any]], read: OcrReader, early: Optional[Early] = None) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """(pages with the OCR text of the rescued ones, report {"bad": {page: reason}, "early": [pages read during the parse], "sent": [pages sent after it],
+    "replaced": [pages], "error"?: type name}). A page read early is not sent again, even when nothing came back for it (the reader already tried it)."""
+    done, found = early or ([], {})
     bad = await asyncio.to_thread(bad_pages, pdf_path, pages)
-    sent = sorted(bad)
-    report: Dict[str, Any] = {"bad": bad, "sent": sent, "replaced": []}
-    if not sent:
+    sent = [n for n in sorted(bad) if n not in done]
+    report: Dict[str, Any] = {"bad": bad, "early": list(done), "sent": sent, "replaced": []}
+    if not bad:
         return pages, report
-    try:
-        read_pages = await read(pdf_path, sent)
-    except Exception as exc:  # the fallback is an extra: Docling's pages stand
-        report["error"] = type(exc).__name__
-        logger.warning(f"OCR fallback skipped for {pdf_path.name}: {type(exc).__name__}: {str(exc)[:160]}")
-        return pages, report
+    read_pages = dict(found)
+    if sent:
+        try:
+            read_pages.update(await read(pdf_path, sent))
+        except Exception as exc:  # the fallback is an extra: Docling's pages (and what the early read gave) stand
+            report["error"] = type(exc).__name__
+            logger.warning(f"OCR fallback skipped for {pdf_path.name}: {type(exc).__name__}: {str(exc)[:160]}")
     out: List[Dict[str, Any]] = []
     for p in pages:
-        text = (read_pages.get(p["page_number"]) or "").strip() if p["page_number"] in sent else ""
+        text = (read_pages.get(p["page_number"]) or "").strip() if p["page_number"] in bad else ""
         if text and len(_numbers(text)) >= len(_numbers(p.get("text") or "")):  # never swap in a text with fewer figures
             out.append({**p, "text": text, "ocr": True})
             report["replaced"].append(p["page_number"])
@@ -106,14 +136,22 @@ async def rescue_pages(pdf_path: Path, pages: List[Dict[str, Any]], read: OcrRea
     return out, report
 
 
-async def rescue_if_enabled(pdf_path: Path, pages: List[Dict[str, Any]], info: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    """`pages` unchanged unless OCR_FALLBACK_ENABLED and OCR_BACKEND names a registered reader; `info` receives ocr_bad_pages and ocr_replaced_pages (the pipeline's timings)."""
+async def rescue_if_enabled(pdf_path: Path, pages: List[Dict[str, Any]], info: Optional[Dict[str, Any]] = None,
+                            early: Optional["asyncio.Future[Early]"] = None) -> List[Dict[str, Any]]:
+    """`pages` unchanged unless OCR_FALLBACK_ENABLED and OCR_BACKEND names a registered reader; `info` receives ocr_bad_pages, ocr_early_pages and
+    ocr_replaced_pages (the pipeline's timings). `early`: the task of start_early_ocr; if it failed, its pages are read now like the others."""
     read = READERS.get(settings.OCR_BACKEND)
     if not settings.OCR_FALLBACK_ENABLED or read is None:
         return pages
-    pages, report = await rescue_pages(pdf_path, pages, read)
+    got: Optional[Early] = None
+    if early is not None:
+        try:
+            got = await early
+        except Exception as exc:
+            logger.warning(f"Early OCR of {pdf_path.name} failed ({type(exc).__name__}): its pages are read after the parse")
+    pages, report = await rescue_pages(pdf_path, pages, read, got)
     if info is not None:
-        info.update({"ocr_bad_pages": len(report["bad"]), "ocr_replaced_pages": len(report["replaced"])})
+        info.update({"ocr_bad_pages": len(report["bad"]), "ocr_early_pages": len(report["early"]), "ocr_replaced_pages": len(report["replaced"])})
     if report["bad"]:
-        logger.info(f"OCR fallback on {pdf_path.name}: bad pages {report['bad']}, replaced {report['replaced']}")
+        logger.info(f"OCR fallback on {pdf_path.name}: bad pages {report['bad']}, read during the parse {report['early']}, replaced {report['replaced']}")
     return pages

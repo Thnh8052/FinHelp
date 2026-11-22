@@ -22,7 +22,7 @@ from app.modules.ingestion.ingestion_job_repo import IngestionJobRepository
 from app.modules.ingestion.chunker import FinancialChunkerService
 from app.modules.ingestion.catalog import needs_vlm, read_catalog, read_catalog_vlm, years_covered
 from app.modules.ingestion.doc_header import company_candidates, extract_document_header
-from app.modules.ingestion.page_quality import rescue_if_enabled
+from app.modules.ingestion.page_quality import rescue_if_enabled, start_early_ocr
 from app.modules.ingestion.figures import read_figures_if_enabled
 from app.modules.ingestion.parser import DoclingSession, PDFParserService
 from app.modules.query_router.input_policy import instruction_like
@@ -56,6 +56,7 @@ class _Job:
     engine: str = ""
     chunks: list = field(default_factory=list)
     catalog: Optional[asyncio.Task] = None
+    early_ocr: Optional[asyncio.Future] = None  # scanned pages read by OCR while Docling parses (page_quality.start_early_ocr)
     timings: Dict[str, float] = field(default_factory=dict)  # seconds per stage, stored on the job record
 
 
@@ -158,8 +159,9 @@ class IngestionPipeline:
 
     async def _fail(self, job: _Job, exc: Exception) -> None:
         logger.error(f"Ingestion job {job.job_id} failed: {exc!r}", exc_info=True)
-        if job.catalog is not None and not job.catalog.done():
-            job.catalog.cancel()
+        for task in (job.catalog, job.early_ocr):
+            if task is not None and not task.done():
+                task.cancel()
         await self._cleanup(job.document_id)
         await self.job_repo.fail(job.job_id, repr(exc)[:1000])
         reason = exc.code if isinstance(exc, DomainException) else Code.INGESTION_UNEXPECTED
@@ -194,7 +196,8 @@ class IngestionPipeline:
                 await QdrantManager.ensure_collection()
                 if not await self.qdrant.collection_exists(settings.QDRANT_COLLECTION_NAME):
                     raise IngestionError(Code.SYSTEM_NOT_READY)
-            # 1. Parsing
+            # 1. Parsing; the scanned pages (known from the PDF alone) are read by OCR meanwhile (owner 22/11)
+            job.early_ocr = start_early_ocr(job.pdf_path)
             await self.job_repo.update_progress(job.job_id, "docling", 20)
             t0, info = time.perf_counter(), {}
             job.pages, job.engine = await self._parse(job, session, info)
@@ -202,7 +205,7 @@ class IngestionPipeline:
             job.timings.update({f"docling_{k}": v for k, v in info.items()})  # start_s (model load, first file only), convert_s, postprocess_s
             # 1a. OCR fallback (page_quality.py): the pages Docling read badly are read again by the OCR backend (Chandra), those pages only
             t0 = time.perf_counter()
-            job.pages = await rescue_if_enabled(job.pdf_path, job.pages, job.timings)
+            job.pages = await rescue_if_enabled(job.pdf_path, job.pages, job.timings, job.early_ocr)
             if "ocr_bad_pages" in job.timings:
                 job.timings["ocr"] = round(time.perf_counter() - t0, 2)
             # 1a'. Pictures whose figures are only in the pixels are described by the vision model (figures.py; pages read again by OCR are skipped)
