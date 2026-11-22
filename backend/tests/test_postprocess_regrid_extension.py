@@ -159,6 +159,32 @@ def test_crowded_columns_two_values_of_one_row_in_one_column():
     assert tr.crowded_columns(columns, spread) is False
 
 
+def test_crowded_columns_ignores_words_that_are_not_amounts():
+    # AES 2022 p16: "Expected Date of Commercial Operations" holds "1H 2023": two words, one amount, one column
+    columns = [[100.0, 130.0], [200.0, 240.0]]
+    body = [(["Cement City (1)"], [(100.0, 110.0, ["20"], 100.0), (200.0, 210.0, ["1H"], 200.0), (215.0, 240.0, ["2023"], 215.0)])]
+    assert tr.crowded_columns(columns, body) is False
+    ranged = [(["Cavalier (1)"], [(100.0, 110.0, ["155"], 100.0), (200.0, 205.0, ["2H"], 200.0), (206.0, 220.0, ["2023-1H"], 206.0),
+                                   (225.0, 240.0, ["2024"], 225.0)])]  # "2H 2023-1H 2024": a date range is text
+    assert tr.crowded_columns(columns, ranged) is False
+
+
+@pytest.mark.parametrize("words", [["2025", "-", "2054"], ["0.00", "-", "1.25"], ["4.19%,", "due", "2029"]])
+def test_crowded_columns_a_cell_with_text_is_one_value(words):
+    # IFRS 22/11: Enbridge "2025 - 2054", Frontera "0.00 - 1.25", George Weston "4.19%, due 2029"
+    columns = [[100.0, 130.0], [200.0, 260.0]]
+    groups = [(200.0 + 20 * i + 15, [w], 200.0 + 20 * i) for i, w in enumerate(words)]
+    body = [(["Notes"], [(100.0, 110.0, ["155"], 100.0)] + [(start, x1, tokens, start) for x1, tokens, start in groups])]
+    assert tr.crowded_columns(columns, body) is False
+
+
+def test_crowded_columns_a_percent_and_an_amount_in_one_column():
+    # American Express 2022 p54: "27 % $ 2,864" in one column is two values
+    columns = [[100.0, 160.0]]
+    body = [(["Card Member loans"], [(100.0, 115.0, ["27", "%"], 100.0), (120.0, 125.0, ["$"], 120.0), (130.0, 160.0, ["2,864"], 130.0)])]
+    assert tr.crowded_columns(columns, body) is True
+
+
 def test_crowded_columns_ignores_a_footnote_mark_next_to_its_value():
     columns = [[100.0, 130.0]]
     body = [(["Revenue"], [(100.0, 110.0, ["336"], 100.0), (112.0, 116.0, ["1"], 112.0)])]
@@ -211,3 +237,32 @@ def test_regrid_block_old_layout_still_wins_when_it_already_fits():
     counts = Counter()
     table = tr.regrid_block(rows, grid, 1, words, counts)
     assert [row_cells(line) for line in table][2] == ["Net Operating Revenues", "$ 43,004", "$ 38,655", "$ 33,014"]
+
+
+# --- (b) a split that puts two values of one row in one column is never taken (Enablence 2026 p26/p28, 22/11) ---
+
+def enablence_fixture():
+    """Docling: one header cell over both date columns ("June 30, 2026 June 30, 2025"), two value columns below."""
+    head = "June 30, 2026 June 30, 2025"
+    texts = [["", head, head], ["Cash", "4,076", "5,000"], ["Restricted Cash", "4", "4"]]
+    cells = [TableCell(0, 1, 1, 2, head, 430.0, 0.0, 519.0, 10.0)]
+    boxes = {1: (430.4, 452.4), 2: (496.9, 518.9)}
+    for r in (1, 2):
+        cells.append(TableCell(r, 0, 1, 1, texts[r][0], 24.6, 20.0 * r, 120.0, 20.0 * r + 10.0))
+        cells += [TableCell(r, c, 1, 1, texts[r][c], *boxes[c][:1], 20.0 * r, boxes[c][1], 20.0 * r + 10.0) for c in (1, 2)]
+    grid = Grid([[("", 0), (head, 1), (head, 1)], [("Cash", 0), ("4,076", 1), ("5,000", 2)], [("Restricted Cash", 0), ("4", 1), ("4", 2)]])
+    grid.cells = tuple(cells)
+    w = lambda x0, x1, text, r: (x0, 20.0 * r + 1.0, x1, 20.0 * r + 9.0, text, 0, 0, 0)
+    words = [w(24.6, 50.0, "Cash", 1), w(430.4, 452.4, "4,076", 1), w(496.9, 518.9, "5,000", 1),
+             w(24.6, 70.0, "Restricted", 2), w(72.0, 90.0, "Cash", 2), w(448.4, 452.4, "4", 2), w(514.9, 518.9, "4", 2)]
+    rows = [texts[0], ["---"] * 3, texts[1], texts[2]]
+    return rows, grid, words
+
+
+def test_regrid_block_never_takes_a_split_with_two_values_of_a_row_in_one_column(monkeypatch):
+    rows, grid, words = enablence_fixture()
+    one_column = [[[420.0, 530.0]], [[420.0, 530.0]]]  # the split Enablence p26 got: both dates in one column; the header label fits it "strictly"
+    monkeypatch.setattr(tr, "column_layouts", lambda groups: [one_column])
+    counts = Counter()
+    assert tr.regrid_block(rows, grid, 1, words, counts) is None
+    assert counts["regrid_skip_columns"] == 1

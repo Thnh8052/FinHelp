@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 
 from app.modules.ingestion.postprocess.constants import LABEL_COLUMN_TOLERANCE, PHRASE_GAP, ROW_MISMATCH, TEXT_FOLD, VALUE_GAP_TOLERANCE
@@ -282,11 +283,26 @@ def is_group_heading(cells: tuple, headers: int, col: int, leaves: list) -> bool
 # Ý nghĩa: có hàng thân nào đặt hai giá trị vào cùng một cột của `columns` không (giá trị chỉ là chỉ số chú thích không tính). `body`: [(nhãn, các giá trị của hàng)] như `body_rows`.
 # Giữ vì: tên cột nới lỏng (`relaxed_names`) ở bảng không dựng lại hàng có thể nhận một cách chia đã chập hai cột ("27 % $ 2,864" ở American Express 2022 p54, "19 % $ 4,262" ở Nike 2021
 #   p41); một hàng PDF không bao giờ có hai số trong một cột thật.
+def is_amount(text: str) -> bool:
+    """A number of 3+ digits, with a separator, or a percent ("2,864", "0.89", "2023", "27%"); "1H", "2023-1H" and 1-2 digit marks are not."""
+    digits = re.sub(r"\D", "", text)
+    return (is_number(text) and not is_footnote_ref(text)
+            and (len(digits) >= 3 or bool(re.search(r"\d[,.]\d", text)) or (bool(digits) and text.endswith("%"))))
+
+
+def is_text_group(text: str) -> bool:
+    return any(ch.isalpha() for ch in text) or text in ("-", "–", "—")
+
+
+# Giữ vì (22/11): một ô chỉ "chập" khi có từ hai số tiền trở lên và không có chữ: ô có chữ hoặc gạch nối là một giá trị ("1H 2023", "2025 - 2054",
+#   "4.19%, due 2029" ở AES 2022 p16 và báo cáo IFRS), còn "4,076 5,000" (Enablence 2026 p26) hay "27 % $ 2,864" (American Express 2022 p54) là hai cột chập.
 def crowded_columns(columns: list, body: list) -> bool:
     for _, row_groups in body:
-        found = [next(i for i, column in enumerate(columns) if column[0] <= start and x1 <= column[1])
-                 for _, x1, tokens, start in row_groups if not is_footnote_ref("".join(tokens))]
-        if len(found) != len(set(found)):
+        cells: dict = {}
+        for _, x1, tokens, start in row_groups:
+            index = next(i for i, column in enumerate(columns) if column[0] <= start and x1 <= column[1])
+            cells.setdefault(index, []).append("".join(tokens))
+        if any(sum(map(is_amount, texts)) >= 2 and not any(map(is_text_group, texts)) for texts in cells.values()):
             return True
     return False
 
@@ -353,8 +369,8 @@ def regrid_block(rows: list, grid, headers: int, page_words: list, counts: Count
                     names = relaxed_names(rows, cells, headers, leaves, reach, marker_columns(columns, groups), page_words, not reflowed)
                 except RegridSkip:
                     names = None
-                if names is not None and not reflowed and crowded_columns(columns, body):
-                    names = None
+            if names is not None and crowded_columns(columns, body):  # 22/11: for every split (Enablence 2026 p26/p28 fused two dates under one spanning header)
+                names = None
             if names is not None:
                 found = columns, names
                 break
