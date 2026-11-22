@@ -294,7 +294,8 @@ def test_secret_key_has_no_default(monkeypatch):
 
 
 SECRET_SETTINGS = ("SECRET_KEY", "ADMIN_PASSWORD", "MONGODB_URI", "QDRANT_API_KEY", "R2_ENDPOINT_URL", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
-                   "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "SENDGRID_API_KEY", "REMOTE_GPU_URL")
+                   "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "SENDGRID_API_KEY", "REMOTE_GPU_URL",
+                   "DATALAB_API_KEY")
 
 
 def test_the_settings_never_print_a_secret(monkeypatch):

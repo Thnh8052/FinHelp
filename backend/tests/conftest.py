@@ -15,6 +15,8 @@ def _measured_prompt(monkeypatch):
     monkeypatch.setattr(settings, "GENERATION_PROMPT", "v2")
     monkeypatch.setattr(settings, "OUTPUT_POLICY_ENABLED", False)
     monkeypatch.setattr(settings, "GUARD_ENABLED", False)
+    monkeypatch.setattr(settings, "OCR_FALLBACK_ENABLED", False, raising=False)  # the paid readers (Chandra, the vision model) are on by default since 22/11:
+    monkeypatch.setattr(settings, "FIGURE_READER_ENABLED", False, raising=False)  # a test turns one on and gives it a fake reader
 
 
 @pytest.fixture(autouse=True)

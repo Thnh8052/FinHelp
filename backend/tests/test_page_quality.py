@@ -1,5 +1,6 @@
 """Stage 1 of the OCR fallback (owner's request 14/11): find the pages Docling read badly, ask an OCR reader for those pages only, mark what it returns, and tell the answer which
-excerpts came from OCR. Production runs Docling with do_ocr=False, so a scanned page used to give an empty text (spec L8). No OCR backend exists yet (stage 2); a fake reader is used.
+excerpts came from OCR. Production runs Docling with do_ocr=False, so a scanned page used to give an empty text (spec L8). Since 22/11 the reader is Datalab Chandra
+(api_readers.py, tested in test_api_readers.py), there is no page cap, and a table F3 could not rebuild is a fourth reason; here a fake reader is used.
 The PDFs are made here with PyMuPDF: a text page, a page that is only a picture of a text page (a scan), a cover with a small logo, a blank page."""
 import fitz
 import pytest
@@ -100,11 +101,11 @@ async def test_only_the_bad_pages_are_sent_and_what_comes_back_is_marked(tmp_pat
         sent.append(list(numbers))
         return {2: "| Revenue line 0 | 1,000 | 2,000 |"}
 
-    out, report = await rescue_pages(pdf, pages, read, max_pages=30)
+    out, report = await rescue_pages(pdf, pages, read)
     assert sent == [[2]]
     assert out[0] is pages[0] and out[2] is pages[2] and "ocr" not in out[0]
     assert out[1] == {"page_number": 2, "text": "| Revenue line 0 | 1,000 | 2,000 |", "tables": [], "ocr": True}
-    assert report == {"bad": {2: "scanned"}, "sent": [2], "replaced": [2], "over_cap": 0}
+    assert report == {"bad": {2: "scanned"}, "sent": [2], "replaced": [2]}
 
 
 async def test_no_bad_page_costs_no_call(tmp_path):
@@ -114,22 +115,23 @@ async def test_no_bad_page_costs_no_call(tmp_path):
         raise AssertionError("the reader must not be called")
 
     pages = [page(1, TABLE), page(2, TABLE)]
-    out, report = await rescue_pages(pdf, pages, read, max_pages=30)
+    out, report = await rescue_pages(pdf, pages, read)
     assert out == pages and report["bad"] == {} and report["sent"] == []
 
 
-async def test_a_cap_bounds_the_pages_sent_and_says_how_many_were_left(tmp_path):
-    pdf = make_pdf(tmp_path / "i.pdf", ["scan"] * 4)
-    pages = [page(n, "") for n in range(1, 5)]
+async def test_every_bad_page_is_sent_there_is_no_cap(tmp_path):
+    """Owner 22/11: no page cap; a 44-page scanned report is read in full (the old cap of 30 left 14 pages empty)."""
+    pdf = make_pdf(tmp_path / "i.pdf", ["scan"] * 44)
+    pages = [page(n, "") for n in range(1, 45)]
     sent = []
 
     async def read(path, numbers):
         sent.append(list(numbers))
         return {n: "| Revenue | 1,000 |" for n in numbers}
 
-    out, report = await rescue_pages(pdf, pages, read, max_pages=2)
-    assert sent == [[1, 2]] and report["over_cap"] == 2 and report["replaced"] == [1, 2]
-    assert [p.get("ocr", False) for p in out] == [True, True, False, False]
+    out, report = await rescue_pages(pdf, pages, read)
+    assert sent == [list(range(1, 45))] and report["replaced"] == list(range(1, 45))
+    assert all(p["ocr"] for p in out)
 
 
 async def test_a_reader_that_fails_leaves_the_docling_pages_and_never_raises(tmp_path):
@@ -139,7 +141,7 @@ async def test_a_reader_that_fails_leaves_the_docling_pages_and_never_raises(tmp
     async def read(path, numbers):
         raise RuntimeError("the OCR service is down")
 
-    out, report = await rescue_pages(pdf, pages, read, max_pages=30)
+    out, report = await rescue_pages(pdf, pages, read)
     assert out == pages and report["error"] == "RuntimeError" and report["replaced"] == []
 
 
@@ -149,7 +151,7 @@ async def test_an_empty_ocr_result_is_not_taken(tmp_path):
     async def read(path, numbers):
         return {1: "   "}
 
-    out, report = await rescue_pages(pdf, [page(1, "")], read, max_pages=30)
+    out, report = await rescue_pages(pdf, [page(1, "")], read)
     assert out[0].get("ocr") is None and report["replaced"] == []
 
 
@@ -164,9 +166,9 @@ async def test_ocr_never_replaces_a_text_that_has_more_figures(tmp_path):
     async def better(path, numbers):
         return {1: TABLE}  # all 60
 
-    out, report = await rescue_pages(pdf, pages, worse, max_pages=30)
+    out, report = await rescue_pages(pdf, pages, worse)
     assert out[0]["text"] == kept and report["replaced"] == [] and report["bad"] == {1: "missing"}
-    out, report = await rescue_pages(pdf, pages, better, max_pages=30)
+    out, report = await rescue_pages(pdf, pages, better)
     assert out[0]["text"] == TABLE and out[0]["ocr"] is True and report["replaced"] == [1]
 
 
@@ -199,19 +201,55 @@ async def test_the_switch_on_rescues_and_reports_into_the_timings(tmp_path, monk
     monkeypatch.setitem(page_quality.READERS, "fake", read)
     monkeypatch.setattr(settings, "OCR_BACKEND", "fake")
     monkeypatch.setattr(settings, "OCR_FALLBACK_ENABLED", True)
-    monkeypatch.setattr(settings, "OCR_FALLBACK_MAX_PAGES", 30)
     info = {}
     out = await rescue_if_enabled(pdf, [page(1, TABLE), page(2, "")], info)
     assert [p.get("ocr", False) for p in out] == [False, True]
     assert info == {"ocr_bad_pages": 1, "ocr_replaced_pages": 1}
 
 
-def test_the_defaults_leave_the_fallback_off():
+def test_the_defaults_turn_the_rescue_on_with_chandra_and_no_cap():
+    """Owner 22/11: the full pipeline is on by default (a missing key only means no request); tests turn it off in conftest."""
     from app.core.config import Settings
 
-    assert Settings.model_fields["OCR_FALLBACK_ENABLED"].default is False
-    assert Settings.model_fields["OCR_BACKEND"].default == ""
-    assert Settings.model_fields["OCR_FALLBACK_MAX_PAGES"].default == 30
+    fields = Settings.model_fields
+    assert fields["OCR_FALLBACK_ENABLED"].default is True
+    assert fields["OCR_BACKEND"].default == "chandra"
+    assert fields["DATALAB_MODE"].default == "balanced"
+    assert fields["FIGURE_READER_ENABLED"].default is True
+    assert fields["FIGURE_MODEL"].default == "gpt-4.1-mini"
+    assert "OCR_FALLBACK_MAX_PAGES" not in fields
+
+
+def test_tests_run_with_both_paid_readers_off():
+    assert settings.OCR_FALLBACK_ENABLED is False and settings.FIGURE_READER_ENABLED is False
+
+
+# ---------------------------------------------------------------- a table F3 could not rebuild
+TABLE_ROWS = [("Total net revenue", "81,737", "63,220", "59,000"), ("Total noninterest expense", "6,254", "5,980", "5,500"),
+              ("Provision for credit losses", "1,384", "2,290", "1,110"), ("Income before income tax", "4,099", "3,950", "3,390")]
+
+
+def make_table_pdf(path):
+    doc = fitz.open()
+    p = doc.new_page()
+    y = 100
+    for name, *values in TABLE_ROWS:
+        p.insert_text((50, y), name, fontsize=9)
+        for x, v in zip((260, 330, 400), values):
+            p.insert_text((x, y), v, fontsize=9)
+        y += 15
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_a_table_the_parse_wrote_as_paragraphs_is_sent_to_ocr(tmp_path):
+    """The F3 detector run again on the final text: a region still lost after F3 (it skips a region it cannot rebuild or place) goes to Chandra."""
+    pdf = make_table_pdf(tmp_path / "t.pdf")
+    paragraphs = "\n\n".join(x for r in TABLE_ROWS for x in r)  # every figure is in the text, none in a table: what F3 could not repair
+    as_table = "\n".join(f"| {' | '.join(r)} |" for r in TABLE_ROWS)
+    assert bad_pages(pdf, [page(1, paragraphs)]) == {1: "lost_table"}
+    assert bad_pages(pdf, [page(1, as_table)]) == {}
 
 
 # ---------------------------------------------------------------- what the rest of the pipeline sees

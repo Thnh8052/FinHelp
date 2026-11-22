@@ -23,6 +23,7 @@ from app.modules.ingestion.chunker import FinancialChunkerService
 from app.modules.ingestion.catalog import needs_vlm, read_catalog, read_catalog_vlm, years_covered
 from app.modules.ingestion.doc_header import company_candidates, extract_document_header
 from app.modules.ingestion.page_quality import rescue_if_enabled
+from app.modules.ingestion.figures import read_figures_if_enabled
 from app.modules.ingestion.parser import DoclingSession, PDFParserService
 from app.modules.query_router.input_policy import instruction_like
 from app.modules.retrieval.embeddings import DenseEmbeddingService
@@ -199,11 +200,16 @@ class IngestionPipeline:
             job.pages, job.engine = await self._parse(job, session, info)
             job.timings["parse"] = round(time.perf_counter() - t0, 2)  # remote: includes docling_slot_wait_s
             job.timings.update({f"docling_{k}": v for k, v in info.items()})  # start_s (model load, first file only), convert_s, postprocess_s
-            # 1a. OCR fallback (off by default, page_quality.py): the pages Docling read badly are read again by the OCR backend, those pages only
+            # 1a. OCR fallback (page_quality.py): the pages Docling read badly are read again by the OCR backend (Chandra), those pages only
             t0 = time.perf_counter()
             job.pages = await rescue_if_enabled(job.pdf_path, job.pages, job.timings)
             if "ocr_bad_pages" in job.timings:
                 job.timings["ocr"] = round(time.perf_counter() - t0, 2)
+            # 1a'. Pictures whose figures are only in the pixels are described by the vision model (figures.py; pages read again by OCR are skipped)
+            t0 = time.perf_counter()
+            job.pages = await read_figures_if_enabled(job.pdf_path, job.pages, job.timings)
+            if "figures_chosen" in job.timings:
+                job.timings["figures"] = round(time.perf_counter() - t0, 2)
             # 1b. Catalog: the API call runs while the next file parses
             job.catalog = asyncio.create_task(self._catalog(job))
             # 2. Chunking (CPU-bound: tokenizer)

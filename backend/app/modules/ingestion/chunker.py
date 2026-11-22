@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from app.core.config import settings
 from app.modules.ingestion.chunk import ChunkDocument
+from app.modules.ingestion.figures import FIGURE_MARK
 
 HEAD = re.compile(r"^#{1,6} ")
 SEP = re.compile(r"^\|[\s:\-|]+\|\s*$")
@@ -217,7 +218,8 @@ class FinancialChunkerService:
                             if table else None
                         ),
                         embedding_model=settings.DEFAULT_EMBEDDING_MODEL,
-                        flags=["ocr"] if page.get("ocr") else [],  # the page text came from the OCR fallback (page_quality.py)
+                        # "ocr": the page text came from the OCR fallback (page_quality.py); "figure": the chunk holds a picture described by the vision model (figures.py)
+                        flags=(["ocr"] if page.get("ocr") else []) + (["figure"] if FIGURE_MARK in text else []),
                     )
                 )
         return chunks

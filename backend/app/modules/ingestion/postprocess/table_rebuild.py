@@ -212,7 +212,7 @@ def amounts(text: str) -> set:
     return out
 
 
-def _lost_regions(text: str, words: list) -> list:
+def lost_regions(text: str, words: list) -> list:
     """Regions of lost tables, one per run of MIN_LOST_LINES+ printed data lines whose figures are in the page's text but in none of its Markdown tables,
     each grown up and down over table lines; growth stops at a gap over REGION_GAP, a sentence, or a line whose figures a parsed table already has."""
     in_tables = amounts("\n".join(l for l in text.split("\n") if l.startswith("|")))
@@ -306,7 +306,7 @@ def rebuild_lost_tables(text: str, grids: list, words: list, number: int, counts
         lines[block[0]:block[-1] + 1] = [l for k, t in enumerate(tables) for l in ([""] if k else []) + t]
         text = "\n".join(lines)
         counts["rebuilt_collapsed"] += 1
-    for region in _lost_regions(text, words):
+    for region in lost_regions(text, words):
         tables = rebuild(words, region)
         inside = [w for w in words if region[0] - 1 <= (w[0] + w[2]) / 2 <= region[2] + 1 and region[1] - 1 <= (w[1] + w[3]) / 2 <= region[3] + 1]
         if not tables:

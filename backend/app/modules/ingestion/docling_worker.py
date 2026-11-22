@@ -7,7 +7,8 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:128,garbage_
     python -X utf8 -m app.modules.ingestion.docling_worker --serve              # several files, models loaded once
 
 It runs in its own process because Docling is heavy and unreliable on a 4 GB laptop GPU (CUDA errors, OOM); the API
-process only waits for it. Output: <work_dir>/pages.json = [{"page_number": n, "text": "<markdown>"}, ...].
+process only waits for it. Output: <work_dir>/pages.json = [{"page_number": n, "text": "<markdown>", "pictures": [[x0, y0, x1, y1], ...]}, ...]
+("pictures": each Docling picture's box in the order of its "<!-- image -->" marker, postprocess/pictures.py; ingestion/figures.py reads them).
 --serve reads one JSON request per line on stdin ({"pdf", "work"}) and answers one JSON line on stdout
 ({"ok", "pages", "convert_s", "postprocess_s"} or {"ok": false, "error"}); the converter (layout + TableFormer models) is built once,
 so only the first file pays the model load. Docling's own logging goes to stderr.
@@ -20,6 +21,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.modules.ingestion.postprocess import process as postprocess
+from app.modules.ingestion.postprocess.pictures import page_pictures
 
 
 def build_converter():
@@ -36,7 +38,7 @@ def build_converter():
     return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)})
 
 
-def convert(converter, pdf: Path, raw_dir: Path) -> None:
+def convert(converter, pdf: Path, raw_dir: Path) -> dict:
     result = converter.convert(str(pdf), raises_on_error=False)
     document = result.document
     (raw_dir / "pages").mkdir(parents=True, exist_ok=True)
@@ -45,16 +47,17 @@ def convert(converter, pdf: Path, raw_dir: Path) -> None:
         (raw_dir / "pages" / f"page_{page_no:03d}.md").write_text(
             document.export_to_markdown(page_no=page_no), encoding="utf-8"
         )
+    return page_pictures(document)
 
 
 def parse(converter, pdf: Path, work: Path) -> dict:
     t0 = time.time()
     raw_dir = work / "raw" / pdf.stem  # postprocess finds the PDF as <PDF_DIR>/<raw_dir.name>.pdf
-    convert(converter, pdf, raw_dir)
+    pictures = convert(converter, pdf, raw_dir)
     t1 = time.time()
     postprocess(raw_dir, pdf.parent, work / "fixed")
     pages = [
-        {"page_number": int(p.stem.split("_")[1]), "text": p.read_text(encoding="utf-8")}
+        {"page_number": int(p.stem.split("_")[1]), "text": p.read_text(encoding="utf-8"), "pictures": pictures.get(int(p.stem.split("_")[1]), [])}
         for p in sorted((work / "fixed" / pdf.stem / "pages").glob("page_*.md"))
     ]
     (work / "pages.json").write_text(json.dumps(pages, ensure_ascii=False), encoding="utf-8")
