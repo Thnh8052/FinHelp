@@ -5,6 +5,14 @@ export interface CitationItem {
   snippet: string;
   /** Câu trả lời có dùng đoạn này ([n]) hay không; không có thì hiện như đã được dùng. */
   cited?: boolean | null;
+  /** Một bảng ở trang này có thể đọc chưa chuẩn (kiểm lúc tải lên): thẻ trích dẫn nhắc xem trang gốc. */
+  may_be_misread?: boolean;
+  /** Chữ của trang được nhận dạng từ ảnh trang: thẻ trích dẫn nhắc đối chiếu trang gốc. */
+  read_from_image?: boolean;
+  /** Đoạn có số liệu đọc từ hình hoặc biểu đồ: thẻ trích dẫn nói rõ. */
+  from_figure?: boolean;
+  /** Một hình ở trang này chưa đọc được (lúc tải lên): thẻ trích dẫn nói rõ và nhắc xem trang gốc. */
+  picture_unread?: boolean;
   /** Set by the chat when the citation is opened: the numbers the answer states next to this [n], whose lines the PDF viewer marks. */
   figures?: string[];
 }

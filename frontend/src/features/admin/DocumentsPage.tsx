@@ -58,7 +58,17 @@ export const DocumentsTable: React.FC<{ documents: AdminDocument[]; emptyText: s
               )}
               {doc.status === "ready" && (
                 <p className="mt-1 text-xs text-dim">
-                  {[doc.parsing_engine, doc.chunks != null && fill(d.chunks, { n: doc.chunks })].filter(Boolean).join(" · ")}
+                  {[doc.parsing_engine, doc.chunks != null && fill(d.chunks, { n: doc.chunks }),
+                    doc.parse_issues?.tables?.length && fill(d.pagesToCheck, { pages: doc.parse_issues.tables.join(", ") }),
+                    doc.parse_issues?.unread?.length && fill(d.pagesUnread, { pages: doc.parse_issues.unread.join(", ") }),
+                    doc.parse_issues?.figures?.length && fill(d.picturesUnread, { pages: doc.parse_issues.figures.join(", ") }),
+                    doc.read_report?.ocr_bad_pages &&
+                      fill(d.readAgain, { done: doc.read_report.ocr_replaced_pages ?? 0, sent: doc.read_report.ocr_bad_pages }) +
+                        (doc.read_report.ocr_rejected
+                          ? " " + fill(d.readRefused, { why: Object.entries(doc.read_report.ocr_rejected).map(([k, v]) => `${k} ${v}`).join(", ") })
+                          : ""),
+                    doc.read_report?.figures_chosen &&
+                      fill(d.picturesRead, { done: doc.read_report.figures_described ?? 0, sent: doc.read_report.figures_chosen })].filter(Boolean).join(" · ")}
                 </p>
               )}
             </td>

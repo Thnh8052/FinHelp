@@ -32,6 +32,12 @@ export interface DocumentRecord {
   error_message?: string;
   /** Tài liệu được đọc bằng cách dự phòng: một số bảng có thể chưa chính xác. */
   tables_may_be_inaccurate?: boolean;
+  /** Các trang có số liệu có thể chưa được đọc chính xác (kiểm lúc tải lên): người dùng nên đối chiếu với bản gốc. */
+  pages_to_check?: number[];
+  /** Các trang ảnh quét chưa đọc được chữ. */
+  pages_unread?: number[];
+  /** Các trang có hình hoặc biểu đồ chưa đọc được. */
+  pages_pictures_unread?: number[];
   created_at: string;
 }
 

@@ -396,8 +396,9 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
         </div>
       )}
 
-      {/* 2. Only when there is something to say: the cited report is gone, or the page has nothing to mark (a scan, or turned sideways). Otherwise the PDF alone, with the marks on it. */}
-      {activeCitation && (citationGone || (citationHere && marks && marks.page === currentPage && marks.boxes.length + marks.figures.length === 0)) && (
+      {/* 2. Only when there is something to say: the cited report is gone, or the page has nothing to mark (a scan, or turned sideways). Otherwise the PDF alone, with the marks on it.
+          A page opened from the document card (a page to check) has no excerpt to mark: nothing to say. */}
+      {activeCitation && (citationGone || (!!activeCitation.snippet && citationHere && marks && marks.page === currentPage && marks.boxes.length + marks.figures.length === 0)) && (
         <div className="pdf-evidence-banner">
           <div className="pdf-evidence-header">
             <p className="pdf-evidence-note" role="status">

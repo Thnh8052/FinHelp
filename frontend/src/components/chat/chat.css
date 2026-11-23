@@ -1492,3 +1492,8 @@ button.chat-scope-chip:hover {
     display: none;
   }
 }
+
+/* An excerpt from a page whose table may be misread: say so under the page number (the card opens the original page) */
+.source-card-text .source-card-note {
+  color: var(--warn-text);
+}

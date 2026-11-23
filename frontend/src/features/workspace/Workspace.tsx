@@ -187,6 +187,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               docs.setActiveDocId(doc.document_id);
               openPdfPane();
             }}
+            onOpenDocPage={(doc, page) => {
+              // a page to check: the viewer goes to it like a citation, with no excerpt to mark
+              docs.setActiveDocId(doc.document_id);
+              setActiveCitation({ citation_id: `page-${page}`, document_id: doc.document_id, page, snippet: "" });
+              openPdfPane();
+            }}
             onUploadFiles={docs.uploadFiles}
             onDeleteDocument={docs.remove}
             onEditCatalog={(docId) => setCatalogDocId(docId)}
