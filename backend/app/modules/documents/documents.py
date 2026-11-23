@@ -18,6 +18,7 @@ import hashlib
 from pathlib import Path
 import uuid
 from typing import Any, Dict, List, Optional
+import fitz  # PyMuPDF
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
@@ -128,6 +129,20 @@ async def _check_upload(db: AsyncIOMotorDatabase, file: UploadFile, user_id: Opt
     await file.seek(0)
     if b"%PDF-" not in head:
         raise api_error(status_code=400, code=Code.NOT_A_PDF)
+    data = await file.read()
+    await file.seek(0)
+    if await asyncio.to_thread(_needs_password, data):
+        raise api_error(status_code=400, code=Code.PDF_PASSWORD_PROTECTED)
+
+
+def _needs_password(data: bytes) -> bool:
+    """True when the PDF opens only with a password (owner 24/11: it failed later with a generic error). A file MuPDF cannot open at all is left to
+    the pipeline as before; a PDF with only an owner password (print / copy limits) opens without one."""
+    try:
+        with fitz.open(stream=data, filetype="pdf") as pdf:
+            return bool(pdf.needs_pass)
+    except Exception:
+        return False
 
 
 # ==============================================================================

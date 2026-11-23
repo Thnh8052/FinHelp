@@ -376,7 +376,8 @@ def upload(monkeypatch):
     client = TestClient(app, raise_server_exceptions=False)
 
     def post(notebook_id, content=b"%PDF-1.4"):
-        return client.post(f"/documents/upload/{notebook_id}", files={"file": ("r.pdf", content, "application/pdf")}).status_code
+        state["last"] = client.post(f"/documents/upload/{notebook_id}", files={"file": ("r.pdf", content, "application/pdf")})
+        return state["last"].status_code
 
     return state, post
 
@@ -439,6 +440,23 @@ def test_a_guest_file_is_limited_to_five_megabytes(upload):
 def test_a_file_that_is_not_a_pdf_is_refused_before_storage(upload, content):
     _, post = upload
     assert post(GUEST_NOTEBOOK, content) == 400
+
+
+def _locked_pdf(user_pw):
+    import fitz
+
+    with fitz.open() as doc:
+        doc.new_page().insert_text((72, 72), "Revenue 100")
+        return doc.tobytes(encryption=fitz.PDF_ENCRYPT_AES_256, user_pw=user_pw, owner_pw="owner-secret")
+
+
+def test_a_password_protected_pdf_is_refused_with_its_own_message(upload):
+    """Owner 24/11: a PDF that needs a password to open used to fail later with a generic error; it is refused at upload with its own code
+    (the interface writes "this PDF is protected by a password"). A PDF with only an owner password (print / copy limits) opens and is processed."""
+    state, post = upload
+    assert post(GUEST_NOTEBOOK, _locked_pdf("open-me")) == 400
+    assert state["last"].json()["detail"]["code"] == "pdf_password_protected"
+    assert post(GUEST_NOTEBOOK, _locked_pdf("")) == 500  # Stop: reached the storage
 
 
 async def _through_the_limit(path, headers, method="POST"):
