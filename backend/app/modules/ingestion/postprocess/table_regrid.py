@@ -2,11 +2,11 @@ import re
 from collections import Counter
 
 from app.modules.ingestion.postprocess.constants import LABEL_COLUMN_TOLERANCE, PHRASE_GAP, ROW_MISMATCH, TEXT_FOLD, VALUE_GAP_TOLERANCE
-from app.modules.ingestion.postprocess.evidence import glue_superscripts, is_footnote_ref, normalise, sits_on
+from app.modules.ingestion.postprocess.evidence import footnote_hosts, glue_superscripts, is_footnote_ref, normalise, sits_on
 from app.modules.ingestion.postprocess.grids import row_cells, table_blocks
 from app.modules.ingestion.postprocess.table_continued import is_data_row
 from app.modules.ingestion.postprocess.table_values import RegridSkip, attach_continuations, column_layouts, distance_to_column, first_value_column, group_value_words, is_numeric_table, is_span_copy, label_hosts, label_key, match_grid, phrase_cells, split_lines, value_columns, value_words, wrap_rows
-from app.modules.ingestion.postprocess.tokens import is_marker, is_number
+from app.modules.ingestion.postprocess.tokens import is_marker, is_number, superscript
 
 
 # Ý nghĩa: lỗi 13. Dựng lại các hàng thân của bảng số liệu từ dòng chữ PDF khi hàng Docling không khớp chữ PDF; trả ([(nhãn theo cột nhãn, [dòng từ giá trị], trên, dưới)], {từ: số lần}
@@ -170,6 +170,40 @@ def merge_ghost_columns(table: list, ghosts: list) -> list:
         if col + 1 < len(merged[0]) and merged[0][col] and not merged[0][col + 1] and col + 1 not in ghosts:
             merged[0][col + 1] = merged[0][col]
     return [[cell for col, cell in enumerate(row) if col not in ghosts] for row in merged]
+
+
+# Ý nghĩa: F4. Trong các dòng bảng Markdown của trang, cặp từ "số chỉ_số" ("53.5 1", "5.9 2,3") mà PDF chứng minh chỉ số in nhỏ, nâng lên ngay sau số đó
+#   (`footnote_hosts`: cùng phép chứng minh của `glue_superscripts`) được viết liền thành số mũ: "53.5¹", "5.9²,³"; đếm `raised_marks`.
+# Giữ vì: chỉ số rời ("53.5 1") bị đọc thành 53,51 hoặc thành một giá trị nữa ("1,016 2" thành 10162, lỗi F4: 37 tài liệu SEC + IFRS); chạy ở cuối trang nên mọi
+#   đường tạo ô (ô Docling giữ nguyên, bảng dựng lại `regrid_block`, cột ma `merge_ghost_columns`, bảng mất `rebuild_lost_tables`) đều được sửa một chỗ.
+#   Bằng chứng là cỡ chữ và vị trí trong PDF chứ không phải hình dạng chữ: "45 3" của cột "Age" in cùng cỡ thì giữ nguyên.
+# Giới hạn: chỉ chỉ số bằng chữ số; "(a)", "*", "†" giữ nguyên (chủ dự án chọn 22/11). So theo cặp chữ của cả trang (như PageEvidence): cặp giống hệt ở chỗ khác
+#   trên trang cũng được đổi. Chỉ số dính liền số ngay trong PDF ("53.51" một từ) không tách được vì không có ranh giới từ.
+DIGIT_MARK = re.compile(r"\d{1,2}(?:,\d{1,2})*")
+
+
+def raise_marks(text: str, page_words: list, counts: Counter) -> str:
+    pairs = {(page_words[k][4].translate(TEXT_FOLD), page_words[i][4].translate(TEXT_FOLD)) for i, k in footnote_hosts(page_words).items()
+             if DIGIT_MARK.fullmatch(page_words[i][4].translate(TEXT_FOLD))}
+    if not pairs:
+        return text
+    lines = text.split("\n")
+    for index, line in enumerate(lines):
+        if not line.startswith("|"):
+            continue
+        parts = line.split("|")
+        for p in range(1, len(parts) - 1):
+            tokens, out = parts[p].split(), []
+            for token in tokens:
+                if out and (out[-1].translate(TEXT_FOLD), token) in pairs:
+                    out[-1] += superscript(token)
+                    counts["raised_marks"] += 1
+                else:
+                    out.append(token)
+            if len(out) != len(tokens):
+                parts[p] = f" {' '.join(out)} "
+        lines[index] = "|".join(parts)
+    return "\n".join(lines)
 
 
 # Ý nghĩa: bỏ khỏi chữ một ô header các từ Docling lỡ nhét vào ô header nhưng PDF đặt ở thân bảng (`moved_out`: {từ: số lần}, mỗi từ chỉ bỏ số lần còn lại).

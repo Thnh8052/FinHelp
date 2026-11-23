@@ -166,3 +166,10 @@ SUPERSCRIPT_RATIO = 0.85
 
 SUPERSCRIPT_RAISE = 0.3
 SUPERSCRIPT_GAP = 20.0
+
+
+# Ý nghĩa: chỉ số chú thích dính liền số ngay trong PDF (không có dấu cách): `get_text("words")` trả một từ "1007" = "100" cỡ 7 pt + "7" cỡ 4,5 pt nâng 2,1 pt
+#   (Siemens tr.47). `split_glued_marks` tách từ đó tại ranh giới hai đoạn chữ (span) khi đoạn sau cách đoạn trước dưới GLUED_MARK_GAP điểm (cùng một từ).
+# Giữ vì: đếm 23/11 trên 170 tài liệu: 17 tài liệu, 314 chỗ (IFRS 10/26, 10 PDF mới 3/10, SEC 4/134), phần lớn ở ô tiêu đề năm ("2024" + "1") và cột
+#   tỉ lệ sở hữu; cỡ chữ và độ nâng dùng lại SUPERSCRIPT_RATIO / SUPERSCRIPT_RAISE của chỉ số tách rời.
+GLUED_MARK_GAP = 1.0

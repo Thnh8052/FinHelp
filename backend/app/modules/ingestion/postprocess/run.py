@@ -8,7 +8,7 @@ from app.modules.ingestion.postprocess.evidence import page_evidence
 from app.modules.ingestion.postprocess.text_lines import join_broken_lines, tidy_spaces
 from app.modules.ingestion.postprocess.small_caps import build_vocabulary, fix_small_caps
 from app.modules.ingestion.postprocess.grids import load_table_grids
-from app.modules.ingestion.postprocess.table_regrid import unspan_tables
+from app.modules.ingestion.postprocess.table_regrid import raise_marks, unspan_tables
 from app.modules.ingestion.postprocess.table_rebuild import rebuild_lost_tables
 from app.modules.ingestion.postprocess.table_continued import carry_header, carry_title, continued_table, page_items, table_heading
 from app.modules.ingestion.postprocess.footnotes_captions import move_footnotes, split_captions
@@ -142,6 +142,9 @@ def process(doc_dir: Path, pdf_dir: Path, fixed_dir: Path) -> dict:
                 text = carry_title(text, heading, report["tables"])
                 if report["tables"]["titled"] > titled:
                     report["titled_pages"].append(pdf_page)
+        evidence = page_evidence(pdf, cache, pdf_page)
+        if evidence is not None:  # F4: last, so every way a table cell is made is covered and no rule above sees "53.5¹" as text
+            text = raise_marks(text, evidence.boxes, report["tables"])
         text = fix_checkboxes(unescape_markdown(text), report["checkboxes"])
         heading = table_heading(text)
         (out / "pages" / page_file.name).write_text(text, encoding="utf-8")
