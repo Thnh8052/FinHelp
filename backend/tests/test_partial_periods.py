@@ -32,6 +32,23 @@ def test_a_question_whose_every_year_is_missing_is_still_refused():
         assert decide(q, [A19], 1).action == "period_unavailable", q
 
 
+BANK25 = SourceInfo("Royal Bank of Canada", "annual report", 2025, None, "RBC annual report FY2025", years_covered=[2025, 2024])
+
+
+def test_a_schedule_word_after_the_year_also_dates_the_amount():
+    """24/11 (owner: make the rule looser): Vietnamese puts "dự kiến" after the year ("năm 2026 dự kiến"), English often too ("Q4 2026 expected"); the cue
+    was looked for only before the year, so a forecast the report prints got "The selected reports do not show FY2026" (TRIED NP-28)."""
+    for q, sources in (
+        ("Theo thuyết minh 5, GDP quý 4 năm 2026 dự kiến cao hơn mức quý 4 năm 2025 bao nhiêu phần trăm?", [BANK25]),
+        ("By how much is GDP in calendar Q4 2026 expected to exceed Q4 2025 in Note 5?", [BANK25]),
+        ("Chi phí thuê văn phòng của Amazon năm 2021 dự kiến là bao nhiêu?", [A19]),
+        ("How much of Amazon's notes in 2021 are scheduled to mature?", [A19]),
+    ):
+        d = decide(q, sources, len(sources))
+        assert d.action != "period_unavailable", q
+        assert "period_missing" not in d.flags, q
+
+
 def test_a_result_of_a_later_year_is_not_a_schedule():
     """Only amounts dated after the report: "revenue in 2022" has no cue, "net sales expected" without a later year is an ordinary period."""
     assert decide("What revenue did Amazon report for 2022?", [A19], 1).action == "period_unavailable"

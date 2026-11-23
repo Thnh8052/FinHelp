@@ -140,11 +140,14 @@ def _years(question: str) -> List[int]:
 
 
 # B8: words that date an amount given in a report (a debt maturing, a payment due or scheduled, an expectation), up to 80 characters before the year
+# or, in the same clause, up to SCHEDULE_AFTER characters after it (24/11, owner: looser; "năm 2026 dự kiến", "Q4 2026 expected": TRIED NP-28)
 _SCHEDULE_CUE = re.compile(r"\b(matur\w*|due|scheduled|expir\w*|expect\w*|payable|guidance|forecast\w*|commit\w*)\b|đáo hạn|đến hạn|dự kiến|cam kết|kế hoạch", re.I)
+SCHEDULE_AFTER = 40
 
 
 def _scheduled(question: str, year: int) -> bool:
-    return any(_SCHEDULE_CUE.search(question[max(0, m.start() - 80):m.start()]) for m in re.finditer(str(year), question))
+    return any(_SCHEDULE_CUE.search(question[max(0, m.start() - 80):m.start()]) or _SCHEDULE_CUE.search(re.split(r"[.?!;\n]", question[m.end():m.end() + SCHEDULE_AFTER])[0])
+               for m in re.finditer(str(year), question))
 
 
 # ---------------------------------------------------------------- patterns
