@@ -218,8 +218,13 @@ class FinancialChunkerService:
                             if table else None
                         ),
                         embedding_model=settings.DEFAULT_EMBEDDING_MODEL,
-                        # "ocr": the page text came from the OCR fallback (page_quality.py); "figure": the chunk holds a picture described by the vision model (figures.py)
-                        flags=(["ocr"] if page.get("ocr") else []) + (["figure"] if FIGURE_MARK in text else []),
+                        # "ocr": the page text came from the OCR fallback (page_quality.py); "table_check": a table of the page may be misread (parse_check.py);
+                        # "figure": the chunk holds a picture described by the vision model (figures.py); "picture_unread": a picture of the page chosen for
+                        # reading could not be read (figures.py figure_failed) or a vector chart's printed figures were lost (parse_check chart_unread);
+                        # every chunk of the page, owner 24/11
+                        flags=(["ocr"] if page.get("ocr") else []) + (["table_check"] if page.get("table_check") else [])
+                              + (["figure"] if FIGURE_MARK in text else [])
+                              + (["picture_unread"] if page.get("figure_failed") or page.get("chart_unread") else []),
                     )
                 )
         return chunks

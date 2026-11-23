@@ -8,7 +8,8 @@ A picture is read when (the "image" class of the VLM bench, experiments/scripts/
   - fewer than MAX_WORDS_INSIDE words of the PDF text layer are inside it.
 Not read: a vector chart (its printed values are text already), a small logo, a page the OCR fallback read again ("ocr": Chandra describes its pictures itself).
 The description replaces the picture's marker, prefixed "[Figure read from the image, page N]" (the chunk gets the flag "figure"); "NO_DATA" (a photo, a logo)
-or a failed call leaves the marker. If the markers and the boxes do not match in number, the descriptions go at the end of the page.
+or a failed call leaves the marker. A failed call also marks the page "figure_failed", so the document card lists it (owner 24/11: the user is told what
+was not processed). If the markers and the boxes do not match in number, the descriptions go at the end of the page.
 """
 import asyncio
 from pathlib import Path
@@ -95,24 +96,30 @@ async def read_figures(pdf_path: Path, pages: List[Dict[str, Any]], describe) ->
 
     replies = await asyncio.gather(*(one(png) for png in images))
     found: Dict[int, Dict[int, str]] = {}
+    failed = set()  # owner 24/11: a picture chosen and left unread is reported on the document card (parse_check.py "figures")
     for (n, k, _), reply in zip(jobs, replies):
         if not reply:
             report["failed"] += 1
+            failed.add(n)
         elif reply.lstrip().upper().startswith("NO_DATA"):
             report["no_data"] += 1
         else:
             found.setdefault(n, {})[k] = " ".join(reply.split())
             report["described"] += 1
-    return [{**p, "text": _place(p, found[p["page_number"]])} if p["page_number"] in found else p for p in pages], report
+    out = [{**p, "text": _place(p, found[p["page_number"]])} if p["page_number"] in found else p for p in pages]
+    return [{**p, "figure_failed": True} if p["page_number"] in failed else p for p in out], report
 
 
 async def read_figures_if_enabled(pdf_path: Path, pages: List[Dict[str, Any]], info: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    """`pages` unchanged unless FIGURE_READER_ENABLED; `info` (the pipeline's timings) receives figures_chosen and figures_described."""
+    """`pages` unchanged unless FIGURE_READER_ENABLED; `info` (the pipeline's timings) receives figures_chosen and figures_described, and figures_failed
+    when a picture could not be read."""
     if not settings.FIGURE_READER_ENABLED or not any(p.get("pictures") for p in pages):
         return pages
     pages, report = await read_figures(pdf_path, pages, describe_picture)
     if info is not None:
         info.update({"figures_chosen": report["chosen"], "figures_described": report["described"]})
+        if report["failed"]:
+            info["figures_failed"] = report["failed"]
     if report["chosen"]:
         logger.info(f"Pictures of {pdf_path.name}: {report}")
     return pages

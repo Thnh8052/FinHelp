@@ -267,7 +267,7 @@ def test_an_answer_carries_no_internal_details(client, monkeypatch):
     monkeypatch.setattr(chat_api.RAGWorkflowOrchestrator, "execute_query", answered)
     response = ask(client, "alice", notebook_id="nb_alice", document_ids=["d1"])
     assert set(response.json()) == {"title", "query", "answer", "citations", "understood", "alternatives", "actions", "message_id"}  # message_id: the stored answer, as GET /messages shows it
-    assert set(response.json()["citations"][0]) == {"citation_id", "document_id", "page", "snippet", "cited"} and "internal-" not in response.text
+    assert set(response.json()["citations"][0]) == {"citation_id", "document_id", "page", "snippet", "cited", "may_be_misread", "read_from_image", "from_figure", "picture_unread"} and "internal-" not in response.text
 
 
 def test_the_stored_trace_keeps_both_kinds_of_verdict(client, monkeypatch):

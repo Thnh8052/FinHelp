@@ -535,7 +535,7 @@ def test_messages_carry_no_internal_details(read_api, monkeypatch):
     body = response.json()[0]
     # user_rating: the reader's own report of wrong figures; message_index: the position, to ask for the page before it (D7)
     assert set(body) == {"message_id", "notebook_id", "role", "content", "citations", "understood", "alternatives", "actions", "created_at", "message_index", "user_rating", "click", "clicked"}
-    assert set(body["citations"][0]) == {"citation_id", "document_id", "page", "snippet", "cited"}
+    assert set(body["citations"][0]) == {"citation_id", "document_id", "page", "snippet", "cited", "may_be_misread", "read_from_image", "from_figure", "picture_unread"}
     assert body["understood"] == "AMD 2023" and body["alternatives"] == [{"document_id": "d2", "label": "Intel"}]
     assert not any(word in response.text for word in ("internal-chunk", "internal-plan", "internal-model", "prompt_version"))
 
@@ -551,7 +551,7 @@ def test_documents_carry_no_internal_details(read_api, monkeypatch):
     response = read_api.get("/documents/notebook/nb")
 
     body = response.json()[0]
-    assert set(body) == {"document_id", "notebook_id", "file_name", "file_size_bytes", "page_count", "status", "metadata", "error_message", "tables_may_be_inaccurate", "created_at"}
+    assert set(body) == {"document_id", "notebook_id", "file_name", "file_size_bytes", "page_count", "status", "metadata", "error_message", "tables_may_be_inaccurate", "pages_to_check", "pages_unread", "pages_pictures_unread", "created_at"}
     assert set(body["metadata"]) == {"company_name", "ticker", "report_type", "fiscal_year", "fiscal_quarter", "catalog_unverified", "catalog_confirmed", "user_override_unverified"}
     assert body["tables_may_be_inaccurate"] is True and not any(word in response.text for word in ("internal-", "pymupdf"))
 

@@ -113,6 +113,10 @@ class CitationOut(BaseModel):
     page: int
     snippet: str
     cited: Optional[bool] = None
+    may_be_misread: bool = False  # a table on this page may be misread: the interface says to check the original page
+    read_from_image: bool = False  # the page was recognised from its image: the interface says to compare with the original page
+    from_figure: bool = False  # figures read from a chart or picture: the interface says so
+    picture_unread: bool = False  # a picture on this page could not be read: the interface says so
 
 
 class QueryResponse(BaseModel):

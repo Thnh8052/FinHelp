@@ -62,12 +62,17 @@ class DocumentOut(BaseModel):
     metadata: Dict[str, Any]
     error_message: Optional[str] = None
     tables_may_be_inaccurate: bool  # the document was read by the fallback parser
+    pages_to_check: List[int] = []  # a table on these pages may be misread (parse_issues "tables")
+    pages_unread: List[int] = []  # pages with no text: scanned and not read, or not returned by the parse (parse_issues "unread")
+    pages_pictures_unread: List[int] = []  # a picture chosen for reading could not be read (parse_issues "figures", owner 24/11)
     created_at: Any
 
     @classmethod
     def of(cls, doc: DocumentRecord) -> "DocumentOut":
-        fields = doc.model_dump(exclude={"metadata"})
-        return cls(**fields, metadata=doc.metadata.model_dump(include=LISTED_METADATA), tables_may_be_inaccurate=doc.parsing_engine == "pymupdf_fallback")
+        fields = doc.model_dump(exclude={"metadata", "parse_issues"})
+        return cls(**fields, metadata=doc.metadata.model_dump(include=LISTED_METADATA), tables_may_be_inaccurate=doc.parsing_engine == "pymupdf_fallback",
+                   pages_to_check=doc.parse_issues.get("tables", []), pages_unread=doc.parse_issues.get("unread", []),
+                   pages_pictures_unread=doc.parse_issues.get("figures", []))
 
 
 class JobOut(BaseModel):

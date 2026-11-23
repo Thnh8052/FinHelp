@@ -179,10 +179,14 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
                 "status": d.get("status"),
                 "error_code": d.get("error_message"),
                 "parsing_engine": d.get("parsing_engine"),
+                "parse_issues": d.get("parse_issues") or {},  # pages the user is told to check (ingestion/parse_check.py)
                 "stage": job_of.get(d["document_id"], {}).get("stage"),
                 "progress_percent": job_of.get(d["document_id"], {}).get("progress_percent"),
                 "chunks": job_of.get(d["document_id"], {}).get("extracted_chunks_count"),
                 "duration_s": (job_of.get(d["document_id"], {}).get("timings") or {}).get("total"),
+                # how the reading went (plan 24/11, channel D): pages read again, refused and why, pictures described
+                "read_report": {k: v for k, v in (job_of.get(d["document_id"], {}).get("timings") or {}).items()
+                                if k in ("ocr_bad_pages", "ocr_replaced_pages", "ocr_rejected", "figures_chosen", "figures_described", "figures_failed")},
                 "created_at": d.get("created_at"),
                 **doc_owners.get(d["notebook_id"], {"owner_type": "unknown", "username": None, "notebook_title": None}),
             }

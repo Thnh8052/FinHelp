@@ -24,6 +24,7 @@ from app.modules.ingestion.catalog import needs_vlm, read_catalog, read_catalog_
 from app.modules.ingestion.doc_header import company_candidates, extract_document_header
 from app.modules.ingestion.page_quality import rescue_if_enabled, start_early_ocr
 from app.modules.ingestion.figures import read_figures_if_enabled
+from app.modules.ingestion.parse_check import check_safely
 from app.modules.ingestion.parser import DoclingSession, PDFParserService
 from app.modules.query_router.input_policy import instruction_like
 from app.modules.retrieval.embeddings import DenseEmbeddingService
@@ -58,6 +59,7 @@ class _Job:
     catalog: Optional[asyncio.Task] = None
     early_ocr: Optional[asyncio.Future] = None  # scanned pages read by OCR while Docling parses (page_quality.start_early_ocr)
     timings: Dict[str, float] = field(default_factory=dict)  # seconds per stage, stored on the job record
+    issues: Dict[str, List[int]] = field(default_factory=dict)  # pages for the user to check (parse_check.py), saved on the document
 
 
 # One worker drains the uploads in batches (Docling and the embedding model share one small GPU):
@@ -213,6 +215,8 @@ class IngestionPipeline:
             job.pages = await read_figures_if_enabled(job.pdf_path, job.pages, job.timings)
             if "figures_chosen" in job.timings:
                 job.timings["figures"] = round(time.perf_counter() - t0, 2)
+            # 1a''. What the OCR and figure steps could not repair is listed for the user (parse_check.py); the chunks of those pages are flagged
+            job.pages, job.issues = await check_safely(job.pdf_path, job.pages, job.timings)
             # 1b. Catalog: the API call runs while the next file parses
             job.catalog = asyncio.create_task(self._catalog(job))
             # 2. Chunking (CPU-bound: tokenizer)
@@ -300,7 +304,7 @@ class IngestionPipeline:
             await self.job_repo.finish(job_id, len(chunks), job.timings)
             await self.doc_repo.update_one(
                 {"document_id": document_id},
-                {"page_count": len(job.pages), "parsing_engine": job.engine, "status": "ready", "updated_at": datetime.now(timezone.utc)},
+                {"page_count": len(job.pages), "parsing_engine": job.engine, "parse_issues": job.issues, "status": "ready", "updated_at": datetime.now(timezone.utc)},
             )
             logger.info(f"Ingestion job {job_id}: {len(job.pages)} pages, {len(chunks)} chunks, engine={job.engine}, timings={job.timings}")
         except Exception as exc:

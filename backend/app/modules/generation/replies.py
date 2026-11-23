@@ -27,6 +27,31 @@ NO_DATA_ANSWER = {"vi": "Không tìm thấy dữ liệu tài chính phù hợp t
                   "en": "No matching financial data was found in the selected sources. " + CHECK_SOURCES["en"]}
 
 
+def page_runs(pages: List[int]) -> str:
+    """[6, 7, 8, 9, 12] -> "6–9, 12" (the document card writes page lists the same way, frontend pageRuns.ts)."""
+    runs, out = [], []
+    for p in sorted(set(pages)):
+        if runs and p == runs[-1][1] + 1:
+            runs[-1][1] = p
+        else:
+            runs.append([p, p])
+    for a, b in runs:
+        out.append(str(a) if a == b else f"{a}–{b}")
+    return ", ".join(out)
+
+
+def unread_note(docs: List[DocumentRecord], lang: str) -> str:
+    """Appended by code when nothing was found and a searched document has pages that could not be read (parse_issues "unread": a scan left without text,
+    a page the parse did not return; owner-approved plan 24/11, channel C): the information may be on those pages. Names no component."""
+    lines = []
+    for d in docs:
+        pages = (getattr(d, "parse_issues", None) or {}).get("unread") or []
+        if pages:
+            lines.append(f"Lưu ý: trang {page_runs(pages)} của {document_label(d)} chưa đọc được chữ, thông tin có thể nằm ở đó." if lang == "vi" else
+                         f"Note: pages {page_runs(pages)} of {document_label(d)} could not be read, the information may be there.")
+    return " ".join(lines)
+
+
 def _cells(line: str) -> List[str]:
     return [" ".join(c.split()) for c in line.strip().strip("|").split("|")]
 
