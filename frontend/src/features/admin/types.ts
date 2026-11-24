@@ -114,6 +114,15 @@ export interface ReviewItem extends AdminAnswer {
   unverified: string[]; // figures the answer check could not trace
   notes: string[]; // what the answer prompt was told for this question
   degraded: string[]; // steps dropped because they were too slow
+  flagged_pages: FlaggedPage[]; // cited pages that were read with a problem at upload (backend admin/review.flagged_pages)
+}
+
+export type PageFlag = "may_be_misread" | "read_from_image" | "from_figure" | "picture_unread";
+export interface FlaggedPage {
+  document_id: string;
+  page: number;
+  flags: PageFlag[];
+  file_name: string | null; // null once the document was deleted
 }
 
 export interface ReviewQueue {

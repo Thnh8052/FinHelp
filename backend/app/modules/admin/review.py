@@ -84,9 +84,24 @@ def _state(status: str) -> Dict[str, Any]:
     return {"admin_review": {"$exists": False}} if status == "open" else {"admin_review": {"$exists": True}} if status == "reviewed" else {}
 
 
+PAGE_FLAGS = ("may_be_misread", "read_from_image", "from_figure", "picture_unread")  # the citation flags set from the page checks at upload
+
+
+def flagged_pages(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The pages an answer cites that were read with a problem at upload, one entry per page with its flags (owner 25/11): the admin sees at once
+    whether a reported figure may come from the reading of the PDF rather than from the answer. An excerpt the answer does not cite is left out."""
+    out: Dict[tuple, List[str]] = {}
+    for c in doc.get("citations") or []:
+        flags = [f for f in PAGE_FLAGS if c.get(f)]
+        if flags and c.get("cited") is not False:
+            seen = out.setdefault((c.get("document_id"), c.get("page")), [])
+            seen += [f for f in flags if f not in seen]
+    return [{"document_id": d, "page": p, "flags": f} for (d, p), f in out.items()]
+
+
 def _extra(doc: Dict[str, Any]) -> Dict[str, Any]:
     trace = doc.get("trace_info") or {}
-    return {"labels": problem_labels(doc), "review": doc.get("admin_review"), "intent": trace.get("intent"),
+    return {"labels": problem_labels(doc), "review": doc.get("admin_review"), "intent": trace.get("intent"), "flagged_pages": flagged_pages(doc),
             "status": (trace.get("answer_meta") or {}).get("status"), "unverified": (trace.get("verification") or {}).get("unverified_figures") or [],
             "notes": trace.get("notes") or [], "degraded": trace.get("degraded") or []}
 
@@ -114,6 +129,12 @@ async def review_queue(db, days: int = 14, label: Optional[str] = None, user: Op
     counts = {name: await messages.count_documents({**base, **cond, **_state("open")}) for name, cond in PROBLEMS.items()}
     open_total = await messages.count_documents(_open(base))
     items = await _answers(db, {k: v for k, v in query.items() if k != "role"}, min(limit, QUEUE_LIMIT), extra=_extra)
+    ids = list({p["document_id"] for i in items for p in i["flagged_pages"]})
+    names = {d["document_id"]: d.get("file_name") for d in await db[collections.DOCUMENTS_COLLECTION].find(
+        {"document_id": {"$in": ids}}, {"document_id": 1, "file_name": 1}).to_list(None)} if ids else {}
+    for i in items:
+        for p in i["flagged_pages"]:
+            p["file_name"] = names.get(p["document_id"])  # None once the document was deleted
     return {"items": items, "counts": counts, "open_total": open_total, "window_days": days}
 
 

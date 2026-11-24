@@ -7,11 +7,15 @@ A picture is read when (the "image" class of the VLM bench, experiments/scripts/
   - embedded raster images cover at least MIN_RASTER_COVER of it, and
   - fewer than MAX_WORDS_INSIDE words of the PDF text layer are inside it.
 Not read: a vector chart (its printed values are text already), a small logo, a page the OCR fallback read again ("ocr": Chandra describes its pictures itself).
+Second route (24/11, IMAGE_REGION_READER_ENABLED, off by default): a raster image on a page that has a text layer, that Docling gave no picture box for and that no word of
+the layer sits in, is "an image region" (a table pasted as a picture: Enablence p42, a bad-debt line of 166). regions_to_read finds them from the PDF alone, read_regions
+sends each crop with REGION_PROMPT and appends the reply to the page, lines kept: "[Figure read from the image, page N]" and then the rows.
 The description replaces the picture's marker, prefixed "[Figure read from the image, page N]" (the chunk gets the flag "figure"); "NO_DATA" (a photo, a logo)
 or a failed call leaves the marker. A failed call also marks the page "figure_failed", so the document card lists it (owner 24/11: the user is told what
 was not processed). If the markers and the boxes do not match in number, the descriptions go at the end of the page.
 """
 import asyncio
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,7 +23,7 @@ import fitz  # PyMuPDF
 
 from app.core.config import settings
 from app.core.logging import logger
-from app.modules.ingestion.api_readers import describe_picture
+from app.modules.ingestion.api_readers import describe_picture, describe_region
 
 MARKER = "<!-- image -->"
 FIGURE_MARK = "[Figure read from the image"
@@ -122,4 +126,124 @@ async def read_figures_if_enabled(pdf_path: Path, pages: List[Dict[str, Any]], i
             info["figures_failed"] = report["failed"]
     if report["chosen"]:
         logger.info(f"Pictures of {pdf_path.name}: {report}")
+    return pages
+
+
+# ---------------------------------------------------------------- image regions no step reads (experiments TRIED NP-38 to NP-40)
+REGION_MARGIN = 3.0  # points: a word this close to the box counts as inside. Some PDFs (AMCOR 409A plan, 32 pages) carry a hidden text layer, 144 to 604 words
+#                      on one line just under the image, so the text is already read; a box-only count would send those pages to the model
+REGION_OVERLAP = 0.5  # share of the region covered by a picture box the figure reader reads: it is that reader's
+UNPAIRED_RUN = 3  # single values in a row with no label (blank lines between do not count): the reader listed the values apart from their labels
+_LETTER = re.compile(r"[^\W\d_]")
+_NUMBER = re.compile(r"\d[\d,.]*")
+_YEAR = re.compile(r"(?:19|20)\d\d")
+
+
+def _same_box(a: "fitz.Rect", b: "fitz.Rect") -> bool:
+    return all(abs(x - y) < 1 for x, y in zip(a, b))
+
+
+def _share(a: "fitz.Rect", b: "fitz.Rect") -> float:
+    inter = a & b
+    return 0.0 if inter.is_empty else inter.width * inter.height / ((a.width * a.height) or 1.0)
+
+
+def regions_to_read(pdf_path: Path, pages: List[Dict[str, Any]]) -> List[Tuple[int, int, list]]:
+    """[(page number, index of the region on its page, box in PDF points)] of the raster images nothing else reads: >= MIN_PICTURE_SHARE of the page, fewer than
+    MAX_WORDS_INSIDE words of the text layer within REGION_MARGIN of the box, not a picture the figure reader reads (pictures_to_read). Skipped: a page the OCR
+    fallback read again ("ocr"), a page with no text layer at all (a scan: the OCR fallback's), an image drawn twice."""
+    read: Dict[int, List["fitz.Rect"]] = {}
+    for n, _, box in pictures_to_read(pdf_path, pages):
+        read.setdefault(n, []).append(fitz.Rect(box))
+    out = []
+    with fitz.open(str(pdf_path)) as doc:
+        for p in pages:
+            n = p["page_number"]
+            if p.get("ocr") or not 1 <= n <= len(doc):
+                continue
+            page = doc[n - 1]
+            words = page.get_text("words")
+            if not words:
+                continue
+            area = (page.rect.width * page.rect.height) or 1.0
+            seen: List["fitz.Rect"] = []
+            for info in page.get_image_info():
+                rect = fitz.Rect(info["bbox"]) & page.rect
+                if rect.is_empty or rect.width * rect.height < MIN_PICTURE_SHARE * area or any(_same_box(rect, o) for o in seen):
+                    continue
+                seen.append(rect)
+                near = rect + (-REGION_MARGIN, -REGION_MARGIN, REGION_MARGIN, REGION_MARGIN)
+                if sum(1 for w in words if near.contains(fitz.Point((w[0] + w[2]) / 2, (w[1] + w[3]) / 2))) >= MAX_WORDS_INSIDE:
+                    continue
+                if any(_share(rect, r) >= REGION_OVERLAP for r in read.get(n, [])):
+                    continue
+                out.append((n, len(seen) - 1, [round(v, 1) for v in rect]))
+    return out
+
+
+def unpaired_values(reply: str) -> bool:
+    """True when UNPAIRED_RUN or more lines in a row hold one number and nothing else (not a year): the values are listed apart from their labels, so a number could
+    be quoted against the wrong label (1 of 4 waterfall charts in the NP-40 trial). A row label, a year before its value or several cells on a line is a pair."""
+    run = 0
+    for line in reply.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        tokens = _NUMBER.findall(s)
+        if len(tokens) == 1 and not _LETTER.search(s) and not _YEAR.fullmatch(tokens[0]):
+            run += 1
+            if run >= UNPAIRED_RUN:
+                return True
+        else:
+            run = 0
+    return False
+
+
+async def read_regions(pdf_path: Path, pages: List[Dict[str, Any]], describe) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """(pages with the replies appended, report {"chosen", "described", "no_data", "failed"}). `describe(png) -> str | None`. A failed call, or a reply with
+    values apart from their labels, marks the page "figure_failed" (the document card lists it); NO_DATA (a logo, a photo, a signature) is an answer."""
+    jobs = await asyncio.to_thread(regions_to_read, pdf_path, pages)
+    report = {"chosen": len(jobs), "described": 0, "no_data": 0, "failed": 0}
+    if not jobs:
+        return pages, report
+    images = await asyncio.to_thread(_crop, pdf_path, jobs)
+    gate = asyncio.Semaphore(settings.API_READ_CONCURRENCY)
+
+    async def one(png: bytes) -> Optional[str]:
+        async with gate:
+            try:
+                return await describe(png)
+            except Exception as exc:  # an extra: the page keeps Docling's text
+                logger.warning(f"Image region reading failed: {type(exc).__name__}")
+                return None
+
+    replies = await asyncio.gather(*(one(png) for png in images))
+    found: Dict[int, List[str]] = {}
+    failed = set()
+    for (n, _, _), reply in zip(jobs, replies):
+        if not reply or unpaired_values(reply):
+            report["failed"] += 1
+            failed.add(n)
+        elif reply.lstrip().upper().startswith("NO_DATA"):
+            report["no_data"] += 1
+        else:
+            found.setdefault(n, []).append("\n".join(line.rstrip() for line in reply.strip().splitlines()))
+            report["described"] += 1
+    out = [{**p, "text": p["text"].rstrip() + "".join(f"\n\n{FIGURE_MARK}, page {p['page_number']}]\n{t}" for t in found[p["page_number"]])}
+           if p["page_number"] in found else p for p in pages]
+    return [{**p, "figure_failed": True} if p["page_number"] in failed else p for p in out], report
+
+
+async def read_regions_if_enabled(pdf_path: Path, pages: List[Dict[str, Any]], info: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """`pages` unchanged unless IMAGE_REGION_READER_ENABLED; `info` (the pipeline's timings) receives regions_chosen and regions_described, and regions_failed
+    when a region could not be read; nothing when the document has no such region."""
+    if not settings.IMAGE_REGION_READER_ENABLED:
+        return pages
+    pages, report = await read_regions(pdf_path, pages, describe_region)
+    if report["chosen"]:
+        logger.info(f"Image regions of {pdf_path.name}: {report}")
+        if info is not None:
+            info.update({"regions_chosen": report["chosen"], "regions_described": report["described"]})
+            if report["failed"]:
+                info["regions_failed"] = report["failed"]
     return pages

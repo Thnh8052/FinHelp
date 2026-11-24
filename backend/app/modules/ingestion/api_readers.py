@@ -43,6 +43,19 @@ Otherwise write one plain paragraph of at most 80 words, in the language of the 
 - the main trend or comparison.
 Rules: copy numbers exactly as printed (same digits, same unit). Never compute new numbers. If a value is not printed and you read it from an axis, write it with "~" (for example ~240). Do not guess what is not visible. No markdown."""
 
+# The prompt for a region of a page that is only an image (a table pasted as a picture, figures.py regions_to_read): it must copy the whole table, so the reply keeps
+# its lines. Measured as v2 on 30 images (experiments TRIED NP-40): 99.0 % of the printed numbers stated, 0 of 269 invented, 9 of 10 photos and signatures NO_DATA,
+# 0 of 20 titles made up. The two lines marked v2 are the only change from v1 (NP-39), which sent 3 of 20 small data crops to NO_DATA and made up a chart title.
+REGION_PROMPT = """You read one picture cut from a company report, so that what is printed on it can be found and quoted as text.
+If the picture is only a logo, a photo, a signature or a decoration, with no digit printed on it and no table, chart or text with content, reply exactly: NO_DATA: <at most 8 words on what it shows>
+If any number is printed on the picture, never reply NO_DATA, even when the picture is small or cut: copy what is visible.
+Otherwise write plain text, in the language printed on the picture:
+- Table: its title, unit and column headings as printed, then one line per row: the row label, then every cell separated by " | ", left to right. Write a printed dash as "-" and keep brackets, signs, % and currency marks as printed.
+- Chart or infographic: its title, unit and period, then each label with its printed value, one per line.
+- Text: copy the text.
+Rules: copy every number exactly as printed (same digits, same separators, same unit). Write a title, unit or period only if it is printed on the picture; never add one that is not printed. Never compute a new number. Never estimate a value from an axis or from the height of a bar: write only what is printed. Do not guess what is cut off or not visible. No markdown, no commentary."""
+REGION_MAX_TOKENS = 4000  # a full page of text came to 700 tokens, a table to 400
+
 def _busy_wait(exc: Exception, n: int) -> Optional[float]:
     """Seconds to wait when `exc` is a busy answer (the server's Retry-After, else a growing pause), None for any other failure."""
     if not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code not in BUSY_CODES:
@@ -166,23 +179,33 @@ async def read_chandra(pdf_path: Path, pages: List[int], client: Optional[httpx.
 
 
 # ---------------------------------------------------------------- the vision model
-async def describe_picture(png: bytes, client: Optional[httpx.AsyncClient] = None) -> Optional[str]:
-    """The picture's description, "NO_DATA: ..." for a logo or photo, or None (no key, or ATTEMPTS failures)."""
+async def _ask_vision(png: bytes, prompt: str, max_tokens: int, label: str, client: Optional[httpx.AsyncClient], timeout: float = 60.0) -> Optional[str]:
     key = settings.OPENAI_API_KEY
     if not key:
         return None
-    body = {"model": settings.FIGURE_MODEL, "temperature": 0, "max_tokens": 400,
-            "messages": [{"role": "user", "content": [{"type": "text", "text": FIGURE_PROMPT},
+    body = {"model": settings.FIGURE_MODEL, "temperature": 0, "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": [{"type": "text", "text": prompt},
                                                       {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(png).decode()}}]}]}
     own = client is None
-    client = client or httpx.AsyncClient(timeout=60.0)
+    client = client or httpx.AsyncClient(timeout=timeout)
     async def job() -> str:
         r = await client.post(f"{settings.OPENAI_BASE_URL.rstrip('/')}/chat/completions", headers={"Authorization": f"Bearer {key}"}, json=body)
         r.raise_for_status()
         return (r.json()["choices"][0]["message"].get("content") or "").strip()
 
     try:
-        return await _call(job, "Picture description")
+        return await _call(job, label)
     finally:
         if own:
             await client.aclose()
+
+
+async def describe_picture(png: bytes, client: Optional[httpx.AsyncClient] = None) -> Optional[str]:
+    """The picture's description, "NO_DATA: ..." for a logo or photo, or None (no key, or ATTEMPTS failures)."""
+    return await _ask_vision(png, FIGURE_PROMPT, 400, "Picture description", client)
+
+
+async def describe_region(png: bytes, client: Optional[httpx.AsyncClient] = None) -> Optional[str]:
+    """The text of an image region (REGION_PROMPT: a table row by row, a chart's printed values, a text copied), its lines kept; "NO_DATA: ..." for a logo,
+    a photo or a signature; None (no key, or ATTEMPTS failures)."""
+    return await _ask_vision(png, REGION_PROMPT, REGION_MAX_TOKENS, "Image region", client, timeout=90.0)  # a page of text took 10 s to write
