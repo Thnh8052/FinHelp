@@ -20,7 +20,7 @@ from app.modules.ingestion.chunk_repo import ChunkRepository
 from app.modules.documents.document_repo import DocumentRepository
 from app.modules.ingestion.ingestion_job_repo import IngestionJobRepository
 from app.modules.ingestion.chunker import FinancialChunkerService
-from app.modules.ingestion.catalog import needs_vlm, read_catalog, read_catalog_vlm, years_covered
+from app.modules.ingestion.catalog import needs_vlm, read_catalog, read_catalog_vlm, years_covered, years_printed
 from app.modules.ingestion.doc_header import company_candidates, extract_document_header
 from app.modules.ingestion.page_quality import rescue_if_enabled, start_early_ocr
 from app.modules.ingestion.figures import read_figures_if_enabled
@@ -250,6 +250,7 @@ class IngestionPipeline:
                 header.update(years_covered=years_covered({int(p["page_number"]): p.get("text") or "" for p in pages}, header.get("period_end") or ""),
                               catalog_source="rule")
             header["name_candidates"] = await asyncio.to_thread(company_candidates, pages)  # the choices of the catalog form
+            header["years_printed"] = years_printed({int(p["page_number"]): p.get("text") or "" for p in pages})  # the period rule's years
             await self.doc_repo.update_one({"document_id": job.document_id}, {f"metadata.{k}": v for k, v in header.items()})
         except Exception as exc:
             logger.warning(f"Document catalog not extracted for {job.document_id}: {type(exc).__name__}: {str(exc)[:120]}")

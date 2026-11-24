@@ -36,6 +36,18 @@ class SourceInfo:
     years_covered: List[int] = field(default_factory=list)  # years heading the document's tables (catalog, code); empty = unknown
     aliases: List[str] = field(default_factory=list)
     ticker: Optional[str] = None
+    years_printed: List[int] = field(default_factory=list)  # every year the report prints (catalog.years_printed); empty = read before 24/11
+
+
+def shown_years(s: SourceInfo) -> Set[int]:
+    """The years a report can answer for: every year it prints, its own fiscal year included (24/11, TRIED DV-15: a year printed nowhere is refused,
+    one printed in a five-year table, a debt schedule or a note "due 2047" is not). A report read before 24/11 has no printed years: the years
+    heading its tables, as before."""
+    return set(s.years_printed or s.years_covered) | ({s.fiscal_year} if s.fiscal_year else set())
+
+
+def knows_years(s: SourceInfo) -> bool:
+    return bool(s.years_printed or s.years_covered)
 
 
 @dataclass
@@ -494,10 +506,10 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
         groups.setdefault(_company_key(s), []).append(s)
     if years and all(s.fiscal_year for s in target):
         bad, via_later = [], False
-        # With the years heading every source's tables known (catalog), a year none of them shows is refused (router_eval.py: 0/182
-        # answerable SEC questions and 0/176 non-SEC refused). Otherwise only years that are too OLD are refused (an annual report shows
-        # up to 5 years). Later years stay in that case: filings talk about the next year and fiscal-year labels differ between datasets.
-        covered = [set(s.years_covered) | {s.fiscal_year} for s in target] if all(s.years_covered for s in target) else None
+        # With every source's years known, a year none of them prints is refused (shown_years: every year printed since 24/11, the years heading
+        # the tables for a report read earlier; TRIED DV-15: printed anywhere 1 wrong of 42 trap questions, 0 false refusals on gold v2, against 19
+        # and 0 for the table-heading years). Otherwise only years that are too OLD are refused (an annual report shows up to 5 years).
+        covered = [shown_years(s) for s in target] if all(knows_years(s) for s in target) else None
         latest = max(s.fiscal_year for s in target)
         # B8: a year after the latest report, asked as the date of an amount that report gives (debt maturing in 2021, expected for 2020), is in
         # that report; the answer prompt says how to state it (v5, "Amounts dated after a report's period end")
@@ -515,7 +527,7 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
             bad = []
         if bad:
             avail = {g[0].company or g[0].file_name: sorted({s.fiscal_year for s in g}) for g in groups.values()}
-            in_chat = [y for y in bad if any(_company_key(u) in groups and y in set(u.years_covered) | {u.fiscal_year} for u in unselected)]
+            in_chat = [y for y in bad if any(_company_key(u) in groups and y in shown_years(u) for u in unselected)]
             d.action, d.message, d.available = "period_unavailable", _period_message(lang, bad, avail, in_chat), [f"FY{y}" for ys in avail.values() for y in ys]
             return d
         # Each named company on its own: another company's report showing the year says nothing about this one. Only a company that shows NONE of
@@ -523,7 +535,7 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
         # FY2016"): checking every year against every company put a wrong note on 37 of 187 answerable gold v2 questions (input_layer_v2.py).
         if named and len(groups) > 1:
             for g in groups.values():
-                known = set().union(*(set(s.years_covered) | {s.fiscal_year} for s in g)) if all(s.years_covered for s in g) else None
+                known = set().union(*(shown_years(s) for s in g)) if all(knows_years(s) for s in g) else None
                 lacks = [y for y in years if (y not in known if known is not None else all(y < s.fiscal_year - 4 for s in g))]
                 if lacks and len(lacks) == len(years):
                     name, have = g[0].company or g[0].file_name, ", ".join(f"FY{s.fiscal_year}" for s in sorted(g, key=lambda s: s.fiscal_year))

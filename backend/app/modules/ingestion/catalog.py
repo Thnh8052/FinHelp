@@ -87,6 +87,13 @@ def fiscal_label(label: Any, period_end: str = "") -> tuple:
     return (int(y[0]), q) if y else (None, None)
 
 
+def years_printed(pages: Dict[int, str]) -> List[int]:
+    """Every year the document prints anywhere (tables, schedules, notes, figure text), read like the years of a question (input_policy._YEAR:
+    "$2019", "2019,5" and "2019.5" are not years). The period rule refuses a year only when no selected report prints it (24/11, TRIED DV-15)."""
+    from app.modules.query_router.input_policy import _YEAR  # one reader for the question and the document
+    return sorted({int(y) for text in pages.values() for y in _YEAR.findall(text or "")})
+
+
 def years_covered(pages: Dict[int, str], period_end: str = "") -> List[int]:
     """Years in the header rows (first two rows) of the document's tables, current first. A year must head at least 30% as many tables
     as the most frequent one (drops a lone note table with old years) and not be after the period end (drops maturity schedules)."""

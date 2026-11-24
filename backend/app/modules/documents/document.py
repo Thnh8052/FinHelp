@@ -19,6 +19,7 @@ class DocumentMetadata(BaseModel):
     report_type: Optional[str] = None  # catalog doc_type (annual financial statements, 10-K, 10-Q, ...) or the rule header's form
     aliases: List[str] = Field(default_factory=list)  # former names of the reporting company found in the text (Barrick Gold -> Barrick Mining)
     years_covered: List[int] = Field(default_factory=list)  # years heading the document's tables, current first (code, no model)
+    years_printed: List[int] = Field(default_factory=list)  # every year the text prints (catalog.years_printed): the period rule's years; empty = read before 24/11
     catalog_source: Optional[str] = None  # "model" (catalog.py), "rule" (doc_header.py) or "user" (confirmed / edited in the UI)
     catalog_unverified: List[str] = Field(default_factory=list)  # catalog fields not found in the text: the UI asks the user
     catalog_confirmed: bool = False  # the owner confirmed / edited the catalog in the UI (PATCH /documents/{id}/catalog)
