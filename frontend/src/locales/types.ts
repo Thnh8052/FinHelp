@@ -293,6 +293,7 @@ export interface TranslationSchema {
     clearHighlight: string;
     highlightFound: string;
     highlightNotFound: string;
+    scannedPage: string;
     reportTitle: string;
     previewTitle: string;
     allReports: string;
