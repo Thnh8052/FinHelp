@@ -97,6 +97,12 @@ function bestWindow(unit: string[], page: PageToken[]): number[] | null {
   return best && bestScore / total >= ENOUGH && best.length >= MIN_UNIT_TOKENS ? best : null;
 }
 
+/** Whether the page has a text layer at all: a scanned page has none (at most a page number laid over the image), so its lines cannot be marked
+ * and the viewer says so plainly instead of "not found". Two words of text are enough to call it a text page. */
+export function hasTextLayer(items: PageItem[]): boolean {
+  return items.reduce((n, it) => n + tokenize(it.str ?? "").filter((t) => !/^\d{1,3}$/.test(t)).length, 0) >= 2;
+}
+
 export function locateExcerpt(excerpt: string, items: PageItem[]): Located {
   const units = excerptUnits(excerpt);
   const page = pageTokens(items);
@@ -131,13 +137,24 @@ export function citedFigures(answer: string, n: number): string[] {
   return [...figures];
 }
 
+/** Where an item's line lies: the direction the text runs and its offset across that direction. A page turned by /Rotate draws its text
+ * upwards in PDF space (Infosys, Fed Z.1): one row of the drawn page then shares x, not y, so the offset is taken across the text, not along y. */
+function lineOf(it: PageItem) {
+  const [a, b, c, d, e, f] = it.transform;
+  const run = Math.hypot(a, b) || 1;
+  const ux = a / run;
+  const uy = b / run;
+  return { ux, uy, offset: ux * f - uy * e, height: Math.hypot(c, d) || 1 };
+}
+
 /** Items on the same line of text as item `index` (the whole table row, label and figures). */
 function sameLine(items: PageItem[], index: number): number[] {
-  const y = items[index].transform[5];
-  const height = Math.hypot(items[index].transform[2], items[index].transform[3]) || 1;
+  const ref = lineOf(items[index]);
   const line: number[] = [];
   items.forEach((it, i) => {
-    if (it.str?.trim() && Math.abs(it.transform[5] - y) < height * 0.5) line.push(i);
+    if (!it.str?.trim()) return;
+    const l = lineOf(it);
+    if (Math.abs(l.ux - ref.ux) < 0.1 && Math.abs(l.uy - ref.uy) < 0.1 && Math.abs(l.offset - ref.offset) < ref.height * 0.5) line.push(i);
   });
   return line;
 }
@@ -171,22 +188,34 @@ const multiply = (m: number[], n: number[]): number[] => [
  * `viewport`: the page's viewport transform as pdf.js gives it (page.getViewport(...).transform) and the page width in the same pixels.
  */
 export function bandsFor(items: PageItem[], marked: number[], viewportTransform: number[], pageWidth: number): Box[] {
-  const boxes: Box[] = [];
+  // Each item is the rectangle its glyphs cover on the drawn page: from the baseline origin along the text direction (its width) and towards the top of
+  // the glyphs (its height), turned with the text; then the box around it. Text that runs upwards on the drawn page (a table printed sideways on an
+  // unrotated page) gives a tall, narrow box; its line is a column of the drawn page.
+  const boxes: (Box & { upright: boolean })[] = [];
   for (const i of marked) {
     const it = items[i];
     if (!it?.str?.trim()) continue;
     const tx = multiply(viewportTransform, it.transform);
+    const run = Math.hypot(tx[0], tx[1]);
     const height = Math.hypot(tx[2], tx[3]);
     const width = it.width * Math.hypot(viewportTransform[0], viewportTransform[1]);
-    if (height <= 0 || width <= 0) continue;
-    boxes.push({ left: tx[4], top: tx[5] - height, width, height });
+    if (run <= 0 || height <= 0 || width <= 0) continue;
+    const along = [(tx[0] / run) * width, (tx[1] / run) * width];
+    const xs = [tx[4], tx[4] + along[0], tx[4] + tx[2], tx[4] + along[0] + tx[2]];
+    const ys = [tx[5], tx[5] + along[1], tx[5] + tx[3], tx[5] + along[1] + tx[3]];
+    const left = Math.min(...xs);
+    const top = Math.min(...ys);
+    boxes.push({ left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top, upright: Math.abs(tx[0]) >= Math.abs(tx[1]) });
   }
   boxes.sort((a, b) => a.top - b.top || a.left - b.left);
   const maxGap = pageWidth * 0.7; // a table row spans the page; only two far-apart columns stay apart
-  const bands: Box[] = [];
+  const bands: (Box & { upright: boolean })[] = [];
   for (const box of boxes) {
-    const band = bands.find((b) => Math.abs(b.top + b.height / 2 - (box.top + box.height / 2)) < Math.max(b.height, box.height) * 0.6
-      && box.left - (b.left + b.width) < maxGap && b.left - (box.left + box.width) < maxGap);
+    const band = bands.find((b) => b.upright === box.upright && (box.upright
+      ? Math.abs(b.top + b.height / 2 - (box.top + box.height / 2)) < Math.max(b.height, box.height) * 0.6
+        && box.left - (b.left + b.width) < maxGap && b.left - (box.left + box.width) < maxGap
+      : Math.abs(b.left + b.width / 2 - (box.left + box.width / 2)) < Math.max(b.width, box.width) * 0.6
+        && box.top - (b.top + b.height) < maxGap && b.top - (box.top + box.height) < maxGap));
     if (!band) {
       bands.push({ ...box });
       continue;
@@ -198,5 +227,5 @@ export function bandsFor(items: PageItem[], marked: number[], viewportTransform:
     band.width = right - band.left;
     band.height = bottom - band.top;
   }
-  return bands;
+  return bands.map(({ left, top, width, height }) => ({ left, top, width, height }));
 }

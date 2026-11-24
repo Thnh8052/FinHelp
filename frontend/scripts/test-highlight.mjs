@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bandsFor, citedFigures, excerptUnits, figureLines, locateExcerpt, tokenize } from "../src/components/notebook/locateExcerpt.ts";
+import { bandsFor, citedFigures, excerptUnits, figureLines, hasTextLayer, locateExcerpt, tokenize } from "../src/components/notebook/locateExcerpt.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..", "..");
@@ -77,6 +77,32 @@ check("figure lines: the whole row of the figure, in every place it is printed (
   assert.deepEqual(figureLines(items, ["340751"]), [0, 1, 2, 5, 6]);
   assert.deepEqual(figureLines(items, ["99999"]), []);
   assert.deepEqual(figureLines(items, ["340751"], 1), [0, 1, 2]);
+});
+
+// rotated pages (24/11): Infosys and Fed Z.1 pages carry /Rotate 90 and draw their text upwards, so a row of the drawn page is a column of the PDF space
+const up = (str, x, y, width = 40) => ({ str, transform: [0, 10, -10, 0, x, y], width }); // text running upwards in PDF space
+check("rotated page: the figure's line is its row on the drawn page (same x in PDF space), not the figures of other rows (same y)", () => {
+  const items = [up("Net sales", 300, 50), up("4,073.8", 300, 400), up("2,625.9", 300, 480), up("Cost", 320, 50), up("1,447.9", 320, 400)];
+  assert.deepEqual(figureLines(items, ["4073.8"]), [0, 1, 2]);
+});
+check("text drawn upwards on an unrotated page: one tall band per line, from the label to the last figure", () => {
+  const items = [up("Net sales", 300, 50, 50), up("5,555", 300, 400, 30), up("Cost", 330, 50, 20), up("4,444", 330, 400, 30)];
+  const bands = bandsFor(items, [0, 1, 2, 3], [1, 0, 0, -1, 0, 800], 600);
+  assert.equal(bands.length, 2);
+  assert.deepEqual([bands[0].left, bands[0].width], [290, 10]); // 10 units thick, left of x = 300 (the glyphs grow to the left of their baseline)
+  assert.deepEqual([bands[0].top, bands[0].height], [800 - 430, 380]); // from y = 50 (the label) up to y = 400 + 30 (the end of the last figure)
+});
+check("rotated page drawn upright by the viewport: the band is the same as for a page printed upright", () => {
+  const bands = bandsFor([up("Net sales", 300, 50, 50), up("5,555", 300, 400, 30)], [0, 1], [0, 1, 1, 0, 0, 0], 792); // pdf.js viewport of a /Rotate 90 page
+  assert.equal(bands.length, 1);
+  assert.deepEqual([bands[0].left, bands[0].top, bands[0].width, bands[0].height], [50, 290, 380, 10]);
+});
+
+check("a page with no text layer (a scan) is told apart from a page whose text simply does not hold the excerpt", () => {
+  assert.equal(hasTextLayer([]), false);
+  assert.equal(hasTextLayer([item("  ", 10, 700), item("", 10, 680)]), false);
+  assert.equal(hasTextLayer([item("37", 300, 20)]), false); // only a page number printed as text over the scanned image
+  assert.equal(hasTextLayer([item("Net sales", 10, 700), item("5,555", 200, 700)]), true);
 });
 
 // ---------------------------------------------------------------- real pages

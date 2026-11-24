@@ -20,12 +20,19 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import logger
+from app.modules.ingestion.postprocess.table_regrid import DIGIT_MARK
+from app.modules.ingestion.postprocess.tokens import superscript
 
 DATALAB_URL = "https://www.datalab.to/api/v1/convert"
 ATTEMPTS = 3
 POLL_SECONDS = 1.0
 MAX_POLLS = 300  # 5 minutes for one page
 RETRY_SECONDS = 2.0
+# Ý nghĩa: câu trả lời "bận" (429, 503) được chờ rồi hỏi lại, không tính vào ATTEMPTS: chờ đúng Retry-After của máy chủ, không có thì BUSY_SECONDS x 2^(k-1).
+# Giữ vì: 22/11 đọc 28 trang scan Walmart 2019, 4 trang một lúc, Datalab trả 429 cho 5 trang ở cả 3 lần thử (chờ 2, 4, 6 giây): 5 trang mất chữ.
+BUSY_SECONDS = 5.0
+BUSY_WAITS = 8
+BUSY_CODES = (429, 503)
 
 FIGURE_PROMPT = """You describe one picture cut from a company report, so that its content can be found and quoted as text.
 If the picture is only a logo, a photo, a signature or a decoration with no data, reply exactly: NO_DATA: <at most 8 words on what it shows>
@@ -36,10 +43,42 @@ Otherwise write one plain paragraph of at most 80 words, in the language of the 
 - the main trend or comparison.
 Rules: copy numbers exactly as printed (same digits, same unit). Never compute new numbers. If a value is not printed and you read it from an axis, write it with "~" (for example ~240). Do not guess what is not visible. No markdown."""
 
+def _busy_wait(exc: Exception, n: int) -> Optional[float]:
+    """Seconds to wait when `exc` is a busy answer (the server's Retry-After, else a growing pause), None for any other failure."""
+    if not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code not in BUSY_CODES:
+        return None
+    try:
+        return float(exc.response.headers.get("Retry-After", ""))
+    except ValueError:
+        return min(60.0, BUSY_SECONDS * 2 ** (n - 1))
+
+
+async def _call(job, label: str) -> Optional[str]:
+    """`job()` until it gives a non-empty text: ATTEMPTS failures or empty replies, plus up to BUSY_WAITS busy answers waited out."""
+    attempt = busy = 0
+    while attempt < ATTEMPTS:
+        try:
+            text = await job()
+            if text:
+                return text
+            attempt += 1
+        except Exception as exc:  # recorded, never raised: the caller keeps Docling's text
+            wait = _busy_wait(exc, busy + 1) if busy < BUSY_WAITS else None
+            if wait is not None:
+                busy += 1
+                await asyncio.sleep(wait)
+                continue
+            attempt += 1
+            logger.warning(f"{label}, attempt {attempt}: {type(exc).__name__}: {str(exc)[:160]}")
+        await asyncio.sleep(RETRY_SECONDS * attempt)
+    return None
+
+
 # ---------------------------------------------------------------- cleaning Chandra's Markdown
 # Ý nghĩa: Chandra viết "\$", bọc số trong <b>/<u>/<i>, xuống dòng trong ô bằng <br>, chỉ số chú thích bằng <sup>, chèn link ảnh (logo, chữ ký) và đôi khi bảng HTML.
 # Giữ vì: đo 22/11 trên 60 trang, các thẻ này nằm trong 53 trang và làm số không khớp (97,1 % sau khi làm sạch so với 53,2 %); <br> phải thành dấu cách,
-#   bỏ hẳn thì chữ hai bên dính nhau ("Share capital£"); chỉ số chú thích thành "[3]" để không dính vào số ("1,016 2" đọc thành 10162, lỗi F4).
+#   bỏ hẳn thì chữ hai bên dính nhau ("Share capital£"); chỉ số chú thích bằng chữ số thành số mũ dính liền ("1,016²", cùng dạng với F4 của postprocess, 23/11),
+#   chỉ số khác thành "[a]", để không dính vào số ("1,016 2" đọc thành 10162).
 ESCAPED = re.compile(r"\\([$%&#_*()\[\]-])")
 BREAK = re.compile(r"\s*<br\s*/?>\s*", re.I)
 NOTE_MARK = re.compile(r"\s*<sup>\s*([^<\s]{1,3})\s*</sup>", re.I)
@@ -66,21 +105,24 @@ def clean_ocr(text: str) -> str:
     text = IMAGE_LINK.sub("", text)
     text = ESCAPED.sub(r"\1", text)
     text = BREAK.sub(" ", text)
-    text = NOTE_MARK.sub(r" [\1]", text)
+    text = NOTE_MARK.sub(lambda m: superscript(m.group(1)) if DIGIT_MARK.fullmatch(m.group(1)) else f" [{m.group(1)}]", text)
     return FORMAT_TAG.sub("", text).strip()
 
 
 # ---------------------------------------------------------------- Datalab Chandra
 def _one_page(pdf_path: Path, page: int) -> bytes:
+    # widgets=False: the form-field tree of some reports (HSBC 2025) made MuPDF raise "exception stack overflow" on every page (23/11)
     with fitz.open(str(pdf_path)) as src, fitz.open() as one:
-        one.insert_pdf(src, from_page=page - 1, to_page=page - 1)
+        one.insert_pdf(src, from_page=page - 1, to_page=page - 1, widgets=False)
         return one.tobytes()
 
 
 async def _chandra_page(client: httpx.AsyncClient, data: bytes, key: str) -> str:
     headers = {"X-Api-Key": key}
+    # disable_image_captions: by default Datalab writes a caption for each picture ("A line chart showing ...", up to 73 figures a page the PDF does not
+    # print); off, the table rows are unchanged (80.4 % vs 80.5 % right on 40 pages) and what is left is caught by page_quality (rule_caption_marker_v2.txt, 24/11)
     r = await client.post(DATALAB_URL, headers=headers, files={"file": ("page.pdf", data, "application/pdf")},
-                          data={"output_format": "markdown", "mode": settings.DATALAB_MODE})
+                          data={"output_format": "markdown", "mode": settings.DATALAB_MODE, "disable_image_captions": "true"})
     r.raise_for_status()
     check = r.json()["request_check_url"]
     for _ in range(MAX_POLLS):
@@ -108,16 +150,12 @@ async def read_chandra(pdf_path: Path, pages: List[int], client: Optional[httpx.
 
     async def one(page: int) -> Optional[str]:
         data = await asyncio.to_thread(_one_page, pdf_path, page)
-        for attempt in range(1, ATTEMPTS + 1):
-            try:
-                async with gate:
-                    text = clean_ocr(await _chandra_page(client, data, key))
-                if text:
-                    return text
-            except Exception as exc:  # recorded, never raised: Docling's page stands
-                logger.warning(f"Chandra page {page} of {pdf_path.name}, attempt {attempt}: {type(exc).__name__}: {str(exc)[:160]}")
-            await asyncio.sleep(RETRY_SECONDS * attempt)
-        return None
+
+        async def job() -> str:
+            async with gate:  # a busy wait does not hold a place
+                return clean_ocr(await _chandra_page(client, data, key))
+
+        return await _call(job, f"Chandra page {page} of {pdf_path.name}")
 
     try:
         texts = await asyncio.gather(*(one(p) for p in pages))
@@ -138,18 +176,13 @@ async def describe_picture(png: bytes, client: Optional[httpx.AsyncClient] = Non
                                                       {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(png).decode()}}]}]}
     own = client is None
     client = client or httpx.AsyncClient(timeout=60.0)
+    async def job() -> str:
+        r = await client.post(f"{settings.OPENAI_BASE_URL.rstrip('/')}/chat/completions", headers={"Authorization": f"Bearer {key}"}, json=body)
+        r.raise_for_status()
+        return (r.json()["choices"][0]["message"].get("content") or "").strip()
+
     try:
-        for attempt in range(1, ATTEMPTS + 1):
-            try:
-                r = await client.post(f"{settings.OPENAI_BASE_URL.rstrip('/')}/chat/completions", headers={"Authorization": f"Bearer {key}"}, json=body)
-                r.raise_for_status()
-                text = (r.json()["choices"][0]["message"].get("content") or "").strip()
-                if text:
-                    return text
-            except Exception as exc:
-                logger.warning(f"Picture description, attempt {attempt}: {type(exc).__name__}: {str(exc)[:160]}")
-            await asyncio.sleep(RETRY_SECONDS * attempt)
-        return None
+        return await _call(job, "Picture description")
     finally:
         if own:
             await client.aclose()

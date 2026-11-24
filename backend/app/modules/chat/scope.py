@@ -38,7 +38,7 @@ def catalog_entry(doc: DocumentRecord) -> CatalogEntry:
 def source_info(doc: DocumentRecord) -> SourceInfo:
     m = doc.metadata
     return SourceInfo(m.company_name or "", m.report_type or "", m.fiscal_year, m.fiscal_quarter, readable_label(doc), doc.page_count, doc.file_name,
-                      list(m.years_covered), list(m.aliases), m.ticker)
+                      list(m.years_covered), list(m.aliases), m.ticker, list(m.years_printed))
 
 
 def catalog_card(doc: DocumentRecord) -> Dict[str, Any]:

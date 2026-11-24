@@ -4,7 +4,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { CitationItem } from "../../types/chat";
 import { DocumentRecord, documentLabel } from "../../types/notebook";
 import { documentService } from "../../services/documents";
-import { bandsFor, figureLines, locateExcerpt, type Box, type PageItem } from "./locateExcerpt";
+import { bandsFor, figureLines, hasTextLayer, locateExcerpt, type Box, type PageItem } from "./locateExcerpt";
 import { ChevronDown, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
 import {
   FileTextIcon,
@@ -55,8 +55,9 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
   // How the page was last drawn (the scale the lines of the excerpt are placed with) and the lines found for the active citation
-  const [pageView, setPageView] = useState<{ page: number; transform: number[]; width: number; rotated: boolean } | null>(null);
-  const [marks, setMarks] = useState<{ page: number; boxes: Box[]; figures: Box[]; found: number } | null>(null); // boxes: lines of the excerpt; figures: lines with the numbers the answer states
+  const [pageView, setPageView] = useState<{ page: number; transform: number[]; width: number } | null>(null);
+  // boxes: lines of the excerpt; figures: lines with the numbers the answer states; scanned: the page has no text layer, so nothing can be marked
+  const [marks, setMarks] = useState<{ page: number; boxes: Box[]; figures: Box[]; found: number; scanned?: boolean } | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -160,7 +161,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
       canvas.style.width = `${Math.floor(viewport.width)}px`;
       canvas.style.height = `${Math.floor(viewport.height)}px`;
       canvas.getContext("2d")?.drawImage(offscreen, 0, 0);
-      setPageView({ page: page.pageNumber, transform: viewport.transform, width: viewport.width, rotated: page.rotate % 360 !== 0 });
+      setPageView({ page: page.pageNumber, transform: viewport.transform, width: viewport.width });
     })().catch((err) => {
       if (!cancelled && err?.name !== "RenderingCancelledException") setPdfFailed(true);
     });
@@ -182,15 +183,12 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
   }, [activeCitation, currentDoc?.document_id]);
 
   // F9: the lines of the cited excerpt are looked for in the text of the page the citation points at, and marked once the page is drawn.
-  // A page without text (a scan) or turned sideways has nothing to mark: the banner says so and the page jump still works.
+  // A page turned by /Rotate is marked like any other (bandsFor follows the text direction, 24/11). A scan has no text to mark: the page still opens
+  // on the cited page, and the banner says it is a scanned page, so the user reads the excerpt on it.
   const citationHere = !!activeCitation && !!currentDoc && activeCitation.document_id === currentDoc.document_id && activeCitation.page === currentPage;
   useEffect(() => {
     if (!pdfDoc || !pageView || pageView.page !== currentPage || !activeCitation || !citationHere) {
       setMarks(null);
-      return;
-    }
-    if (pageView.rotated) {
-      setMarks({ page: currentPage, boxes: [], figures: [], found: 0 });
       return;
     }
     let cancelled = false;
@@ -211,6 +209,7 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
         boxes: bandsFor(items, located.items, pageView.transform, pageView.width),
         figures: bandsFor(items, stated, pageView.transform, pageView.width),
         found: located.found + stated.length,
+        scanned: !hasTextLayer(items),
       });
     })().catch(() => {
       if (!cancelled) setMarks({ page: currentPage, boxes: [], figures: [], found: 0 });
@@ -396,12 +395,14 @@ export const SourceViewer: React.FC<SourceViewerProps> = ({
         </div>
       )}
 
-      {/* 2. Only when there is something to say: the cited report is gone, or the page has nothing to mark (a scan, or turned sideways). Otherwise the PDF alone, with the marks on it. */}
-      {activeCitation && (citationGone || (citationHere && marks && marks.page === currentPage && marks.boxes.length + marks.figures.length === 0)) && (
+      {/* 2. Only when there is something to say: the cited report is gone, the page is a scan (nothing to mark), or the excerpt's lines were not found. Otherwise the PDF alone, with the marks on it.
+          A page opened from the document card (a page to check) has no excerpt to mark: nothing to say. */}
+      {activeCitation && (citationGone || (!!activeCitation.snippet && citationHere && marks && marks.page === currentPage && marks.boxes.length + marks.figures.length === 0)) && (
         <div className="pdf-evidence-banner">
           <div className="pdf-evidence-header">
             <p className="pdf-evidence-note" role="status">
-              {citationGone ? t.sourceViewer.citationSourceRemoved.replace("{page}", String(activeCitation.page)) : t.sourceViewer.highlightNotFound}
+              {citationGone ? t.sourceViewer.citationSourceRemoved.replace("{page}", String(activeCitation.page))
+                : marks?.scanned ? t.sourceViewer.scannedPage.replace("{page}", String(currentPage)) : t.sourceViewer.highlightNotFound}
             </p>
             <button onClick={onClearCitation} className="pdf-clear-cite-btn" title={t.sourceViewer.clearHighlight}>
               <CloseIcon size={11} />

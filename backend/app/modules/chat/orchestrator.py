@@ -32,7 +32,7 @@ from app.modules.query_router.target_scope import TargetDecision, decide_targets
 from app.modules.generation.citation_generator import CitationGenerator
 from app.modules.generation.answer_check import policy, review
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
-from app.modules.generation.replies import CHECK_SOURCES, DEGRADED_NOTE, EMPTY_PLAN_ANSWER, NO_DATA_ANSWER, RETRY_APOLOGY, excerpt_preview, sources_message, terminal, unlisted_message
+from app.modules.generation.replies import CHECK_SOURCES, DEGRADED_NOTE, EMPTY_PLAN_ANSWER, NO_DATA_ANSWER, RETRY_APOLOGY, excerpt_preview, sources_message, terminal, unlisted_message, unread_note
 from app.modules.chat.retrieval_step import EMPTY_PLAN, RetrievalResult, retrieve_for_scope, search_with_retry
 from app.modules.chat.scope import catalog_entry, document_label, readable_label, scope_doc, source_info
 from app.modules.generation.answer_check.citations import cited_numbers
@@ -46,8 +46,8 @@ class SourceSelectionError(DomainException):
 def ocr_note(numbers: List[int]) -> str:
     """The note for excerpts whose page was read again by the OCR fallback (chunk flag "ocr", ingestion/page_quality.py: a scan, garbled text, lost text or
     a lost table, owner 22/11): the figures may be misread."""
-    return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + " were read again by OCR: a figure may be misread. When you use a figure from them, "
-            "say that it comes from OCR text and should be checked against the page.")
+    return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + " were recognised again from the page image: a figure may be misread. When you use a figure from them, "
+            "say that it was recognised from the page image and should be checked against the original page.")
 
 
 def figure_note(numbers: List[int]) -> str:
@@ -56,6 +56,21 @@ def figure_note(numbers: List[int]) -> str:
     return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + ' contain a description of a chart or picture read from the image (it starts with "[Figure read '
             'from the image"). Its figures were copied from the picture; a value marked "~" was read from an axis and is an estimate. When you use a figure from it, '
             'say that it comes from a chart, and give a "~" value as approximate.')
+
+
+def table_note(numbers: List[int]) -> str:
+    """The note for excerpts whose page failed the table check at upload (chunk flag "table_check", ingestion/parse_check.py; owner-approved plan 24/11,
+    channel C): the answer says a figure from them should be checked against the original page."""
+    return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + " come from a page whose table may not have been read accurately at upload. When you use a "
+            "figure from them, say in one short sentence that it should be checked against the original page (the citation opens it).")
+
+
+def picture_note(numbers: List[int]) -> str:
+    """The note for excerpts from a page with a picture that could not be read at upload (chunk flag "picture_unread", figures.py figure_failed; owner
+    24/11, wording approved): a question about that picture is told its figures could not be read, never estimated."""
+    return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + " come from a page with a picture or chart whose figures could not be read. If the question "
+            "asks about that picture or chart, say in one short sentence that its figures could not be read and that the original page shows it (the citation "
+            "opens it); do not estimate them.")
 
 
 class Unfinished(str):
@@ -241,6 +256,12 @@ class RAGWorkflowOrchestrator:
         figure_flagged = [n for n, c in enumerate(retrieved, 1) if "figure" in (c.get("flags") or [])]
         if figure_flagged:
             notes.append(figure_note(figure_flagged))
+        table_flagged = [n for n, c in enumerate(retrieved, 1) if "table_check" in (c.get("flags") or [])]
+        if table_flagged:
+            notes.append(table_note(table_flagged))
+        picture_flagged = [n for n, c in enumerate(retrieved, 1) if "picture_unread" in (c.get("flags") or [])]
+        if picture_flagged:
+            notes.append(picture_note(picture_flagged))
         two_step = writer_note(found.hop)  # MULTIHOP_ENABLED: the first step's result and its excerpts, to check and state before the second step
         if two_step:
             notes.append(two_step)
@@ -278,6 +299,11 @@ class RAGWorkflowOrchestrator:
             answer += "\n\n" + RETRY_APOLOGY[lang]
         elif short and not_found:  # S2
             answer += "\n\n" + CHECK_SOURCES[lang]
+        if (not_found or not retrieved or found.missing) and not unfinished:  # nothing found where pages could not be read: name them (plan 24/11, channel C)
+            searched_ids = found.missing if found.missing and not not_found and retrieved else (targets.document_ids or [d.document_id for d in scope])
+            unread = unread_note([d for d in scope if d.document_id in searched_ids], lang)
+            if unread:
+                answer += "\n\n" + unread
         why: List[str] = []
         actions = answer_actions(scope, found, targets, status, short, unfinished, retry, why=why)
         understood = targets.understood
@@ -311,6 +337,8 @@ class RAGWorkflowOrchestrator:
                 "suspicious_excerpts": flagged,
                 "ocr_excerpts": ocr_flagged,
                 "figure_excerpts": figure_flagged,
+                "table_check_excerpts": table_flagged,
+                "picture_unread_excerpts": picture_flagged,
                 "plan": [{"query": p.query, "documents": [labels.get(d, d) for d in p.document_ids] or "all"} for p in plan],
                 "sub_queries": sub_queries,
                 **({"multihop": found.hop} if found.hop else {}),

@@ -34,6 +34,10 @@ export interface AdminDocument extends Owner {
   status: "pending" | "processing" | "ready" | "failed";
   error_code: string | null;
   parsing_engine: string | null;
+  /** Pages the user is told to check: tables that may be misread, scanned pages with no text (ingestion/parse_check.py). */
+  parse_issues?: { tables?: number[]; unread?: number[]; figures?: number[] };
+  /** How reading went: pages read again, how many replaced, refused (by reason), pictures described (ingestion/page_quality.py, figures.py). */
+  read_report?: { ocr_bad_pages?: number; ocr_replaced_pages?: number; ocr_rejected?: Record<string, number>; figures_chosen?: number; figures_described?: number };
   stage: string | null;
   progress_percent: number | null;
   chunks: number | null;

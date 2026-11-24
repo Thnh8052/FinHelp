@@ -282,10 +282,12 @@ async def test_excerpts_read_by_ocr_are_announced_to_the_answer(monkeypatch):
     finally:
         CHUNKS[1].pop("flags")
     assert r["trace"]["ocr_excerpts"] == [2]
-    note = next(n for n in calls[0] if "read again by OCR" in n)
+    note = next(n for n in calls[0] if "recognised again from the page image" in n)
     # owner 22/11: OCR now also reads garbled pages, pages with lost text and lost tables, not only scans
-    assert note == ("Excerpts [2] were read again by OCR: a figure may be misread. When you use a figure from them, "
-                    "say that it comes from OCR text and should be checked against the page.")
+    # owner 24/11: the answer must not name the component ("OCR text" reached the user in the E2E check), in either sentence
+    assert "OCR" not in note
+    assert note == ("Excerpts [2] were recognised again from the page image: a figure may be misread. When you use a figure from them, "
+                    "say that it was recognised from the page image and should be checked against the original page.")
     clean = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
     assert clean["trace"]["ocr_excerpts"] == []
 
@@ -306,7 +308,7 @@ async def test_excerpts_holding_a_picture_description_are_announced_to_the_answe
     assert note == ('Excerpts [1] contain a description of a chart or picture read from the image (it starts with "[Figure read from the image"). '
                     'Its figures were copied from the picture; a value marked "~" was read from an axis and is an estimate. When you use a figure from it, '
                     'say that it comes from a chart, and give a "~" value as approximate.')
-    assert not any("read again by OCR" in n for n in calls[0])
+    assert not any("recognised again from the page image" in n for n in calls[0])
     clean = await orch._answer_one("Compare AMD and NVIDIA revenue in 2024", "nb", _scope(), Decision(lang="en"))
     assert clean["trace"]["figure_excerpts"] == []
 
@@ -357,7 +359,7 @@ async def test_pages_read_early_are_not_sent_again_and_the_others_still_are(tmp_
     out, report = await rescue_pages(pdf, pages, read, early=early)
     assert sent == [[2]]
     assert [p.get("ocr", False) for p in out] == [True, True, False]
-    assert report == {"bad": {1: "scanned", 2: "missing", 3: "scanned"}, "early": [1, 3], "sent": [2], "replaced": [1, 2]}
+    assert report == {"bad": {1: "scanned", 2: "missing", 3: "scanned"}, "early": [1, 3], "sent": [2], "replaced": [1, 2], "rejected": {3: "empty"}}
 
 
 async def test_a_failure_after_docling_keeps_what_the_early_read_gave(tmp_path):
@@ -428,3 +430,146 @@ def test_the_pipeline_reads_scanned_pages_while_docling_parses(tmp_path, monkeyp
     assert events == ["processing", ("read", [2]), "parse"]  # read once, before the parse ended; nothing sent after it
     assert [p.get("ocr", False) for p in job.pages] == [False, True]
     assert job.timings["ocr_early_pages"] == 1 and job.timings["ocr_replaced_pages"] == 1
+
+
+# ---------------------------------------------------------------- fifth reason: the table check (23/11, rule_reread_flagged.txt)
+FLAG_ROWS = [(f"Item {name}", f"{1000 + i * 7:,}", f"{2000 + i * 9:,}") for i, name in enumerate("ABCDEF")]
+
+
+def make_flag_pdf(path):
+    doc = fitz.open()
+    p = doc.new_page()
+    for i, (label, a, b) in enumerate(FLAG_ROWS):
+        p.insert_text((72, 100 + 14 * i), label, fontsize=9)
+        for text, right in ((a, 380), (b, 480)):
+            p.insert_text((right - fitz.get_text_length(text, fontsize=9), 100 + 14 * i), text, fontsize=9)
+    doc.save(str(path))
+    return path
+
+
+FUSED = "\n".join(["| | 2025 |", "|---|---|"] + [f"| {label} | {a} {b} |" for label, a, b in FLAG_ROWS])
+RIGHT = "\n".join(["| | 2025 | 2024 |", "|---|---|---|"] + [f"| {label} | {a} | {b} |" for label, a, b in FLAG_ROWS])
+
+
+def test_a_table_the_table_check_finds_misread_is_sent_to_ocr(tmp_path):
+    """Measured 23/11: Chandra fixed 29 of 40 such pages (true rows right 51.5 % -> 98.0 % on them), 9 of 10 checked by hand better."""
+    pdf = make_flag_pdf(tmp_path / "f.pdf")
+    assert bad_pages(pdf, [page(1, FUSED)]) == {1: "table_check"}
+    assert bad_pages(pdf, [page(1, RIGHT)]) == {}
+
+
+async def test_a_misread_table_is_replaced_only_by_a_text_with_fewer_wrong_rows(tmp_path):
+    pdf = make_flag_pdf(tmp_path / "g.pdf")
+
+    async def better(path, numbers):
+        return {1: RIGHT}
+
+    async def no_better(path, numbers):  # as many figures, rows still fused: refused
+        return {1: FUSED.replace("| | 2025 |", "| | Year |")}
+
+    out, report = await rescue_pages(pdf, [page(1, FUSED)], better)
+    assert out[0]["text"] == RIGHT and out[0]["ocr"] is True and report["replaced"] == [1]
+    out, report = await rescue_pages(pdf, [page(1, FUSED)], no_better)
+    assert out[0]["text"] == FUSED and report["replaced"] == []
+
+
+# ---------------------------------------------------------------- broad re-read reasons and the foreign-number gate (plan 24/11, steps 2-3)
+def _rows(rows):
+    return "\n".join(["| | 2025 | 2024 |", "|---|---|---|"] + [f"| {label} | {a} | {b} |" for label, a, b in rows])
+
+
+SWAPPED = _rows([(FLAG_ROWS[0][0], FLAG_ROWS[0][1], ""), ("", FLAG_ROWS[0][2], ""), (FLAG_ROWS[1][0], FLAG_ROWS[1][1], ""), ("", FLAG_ROWS[1][2], "")]
+                + FLAG_ROWS[2:])  # two rows split over two lines each: wrong rows, no defect of the Markdown tables
+ONE_FUSED = "\n".join(["| | 2025 | 2024 |", "|---|---|---|"] + [f"| {label} | {a} | {b} |" for label, a, b in FLAG_ROWS[:5]]
+                      + [f"| {FLAG_ROWS[5][0]} | {FLAG_ROWS[5][1]} {FLAG_ROWS[5][2]} | |"])  # one wrong row, a two-amount cell
+
+
+def test_the_broad_reasons_send_more_pages_to_be_read_again_but_not_to_the_user(tmp_path):
+    """D1 v2 (rule_d1_reread_v2.txt): re-read pages whose labelled rows are wrong without a defect ("rows") and pages with a defect and one wrong row
+    ("defect"); 10 of 10 accepted re-reads better by hand. The strict check (the user's list) is unchanged."""
+    pdf = make_flag_pdf(tmp_path / "b.pdf")
+    assert bad_pages(pdf, [page(1, SWAPPED)]) == {} and bad_pages(pdf, [page(1, SWAPPED)], broad=True) == {1: "rows"}
+    assert bad_pages(pdf, [page(1, ONE_FUSED)]) == {} and bad_pages(pdf, [page(1, ONE_FUSED)], broad=True) == {1: "defect"}
+    assert bad_pages(pdf, [page(1, RIGHT)], broad=True) == {}
+
+
+async def test_a_reply_with_numbers_the_page_does_not_print_is_not_taken(tmp_path):
+    """Step 2 (rule_chandra_modes.txt): a reply holding >= 2 figures of 3+ digits that the PDF text layer does not print (chart values the reader
+    estimated) is refused; the page keeps its text and stays on the user's list. 0 good replies of 40 were refused this way."""
+    pdf = make_flag_pdf(tmp_path / "h.pdf")
+
+    async def invented(path, numbers):
+        return {1: RIGHT + "\n| Estimated | 9,876 | 8,765 |"}
+
+    async def one_extra(path, numbers):
+        return {1: RIGHT + "\n| Page | 123 | |"}
+
+    out, report = await rescue_pages(pdf, [page(1, FUSED)], invented)
+    assert out[0]["text"] == FUSED and report["replaced"] == [] and report["rejected"] == {1: "foreign_numbers"}
+    out, report = await rescue_pages(pdf, [page(1, FUSED)], one_extra)
+    assert out[0]["ocr"] is True and report["replaced"] == [1]
+
+
+async def test_refused_replies_are_counted_by_reason_for_the_admin(tmp_path, monkeypatch):
+    """Plan 24/11 channel D: the document's timings say how many re-read pages were refused and why (admin documents page)."""
+    pdf = make_flag_pdf(tmp_path / "a.pdf")
+
+    async def invented(path, numbers):
+        return {1: RIGHT + "\n| Estimated | 9,876 | 8,765 |"}
+
+    monkeypatch.setitem(page_quality.READERS, "fake", invented)
+    monkeypatch.setattr(settings, "OCR_BACKEND", "fake")
+    monkeypatch.setattr(settings, "OCR_FALLBACK_ENABLED", True)
+    info = {}
+    await rescue_if_enabled(pdf, [page(1, FUSED)], info)
+    assert info == {"ocr_bad_pages": 1, "ocr_early_pages": 0, "ocr_replaced_pages": 0, "ocr_rejected": {"foreign_numbers": 1}}
+
+
+# ---------------------------------------------------------------- chart text the reader writes itself (rule_caption_marker_v2.txt, 24/11)
+async def test_a_reply_describing_a_chart_the_page_does_not_print_is_not_taken_on_a_page_with_text(tmp_path):
+    """With picture captions off, the reader still describes a chart now and then ("A line chart showing ..."), with numbers read off the axes.
+    Measured: every such reply of 12 chart pages caught, 0 good replies refused of 16 taken, 0 of 20 scans flagged. On a page with a text layer the
+    reply is refused (the page keeps its text, the user lists apply); a description the page itself prints is not the reader's."""
+    pdf = make_flag_pdf(tmp_path / "c.pdf")
+
+    async def described(path, numbers):
+        return {1: RIGHT + "\n\nA line chart showing revenue rising each year."}
+
+    out, report = await rescue_pages(pdf, [page(1, FUSED)], described)
+    assert out[0]["text"] == FUSED and report["replaced"] == [] and report["rejected"] == {1: "chart_text"}
+
+    doc = fitz.open(str(pdf))
+    doc[0].insert_text((72, 300), "The bar chart below shows revenue by segment.", fontsize=9)
+    printed = tmp_path / "printed.pdf"
+    doc.save(str(printed))
+
+    async def quoted(path, numbers):
+        return {1: RIGHT + "\n\nThe bar chart below shows revenue by segment."}
+
+    out, report = await rescue_pages(printed, [page(1, FUSED)], quoted)
+    assert out[0]["ocr"] is True and report["replaced"] == [1]
+
+
+async def test_a_scan_whose_reply_describes_a_chart_is_taken_but_goes_on_the_user_list(tmp_path):
+    """A scan has no text layer to compare with: its reply is the only text, so it is taken, and the page is marked "ocr_unsure" (parse_check lists it
+    for the user as "may not have been read accurately", owner 24/11: the user is told the page is not sound)."""
+    pdf = make_pdf(tmp_path / "s.pdf", ["text", "scan"])
+
+    async def read(path, numbers):
+        return {2: "| Revenue line 0 | 1,000 | 2,000 |\n\nA bar chart showing revenue by year."}
+
+    out, report = await rescue_pages(pdf, [page(1, TABLE), page(2, "")], read)
+    assert out[1]["ocr"] is True and out[1]["ocr_unsure"] is True and report["replaced"] == [2]
+    assert "ocr_unsure" not in out[0]
+
+
+async def test_rescue_reads_the_broad_reasons_too(tmp_path):
+    pdf = make_flag_pdf(tmp_path / "r.pdf")
+    sent = []
+
+    async def read(path, numbers):
+        sent.append(list(numbers))
+        return {1: RIGHT}
+
+    out, report = await rescue_pages(pdf, [page(1, SWAPPED)], read)
+    assert sent == [[1]] and report["bad"] == {1: "rows"} and out[0]["text"] == RIGHT

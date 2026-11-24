@@ -1,6 +1,15 @@
 from app.modules.ingestion.postprocess.constants import NUMBER_CHARS, VALUE_PREFIXES, VALUE_SUFFIXES
 
 
+# Ý nghĩa: F4. Chỉ số chú thích bằng chữ số viết dạng số mũ Unicode: "1" -> "¹", "2,3" -> "²,³" (dấu phẩy giữ nguyên).
+# Giữ vì: dính liền vào số ("53.5¹") thì không người đọc hay mô hình nào đọc thành 53,51 hoặc thành giá trị thứ hai; chủ dự án chọn dạng này 22/11.
+SUPERSCRIPT_DIGITS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
+
+
+def superscript(mark: str) -> str:
+    return mark.translate(SUPERSCRIPT_DIGITS)
+
+
 # Ý nghĩa: từ có phải một phần của giá trị không: có chữ số, ký hiệu tiền/phần trăm/ngoặc, hoặc chỉ gồm gạch ("-" = không có giá trị).
 def is_value_token(token: str) -> bool:
     return any(ch.isdigit() for ch in token) or token in VALUE_PREFIXES or token in VALUE_SUFFIXES or set(token) <= {"-"}

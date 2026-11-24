@@ -3,6 +3,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { usePdfDrop } from "../../hooks/usePdfDrop";
 import { processingErrorText } from "../../services/api";
 import { DocumentRecord, isDocProcessing, isDocFailed } from "../../types/notebook";
+import { pageRuns } from "./pageRuns";
 import {
   FileTextIcon,
   UploadCloudIcon,
@@ -22,6 +23,8 @@ interface DocumentManagerProps {
   onToggleDoc: (docId: string) => void;
   onToggleAllDocs?: (selectAll: boolean) => void;
   onOpenDocPdf?: (doc: DocumentRecord) => void;
+  /** Opens the original PDF at one page (the pages to check). */
+  onOpenDocPage?: (doc: DocumentRecord, page: number) => void;
   onUploadFiles: (files: File[]) => void;
   onDeleteDocument: (docId: string) => Promise<boolean> | void;
   onEditCatalog?: (docId: string) => void;
@@ -40,6 +43,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   onToggleDoc,
   onToggleAllDocs,
   onOpenDocPdf,
+  onOpenDocPage,
   onUploadFiles,
   onDeleteDocument,
   onEditCatalog,
@@ -223,6 +227,33 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                         {t.sourcesDrawer.tablesWarning}
                       </p>
                     )}
+                    {/* Pages found at upload that the reader should check against the original: one click opens the page */}
+                    {doc.status === "ready" && !doc.tables_may_be_inaccurate && ([
+                      [doc.pages_to_check, t.sourcesDrawer.pagesToCheck],
+                      [doc.pages_unread, t.sourcesDrawer.pagesUnread],
+                      [doc.pages_pictures_unread, t.sourcesDrawer.picturesUnread],
+                    ] as const).map(([pages, label]) => {
+                      const { runs, more } = pageRuns(pages);
+                      if (!runs.length) return null;
+                      return (
+                        <p key={label} className="doc-card-error doc-card-pages">
+                          {label}{" "}
+                          {runs.map((run) => (
+                            <button
+                              key={run.first}
+                              type="button"
+                              className="doc-page-link"
+                              disabled={!onOpenDocPage}
+                              onClick={() => onOpenDocPage?.(doc, run.first)}
+                              title={t.sourcesDrawer.openPage.replace("{page}", String(run.first))}
+                            >
+                              {run.first === run.last ? run.first : `${run.first}–${run.last}`}
+                            </button>
+                          ))}
+                          {more > 0 && <span> {t.sourcesDrawer.morePages.replace("{n}", String(more))}</span>}
+                        </p>
+                      );
+                    })}
 
                     {/* Action Bar: nothing while the file is being processed; a failed file can only be deleted */}
                     {!isProcessing && <div className="doc-card-actions">

@@ -193,6 +193,10 @@ export interface TranslationSchema {
     insertSample: string;
     pageLabel: string;
     citationTitle: string;
+    misreadNote: string;
+    imageNote: string;
+    figureNote: string;
+    pictureNote: string;
   };
   hub: {
     fileOne: string;
@@ -252,6 +256,11 @@ export interface TranslationSchema {
     processingDots: string;
     pagesCount: string;
     tablesWarning: string;
+    pagesToCheck: string;
+    pagesUnread: string;
+    picturesUnread: string;
+    morePages: string;
+    openPage: string;
     openInReader: string;
     viewMetadata: string;
     details: string;
@@ -284,6 +293,7 @@ export interface TranslationSchema {
     clearHighlight: string;
     highlightFound: string;
     highlightNotFound: string;
+    scannedPage: string;
     reportTitle: string;
     previewTitle: string;
     allReports: string;
@@ -577,6 +587,12 @@ export interface TranslationSchema {
       colUploaded: string;
       noCompany: string;
       chunks: string;
+      pagesToCheck: string;
+      pagesUnread: string;
+    picturesUnread: string;
+      readAgain: string;
+      readRefused: string;
+      picturesRead: string;
       seconds: string;
       empty: string;
       noMatch: string;
@@ -733,6 +749,7 @@ export interface TranslationSchema {
     unsupported_file_type: string;
     file_too_large: string;
     not_a_pdf: string;
+    pdf_password_protected: string;
     document_same_name_processing: string;
     document_same_name: string;
     guest_document_limit: string;

@@ -2,11 +2,33 @@ import re
 from collections import Counter
 
 from app.modules.ingestion.postprocess.constants import LABEL_COLUMN_TOLERANCE, PHRASE_GAP, ROW_MISMATCH, TEXT_FOLD, VALUE_GAP_TOLERANCE
-from app.modules.ingestion.postprocess.evidence import glue_superscripts, is_footnote_ref, normalise, sits_on
+from app.modules.ingestion.postprocess.evidence import footnote_hosts, glue_superscripts, is_footnote_ref, normalise, sits_on
 from app.modules.ingestion.postprocess.grids import row_cells, table_blocks
 from app.modules.ingestion.postprocess.table_continued import is_data_row
 from app.modules.ingestion.postprocess.table_values import RegridSkip, attach_continuations, column_layouts, distance_to_column, first_value_column, group_value_words, is_numeric_table, is_span_copy, label_hosts, label_key, match_grid, phrase_cells, split_lines, value_columns, value_words, wrap_rows
-from app.modules.ingestion.postprocess.tokens import is_marker, is_number
+from app.modules.ingestion.postprocess.tokens import is_marker, is_number, superscript
+
+
+# Ý nghĩa: cụm đơn vị in trong vùng số của bảng ("(in millions)", "(Dollars in millions, except per share data)", "(Đơn vị: triệu đồng)"): trong ngoặc, không chữ số, có từ chỉ quy mô.
+UNIT_PHRASE = re.compile(r"\((?=[^()\d]*\b(?:millions?|thousands?|billions?|triệu|nghìn|ngàn|tỷ|đơn vị)\b)[^()\d]*\)", re.I)
+
+
+# Ý nghĩa: bỏ khỏi các từ PDF của thân bảng mọi cụm đơn vị (2-10 từ liền nhau trên một dòng, nằm hẳn trong vùng số, tâm từ >= `left`); trả (từ còn lại, [cụm]).
+# Giữ vì: AES 2021 p134 in "(in millions)" cùng dòng "OPERATING ACTIVITIES:" giữa vùng số, làm reflow_rows thấy chữ chồng cột số (`mixed`) và bỏ cả bảng.
+def drop_unit_phrases(words: list, left: float) -> tuple[list, list]:
+    kept, phrases = [], []
+    for line in split_lines(words):
+        drop = [False] * len(line)
+        for i in range(len(line)):
+            for k in range(10, 1, -1):
+                run = line[i:i + k]
+                if len(run) == k and not any(drop[i:i + k]) and all((w[1] + w[2]) / 2 >= left for w in run) \
+                        and UNIT_PHRASE.fullmatch(" ".join(w[3] for w in run)):
+                    drop[i:i + k] = [True] * k
+                    phrases.append(" ".join(w[3] for w in run))
+                    break
+        kept += [w for w, d in zip(line, drop) if not d]
+    return kept, phrases
 
 
 # Ý nghĩa: lỗi 13. Dựng lại các hàng thân của bảng số liệu từ dòng chữ PDF khi hàng Docling không khớp chữ PDF; trả ([(nhãn theo cột nhãn, [dòng từ giá trị], trên, dưới)], {từ: số lần}
@@ -36,6 +58,7 @@ def reflow_rows(cells: tuple, headers: int, first: int, page_words: list) -> lis
     top, bottom, edge = min(c.t for c in body) - 1, max(c.b for c in body) + 1, min(c.l for c in body) - 2
     inside = [((y0 + y1) / 2, x0, x1, text) for x0, y0, x1, y1, text, *_ in page_words
               if edge <= (x0 + x1) / 2 <= right and top <= (y0 + y1) / 2 <= bottom]
+    inside, units = drop_unit_phrases(inside, left)
     drawn = []
     for line in split_lines(inside):
         labels, last = [""] * first, None
@@ -53,7 +76,7 @@ def reflow_rows(cells: tuple, headers: int, first: int, page_words: list) -> lis
     header_labels = Counter("".join(normalise(c.text) for c in header_cells))
     strays = [c for c in label_cells if all(is_number(token) for token in c.text.translate(TEXT_FOLD).split())]
     for moved in ([], strays):
-        docling_values = Counter("".join("".join(c.text.translate(TEXT_FOLD).split()) for c in values + moved))
+        docling_values = Counter("".join("".join((UNIT_PHRASE.sub("", c.text) if units else c.text).translate(TEXT_FOLD).split()) for c in values + moved))
         docling_labels = Counter("".join(normalise(c.text) for c in label_cells if c not in moved))
         lost_values, lost_labels = pdf_values - docling_values, pdf_labels - docling_labels
         if not docling_values - pdf_values and not docling_labels - pdf_labels \
@@ -99,7 +122,7 @@ def reflow_rows(cells: tuple, headers: int, first: int, page_words: list) -> lis
         for span in spans:
             if grid_row is not None and not labels[span.col] and span.row < grid_row < span.row + span.row_span:
                 labels[span.col] = span.text
-    return rows, moved_out
+    return rows, moved_out, units
 
 
 # Ý nghĩa: các hàng thân của bảng cho `regrid_block`: [(các ô nhãn, [(x0, x1, từ)])], cờ "hàng dựng lại từ dòng chữ PDF" và {từ: số lần} Docling lỡ nhét vào ô header. Hàng của Docling khi
@@ -112,13 +135,13 @@ def body_rows(rows: list, grid, headers: int, first: int, page_words: list, coun
         if skip.reason not in ROW_MISMATCH:
             raise
         try:
-            rebuilt, moved_out = reflow_rows(grid.cells, headers, first, page_words)
-            return [(labels, [group for words in lines for group in group_value_words(words)]) for labels, lines, *_ in rebuilt], True, moved_out
+            rebuilt, moved_out, units = reflow_rows(grid.cells, headers, first, page_words)
+            return [(labels, [group for words in lines for group in group_value_words(words)]) for labels, lines, *_ in rebuilt], True, moved_out, units
         except RegridSkip as declined:
             counts[f"reflow_skip_{declined.reason}"] += 1
             raise skip from None
     labels = lambda k, row: ["" if is_span_copy([grid[row]], col) else rows[2 + k][col] for col in range(first)]
-    return [(labels(k, row), group_value_words(by_row.get(row, []))) for k, row in enumerate(range(headers, len(grid)))], False, Counter()
+    return [(labels(k, row), group_value_words(by_row.get(row, []))) for k, row in enumerate(range(headers, len(grid)))], False, Counter(), []
 
 
 # Ý nghĩa: các cụm giá trị chỉ chứa chỉ số chú thích ("(i)", "(f)(g)") thay cho giá trị: tập chỉ số trong `columns`. `groups`: các giá trị (x0, x1, [từ], đầu số) của mọi hàng.
@@ -170,6 +193,40 @@ def merge_ghost_columns(table: list, ghosts: list) -> list:
         if col + 1 < len(merged[0]) and merged[0][col] and not merged[0][col + 1] and col + 1 not in ghosts:
             merged[0][col + 1] = merged[0][col]
     return [[cell for col, cell in enumerate(row) if col not in ghosts] for row in merged]
+
+
+# Ý nghĩa: F4. Trong các dòng bảng Markdown của trang, cặp từ "số chỉ_số" ("53.5 1", "5.9 2,3") mà PDF chứng minh chỉ số in nhỏ, nâng lên ngay sau số đó
+#   (`footnote_hosts`: cùng phép chứng minh của `glue_superscripts`) được viết liền thành số mũ: "53.5¹", "5.9²,³"; đếm `raised_marks`.
+# Giữ vì: chỉ số rời ("53.5 1") bị đọc thành 53,51 hoặc thành một giá trị nữa ("1,016 2" thành 10162, lỗi F4: 37 tài liệu SEC + IFRS); chạy ở cuối trang nên mọi
+#   đường tạo ô (ô Docling giữ nguyên, bảng dựng lại `regrid_block`, cột ma `merge_ghost_columns`, bảng mất `rebuild_lost_tables`) đều được sửa một chỗ.
+#   Bằng chứng là cỡ chữ và vị trí trong PDF chứ không phải hình dạng chữ: "45 3" của cột "Age" in cùng cỡ thì giữ nguyên.
+# Giới hạn: chỉ chỉ số bằng chữ số; "(a)", "*", "†" giữ nguyên (chủ dự án chọn 22/11). So theo cặp chữ của cả trang (như PageEvidence): cặp giống hệt ở chỗ khác
+#   trên trang cũng được đổi. Chỉ số dính liền số ngay trong PDF ("53.51" một từ) không tách được vì không có ranh giới từ.
+DIGIT_MARK = re.compile(r"\d{1,2}(?:,\d{1,2})*")
+
+
+def raise_marks(text: str, page_words: list, counts: Counter) -> str:
+    pairs = {(page_words[k][4].translate(TEXT_FOLD), page_words[i][4].translate(TEXT_FOLD)) for i, k in footnote_hosts(page_words).items()
+             if DIGIT_MARK.fullmatch(page_words[i][4].translate(TEXT_FOLD))}
+    if not pairs:
+        return text
+    lines = text.split("\n")
+    for index, line in enumerate(lines):
+        if not line.startswith("|"):
+            continue
+        parts = line.split("|")
+        for p in range(1, len(parts) - 1):
+            tokens, out = parts[p].split(), []
+            for token in tokens:
+                if out and (out[-1].translate(TEXT_FOLD), token) in pairs:
+                    out[-1] += superscript(token)
+                    counts["raised_marks"] += 1
+                else:
+                    out.append(token)
+            if len(out) != len(tokens):
+                parts[p] = f" {' '.join(out)} "
+        lines[index] = "|".join(parts)
+    return "\n".join(lines)
 
 
 # Ý nghĩa: bỏ khỏi chữ một ô header các từ Docling lỡ nhét vào ô header nhưng PDF đặt ở thân bảng (`moved_out`: {từ: số lần}, mỗi từ chỉ bỏ số lần còn lại).
@@ -345,7 +402,7 @@ def regrid_block(rows: list, grid, headers: int, page_words: list, counts: Count
     if not cells or not page_words or not headers or first is None or not is_numeric_table(grid[headers:], first, ncols):
         return None
     try:
-        body, reflowed, moved_out = body_rows(rows, grid, headers, first, page_words, counts)
+        body, reflowed, moved_out, units = body_rows(rows, grid, headers, first, page_words, counts)
         groups = [group for _, row_groups in body for group in row_groups]
         header = grid[:headers]
         copies = [col for col in range(ncols) if is_span_copy(header, col)]
@@ -387,6 +444,10 @@ def regrid_block(rows: list, grid, headers: int, page_words: list, counts: Count
     spelling = {key: next(iter(found)) for key, found in spellings.items() if len(found) == 1} if reflowed else {}
     table = [["" if col in copies else rows[0][col] for col in range(first)] + names]
     table[0] = [strip_moved(cell, moved_out) for cell in table[0]]
+    for phrase in units:  # the unit phrase leaves the body: it stays with the table in the first header cell (repeated with the header)
+        if phrase.translate(TEXT_FOLD) not in " ".join(table[0]).translate(TEXT_FOLD):
+            table[0][0] = f"{table[0][0]} {phrase}".strip()
+            counts["unit_phrases_moved"] += 1
     for row_labels, row_groups in body:
         values = [""] * len(columns)
         for _, x1, tokens, start in row_groups:

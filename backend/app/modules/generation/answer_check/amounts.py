@@ -48,6 +48,10 @@ UNIT_WORD = re.compile(r"(?:million|billion|thousand|trillion|mn|bn|triệu|tỷ
 EN = "en"
 GROUP_SPACES = "    "  # space, no-break space, thin space, narrow no-break space: how financial statements group thousands ("89 913")
 
+# Footnote marks written as superscripts after a number ("1,016²", "53.5¹": parsing postprocess F4 and Chandra pages, 23/11) end the number;
+# without this "²" counts as a letter glued to it (like "3M") and the amount is skipped.
+SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+
 
 def _is_digit(ch: str) -> bool:
     return "0" <= ch <= "9"
@@ -172,7 +176,7 @@ def find_amounts(text: str, locale: str = EN, space_groups: bool = False) -> Lis
         after = text[end] if end < length else ""
         glued_fy = text[max(0, start - 2):start] == "FY" and (start < 3 or not text[start - 3].isalnum())
         scale_suffix = any(text.startswith(s, end) and not (end + len(s) < length and text[end + len(s)].isalnum()) for s in SCALE_SUFFIXES + MULTIPLE_SUFFIXES)
-        if (before and (before.isalnum() or before in "_.") and not glued_fy) or (after and (after.isalnum() or after == "_") and not scale_suffix):
+        if (before and (before.isalnum() or before in "_.") and not glued_fy) or (after and (after.isalnum() or after == "_") and after not in SUPERSCRIPT_DIGITS and not scale_suffix):
             while index < length and (text[index].isalnum() or text[index] == "_"):
                 index += 1  # part of a word such as "3M", "4G", "A1B2"
             continue

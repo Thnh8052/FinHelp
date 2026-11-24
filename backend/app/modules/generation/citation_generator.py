@@ -28,4 +28,8 @@ class CitationGenerator:
             page=chunk["page"],
             snippet=clip_snippet(chunk["content"]),
             score=chunk.get("score"),
+            may_be_misread="table_check" in (chunk.get("flags") or []),
+            read_from_image="ocr" in (chunk.get("flags") or []),
+            from_figure="figure" in (chunk.get("flags") or []),
+            picture_unread="picture_unread" in (chunk.get("flags") or []),
         )

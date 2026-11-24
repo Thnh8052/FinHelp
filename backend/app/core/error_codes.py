@@ -42,6 +42,7 @@ class Code:
     UNSUPPORTED_FILE_TYPE = "unsupported_file_type"
     FILE_TOO_LARGE = "file_too_large"
     NOT_A_PDF = "not_a_pdf"
+    PDF_PASSWORD_PROTECTED = "pdf_password_protected"
     DOCUMENT_SAME_NAME_PROCESSING = "document_same_name_processing"
     DOCUMENT_SAME_NAME = "document_same_name"
     GUEST_DOCUMENT_LIMIT = "guest_document_limit"

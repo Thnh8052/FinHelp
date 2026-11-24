@@ -80,6 +80,36 @@ async def test_no_data_and_a_failed_call_leave_the_marker(tmp_path):
     assert report == {"chosen": 2, "described": 0, "no_data": 1, "failed": 1}
 
 
+async def test_a_picture_the_reader_could_not_read_marks_its_page(tmp_path, monkeypatch):
+    """Owner 24/11: the user is told when a page was not processed. A picture chosen for reading whose call failed (after the retries) marks its page
+    "figure_failed" (the document card lists it, parse_check.py) and the admin report counts it; NO_DATA (a logo, a photo) is an answer, not a failure."""
+    pdf = make_pdf(tmp_path / "g.pdf")
+    replies = iter(["NO_DATA: company logo", None])
+
+    async def describe(png):
+        return next(replies)
+
+    out, _ = await read_figures(pdf, pages(), describe)
+    assert out[0].get("figure_failed") is True and not any(p.get("figure_failed") for p in out[1:])
+    no_data = iter(["NO_DATA", "NO_DATA"])
+
+    async def logos(png):
+        return next(no_data)
+
+    out, _ = await read_figures(pdf, pages(), logos)
+    assert not any(p.get("figure_failed") for p in out)
+
+    async def broken(png):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(figures, "describe_picture", broken)
+    monkeypatch.setattr(settings, "FIGURE_READER_ENABLED", True)
+    info = {}
+    out = await read_figures_if_enabled(pdf, pages(), info)
+    assert out[0]["figure_failed"] is True and out[0]["text"] == pages()[0]["text"]
+    assert info == {"figures_chosen": 2, "figures_described": 0, "figures_failed": 2}
+
+
 async def test_when_the_markers_do_not_match_the_pictures_the_description_goes_at_the_end(tmp_path):
     pdf = make_pdf(tmp_path / "d.pdf")
     one = [{"page_number": 1, "text": "## Revenue by segment\n\nSome text.", "pictures": [CHART1]}]

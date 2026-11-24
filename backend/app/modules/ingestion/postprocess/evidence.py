@@ -2,7 +2,8 @@ import html
 from bisect import bisect_left, bisect_right
 import fitz  # PyMuPDF
 
-from app.modules.ingestion.postprocess.constants import FOOTNOTE_SYMBOLS, NAV_TITLE_KEY, SUPERSCRIPT_GAP, SUPERSCRIPT_RAISE, SUPERSCRIPT_RATIO, TEXT_FOLD, TOP_LINE_TOLERANCE, TRAILING_PUNCT
+from app.modules.ingestion.postprocess.constants import (FOOTNOTE_SYMBOLS, GLUED_MARK_GAP, NAV_TITLE_KEY, SUPERSCRIPT_GAP, SUPERSCRIPT_RAISE, SUPERSCRIPT_RATIO, TEXT_FOLD,
+                                                          TOP_LINE_TOLERANCE, TRAILING_PUNCT)
 from app.modules.ingestion.postprocess.tokens import is_marker, is_number, is_placeholder
 
 
@@ -40,9 +41,18 @@ def sits_on(word: tuple, host: tuple) -> bool:
 # Giới hạn: số đứng trước phải là số/từ giữ chỗ trong SUPERSCRIPT_GAP điểm: chỉ số đứng xa sau nhãn chữ ("Consumer & Business Banking" rồi "(d)" cách 70 điểm) không được gắn; cột chứa chúng
 #   được `regrid_block` bỏ qua (`ghost`) và gộp ở mức Markdown (`merge_ghost_columns`).
 def glue_superscripts(words: list) -> list:
+    reach: dict[int, float] = {}
+    for i, nearest in footnote_hosts(words).items():
+        reach[nearest] = max(reach.get(nearest, 0.0), words[i][2])
+    return [(word[0], word[1], max(word[2], reach.get(i, word[2])), *word[3:]) for i, word in enumerate(words)]
+
+
+# Ý nghĩa: {chỉ số của từ chỉ số chú thích: chỉ số của số đứng ngay trước nó} theo đúng phép chứng minh của `glue_superscripts` (số hoặc từ giữ chỗ bên trái, cách không quá
+#   SUPERSCRIPT_GAP, chỉ số in nhỏ theo `sits_on`, nhiều số thì lấy số gần nhất). Dùng chung cho `glue_superscripts` và `raise_marks` (F4).
+def footnote_hosts(words: list) -> dict:
     by_right = sorted(range(len(words)), key=lambda k: words[k][2])
     rights = [words[k][2] for k in by_right]
-    reach: dict[int, float] = {}
+    found: dict[int, int] = {}
     for i, word in enumerate(words):
         if not is_footnote_ref(word[4].translate(TEXT_FOLD)):
             continue
@@ -50,9 +60,37 @@ def glue_superscripts(words: list) -> list:
                  if sits_on(word, words[k])
                  and (is_number(words[k][4].translate(TEXT_FOLD)) or is_placeholder(words[k][4].translate(TEXT_FOLD)))]
         if hosts:
-            nearest = min(hosts)[1]
-            reach[nearest] = max(reach.get(nearest, 0.0), word[2])
-    return [(word[0], word[1], max(word[2], reach.get(i, word[2])), *word[3:]) for i, word in enumerate(words)]
+            found[i] = min(hosts)[1]
+    return found
+
+
+# Ý nghĩa: từ PDF (`page.get_text("words")`) mà đuôi là chỉ số chú thích bằng chữ số in nhỏ, nâng lên, dính liền số đứng trước (không dấu cách: "1007" =
+#   "100" + "7") được tách thành hai từ: số (hộp của đoạn chữ số) và chỉ số (hộp của đoạn chỉ số). Bằng chứng là đoạn chữ (span, `get_text("dict")`) của PDF:
+#   đoạn sau là 1-2 chữ số (`is_footnote_ref`), cỡ chữ không quá SUPERSCRIPT_RATIO lần đoạn trước, đường chân chữ cao hơn ít nhất SUPERSCRIPT_RAISE điểm,
+#   cách dưới GLUED_MARK_GAP điểm; đoạn trước kết thúc bằng chữ số.
+# Giữ vì: Docling đã ghi "100 7", nhưng `footnote_hosts` chỉ chứng minh được chỉ số là một từ riêng, nên F4 bỏ qua 314 chỗ ở 17 tài liệu (đếm 23/11).
+# Giới hạn: chỉ sau số; chữ cái ("100a") và chỉ số sau chữ ("Revenue1") giữ nguyên như F4.
+def split_glued_marks(page: "fitz.Page", words: list) -> list:
+    cuts = []
+    for block in page.get_text("dict")["blocks"]:
+        for line in block.get("lines", []):
+            for host, mark in zip(line["spans"], line["spans"][1:]):
+                tail = mark["text"].strip()
+                if (host["text"][-1:].isdigit() and tail[:1].isdigit() and is_footnote_ref(tail) and mark["size"] <= SUPERSCRIPT_RATIO * host["size"]
+                        and host["origin"][1] - mark["origin"][1] >= SUPERSCRIPT_RAISE and mark["bbox"][0] - host["bbox"][2] < GLUED_MARK_GAP):
+                    cuts.append((host["bbox"], mark["bbox"], tail))
+    if not cuts:
+        return words
+    out = []
+    for word in words:
+        cut = next((c for c in cuts if word[0] < c[0][2] < word[2] and c[1][2] <= word[2] + 0.5 and word[4].endswith(c[2]) and len(word[4]) > len(c[2])
+                    and c[0][1] < word[3] and c[0][3] > word[1]), None)
+        if cut is None:
+            out.append(word)
+            continue
+        (_, hy0, hx1, hy1), (mx0, my0, mx1, my1), tail = cut
+        out += [(word[0], hy0, hx1, hy1, word[4][:-len(tail)], *word[5:]), (mx0, my0, mx1, my1, tail, *word[5:])]
+    return out
 
 
 # Ý nghĩa: bằng chứng của MỘT trang PDF: tập từ của trang, các cặp từ kề nhau trên cùng một dòng chữ, các cặp "từ cuối dòng / từ đầu
@@ -72,7 +110,7 @@ class PageEvidence:
         self.words: set[str] = set()
         self.nav_key = ""
         lines: dict[tuple[int, int], list[tuple[str, float]]] = {}
-        page_words = self.boxes = page.get_text("words")
+        page_words = self.boxes = split_glued_marks(page, page.get_text("words"))
         if page_words:
             top = min(word[1] for word in page_words)
             first_line = sorted((word for word in page_words if word[1] - top < TOP_LINE_TOLERANCE), key=lambda word: word[0])

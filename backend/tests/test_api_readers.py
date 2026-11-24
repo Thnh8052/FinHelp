@@ -40,7 +40,8 @@ def test_a_line_break_inside_a_cell_becomes_a_space_not_nothing():
 
 
 def test_a_superscript_note_mark_is_kept_apart_from_the_figure():
-    assert clean_ocr("| Subordinated notes <sup>3</sup> | 1,016<sup>2</sup> |") == "| Subordinated notes [3] | 1,016 [2] |"
+    """23/11 (F4): a digit mark becomes superscript digits glued to the figure, the same form as the postprocess ("1,016²", not "1,016 [2]")."""
+    assert clean_ocr("| Subordinated notes <sup>3</sup> | 1,016<sup>2</sup> |") == "| Subordinated notes³ | 1,016² |"
 
 
 def test_image_links_are_dropped():
@@ -115,6 +116,24 @@ async def test_no_key_means_no_request(tmp_path, monkeypatch):
     assert seen == []
 
 
+async def test_the_request_turns_picture_captions_off(tmp_path, monkeypatch):
+    """24/11 (rule_caption_marker_v2.txt): by default Datalab writes a caption for each picture ("A line chart showing ...", numbers read off the axes,
+    up to 73 figures a page the PDF does not print). disable_image_captions turns that off; table rows unchanged (80.4 % vs 80.5 % right on 40 pages)."""
+    monkeypatch.setattr(settings, "DATALAB_API_KEY", "test-key")
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            bodies.append(request.content)
+            return httpx.Response(200, json={"request_check_url": "https://www.datalab.to/api/v1/convert/r1"})
+        return httpx.Response(200, json={"status": "complete", "markdown": "one"})
+
+    out = await read_chandra(make_pdf(tmp_path / "e.pdf", 1), [1], client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    assert out == {1: "one"}
+    assert b'name="disable_image_captions"\r\n\r\ntrue' in bodies[0]
+    assert b'name="mode"\r\n\r\n' + settings.DATALAB_MODE.encode() in bodies[0]
+
+
 def test_chandra_is_the_registered_ocr_reader():
     from app.modules.ingestion.page_quality import READERS
 
@@ -156,3 +175,78 @@ async def test_no_openai_key_means_no_request(monkeypatch):
     monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
     seen = []
     assert await describe_picture(b"png", client=openai("x", seen)) is None and seen == []
+
+
+# ---------------------------------------------------------------- "busy" answers (22/11: Datalab gave 429 to 5 of 28 pages of a scanned report read 4 at a time)
+def busy_then(after, busy_times, header):
+    """A transport that answers 429 (with Retry-After when `header`) `busy_times` times, then hands the request to `after`."""
+    seen = {"busy": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if seen["busy"] < busy_times:
+            seen["busy"] += 1
+            return httpx.Response(429, headers={"Retry-After": "7"} if header else {}, json={"error": "rate limited"})
+        return after(request)
+
+    return handler, seen
+
+
+async def test_a_busy_answer_is_waited_out_and_is_not_an_attempt(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "DATALAB_API_KEY", "test-key")
+    waits = []
+
+    async def sleep(seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr(api_readers.asyncio, "sleep", sleep)
+    pdf = make_pdf(tmp_path / "busy.pdf", 1)
+    seen_pages = []
+    inner = datalab({1: "one"}, seen_pages)._transport.handler
+    handler, seen = busy_then(inner, api_readers.ATTEMPTS + 2, header=True)  # more busy answers than attempts
+    out = await read_chandra(pdf, [1], client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    assert out == {1: "one"} and seen["busy"] == api_readers.ATTEMPTS + 2
+    assert waits.count(7.0) == api_readers.ATTEMPTS + 2  # the server's Retry-After
+
+
+async def test_without_retry_after_the_wait_grows(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
+    waits = []
+
+    async def sleep(seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr(api_readers.asyncio, "sleep", sleep)
+    seen = []
+    inner = openai("Bar chart", seen)._transport.handler
+    handler, busy = busy_then(inner, 3, header=False)
+    assert await describe_picture(b"png", client=httpx.AsyncClient(transport=httpx.MockTransport(handler))) == "Bar chart"
+    assert waits == [api_readers.BUSY_SECONDS, 2 * api_readers.BUSY_SECONDS, 4 * api_readers.BUSY_SECONDS]
+
+
+async def test_busy_answers_are_waited_out_only_so_many_times(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "DATALAB_API_KEY", "test-key")
+
+    async def sleep(seconds):
+        pass
+
+    monkeypatch.setattr(api_readers.asyncio, "sleep", sleep)
+    pdf = make_pdf(tmp_path / "busy2.pdf", 1)
+    handler, seen = busy_then(lambda r: httpx.Response(500), 10 ** 6, header=True)
+    assert await read_chandra(pdf, [1], client=httpx.AsyncClient(transport=httpx.MockTransport(handler))) == {}
+    assert seen["busy"] == api_readers.BUSY_WAITS + api_readers.ATTEMPTS  # the waits, then the attempts, all busy
+
+
+def test_one_page_is_cut_out_without_form_fields(tmp_path):
+    """23/11: cutting a page out of the HSBC 2025 annual report (generality set) copied its form-field tree and MuPDF raised "exception stack
+    overflow" for every page, so the OCR step of that report always failed (silently). The reader needs the page, not the form fields."""
+    import fitz
+    from app.modules.ingestion.api_readers import _one_page
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "Net revenues 1,037", fontsize=9)
+    field = fitz.Widget()
+    field.field_name, field.field_type, field.rect = "box", fitz.PDF_WIDGET_TYPE_TEXT, fitz.Rect(72, 100, 200, 120)
+    page.add_widget(field)
+    doc.save(str(tmp_path / "form.pdf"))
+    with fitz.open(stream=_one_page(tmp_path / "form.pdf", 1), filetype="pdf") as one:
+        assert "Net revenues 1,037" in one[0].get_text() and list(one[0].widgets()) == []

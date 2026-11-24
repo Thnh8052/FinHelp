@@ -1150,3 +1150,28 @@
   line-height: 1.4;
   color: var(--danger-solid);
 }
+
+/* Pages to check against the original (parse_issues): a warning, not an error; each page range opens that page */
+.doc-card-pages {
+  color: var(--warn-text);
+}
+
+.doc-page-link {
+  margin: 0 2px;
+  padding: 0 5px;
+  border: 1px solid var(--warn-border);
+  border-radius: 4px;
+  background-color: var(--warn-bg);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.doc-page-link:hover:not(:disabled) {
+  border-color: var(--warn-solid);
+}
+
+.doc-page-link:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
