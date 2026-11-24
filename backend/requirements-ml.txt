@@ -3,4 +3,6 @@
 #   pip install torch --index-url https://download.pytorch.org/whl/cu124
 torch>=2.6
 FlagEmbedding>=1.3    # BGE-M3 embeddings
-docling==2.127.0      # the version the postprocess rules were measured on; do not upgrade blindly
+docling==2.127.0      # the version the postprocess rules were measured on; do not upgrade blindly (2.151 read tables worse, TRIED NP-14)
+docling-ibm-models==4.0.4   # layout + TableFormer models, same as the Kaggle GPU worker
+docling-parse==7.27.1       # PDF text cells, same as the Kaggle GPU worker
