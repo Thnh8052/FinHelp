@@ -23,7 +23,7 @@ from app.modules.ingestion.chunker import FinancialChunkerService
 from app.modules.ingestion.catalog import needs_vlm, read_catalog, read_catalog_vlm, years_covered, years_printed
 from app.modules.ingestion.doc_header import company_candidates, extract_document_header
 from app.modules.ingestion.page_quality import rescue_if_enabled, start_early_ocr
-from app.modules.ingestion.figures import read_figures_if_enabled
+from app.modules.ingestion.figures import read_figures_if_enabled, read_regions_if_enabled
 from app.modules.ingestion.parse_check import check_safely
 from app.modules.ingestion.parser import DoclingSession, PDFParserService
 from app.modules.query_router.input_policy import instruction_like
@@ -215,6 +215,11 @@ class IngestionPipeline:
             job.pages = await read_figures_if_enabled(job.pdf_path, job.pages, job.timings)
             if "figures_chosen" in job.timings:
                 job.timings["figures"] = round(time.perf_counter() - t0, 2)
+            # 1a'-b. Raster images on a page with a text layer that no picture box covers (a table pasted as a picture) are read by the same model, behind its own switch
+            t0 = time.perf_counter()
+            job.pages = await read_regions_if_enabled(job.pdf_path, job.pages, job.timings)
+            if "regions_chosen" in job.timings:
+                job.timings["regions"] = round(time.perf_counter() - t0, 2)
             # 1a''. What the OCR and figure steps could not repair is listed for the user (parse_check.py); the chunks of those pages are flagged
             job.pages, job.issues = await check_safely(job.pdf_path, job.pages, job.timings)
             # 1b. Catalog: the API call runs while the next file parses

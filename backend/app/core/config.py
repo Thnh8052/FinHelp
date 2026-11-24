@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     # gpt-4.1-mini: label next to its value 92 % on 34 pictures, NO_DATA on 5 of 5 logos/photos, about 0.5 dollar per 1,000 pictures (vlm_bench_2026-11-22.md).
     FIGURE_READER_ENABLED: bool = True
     FIGURE_MODEL: str = "gpt-4.1-mini"
+    # Image regions on a page with a text layer that Docling gave no picture box for (a table pasted as a picture, Enablence p42: 154 regions in 39 of 170 documents,
+    # ingestion/figures.py regions_to_read) are read by the same model with the measured prompt v2 (api_readers.REGION_PROMPT): 99.0 % of the printed numbers on 30 new
+    # images, 0 of 269 invented, 0.38 dollar per 1,000 images (experiments TRIED NP-40). Off until the owner turns it on (24/11).
+    IMAGE_REGION_READER_ENABLED: bool = False
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     API_READ_CONCURRENCY: int = 4  # requests in flight at once for one document (Chandra pages, pictures)
     DOCLING_MODE: str = "accurate"  # "accurate" | "fast"
