@@ -5,7 +5,7 @@ import { apiRequest, errorText } from "../../services/api";
 import { MarkdownRenderer } from "../../components/chat/MarkdownRenderer";
 import "../../components/chat/chat.css";
 import { useAdminData } from "./AdminLayout";
-import { labelTone, reviewPath } from "./reviewQuery";
+import { flaggedPagesText, labelTone, reviewPath } from "./reviewQuery";
 import type { ReviewItem, ReviewLabel, ReviewQueue, ReviewStatus } from "./types";
 import { REVIEW_LABELS } from "./types";
 import { Card, CardHeader, EmptyState, OwnerLabel, Segmented, Skeleton, fill, useFormat } from "./ui";
@@ -141,6 +141,11 @@ const ReviewEntry: React.FC<{ item: ReviewItem; onDecide: (id: string, verdict: 
         )}
       </div>
       <p className="mt-1.5 text-[13.5px] font-medium leading-snug text-fg">{item.question || a.noQuestion}</p>
+      {item.flagged_pages?.length > 0 && (
+        <p className="mt-1.5 text-xs leading-relaxed text-warn-text">
+          {r.flaggedPages} {flaggedPagesText(item.flagged_pages, r)}
+        </p>
+      )}
       <details className="group mt-2">
         <summary className="cursor-pointer list-none text-xs font-medium text-accent-text hover:underline [&::-webkit-details-marker]:hidden">
           <span className="group-open:hidden">{a.showAnswer}</span>

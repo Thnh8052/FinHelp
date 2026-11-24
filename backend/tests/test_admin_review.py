@@ -217,3 +217,28 @@ def test_the_overview_can_be_narrowed_to_one_user_and_counts_the_waiting_answers
 async def test_the_waiting_count_is_the_open_queue():
     db = _db([dict(m) for m in MESSAGES])
     assert await R.open_count(db, 14, now=NOW) == 4 and await R.open_count(db, 14, "u2", now=NOW) == 2
+
+
+# ------------------------------------------------------------------ owner 25/11: which cited pages were read with a problem at upload
+def _cite(doc, page, cited=True, **flags):
+    return {"citation_id": f"c{doc}{page}", "chunk_id": f"k{doc}{page}", "document_id": doc, "page": page, "snippet": "", "cited": cited, **flags}
+
+
+def test_the_flagged_pages_an_answer_cites_are_listed_once_each_with_their_flags():
+    doc = _answer(1, citations=[
+        _cite("d1", 50, may_be_misread=True), _cite("d1", 50, cited=None, from_figure=True),  # two excerpts of one page: one entry, both flags
+        _cite("d2", 4, cited=None, read_from_image=True), _cite("d2", 9),  # a clean page is not listed
+        _cite("d3", 7, cited=False, may_be_misread=True),  # an excerpt the answer does not cite is not listed
+        _cite("d3", 8, picture_unread=True)])
+    assert R.flagged_pages(doc) == [{"document_id": "d1", "page": 50, "flags": ["may_be_misread", "from_figure"]},
+                                    {"document_id": "d2", "page": 4, "flags": ["read_from_image"]},
+                                    {"document_id": "d3", "page": 8, "flags": ["picture_unread"]}]
+    assert R.flagged_pages(_answer(2)) == []
+
+
+async def test_the_queue_row_names_the_file_of_each_flagged_page():
+    db = _db([_answer(2, user_rating=-1, citations=[_cite("d1", 50, may_be_misread=True), _cite("dx", 3, read_from_image=True)])])
+    db["documents"] = FakeCollection([{"document_id": "d1", "file_name": "FinStats.pdf"}])
+    row = (await R.review_queue(db, days=14, now=NOW))["items"][0]
+    assert row["flagged_pages"] == [{"document_id": "d1", "page": 50, "flags": ["may_be_misread"], "file_name": "FinStats.pdf"},
+                                    {"document_id": "dx", "page": 3, "flags": ["read_from_image"], "file_name": None}]  # a deleted document keeps its id

@@ -3,7 +3,7 @@
 //
 //   node scripts/test-review-query.mjs
 import assert from "node:assert/strict";
-import { labelTone, reviewPath } from "../src/features/admin/reviewQuery.ts";
+import { flaggedPagesText, labelTone, reviewPath } from "../src/features/admin/reviewQuery.ts";
 
 let failed = 0;
 const check = (name, fn) => {
@@ -25,6 +25,15 @@ check("what the user reported or what was blocked is red; a warning or a partial
   assert.deepEqual(["user_report", "blocked"].map(labelTone), ["negative", "negative"]);
   assert.deepEqual(["not_traced", "partial", "not_found", "refused", "degraded", "slow"].map(labelTone), ["warn", "warn", "warn", "warn", "neutral", "neutral"]);
   assert.equal(labelTone("safety"), "neutral");
+});
+
+check("each flagged page is named by its file and page, with its problems; a deleted document says so", () => {
+  const words = { pageOf: "{file} tr. {page}", deletedDocument: "tài liệu đã xóa",
+    pageFlags: { may_be_misread: "bảng có thể đọc sai", read_from_image: "nhận dạng từ ảnh", from_figure: "số lấy từ hình/biểu đồ", picture_unread: "có hình chưa đọc được" } };
+  assert.equal(flaggedPagesText([{ document_id: "d1", page: 50, flags: ["may_be_misread", "from_figure"], file_name: "FinStats.pdf" },
+                                 { document_id: "dx", page: 3, flags: ["read_from_image"], file_name: null }], words),
+    "FinStats.pdf tr. 50 (bảng có thể đọc sai, số lấy từ hình/biểu đồ) · tài liệu đã xóa tr. 3 (nhận dạng từ ảnh)");
+  assert.equal(flaggedPagesText([], words), "");
 });
 
 if (failed) {

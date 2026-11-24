@@ -1,4 +1,5 @@
 import type { ClickKind } from "../types/chat";
+import type { PageFlag } from "../features/admin/types";
 
 export type Language = "en" | "vi";
 
@@ -491,6 +492,10 @@ export interface TranslationSchema {
       unverified: string;
       degraded: string;
       handledAs: string;
+      flaggedPages: string;
+      pageOf: string;
+      deletedDocument: string;
+      pageFlags: Record<PageFlag, string>;
       notes: string;
       noteLabel: string;
       notePlaceholder: string;
