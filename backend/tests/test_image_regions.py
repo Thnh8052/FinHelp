@@ -2,7 +2,7 @@
 bad-debt line of 166) is a raster image Docling gives no picture box for, so neither Docling's text nor the picture reader (figures.py) has it. The page text
 stays as it is and each such region is read by the vision model with the measured prompt v2 (api_readers.REGION_PROMPT), the reply appended to the page.
 Measured on 30 new images: 99.0 % of the printed numbers stated, 0 of 269 invented, 9 of 10 photos and signatures skipped, 0 of 20 titles made up.
-Behind IMAGE_REGION_READER_ENABLED (off by default)."""
+Behind IMAGE_REGION_READER_ENABLED (on since 25/11; the tests run with it off, conftest)."""
 import json
 
 import fitz
@@ -179,12 +179,12 @@ async def test_a_document_with_no_such_region_costs_no_call(tmp_path, monkeypatc
     assert await read_regions_if_enabled(pdf, plain, info) == plain and info == {}
 
 
-def test_the_pipeline_runs_the_step_and_the_default_is_off():
+def test_the_pipeline_runs_the_step_and_the_default_is_on():
     from app.core.config import Settings
     from app.modules.ingestion import pipeline
 
     assert pipeline.read_regions_if_enabled is figures.read_regions_if_enabled
-    assert Settings.model_fields["IMAGE_REGION_READER_ENABLED"].default is False  # owner 24/11: behind a switch, off until the owner turns it on
+    assert Settings.model_fields["IMAGE_REGION_READER_ENABLED"].default is True  # owner 25/11: turned on after rule_b2_check.txt passed (experiments TRIED NP-46)
     assert settings.IMAGE_REGION_READER_ENABLED is False  # tests run with it off (conftest)
 
 

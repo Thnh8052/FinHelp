@@ -7,7 +7,7 @@ A picture is read when (the "image" class of the VLM bench, experiments/scripts/
   - embedded raster images cover at least MIN_RASTER_COVER of it, and
   - fewer than MAX_WORDS_INSIDE words of the PDF text layer are inside it.
 Not read: a vector chart (its printed values are text already), a small logo, a page the OCR fallback read again ("ocr": Chandra describes its pictures itself).
-Second route (24/11, IMAGE_REGION_READER_ENABLED, off by default): a raster image on a page that has a text layer, that Docling gave no picture box for and that no word of
+Second route (24/11, IMAGE_REGION_READER_ENABLED, on since 25/11): a raster image on a page that has a text layer, that Docling gave no picture box for and that no word of
 the layer sits in, is "an image region" (a table pasted as a picture: Enablence p42, a bad-debt line of 166). regions_to_read finds them from the PDF alone, read_regions
 sends each crop with REGION_PROMPT and appends the reply to the page, lines kept: "[Figure read from the image, page N]" and then the rows.
 The description replaces the picture's marker, prefixed "[Figure read from the image, page N]" (the chunk gets the flag "figure"); "NO_DATA" (a photo, a logo)
