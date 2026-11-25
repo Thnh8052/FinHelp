@@ -114,3 +114,15 @@ def test_a_header_of_year_ranges_is_not_a_table_row(tmp_path):
     pdf = _page_with_lines(tmp_path / "h.pdf", [("In Millions Total", ["2020", "2021 -22", "2023 -24"])] + [(n, [a, b]) for n, a, b in ROWS])
     text = "\n".join(["| In Millions | Total | 2020 | 2021-22 | 2023-24 |", "|---|---|---|---|---|"]) + "\n\n" + markdown(ROWS)
     assert _wrong(pdf, text) == 0
+
+
+def test_a_small_percent_change_reads_the_same_with_or_without_a_space(tmp_path):
+    """JPM 10-Q 2022 p21 (TRIED NP-63): the PDF prints a change as "(1) %", and the check reads "(1)" as a footnote mark of the amount before it; the OCR reader
+    wrote "(1)%". The same printed value must read the same on both sides, either way round, or a right re-read is refused (3 right rows counted wrong)."""
+    spaced = _page_with_lines(tmp_path / "s.pdf", [("Total net revenue", ["12,760", "(1) %", "11,947"])])  # values right-aligned at x = 380, 480, 580
+    glued = _page_with_lines(tmp_path / "g.pdf", [("Total net revenue", ["12,760", "(1)%", "11,947"])])
+    md = lambda change: "\n".join(["| | 2022 | Change | 2021 |", "|---|---|---|---|", f"| Total net revenue | 12,760 | {change} | 11,947 |"])
+    for pdf in (spaced, glued):
+        for change in ("(1) %", "(1)%"):
+            assert _wrong(pdf, md(change)) == 0, (pdf.name, change)
+    assert _wrong(spaced, md("(2)%")) == 1  # a different value is still wrong
