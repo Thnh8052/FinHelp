@@ -140,9 +140,27 @@ def printed_rows(page: "fitz.Page", labelled: bool = True) -> list:
         phrases = phrases_of(_drop_marks(line))
         if not phrases or (labelled and _unit(phrases[0][0])[0] != "text"):
             continue
-        rows += [units for units, raw in _segments(phrases)
-                 if len(units) >= 2 and not all(YEAR.fullmatch(t.strip("(),.;:$")) for t in raw)]
+        for units, raw in _segments(phrases):
+            units = _undated(units, raw)
+            if len(units) >= 2 and not all(YEAR.fullmatch(t.strip("(),.;:$")) or YEAR_TAIL.fullmatch(t) for t in raw):
+                rows.append(units)
     return rows
+
+
+# Plan B7 (25/11, experiments rule_b7_rows.txt): two general sources of false "wrong rows" seen on the audit pages that no list shows (U1).
+# A day, a comma and a year ("31, 2022") printed where values stand is a date: a column header "December 31, 2022" or justified prose
+# ("On November 21, 2024, ..."), not two values. "2021 -22" of a maturity header is a range of years, like a year.
+DAY_COMMA = re.compile(r"^\(?(\d{1,2}),$")
+YEAR_TAIL = re.compile(r"^[-–]\d{2}$")
+
+
+def _undated(units: list, raw: list) -> list:
+    dates = set()
+    for a, b in zip(raw, raw[1:]):
+        day = DAY_COMMA.match(a)
+        if day and 1 <= int(day.group(1)) <= 31 and YEAR.fullmatch(b.strip("(),.;:$")):
+            dates |= {day.group(1), b.strip("(),.;:$")}
+    return [u for u in units if not set(u) <= dates] if dates else units
 
 
 def _md_rows(text: str) -> list:

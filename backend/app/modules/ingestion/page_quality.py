@@ -27,14 +27,16 @@ import fitz  # PyMuPDF
 from app.core.config import settings
 from app.core.logging import logger
 from app.modules.ingestion.api_readers import read_chandra
+from app.modules.ingestion.page_confidence import reread_reason
 from app.modules.ingestion.postprocess.table_rebuild import lost_regions
-from app.modules.ingestion.table_check import FLAG_MIN_SHARE, FLAG_MIN_WRONG, misread_tables, table_defects, wrong_rows
+from app.modules.ingestion.table_check import FLAG_MIN_SHARE, FLAG_MIN_WRONG, table_defects, wrong_rows
 
 # Broad re-read reasons (owner-approved plan 24/11: "re-read broadly, tell users strictly"; rule_d1_reread_v2.txt, 40 pages, 17 accepted, 10 of 10 checked by
 # hand better, labelled rows right 336 -> 384 of 386 on them). Used only to choose pages to read again, never for the user's list (parse_check.py):
 #   rows    labelled printed rows not held exactly >= FLAG_MIN_WRONG and >= FLAG_MIN_SHARE, without a defect of the Markdown tables
 #   defect  a defect of the Markdown tables and >= 1 printed row (rows that start with a number included) not held exactly
-TABLE_REASONS = ("table_check", "rows", "defect")  # a reply is taken only with fewer wrong rows
+#   rows1   >= 1 labelled printed row not held exactly, below "rows" and "defect" (plan 25/11 night step 2 = B7 part 3, TRIED NP-51 / NP-52)
+TABLE_REASONS = ("table_check", "rows", "defect", "rows1")  # a reply is taken only with fewer wrong rows
 # A reply holding FOREIGN_MAX or more figures (3+ digits) that the page's text layer does not print is refused: the reader estimated chart values
 # (Lockheed 2022 p26, FinStats p48: 19 to 73 such figures). Measured 24/11 (rule_chandra_modes.txt): 0 of the good replies on 40 table pages refused.
 FOREIGN_MAX = 2
@@ -46,6 +48,7 @@ FOREIGN_MAX = 2
 CHART_TEXT = re.compile(r"\b(a|an|the)\s+(line|bar|donut|doughnut|pie|stacked|column|area|scatter|waterfall|combo)[ -]?(chart|graph)\b|\b(line|bar|pie|donut) chart:|"
                         r"\bchart (showing|shows|depicting|displaying)\b|\binfographic\b", re.I)
 
+IMAGE_MARK = "<!-- image -->"  # Docling's picture marker: not text
 MIN_LAYER_CHARS = 20
 SCAN_IMAGE_SHARE = 0.5
 MIN_GARBLED = 3
@@ -88,37 +91,54 @@ def scanned_pages(pdf_path: Path) -> List[int]:
         return [n for n, pdf_page in enumerate(doc, 1) if _scanned(pdf_page)]
 
 
+def text_signals(pdf_page, text: str, broad: bool = False) -> List[str]:
+    """Every signal of page_confidence.SIGNALS that `text` raises against its PDF page, in the order of the re-read reasons (the first one sure enough names
+    the reason): "garbled"; a scan, "scanned_unread" (still no text) or "scanned_read"; "missing"; "lost_table"; "table_check"; and with `broad` one of
+    "rows", "defect" or "rows1" (>= 1 labelled printed row not held exactly, below the other two)."""
+    if garbled(text):
+        return ["garbled"]
+    layer = pdf_page.get_text()
+    if len(re.sub(r"\s", "", layer)) < MIN_LAYER_CHARS:
+        if _image_share(pdf_page) < SCAN_IMAGE_SHARE:
+            return []
+        return ["scanned_unread" if len(re.sub(r"\s", "", text.replace(IMAGE_MARK, ""))) < MIN_LAYER_CHARS else "scanned_read"]
+    out = []
+    wanted = _numbers(layer)
+    if len(wanted) >= MIN_LAYER_NUMBERS and len(wanted & _numbers(text)) / len(wanted) < NUMBER_RECALL:
+        out.append("missing")
+    if lost_regions(text, pdf_page.get_text("words")):
+        out.append("lost_table")
+    has_table = "|" in text
+    if not (has_table or broad):
+        return out
+    total, wrong = wrong_rows(pdf_page, text)
+    many = bool(total) and wrong >= FLAG_MIN_WRONG and wrong / total >= FLAG_MIN_SHARE
+    defects = has_table and table_defects(text) > 0
+    if many and defects:  # table_check.misread_tables
+        out.append("table_check")
+    elif broad:
+        if many:
+            out.append("rows")
+        elif defects and wrong_rows(pdf_page, text, labelled=False)[1] >= 1:
+            out.append("defect")
+        elif wrong >= 1:
+            out.append("rows1")
+    return out
+
+
 def bad_pages(pdf_path: Path, pages: Sequence[Dict[str, Any]], broad: bool = False) -> Dict[int, str]:
     """{page number: "garbled" | "scanned" | "missing" | "lost_table" | "table_check"} for the pages Docling's text (`pages`: [{"page_number", "text"}]) does not
-    do justice to; `broad` adds "rows" and "defect" (pages to read again only). A page number outside the PDF is ignored."""
+    do justice to: page_confidence sends them to be read again (the first signal of text_signals with p >= REREAD_AT names the reason); `broad` adds "rows"
+    and "defect" (and "rows1" once its p is set), pages to read again only. A page number outside the PDF is ignored."""
     out: Dict[int, str] = {}
     with fitz.open(str(pdf_path)) as doc:
         for p in pages:
             n, text = p["page_number"], p.get("text") or ""
             if not 1 <= n <= len(doc):
                 continue
-            if garbled(text):
-                out[n] = "garbled"
-                continue
-            pdf_page = doc[n - 1]
-            layer = pdf_page.get_text()
-            if len(re.sub(r"\s", "", layer)) < MIN_LAYER_CHARS:
-                if _image_share(pdf_page) >= SCAN_IMAGE_SHARE:
-                    out[n] = "scanned"
-                continue
-            wanted = _numbers(layer)
-            if len(wanted) >= MIN_LAYER_NUMBERS and len(wanted & _numbers(text)) / len(wanted) < NUMBER_RECALL:
-                out[n] = "missing"
-            elif lost_regions(text, pdf_page.get_text("words")):
-                out[n] = "lost_table"
-            elif "|" in text and misread_tables(pdf_page, text):
-                out[n] = "table_check"
-            elif broad:
-                total, wrong = wrong_rows(pdf_page, text)
-                if total and wrong >= FLAG_MIN_WRONG and wrong / total >= FLAG_MIN_SHARE:
-                    out[n] = "rows"
-                elif "|" in text and table_defects(text) > 0 and wrong_rows(pdf_page, text, labelled=False)[1] >= 1:
-                    out[n] = "defect"
+            why = reread_reason(text_signals(doc[n - 1], text, broad))
+            if why:
+                out[n] = why
     return out
 
 

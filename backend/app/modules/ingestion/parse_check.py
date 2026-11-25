@@ -14,6 +14,7 @@ or returned a text it would not take:
           processed), or a page whose vector picture holds printed figures the parse lost ("chart_unread": Docling drops the text inside a picture
           box; reading those charts failed twice, TRIED NP-17 / NP-25; 26 of 30 such pictures really charts or figures, rule_layout_checks.txt V);
           the key is only there when some page has one. Both kinds give their chunks the flag "picture_unread" (chunker.py).
+Which page goes on which list is decided by page_confidence (plan 25/11 night): the measured share of really misread pages of its strongest signal >= REPORT_AT.
 The document keeps the lists (DocumentRecord.parse_issues); the document card shows them with the page numbers, naming no component.
 """
 import asyncio
@@ -25,9 +26,8 @@ from typing import Any, Dict, List, Sequence, Tuple
 import fitz  # PyMuPDF
 
 from app.core.logging import logger
-from app.modules.ingestion.page_quality import MIN_LAYER_CHARS, bad_pages
-
-IMAGE_MARK = "<!-- image -->"
+from app.modules.ingestion.page_confidence import REPORT_AT, REREAD_AT, p_wrong, reported
+from app.modules.ingestion.page_quality import text_signals
 # A vector picture whose printed figures the parse lost (rule_layout_checks.txt part V, the D3 detector of experiments chart_text._block, unchanged):
 # at least CHART_MIN_WORDS text-layer words inside its box (figures.MAX_WORDS_INSIDE: fewer go to the vision model), under CHART_MAX_PRESENT of them
 # already in the page's text, and at least CHART_MIN_NEW_NUMBERS numbers new to it. Or (plan B4, 25/11, rule_b4_charts.txt, TRIED NP-47: a chart's axis
@@ -68,20 +68,29 @@ def _charts_unread(doc: "fitz.Document", pages: Sequence[Dict[str, Any]]) -> set
 
 
 def check_pages(pdf_path: Path, pages: Sequence[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, List[int]]]:
-    """(pages, with "table_check": True on the pages to check; {"tables": [page numbers], "unread": [page numbers]})."""
+    """(pages, with "table_check": True on the pages to check; {"tables": [page numbers], "unread": [page numbers]}). A page is listed when its signals
+    (page_quality.text_signals with the broad ones, "ocr_unsure", "chart_lost", "figure_failed") make page_confidence.p_wrong >= REPORT_AT: "rows" (about 55 %
+    really misread) and "rows1" stay off the list, "defect" (36 of 40, plan 24/11 step 4) is on it."""
     text = {p["page_number"]: p.get("text") or "" for p in pages}
-    # the broad reasons of the re-read, minus "rows" (40 % really misread): "defect" was 36 of 40 really misread (plan 24/11 step 4, rule_user_list_defect.txt)
-    bad = {n: why for n, why in bad_pages(pdf_path, pages, broad=True).items() if why != "rows"}
-    unread = {n for n, why in bad.items() if why == "scanned" and len(re.sub(r"\s", "", text[n].replace(IMAGE_MARK, ""))) < MIN_LAYER_CHARS}
+    signals: Dict[int, List[str]] = {}
     with fitz.open(str(pdf_path)) as doc:
         missing = [n for n in range(1, len(doc) + 1) if n not in text]
         charts = _charts_unread(doc, pages)
+        for p in pages:
+            n = p["page_number"]
+            if 1 <= n <= len(doc):
+                signals[n] = (text_signals(doc[n - 1], text[n], broad=True)
+                              + (["ocr_unsure"] if p.get("ocr_unsure") else [])  # a scan re-read with chart text the reader wrote (page_quality.CHART_TEXT)
+                              + (["chart_lost"] if n in charts else []) + (["figure_failed"] if p.get("figure_failed") else []))
     if missing:
         logger.warning(f"Pages missing from the parse of {Path(pdf_path).name}: {missing}")
-    tables = {n for n, why in bad.items() if why != "scanned"}
-    tables |= {p["page_number"] for p in pages if p.get("ocr_unsure")}  # a scan re-read with chart text the reader wrote (page_quality.CHART_TEXT)
-    issues ={"tables": sorted(tables), "unread": sorted(unread | set(missing))}
-    figures = sorted({p["page_number"] for p in pages if p.get("figure_failed")} | charts)
+    lists = {n: reported(s) for n, s in signals.items()}
+    doubtful = sorted(n for n, s in signals.items() if REREAD_AT <= p_wrong(s) < REPORT_AT)
+    if doubtful:  # for the admin's logs: read again where a reader could, never shown to the user
+        logger.info(f"Pages of {Path(pdf_path).name} below the user's bar: {doubtful}")
+    tables = {n for n, k in lists.items() if "tables" in k}
+    issues = {"tables": sorted(tables), "unread": sorted({n for n, k in lists.items() if "unread" in k} | set(missing))}
+    figures = sorted(n for n, k in lists.items() if "figures" in k)
     if figures:
         issues["figures"] = figures
     marks = lambda n: {**({"table_check": True} if n in tables else {}), **({"chart_unread": True} if n in charts else {})}
