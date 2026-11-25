@@ -563,7 +563,6 @@ export interface TranslationSchema {
     picturesUnread: string;
       readAgain: string;
       readRefused: string;
-      picturesRead: string;
       seconds: string;
       empty: string;
       noMatch: string;
