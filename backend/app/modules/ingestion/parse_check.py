@@ -30,10 +30,14 @@ from app.modules.ingestion.page_quality import MIN_LAYER_CHARS, bad_pages
 IMAGE_MARK = "<!-- image -->"
 # A vector picture whose printed figures the parse lost (rule_layout_checks.txt part V, the D3 detector of experiments chart_text._block, unchanged):
 # at least CHART_MIN_WORDS text-layer words inside its box (figures.MAX_WORDS_INSIDE: fewer go to the vision model), under CHART_MAX_PRESENT of them
-# already in the page's text, and at least CHART_MIN_NEW_NUMBERS numbers new to it.
+# already in the page's text, and at least CHART_MIN_NEW_NUMBERS numbers new to it. Or (plan B4, 25/11, rule_b4_charts.txt, TRIED NP-47: a chart's axis
+# years, title and legend are often printed elsewhere on the page, so its words look "present" while its values are lost): at least CHART_MIN_NEW_NUMBERS
+# of its distinct numbers new to the page, and at least CHART_MIN_NEW_SHARE of them. On 170 documents it adds 30 pages: 15 lose printed figures, 9 are charts
+# that print no values (owner 25/11: listed too, their content is not in the text either), 2 borderline, 4 diagrams with numbering.
 CHART_MIN_WORDS = 5
 CHART_MAX_PRESENT = 0.5
 CHART_MIN_NEW_NUMBERS = 2
+CHART_MIN_NEW_SHARE = 0.5
 _PUNCT = "$€£¥()%,.;:*\"'“”‘’[]"
 
 
@@ -54,7 +58,10 @@ def _charts_unread(doc: "fitz.Document", pages: Sequence[Dict[str, Any]]) -> set
             digits = [re.sub(r"\D", "", t) for t in inside]
             present = sum(1 for t, d in zip(inside, digits) if (d in seen_numbers if d else t.strip(_PUNCT).lower() in seen_words))
             new = sum(1 for d in digits if d and d not in seen_numbers)
-            if present < CHART_MAX_PRESENT * len(inside) and new >= CHART_MIN_NEW_NUMBERS:
+            numbers = {d for d in digits if d}
+            lost = numbers - seen_numbers
+            if (present < CHART_MAX_PRESENT * len(inside) and new >= CHART_MIN_NEW_NUMBERS) or \
+                    (len(lost) >= CHART_MIN_NEW_NUMBERS and len(lost) >= CHART_MIN_NEW_SHARE * len(numbers)):
                 out.add(n)
                 break
     return out

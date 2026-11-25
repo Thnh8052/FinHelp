@@ -97,6 +97,27 @@ def test_a_chart_whose_figures_are_in_the_text_or_with_few_words_is_not_listed(t
     assert check_pages(logo, [page(1, TABLE + "\n\n<!-- image -->", pictures=[CHART_BOX])])[1] == {"tables": [], "unread": []}
 
 
+def test_a_chart_whose_labels_are_on_the_page_but_whose_figures_are_lost_is_listed(tmp_path):
+    """Plan B4 (25/11, rule_b4_charts.txt, TRIED NP-47): a chart's axis years, title and legend are often printed elsewhere on the page, so >= 50 % of its
+    words are "present" although its values are lost (HSBC p233, FPT p46, Toyota p157). A picture is also listed when >= 2 of its distinct numbers are new
+    to the page and they are at least half of its distinct numbers. Owner 25/11: a chart that prints no values (only axis ticks) is listed too, its content
+    is not in the text either."""
+    chart = ["Revenue by segment", "Retail Banking Wealth Commercial", "2023 2024 2025", "35,657 44,010 52,618 62,849 70,113 81,200"]
+    pdf = _chart_pdf(tmp_path / "s.pdf", chart)
+    labels_kept = TABLE + "\n\nRevenue by segment: Retail Banking, Wealth, Commercial, 2023 2024 2025.\n\n<!-- image -->"
+    pages, issues = check_pages(pdf, [page(1, labels_kept, pictures=[CHART_BOX])])
+    assert issues == {"tables": [], "unread": [], "figures": [1]}
+    assert pages[0].get("chart_unread") is True
+
+
+def test_a_chart_with_few_new_figures_among_kept_ones_is_not_listed(tmp_path):
+    """New figures that are a minority of the picture's numbers (a total or an axis tick the text lacks) do not list the page."""
+    chart = ["Revenue by segment", "Retail Banking Wealth Commercial", "2023 2024 2025", "35,657 44,010 52,618 62,849 70,113 81,200"]
+    pdf = _chart_pdf(tmp_path / "t.pdf", chart)
+    most_kept = TABLE + "\n\nRevenue by segment: Retail Banking, Wealth, Commercial, 2023 2024 2025: 35,657 44,010 52,618 62,849.\n\n<!-- image -->"
+    assert check_pages(pdf, [page(1, most_kept, pictures=[CHART_BOX])])[1] == {"tables": [], "unread": []}
+
+
 def test_a_scan_read_with_chart_text_is_listed_for_the_user(tmp_path):
     """Owner 24/11: a scan whose re-read holds a chart description the reader wrote (page_quality "ocr_unsure") is listed under "tables" and flagged."""
     pdf = make_pdf(tmp_path / "u.pdf", ["text", "scan"])
