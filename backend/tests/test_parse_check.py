@@ -55,75 +55,74 @@ def test_a_page_whose_figures_are_still_lost_is_listed_and_flagged(tmp_path):
     assert [p.get("table_check", False) for p in pages] == [False, True]
 
 
-def test_a_page_whose_picture_could_not_be_read_is_listed(tmp_path):
-    """Owner 24/11: a picture the reader was asked to read and could not (figures.py "figure_failed") is listed under "figures"; the key is only
-    there when some page has one."""
-    pdf = make_pdf(tmp_path / "g.pdf", ["text", "text"])
-    pages, issues = check_pages(pdf, [page(1, TABLE), page(2, TABLE, figure_failed=True)])
-    assert issues == {"tables": [], "unread": [], "figures": [2]}
-    assert not any(p.get("table_check") for p in pages)
+CHART_BOX = [60.0, 520.0, 540.0, 640.0]  # top-left origin, as the worker sends picture boxes; 12 % of a letter page
 
 
-CHART_BOX = [60.0, 520.0, 540.0, 640.0]  # top-left origin, as the worker sends picture boxes
-
-
-def _chart_pdf(path, chart_lines):
+def _image_pdf(path, rect, words_over=0):
+    """A text page with a raster image at `rect` (a table or chart pasted as a picture) and `words_over` text-layer words printed on it."""
     doc = fitz.open()
     pg = doc.new_page()
     _write_lines(pg)
-    for i, line in enumerate(chart_lines):
-        pg.insert_text((80, 550 + 16 * i), line, fontsize=9)
+    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 60, 40), False)
+    pix.clear_with(200)
+    pg.insert_image(fitz.Rect(*rect), pixmap=pix)
+    for i in range(words_over):
+        pg.insert_text((rect[0] + 10, rect[1] + 14 + 12 * (i // 4)), f"word{i}", fontsize=8)
     doc.save(str(path))
     return path
 
 
-def test_a_vector_chart_whose_printed_figures_the_parse_lost_is_listed(tmp_path):
-    """Owner 24/11 (rule_layout_checks.txt part V, 26 of 30 such pictures really charts or figures): Docling drops the text inside a picture box, so a
-    vector chart's printed values are not in the excerpt. A picture with >= 5 text-layer words, < 50 % of them in the page's text and >= 2 numbers new
-    to it is listed with the unread pictures and marked "chart_unread" (its chunks get the "picture unread" flag)."""
-    chart = ["Revenue by year", "2021 2022 2023 2024 2025", "35,657 44,010 52,618 62,849 70,113"]
-    pdf = _chart_pdf(tmp_path / "v.pdf", chart)
-    pages, issues = check_pages(pdf, [page(1, TABLE + "\n\n<!-- image -->", pictures=[CHART_BOX])])
-    assert issues == {"tables": [], "unread": [], "figures": [1]}
-    assert pages[0].get("chart_unread") is True and not pages[0].get("table_check")
+def test_a_page_with_a_picture_is_listed_as_not_processed(tmp_path):
+    """Owner 25/11 (plan "parsing gọn lại"): no model reads pictures any more; a page with a picture of >= 3 % of the page (a Docling picture box) is
+    listed under "figures" (the document card: pictures not processed) and marked "picture_unread" (every chunk of the page gets the flag)."""
+    pdf = make_pdf(tmp_path / "v.pdf", ["text", "text"])
+    pages, issues = check_pages(pdf, [page(1, TABLE), page(2, TABLE + "\n\n<!-- image -->", pictures=[CHART_BOX])])
+    assert issues == {"tables": [], "unread": [], "figures": [2]}
+    assert pages[1].get("picture_unread") is True and not pages[1].get("table_check") and not pages[0].get("picture_unread")
 
 
-def test_a_chart_whose_figures_are_in_the_text_or_with_few_words_is_not_listed(tmp_path):
-    chart = ["Revenue by year", "2021 2022 2023 2024 2025", "35,657 44,010 52,618 62,849 70,113"]
-    pdf = _chart_pdf(tmp_path / "w.pdf", chart)
-    kept = TABLE + "\n\nRevenue by year 2021 2022 2023 2024 2025 35,657 44,010 52,618 62,849 70,113"
-    assert check_pages(pdf, [page(1, kept, pictures=[CHART_BOX])])[1] == {"tables": [], "unread": []}
-    logo = _chart_pdf(tmp_path / "x.pdf", ["Logo 2024"])
-    assert check_pages(logo, [page(1, TABLE + "\n\n<!-- image -->", pictures=[CHART_BOX])])[1] == {"tables": [], "unread": []}
+def test_a_small_picture_is_not_listed(tmp_path):
+    """A logo or an icon (under 3 % of the page) holds no figures worth telling the user about."""
+    pdf = make_pdf(tmp_path / "w.pdf", ["text"])
+    assert check_pages(pdf, [page(1, TABLE + "\n\n<!-- image -->", pictures=[[72.0, 100.0, 172.0, 150.0]])])[1] == {"tables": [], "unread": []}
 
 
-def test_a_chart_whose_labels_are_on_the_page_but_whose_figures_are_lost_is_listed(tmp_path):
-    """Plan B4 (25/11, rule_b4_charts.txt, TRIED NP-47): a chart's axis years, title and legend are often printed elsewhere on the page, so >= 50 % of its
-    words are "present" although its values are lost (HSBC p233, FPT p46, Toyota p157). A picture is also listed when >= 2 of its distinct numbers are new
-    to the page and they are at least half of its distinct numbers. Owner 25/11: a chart that prints no values (only axis ticks) is listed too, its content
-    is not in the text either."""
-    chart = ["Revenue by segment", "Retail Banking Wealth Commercial", "2023 2024 2025", "35,657 44,010 52,618 62,849 70,113 81,200"]
-    pdf = _chart_pdf(tmp_path / "s.pdf", chart)
-    labels_kept = TABLE + "\n\nRevenue by segment: Retail Banking, Wealth, Commercial, 2023 2024 2025.\n\n<!-- image -->"
-    pages, issues = check_pages(pdf, [page(1, labels_kept, pictures=[CHART_BOX])])
-    assert issues == {"tables": [], "unread": [], "figures": [1]}
-    assert pages[0].get("chart_unread") is True
+def test_an_image_pasted_on_a_text_page_without_a_picture_box_is_listed(tmp_path):
+    """A raster image Docling gave no picture box for (a table pasted as a picture, Enablence p42) is not processed either: listed the same way."""
+    pdf = _image_pdf(tmp_path / "r.pdf", (72, 500, 400, 700))
+    pages, issues = check_pages(pdf, [page(1, TABLE)])
+    assert issues == {"tables": [], "unread": [], "figures": [1]} and pages[0].get("picture_unread") is True
 
 
-def test_a_chart_with_few_new_figures_among_kept_ones_is_not_listed(tmp_path):
-    """New figures that are a minority of the picture's numbers (a total or an axis tick the text lacks) do not list the page."""
-    chart = ["Revenue by segment", "Retail Banking Wealth Commercial", "2023 2024 2025", "35,657 44,010 52,618 62,849 70,113 81,200"]
-    pdf = _chart_pdf(tmp_path / "t.pdf", chart)
-    most_kept = TABLE + "\n\nRevenue by segment: Retail Banking, Wealth, Commercial, 2023 2024 2025: 35,657 44,010 52,618 62,849.\n\n<!-- image -->"
-    assert check_pages(pdf, [page(1, most_kept, pictures=[CHART_BOX])])[1] == {"tables": [], "unread": []}
+def test_an_image_the_region_reader_read_is_not_listed(tmp_path):
+    """Condition 2 (owner 25/11): a pasted image the region reader answered for (image_regions.py "regions_read") was processed, so it is not listed; one it
+    could not read stays listed. A page Chandra read again is not listed for its pasted images either: the reader read the whole page image."""
+    pdf = _image_pdf(tmp_path / "q.pdf", (72, 500, 400, 700))
+    with fitz.open(str(pdf)) as doc:
+        drawn = [round(v, 1) for v in doc[0].get_image_info()[0]["bbox"]]  # the image keeps its proportions inside the rectangle it was put in
+    assert check_pages(pdf, [page(1, TABLE, regions_read=[drawn])])[1] == {"tables": [], "unread": []}
+    assert check_pages(pdf, [page(1, TABLE, regions_read=[[72.0, 100.0, 400.0, 300.0]])])[1]["figures"] == [1]  # another region was read, not this one
+    assert check_pages(pdf, [page(1, TABLE, ocr=True)])[1] == {"tables": [], "unread": []}
 
 
-def test_a_scan_read_with_chart_text_is_listed_for_the_user(tmp_path):
-    """Owner 24/11: a scan whose re-read holds a chart description the reader wrote (page_quality "ocr_unsure") is listed under "tables" and flagged."""
-    pdf = make_pdf(tmp_path / "u.pdf", ["text", "scan"])
-    pages, issues = check_pages(pdf, [page(1, TABLE), page(2, TABLE, ocr=True, ocr_unsure=True)])
-    assert issues == {"tables": [2], "unread": []}
-    assert [p.get("table_check", False) for p in pages] == [False, True]
+def test_a_docling_picture_is_listed_even_on_a_page_whose_pasted_image_was_read(tmp_path):
+    pdf = _image_pdf(tmp_path / "z.pdf", (72, 500, 400, 700))
+    got = check_pages(pdf, [page(1, TABLE, regions_read=[[72.0, 500.0, 400.0, 700.0]], pictures=[[420.0, 500.0, 560.0, 700.0]])])[1]
+    assert got == {"tables": [], "unread": [], "figures": [1]}
+
+
+def test_an_image_under_printed_words_is_not_listed(tmp_path):
+    """An image with >= 5 text-layer words on it is a background or carries a hidden text layer (AMCOR): its text is read already."""
+    pdf = _image_pdf(tmp_path / "h.pdf", (72, 500, 400, 700), words_over=8)
+    assert check_pages(pdf, [page(1, TABLE)])[1] == {"tables": [], "unread": []}
+
+
+def test_a_scanned_page_is_not_listed_as_a_picture(tmp_path):
+    """A scan is one big picture with no text layer: the OCR step reads it, so it is never on the picture list (unread when still without text)."""
+    pdf = make_pdf(tmp_path / "s.pdf", ["text", "scan"])
+    full = [0.0, 0.0, 612.0, 792.0]
+    assert check_pages(pdf, [page(1, TABLE), page(2, TABLE, ocr=True, pictures=[full])])[1] == {"tables": [], "unread": []}
+    assert check_pages(pdf, [page(1, TABLE), page(2, "<!-- image -->", pictures=[full])])[1] == {"tables": [], "unread": [2]}
 
 
 def test_a_blank_page_is_not_unread(tmp_path):

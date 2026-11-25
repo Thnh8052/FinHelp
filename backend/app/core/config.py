@@ -97,17 +97,15 @@ class Settings(BaseSettings):
     OCR_BACKEND: str = "chandra"
     DATALAB_API_KEY: Optional[str] = Field(default=None, repr=False)
     DATALAB_MODE: str = "balanced"  # the measured mode
-    # Pictures whose figures are only in the pixels (ingestion/figures.py) are described by a vision model through the OpenAI API (OPENAI_API_KEY; none: no request).
-    # gpt-4.1-mini: label next to its value 92 % on 34 pictures, NO_DATA on 5 of 5 logos/photos, about 0.5 dollar per 1,000 pictures (vlm_bench_2026-11-22.md).
-    FIGURE_READER_ENABLED: bool = True
-    FIGURE_MODEL: str = "gpt-4.1-mini"
-    # Image regions on a page with a text layer that Docling gave no picture box for (a table pasted as a picture, Enablence p42: 154 regions in 39 of 170 documents,
-    # ingestion/figures.py regions_to_read) are read by the same model with the measured prompt v2 (api_readers.REGION_PROMPT): 99.0 % of the printed numbers on 30 new
-    # images, 0 of 269 invented, 0.38 dollar per 1,000 images (experiments TRIED NP-40). On since 25/11 (owner), after the check on the 170 PDFs: the 17 NP-39
-    # images with figures 100 % of their numbers, 0 of 455 invented, 10 of 10 photos skipped (TRIED NP-46).
+    # Pictures under a Docling picture box are not read by any model since 25/11 (owner, plan "parsing gọn lại"): their pages are listed as not processed
+    # (ingestion/parse_check.py). The one model reader kept: image regions on a page with a text layer that no Docling picture box covers (a table pasted as a
+    # picture, Enablence p42), read by the vision model with the measured prompt v2 (api_readers.REGION_PROMPT, ingestion/image_regions.py): 99.0 % of the
+    # printed numbers on 30 new images, 0 of 269 invented, 0.38 dollar per 1,000 images (experiments TRIED NP-40); on the 170 PDFs the 17 NP-39 images with
+    # figures 100 % of their numbers, 0 of 455 invented, 10 of 10 photos skipped (TRIED NP-46). Through the OpenAI API (OPENAI_API_KEY; none: no request).
     IMAGE_REGION_READER_ENABLED: bool = True
+    FIGURE_MODEL: str = "gpt-4.1-mini"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
-    API_READ_CONCURRENCY: int = 4  # requests in flight at once for one document (Chandra pages, pictures)
+    API_READ_CONCURRENCY: int = 4  # requests in flight at once for one document (Chandra pages, image regions)
     DOCLING_MODE: str = "accurate"  # "accurate" | "fast"
     DOCLING_DEVICE: str = "auto"  # auto | cuda | cpu
     DOCLING_TIMEOUT_SECONDS: int = 3600

@@ -184,9 +184,9 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
                 "progress_percent": job_of.get(d["document_id"], {}).get("progress_percent"),
                 "chunks": job_of.get(d["document_id"], {}).get("extracted_chunks_count"),
                 "duration_s": (job_of.get(d["document_id"], {}).get("timings") or {}).get("total"),
-                # how the reading went (plan 24/11, channel D): pages read again, refused and why, pictures described
+                # how the reading went (plan 24/11, channel D): pages read again, refused and why
                 "read_report": {k: v for k, v in (job_of.get(d["document_id"], {}).get("timings") or {}).items()
-                                if k in ("ocr_bad_pages", "ocr_replaced_pages", "ocr_rejected", "figures_chosen", "figures_described", "figures_failed")},
+                                if k in ("ocr_bad_pages", "ocr_replaced_pages", "ocr_rejected")},
                 "created_at": d.get("created_at"),
                 **doc_owners.get(d["notebook_id"], {"owner_type": "unknown", "username": None, "notebook_title": None}),
             }

@@ -66,9 +66,7 @@ export const DocumentsTable: React.FC<{ documents: AdminDocument[]; emptyText: s
                       fill(d.readAgain, { done: doc.read_report.ocr_replaced_pages ?? 0, sent: doc.read_report.ocr_bad_pages }) +
                         (doc.read_report.ocr_rejected
                           ? " " + fill(d.readRefused, { why: Object.entries(doc.read_report.ocr_rejected).map(([k, v]) => `${k} ${v}`).join(", ") })
-                          : ""),
-                    doc.read_report?.figures_chosen &&
-                      fill(d.picturesRead, { done: doc.read_report.figures_described ?? 0, sent: doc.read_report.figures_chosen })].filter(Boolean).join(" · ")}
+                          : "")].filter(Boolean).join(" · ")}
                 </p>
               )}
             </td>

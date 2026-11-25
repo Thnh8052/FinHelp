@@ -11,7 +11,7 @@ import pytest
 
 from app.core.config import settings
 from app.modules.ingestion import api_readers
-from app.modules.ingestion.api_readers import clean_ocr, describe_picture, read_chandra
+from app.modules.ingestion.api_readers import clean_ocr, read_chandra
 
 
 @pytest.fixture(autouse=True)
@@ -140,43 +140,6 @@ def test_chandra_is_the_registered_ocr_reader():
     assert READERS["chandra"] is read_chandra
 
 
-# ---------------------------------------------------------------- the vision model, one picture per request
-def openai(reply, seen, status=200):
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(json.loads(request.content))
-        assert request.headers["Authorization"] == "Bearer test-key"
-        if status != 200:
-            return httpx.Response(status, json={"error": {"message": "boom"}})
-        return httpx.Response(200, json={"choices": [{"message": {"content": reply}}]})
-
-    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-
-async def test_a_picture_is_sent_with_the_one_prompt_and_its_description_comes_back(monkeypatch):
-    monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
-    seen = []
-    out = await describe_picture(b"\x89PNG fake", client=openai("  Bar chart of revenue, 2022 to 2024: 1,000; 1,200; 1,500.  ", seen))
-    assert out == "Bar chart of revenue, 2022 to 2024: 1,000; 1,200; 1,500."
-    body = seen[0]
-    assert body["model"] == settings.FIGURE_MODEL == "gpt-4.1-mini" and body["temperature"] == 0
-    text, image = body["messages"][0]["content"]
-    assert text == {"type": "text", "text": api_readers.FIGURE_PROMPT} and "NO_DATA" in text["text"] and "~" in text["text"]
-    assert image["image_url"]["url"].startswith("data:image/png;base64,")
-
-
-async def test_a_failing_vision_call_gives_nothing_and_never_raises(monkeypatch):
-    monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
-    seen = []
-    assert await describe_picture(b"png", client=openai("x", seen, status=500)) is None
-    assert len(seen) == api_readers.ATTEMPTS
-
-
-async def test_no_openai_key_means_no_request(monkeypatch):
-    monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
-    seen = []
-    assert await describe_picture(b"png", client=openai("x", seen)) is None and seen == []
-
-
 # ---------------------------------------------------------------- "busy" answers (22/11: Datalab gave 429 to 5 of 28 pages of a scanned report read 4 at a time)
 def busy_then(after, busy_times, header):
     """A transport that answers 429 (with Retry-After when `header`) `busy_times` times, then hands the request to `after`."""
@@ -209,18 +172,18 @@ async def test_a_busy_answer_is_waited_out_and_is_not_an_attempt(tmp_path, monke
 
 
 async def test_without_retry_after_the_wait_grows(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "DATALAB_API_KEY", "test-key")
     waits = []
 
     async def sleep(seconds):
         waits.append(seconds)
 
     monkeypatch.setattr(api_readers.asyncio, "sleep", sleep)
-    seen = []
-    inner = openai("Bar chart", seen)._transport.handler
+    pdf = make_pdf(tmp_path / "grow.pdf", 1)
+    inner = datalab({1: "one"}, [])._transport.handler
     handler, busy = busy_then(inner, 3, header=False)
-    assert await describe_picture(b"png", client=httpx.AsyncClient(transport=httpx.MockTransport(handler))) == "Bar chart"
-    assert waits == [api_readers.BUSY_SECONDS, 2 * api_readers.BUSY_SECONDS, 4 * api_readers.BUSY_SECONDS]
+    assert await read_chandra(pdf, [1], client=httpx.AsyncClient(transport=httpx.MockTransport(handler))) == {1: "one"}
+    assert [w for w in waits if w >= api_readers.BUSY_SECONDS][:3] == [api_readers.BUSY_SECONDS, 2 * api_readers.BUSY_SECONDS, 4 * api_readers.BUSY_SECONDS]
 
 
 async def test_busy_answers_are_waited_out_only_so_many_times(tmp_path, monkeypatch):

@@ -3,8 +3,8 @@
   read_chandra      Datalab Chandra reads whole pages again: one single-page PDF per request (the measured setup), the Markdown cleaned by `clean_ocr`.
                     Registered in page_quality.READERS["chandra"]. Measured: 97.1 % of 648 true table rows on 40 scanned IFRS pages once cleaned, 53.2 % raw
                     ("\\$" and <b> stick to the figures), Docling with OCR 92.0 % (experiments/results/docs/parsing/ocr_scan_2026-11-22.md).
-  describe_picture  the vision model (settings.FIGURE_MODEL) describes one cropped picture with FIGURE_PROMPT, the one prompt the bench measured
-                    (gpt-4.1-mini: label next to its value 92 %, NO_DATA on 5 of 5 logos and photos; vlm_bench_2026-11-22.md).
+  describe_region   the vision model (settings.FIGURE_MODEL) copies one image pasted on a page with a text layer (image_regions.py) with REGION_PROMPT v2
+                    (TRIED NP-40: 99.0 % of the printed numbers, 0 of 269 invented). The picture describer (describe_picture) was removed 25/11 (owner).
 
 Both are extras: no key means no request, a call that fails ATTEMPTS times gives nothing, and the caller keeps Docling's text. Keys are never logged.
 """
@@ -34,16 +34,7 @@ BUSY_SECONDS = 5.0
 BUSY_WAITS = 8
 BUSY_CODES = (429, 503)
 
-FIGURE_PROMPT = """You describe one picture cut from a company report, so that its content can be found and quoted as text.
-If the picture is only a logo, a photo, a signature or a decoration with no data, reply exactly: NO_DATA: <at most 8 words on what it shows>
-Otherwise write one plain paragraph of at most 80 words, in the language of the text printed on the picture (English if there is none):
-- the kind of picture (line chart, bar chart, pie chart, waterfall chart, table, diagram, ...) and its title if printed;
-- the unit and the period;
-- each series or category name with its values exactly as printed;
-- the main trend or comparison.
-Rules: copy numbers exactly as printed (same digits, same unit). Never compute new numbers. If a value is not printed and you read it from an axis, write it with "~" (for example ~240). Do not guess what is not visible. No markdown."""
-
-# The prompt for a region of a page that is only an image (a table pasted as a picture, figures.py regions_to_read): it must copy the whole table, so the reply keeps
+# The prompt for a region of a page that is only an image (a table pasted as a picture, image_regions.regions_to_read): it must copy the whole table, so the reply keeps
 # its lines. Measured as v2 on 30 images (experiments TRIED NP-40): 99.0 % of the printed numbers stated, 0 of 269 invented, 9 of 10 photos and signatures NO_DATA,
 # 0 of 20 titles made up. The two lines marked v2 are the only change from v1 (NP-39), which sent 3 of 20 small data crops to NO_DATA and made up a chart title.
 REGION_PROMPT = """You read one picture cut from a company report, so that what is printed on it can be found and quoted as text.
@@ -198,11 +189,6 @@ async def _ask_vision(png: bytes, prompt: str, max_tokens: int, label: str, clie
     finally:
         if own:
             await client.aclose()
-
-
-async def describe_picture(png: bytes, client: Optional[httpx.AsyncClient] = None) -> Optional[str]:
-    """The picture's description, "NO_DATA: ..." for a logo or photo, or None (no key, or ATTEMPTS failures)."""
-    return await _ask_vision(png, FIGURE_PROMPT, 400, "Picture description", client)
 
 
 async def describe_region(png: bytes, client: Optional[httpx.AsyncClient] = None) -> Optional[str]:

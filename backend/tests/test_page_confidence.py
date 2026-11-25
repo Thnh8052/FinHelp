@@ -18,8 +18,16 @@ ONE_WRONG = _rows(FLAG_ROWS[:5] + [(FLAG_ROWS[5][0], FLAG_ROWS[5][1], "")])  # o
 
 def test_every_signal_has_a_share_a_kind_and_a_source():
     for name, (p, kind, source) in pc.SIGNALS.items():
-        assert 0.0 <= p <= 1.0 and kind in ("tables", "figures", "unread") and source, name
+        assert 0.0 <= p <= 1.0 and kind in ("tables", "unread") and source, name
+        assert p >= pc.REREAD_AT, name  # every signal sends its page to be read again first (owner 25/11: always try the re-read before telling the user)
     assert 0 < pc.REREAD_AT < pc.REPORT_AT <= 1
+
+
+def test_the_report_floor_is_the_owners_and_no_picture_signal_is_left():
+    """Owner 25/11 (plan "parsing gọn lại", TRIED NP-60): a page goes on the user's list when its signal is right at least half the time; pictures are no
+    longer read by a model, so the picture signals are gone (parse_check lists pictures as not processed, by geometry)."""
+    assert pc.REPORT_AT == 0.5
+    assert not {"chart_lost", "figure_failed", "ocr_unsure"} & set(pc.SIGNALS)
 
 
 def test_a_page_is_as_likely_wrong_as_its_strongest_signal():
@@ -36,11 +44,14 @@ def test_the_reread_reason_is_the_first_signal_sure_enough():
 
 
 def test_only_signals_sure_enough_reach_the_user():
-    assert pc.reported(["rows"]) == set()  # read again, never listed (NP-11: about 55 % really misread)
-    assert pc.reported(["defect"]) == {"tables"}
-    assert pc.reported(["scanned_unread"]) == {"unread"}
-    assert pc.reported(["scanned_read"]) == set()  # a scan the OCR step read
-    assert pc.reported(["chart_lost", "rows"]) == {"figures"}
+    """NP-60 (25/11, financial statements, text before any re-read): defect 43 of 44 really misread, rows 7 of 21, rows1 6 of 22; lost_table 0 of 2 (NP-59)."""
+    for name in ("garbled", "missing", "table_check", "defect"):
+        assert pc.reported([name]) == {"tables"}, name
+    for name in ("scanned_unread", "page_missing"):
+        assert pc.reported([name]) == {"unread"}, name
+    for name in ("rows", "rows1", "lost_table", "scanned_read"):  # read again, never listed
+        assert pc.reported([name]) == set(), name
+    assert pc.reported(["rows", "defect"]) == {"tables"}
 
 
 def test_text_signals_lists_every_table_signal_of_a_page(tmp_path):

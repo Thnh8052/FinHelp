@@ -29,7 +29,7 @@ PLACEHOLDERS = {"NM", "NA", "N/A", "N/M", "NMF"}
 CURRENCY = {"$", "€", "£", "¥"}
 SYMBOLS = {"%", "(", ")", "-", "—", "–", "−"} | CURRENCY
 YEAR = re.compile(r"(19[5-9]\d|20[0-4]\d)")
-MARK = re.compile(r"\(\d{1,2}\)")
+MARK = re.compile(r"\(\d{1,2}\)%?")  # "(1)%" reads like "(1) %" (a printed "(1) %" and an OCR "(1)%" are the same value, TRIED NP-63)
 DASH = str.maketrans({"–": "-", "−": "-"})
 
 
