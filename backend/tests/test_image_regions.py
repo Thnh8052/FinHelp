@@ -1,8 +1,9 @@
-"""Image regions no step reads today (experiments TRIED NP-38, NP-39, NP-40): a table or chart pasted into a page that has a text layer (Enablence p42, a
-bad-debt line of 166) is a raster image Docling gives no picture box for, so neither Docling's text nor the picture reader (figures.py) has it. The page text
-stays as it is and each such region is read by the vision model with the measured prompt v2 (api_readers.REGION_PROMPT), the reply appended to the page.
-Measured on 30 new images: 99.0 % of the printed numbers stated, 0 of 269 invented, 9 of 10 photos and signatures skipped, 0 of 20 titles made up.
-Behind IMAGE_REGION_READER_ENABLED (on since 25/11; the tests run with it off, conftest)."""
+"""Image regions no step reads (experiments TRIED NP-38, NP-39, NP-40): a table or chart pasted into a page that has a text layer (Enablence p42, a bad-debt
+line of 166) is a raster image Docling gives no picture box for, so Docling's text does not have it. The page text stays as it is and each such region is read
+by the vision model with the measured prompt v2 (api_readers.REGION_PROMPT), the reply appended to the page. Measured on 30 new images: 99.0 % of the printed
+numbers stated, 0 of 269 invented, 9 of 10 photos and signatures skipped, 0 of 20 titles made up. Owner 25/11 (plan "parsing gọn lại"): kept as the one model
+reader, on two conditions: (1) an image under a Docling picture box is never read (those pages are listed as not processed); (2) a region read is not listed
+(parse_check.py). Behind IMAGE_REGION_READER_ENABLED (on; the tests run with it off, conftest)."""
 import json
 
 import fitz
@@ -10,9 +11,9 @@ import httpx
 import pytest
 
 from app.core.config import settings
-from app.modules.ingestion import api_readers, figures
+from app.modules.ingestion import api_readers, image_regions
 from app.modules.ingestion.api_readers import REGION_PROMPT, describe_region
-from app.modules.ingestion.figures import MARKER, read_regions, read_regions_if_enabled, regions_to_read, unpaired_values
+from app.modules.ingestion.image_regions import MARKER, read_regions, read_regions_if_enabled, regions_to_read, unpaired_values
 
 BIG = fitz.Rect(72, 100, 472, 400)  # 400 x 300 points, 25 % of a Letter page
 
@@ -24,7 +25,7 @@ def raster(page, rect, gray=120):
 
 
 def make_pdf(path):
-    """p1 a table image under a text title (to read); p2 the same but Docling gave it a picture box (the figure reader's); p3 a small logo; p4 an image with
+    """p1 a table image under a text title (to read); p2 the same but Docling gave it a picture box (listed, never read); p3 a small logo; p4 an image with
     its own words on top; p5 an image with a hidden text layer stacked on its bottom edge (the AMCOR 409A plan pages: 144 to 604 words, all on one line just
     under the box); p6 an image and no text layer at all (a scan: the OCR fallback's); p7 like p1 but Chandra read it; p8 two images."""
     doc = fitz.open()
@@ -73,18 +74,26 @@ def pages():
 def test_only_a_raster_image_nothing_else_reads_is_chosen(tmp_path):
     pdf = make_pdf(tmp_path / "a.pdf")
     out = regions_to_read(pdf, pages())
-    # not p2 (a picture box the figure reader reads), p3 (small), p4 (its own words), p5 (hidden text layer), p6 (no text layer), p7 (Chandra read it)
+    # not p2 (under a Docling picture box), p3 (small), p4 (its own words), p5 (hidden text layer), p6 (no text layer), p7 (Chandra read it)
     assert [(n, k) for n, k, _ in out] == [(1, 0), (8, 0), (8, 1)]
     assert out[0][2] == pytest.approx([72.0, 100.0, 472.0, 400.0], abs=0.5)
 
 
-def test_a_picture_box_the_figure_reader_does_not_choose_does_not_hide_the_region(tmp_path):
-    """Docling's box on p2 covers less than the raster does, so figures.pictures_to_read skips it (a vector-like box: raster cover under 60 %): the image is still
-    nobody's, and is chosen here."""
+def test_a_small_box_on_a_corner_of_the_image_does_not_hide_it(tmp_path):
+    """A Docling box covering less than half of the image does not make it Docling's picture: the image is still nobody's, and is chosen here."""
     pdf = make_pdf(tmp_path / "b.pdf")
     small_box = pages()
-    small_box[1]["pictures"] = [[72.0, 100.0, 120.0, 130.0]]  # 48 x 30 points: under 3 % of the page, never read by figures.py
+    small_box[1]["pictures"] = [[72.0, 100.0, 120.0, 130.0]]  # 48 x 30 points
     assert (2, 0) in [(n, k) for n, k, _ in regions_to_read(pdf, small_box)]
+
+
+def test_an_image_under_any_docling_picture_box_is_never_read(tmp_path):
+    """Condition 1 (owner 25/11): the old picture reader is gone, so an image under a Docling picture box covering half of it or more is never sent to the model,
+    even a box the old reader would have skipped (larger than the image: raster cover under 60 %). Those pages are listed as not processed (parse_check.py)."""
+    pdf = make_pdf(tmp_path / "g.pdf")
+    big_box = pages()
+    big_box[1]["pictures"] = [[60.0, 90.0, 560.0, 700.0]]
+    assert (2, 0) not in [(n, k) for n, k, _ in regions_to_read(pdf, big_box)]
 
 
 def test_the_prompt_is_the_measured_v2():
@@ -106,9 +115,10 @@ async def test_a_reply_is_appended_to_its_page_with_its_lines_kept(tmp_path):
     out, report = await read_regions(pdf, pages(), describe)
     assert out[0]["text"] == ("## Notes to the financial statements\n\n[Figure read from the image, page 1]\n"
                               "June 30, 2026 | June 30, 2025\nTrade | 3,761 | 1,747\nOther | 635 | 389")
-    assert out[7]["text"] == "Two tables" and out[7]["figure_failed"] is True  # the second image got no answer: the page is listed for the user
-    assert not any(p.get("figure_failed") for p in out[:7])
-    assert [p["text"] for p in out[1:7]] == [p["text"] for p in pages()[1:7]]
+    assert out[7]["text"] == "Two tables"  # the second image got no answer: not in regions_read, so parse_check lists the page
+    assert out[0]["regions_read"] == [pytest.approx([72.0, 100.0, 472.0, 400.0], abs=0.5)]  # condition 2: a region read is not listed
+    assert out[7]["regions_read"] == [pytest.approx([72.0, 60.0, 472.0, 260.0], abs=0.5)]  # NO_DATA is an answer: the model looked at it
+    assert [p["text"] for p in out[1:7]] == [p["text"] for p in pages()[1:7]] and not any(p.get("regions_read") for p in out[1:7])
     assert report == {"chosen": 3, "described": 1, "no_data": 1, "failed": 1}
 
 
@@ -122,7 +132,7 @@ async def test_values_listed_apart_from_their_labels_are_not_trusted(tmp_path):
         return apart
 
     out, report = await read_regions(pdf, pages()[:1], describe)
-    assert out[0]["text"] == "## Notes to the financial statements" and out[0]["figure_failed"] is True
+    assert out[0]["text"] == "## Notes to the financial statements" and not out[0].get("regions_read")
     assert report == {"chosen": 1, "described": 0, "no_data": 0, "failed": 1}
 
 
@@ -146,7 +156,7 @@ async def test_the_switch_and_the_report(tmp_path, monkeypatch):
         calls.append(png)
         return "Total | 100 | 90"
 
-    monkeypatch.setattr(figures, "describe_region", describe)
+    monkeypatch.setattr(image_regions, "describe_region", describe)
     monkeypatch.setattr(settings, "IMAGE_REGION_READER_ENABLED", False)
     before = pages()
     assert await read_regions_if_enabled(pdf, before) is before and calls == []
@@ -159,10 +169,10 @@ async def test_the_switch_and_the_report(tmp_path, monkeypatch):
     async def broken(png):
         raise RuntimeError("down")
 
-    monkeypatch.setattr(figures, "describe_region", broken)
+    monkeypatch.setattr(image_regions, "describe_region", broken)
     info = {}
     out = await read_regions_if_enabled(pdf, pages(), info)
-    assert out[0]["figure_failed"] is True and out[0]["text"] == pages()[0]["text"]
+    assert not out[0].get("regions_read") and out[0]["text"] == pages()[0]["text"]
     assert info == {"regions_chosen": 3, "regions_described": 0, "regions_failed": 3}
 
 
@@ -173,7 +183,7 @@ async def test_a_document_with_no_such_region_costs_no_call(tmp_path, monkeypatc
     async def describe(png):
         raise AssertionError("no call expected")
 
-    monkeypatch.setattr(figures, "describe_region", describe)
+    monkeypatch.setattr(image_regions, "describe_region", describe)
     plain = [p for p in pages() if p["page_number"] in (2, 3, 4, 5, 6, 7)]
     info = {}
     assert await read_regions_if_enabled(pdf, plain, info) == plain and info == {}
@@ -183,7 +193,7 @@ def test_the_pipeline_runs_the_step_and_the_default_is_on():
     from app.core.config import Settings
     from app.modules.ingestion import pipeline
 
-    assert pipeline.read_regions_if_enabled is figures.read_regions_if_enabled
+    assert pipeline.read_regions_if_enabled is image_regions.read_regions_if_enabled
     assert Settings.model_fields["IMAGE_REGION_READER_ENABLED"].default is True  # owner 25/11: turned on after rule_b2_check.txt passed (experiments TRIED NP-46)
     assert settings.IMAGE_REGION_READER_ENABLED is False  # tests run with it off (conftest)
 

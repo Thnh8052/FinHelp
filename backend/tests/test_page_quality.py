@@ -217,13 +217,36 @@ def test_the_defaults_turn_the_rescue_on_with_chandra_and_no_cap():
     assert fields["OCR_FALLBACK_ENABLED"].default is True
     assert fields["OCR_BACKEND"].default == "chandra"
     assert fields["DATALAB_MODE"].default == "balanced"
-    assert fields["FIGURE_READER_ENABLED"].default is True
-    assert fields["FIGURE_MODEL"].default == "gpt-4.1-mini"
     assert "OCR_FALLBACK_MAX_PAGES" not in fields
+    # owner 25/11 (plan "parsing gọn lại"): the picture reader is gone (pages with pictures are listed as not processed, parse_check.py); the image-region
+    # reader stays, on two conditions (image_regions.py)
+    assert "FIGURE_READER_ENABLED" not in fields
+    assert fields["IMAGE_REGION_READER_ENABLED"].default is True and fields["FIGURE_MODEL"].default == "gpt-4.1-mini"
 
 
 def test_tests_run_with_both_paid_readers_off():
-    assert settings.OCR_FALLBACK_ENABLED is False and settings.FIGURE_READER_ENABLED is False
+    assert settings.OCR_FALLBACK_ENABLED is False and settings.IMAGE_REGION_READER_ENABLED is False
+
+
+async def test_a_page_the_parser_did_not_return_is_read_again_first(tmp_path):
+    """Owner 25/11: every page that would be reported is read again first. A page of the PDF missing from the parse (0 of 23,176 measured, TRIED NP-18:
+    a safety net) is sent to the reader with the bad pages and put back in its place when text comes back."""
+    pdf = make_pdf(tmp_path / "m.pdf", ["text", "text", "text"])
+    sent = []
+
+    async def read(path, numbers):
+        sent.extend(numbers)
+        return {2: TABLE}
+
+    out, report = await rescue_pages(pdf, [page(1, TABLE), page(3, TABLE)], read)
+    assert sent == [2] and report["bad"] == {2: "page_missing"} and report["replaced"] == [2]
+    assert [(p["page_number"], p.get("ocr", False)) for p in out] == [(1, False), (2, True), (3, False)]
+
+    async def nothing(path, numbers):
+        return {}
+
+    out, report = await rescue_pages(pdf, [page(1, TABLE), page(3, TABLE)], nothing)
+    assert [p["page_number"] for p in out] == [1, 3] and report["rejected"] == {2: "empty"}  # still missing: parse_check lists it as unread
 
 
 # ---------------------------------------------------------------- a table F3 could not rebuild
@@ -550,17 +573,17 @@ async def test_a_reply_describing_a_chart_the_page_does_not_print_is_not_taken_o
     assert out[0]["ocr"] is True and report["replaced"] == [1]
 
 
-async def test_a_scan_whose_reply_describes_a_chart_is_taken_but_goes_on_the_user_list(tmp_path):
-    """A scan has no text layer to compare with: its reply is the only text, so it is taken, and the page is marked "ocr_unsure" (parse_check lists it
-    for the user as "may not have been read accurately", owner 24/11: the user is told the page is not sound)."""
+async def test_a_scan_whose_reply_describes_a_chart_is_taken(tmp_path):
+    """A scan has no text layer to compare with: its reply is the only text, so it is taken. It is no longer listed for the user: that mark was right on
+    0 of 1 page (TRIED NP-59), below the report floor (owner 25/11)."""
     pdf = make_pdf(tmp_path / "s.pdf", ["text", "scan"])
 
     async def read(path, numbers):
         return {2: "| Revenue line 0 | 1,000 | 2,000 |\n\nA bar chart showing revenue by year."}
 
     out, report = await rescue_pages(pdf, [page(1, TABLE), page(2, "")], read)
-    assert out[1]["ocr"] is True and out[1]["ocr_unsure"] is True and report["replaced"] == [2]
-    assert "ocr_unsure" not in out[0]
+    assert out[1]["ocr"] is True and report["replaced"] == [2]
+    assert "ocr_unsure" not in out[1] and "ocr_unsure" not in out[0]
 
 
 async def test_rescue_reads_the_broad_reasons_too(tmp_path):

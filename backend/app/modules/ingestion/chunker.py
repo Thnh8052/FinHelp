@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from app.core.config import settings
 from app.modules.ingestion.chunk import ChunkDocument
-from app.modules.ingestion.figures import FIGURE_MARK
+from app.modules.ingestion.image_regions import FIGURE_MARK
 
 HEAD = re.compile(r"^#{1,6} ")
 SEP = re.compile(r"^\|[\s:\-|]+\|\s*$")
@@ -219,12 +219,11 @@ class FinancialChunkerService:
                         ),
                         embedding_model=settings.DEFAULT_EMBEDDING_MODEL,
                         # "ocr": the page text came from the OCR fallback (page_quality.py); "table_check": a table of the page may be misread (parse_check.py);
-                        # "figure": the chunk holds a picture described by the vision model (figures.py); "picture_unread": a picture of the page chosen for
-                        # reading could not be read (figures.py figure_failed) or a vector chart's printed figures were lost (parse_check chart_unread);
-                        # every chunk of the page, owner 24/11
+                        # "figure": the chunk holds an image region read by the vision model (image_regions.py); "picture_unread": the page holds a picture
+                        # no step read (parse_check.py), every chunk of the page, owner 24/11
                         flags=(["ocr"] if page.get("ocr") else []) + (["table_check"] if page.get("table_check") else [])
                               + (["figure"] if FIGURE_MARK in text else [])
-                              + (["picture_unread"] if page.get("figure_failed") or page.get("chart_unread") else []),
+                              + (["picture_unread"] if page.get("picture_unread") else []),
                     )
                 )
         return chunks

@@ -42,9 +42,9 @@ TABLE_REASONS = ("table_check", "rows", "defect", "rows1")  # a reply is taken o
 FOREIGN_MAX = 2
 # With picture captions off (api_readers), the reader still describes a chart now and then ("A line chart showing ...", numbers read off the axes).
 # A reply holding such words that the page does not print is refused on a page with a text layer ("chart_text"); a scan has nothing to compare with,
-# so its reply is taken and the page marked "ocr_unsure" (parse_check lists it for the user). Measured 24/11 (rule_caption_marker_v2.txt): 6 of 6 chart
-# pages with a description caught, 0 of 16 good replies refused, 0 of 20 scans flagged. Words of estimates ("approximately") are NOT used: the notes of
-# scanned statements print them (4 of 40 scans flagged, rule_caption_marker.txt).
+# so its reply is taken (it was listed for the user until 25/11: right on 0 of 1 page, TRIED NP-59). Measured 24/11 (rule_caption_marker_v2.txt): 6 of 6
+# chart pages with a description caught, 0 of 16 good replies refused. Words of estimates ("approximately") are NOT used: the notes of scanned statements
+# print them (4 of 40 scans flagged, rule_caption_marker.txt).
 CHART_TEXT = re.compile(r"\b(a|an|the)\s+(line|bar|donut|doughnut|pie|stacked|column|area|scatter|waterfall|combo)[ -]?(chart|graph)\b|\b(line|bar|pie|donut) chart:|"
                         r"\bchart (showing|shows|depicting|displaying)\b|\binfographic\b", re.I)
 
@@ -128,8 +128,8 @@ def text_signals(pdf_page, text: str, broad: bool = False) -> List[str]:
 
 def bad_pages(pdf_path: Path, pages: Sequence[Dict[str, Any]], broad: bool = False) -> Dict[int, str]:
     """{page number: "garbled" | "scanned" | "missing" | "lost_table" | "table_check"} for the pages Docling's text (`pages`: [{"page_number", "text"}]) does not
-    do justice to: page_confidence sends them to be read again (the first signal of text_signals with p >= REREAD_AT names the reason); `broad` adds "rows"
-    and "defect" (and "rows1" once its p is set), pages to read again only. A page number outside the PDF is ignored."""
+    do justice to: page_confidence sends them to be read again (the first signal of text_signals with p >= REREAD_AT names the reason); `broad` adds "rows",
+    "defect" and "rows1". A page number outside the PDF is ignored."""
     out: Dict[int, str] = {}
     with fitz.open(str(pdf_path)) as doc:
         for p in pages:
@@ -196,11 +196,21 @@ def _chart_text(pdf_path: Path, texts: Dict[int, str]) -> Dict[int, bool]:
     return out
 
 
+def _missing_pages(pdf_path: Path, pages: Sequence[Dict[str, Any]]) -> List[int]:
+    """The pages of the PDF the parse did not return (0 of 23,176 measured, TRIED NP-18: a safety net)."""
+    have = {p["page_number"] for p in pages}
+    with fitz.open(str(pdf_path)) as doc:
+        return [n for n in range(1, len(doc) + 1) if n not in have]
+
+
 async def rescue_pages(pdf_path: Path, pages: List[Dict[str, Any]], read: OcrReader, early: Optional[Early] = None) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """(pages with the OCR text of the rescued ones, report {"bad": {page: reason}, "early": [pages read during the parse], "sent": [pages sent after it],
-    "replaced": [pages], "error"?: type name}). A page read early is not sent again, even when nothing came back for it (the reader already tried it)."""
+    "replaced": [pages], "error"?: type name}). A page read early is not sent again, even when nothing came back for it (the reader already tried it).
+    A page the parse did not return ("page_missing") is sent too and put back in its place when text comes back (owner 25/11: read again before telling)."""
     done, found = early or ([], {})
     bad = await asyncio.to_thread(bad_pages, pdf_path, pages, True)
+    missing = set(await asyncio.to_thread(_missing_pages, pdf_path, pages))
+    bad.update({n: "page_missing" for n in missing})
     sent = [n for n in sorted(bad) if n not in done]
     report: Dict[str, Any] = {"bad": bad, "early": list(done), "sent": sent, "replaced": []}
     if not bad:
@@ -219,7 +229,7 @@ async def rescue_pages(pdf_path: Path, pages: List[Dict[str, Any]], read: OcrRea
     chart = await asyncio.to_thread(_chart_text, pdf_path, replies)
     out: List[Dict[str, Any]] = []
     rejected: Dict[int, str] = {}
-    for p in pages:
+    for p in sorted(pages + [{"page_number": n, "text": "", "pictures": []} for n in missing], key=lambda p: p["page_number"]):
         n = p["page_number"]
         text = (read_pages.get(n) or "").strip() if n in bad else ""
         if n in bad and not text:
@@ -231,13 +241,13 @@ async def rescue_pages(pdf_path: Path, pages: List[Dict[str, Any]], read: OcrRea
         elif n in checked and n not in fewer:  # a misread table is swapped only for one with fewer wrong rows
             text, rejected[n] = "", "more_wrong_rows"
         if text and len(_numbers(text)) >= len(_numbers(p.get("text") or "")):  # never swap in a text with fewer figures
-            # a scan whose reply describes a chart: nothing to compare with, so taken, and the user is told (parse_check lists "ocr_unsure" pages)
-            out.append({**p, "text": text, "ocr": True, **({"ocr_unsure": True} if n in chart else {})})
+            out.append({**p, "text": text, "ocr": True})  # a scan whose reply describes a chart: nothing to compare with, so taken
             report["replaced"].append(n)
         else:
             if text:
                 rejected[n] = "fewer_figures"
-            out.append(p)
+            if n not in missing:  # a page still missing stays out: parse_check lists it as unread
+                out.append(p)
     if rejected:
         report["rejected"] = rejected
     return out, report

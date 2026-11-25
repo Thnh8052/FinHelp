@@ -50,7 +50,7 @@ def ocr_note(numbers: List[int]) -> str:
 
 
 def figure_note(numbers: List[int]) -> str:
-    """The note for excerpts holding a picture described by the vision model (chunk flag "figure", ingestion/figures.py, owner 22/11): a value read
+    """The note for excerpts holding a picture described by the vision model (chunk flag "figure", uploads before 25/11 only; owner 22/11): a value read
     from an axis is marked "~" and is an estimate."""
     return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + ' contain a description of a chart or picture read from the image (it starts with "[Figure read '
             'from the image"). Its figures were copied from the picture; a value marked "~" was read from an axis and is an estimate. When you use a figure from it, '
@@ -65,7 +65,7 @@ def table_note(numbers: List[int]) -> str:
 
 
 def picture_note(numbers: List[int]) -> str:
-    """The note for excerpts from a page with a picture that could not be read at upload (chunk flag "picture_unread", figures.py figure_failed; owner
+    """The note for excerpts from a page with a picture no step reads at upload (chunk flag "picture_unread", ingestion/parse_check.py; owner
     24/11, wording approved): a question about that picture is told its figures could not be read, never estimated."""
     return ("Excerpts " + ", ".join(f"[{n}]" for n in numbers) + " come from a page with a picture or chart whose figures could not be read. If the question "
             "asks about that picture or chart, say in one short sentence that its figures could not be read and that the original page shows it (the citation "

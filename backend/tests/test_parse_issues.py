@@ -39,17 +39,18 @@ def test_the_document_card_lists_the_pages_to_check_and_the_unread_pages():
 
 
 def test_an_excerpt_from_a_page_whose_picture_could_not_be_read_says_so():
-    """Owner 24/11: the citation of an excerpt from a page with an unread picture says "a picture on this page could not be read" (figures.py marks the
-    page figure_failed; every chunk of the page gets the flag, the picture's place in the text is not known well enough to pick one)."""
-    pages = [{"page_number": 1, "text": "Revenue was 100 million."}, {"page_number": 2, "text": "Revenue by segment <!-- image -->", "figure_failed": True}]
+    """Owner 24/11: the citation of an excerpt from a page with an unread picture says "a picture on this page could not be read" (parse_check marks the
+    page picture_unread; every chunk of the page gets the flag, the picture's place in the text is not known well enough to pick one). A chunk holding an
+    image region the model read (image_regions.py) gets the flag "figure"."""
+    pages = [{"page_number": 1, "text": "Revenue was 100 million."}, {"page_number": 2, "text": "Revenue by segment <!-- image -->", "picture_unread": True},
+             {"page_number": 3, "text": "[Figure read from the image, page 3] Revenue 100"}]
     chunks = FinancialChunkerService.chunk_document("nb", "d", pages, count_tokens=lambda t: len(t.split()))
-    assert [(c.page, c.flags) for c in chunks] == [(1, []), (2, ["picture_unread"])]
+    assert [(c.page, c.flags) for c in chunks] == [(1, []), (2, ["picture_unread"]), (3, ["figure"])]
     cite = CitationGenerator.from_retrieved_chunk({**CHUNK, "flags": ["picture_unread"]}, 1)
     assert (cite.picture_unread, cite.may_be_misread, cite.read_from_image, cite.from_figure) == (True, False, False, False)
     assert CitationOut(**cite.model_dump()).picture_unread is True
     assert CitationGenerator.from_retrieved_chunk(CHUNK, 1).picture_unread is False
-    vector = [{"page_number": 3, "text": "Revenue by year <!-- image -->", "chart_unread": True}]  # parse_check: a vector chart's printed values lost
-    assert FinancialChunkerService.chunk_document("nb", "d", vector, count_tokens=lambda t: len(t.split()))[0].flags == ["picture_unread"]
+    assert CitationGenerator.from_retrieved_chunk({**CHUNK, "flags": ["figure"]}, 1).from_figure is True
 
 
 def test_the_document_card_lists_the_pages_whose_pictures_could_not_be_read():
