@@ -14,6 +14,7 @@ import asyncio
 import base64
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -87,6 +88,18 @@ def fiscal_label(label: Any, period_end: str = "") -> tuple:
     return (int(y[0]), q) if y else (None, None)
 
 
+FISCAL_LABEL = re.compile(r"\b(?:fiscal(?:\s+year)?\s+|fy\s?)((?:19|20)\d\d)\b", re.I)  # "fiscal 2023", "fiscal year 2023", "FY2023", "FY 2023"
+
+
+def other_fiscal_year(pages: Dict[int, str], guessed: int) -> bool:
+    """The text labels another fiscal year at least 3 times and at least twice as often as `guessed` (Salesforce's third quarter of fiscal 2023
+    ends 31/10/2022: "fiscal 2023" 21 times, "fiscal 2022" 8; docs/VERSION_4/PLANNER_ERRORS_2026-11-26.md 8.1). Only asked of an interim report whose
+    year came from its end date: annual reports print the labels of the years they compare with more than their own (FedEx FY23: "FY22" 53 times)."""
+    counts = Counter(int(y) for text in pages.values() for y in FISCAL_LABEL.findall(text or ""))
+    other = max((n for y, n in counts.items() if y != guessed), default=0)
+    return other >= 3 and other >= 2 * counts.get(guessed, 0)
+
+
 def years_printed(pages: Dict[int, str]) -> List[int]:
     """Every year the document prints anywhere (tables, schedules, notes, figure text), read like the years of a question (input_policy._YEAR:
     "$2019", "2019,5" and "2019.5" are not years). The period rule refuses a year only when no selected report prints it (24/11, TRIED DV-15)."""
@@ -140,6 +153,8 @@ def card_metadata(card: Dict[str, Any], pages: Dict[int, str], source: str = "mo
     if fq is None and doc_type in INTERIM:
         fq = interim_quarter(pages)
     unverified = [k for k, ok in (("entity", entity and (source == "vlm" or _norm(entity) in full)), ("period_end", bool(pe))) if not ok]
+    if fy is None and pe and doc_type in INTERIM and other_fiscal_year(pages, int(pe[:4])):
+        unverified.append("fiscal_year")  # the year was guessed from the end date and the text names another: the page images are read, then the owner asked
     return {
         "company_name": entity or None,
         "aliases": [a for a in card.get("aliases") or [] if isinstance(a, str) and _norm(a) and _norm(a) in full and _norm(a) != _norm(entity)],

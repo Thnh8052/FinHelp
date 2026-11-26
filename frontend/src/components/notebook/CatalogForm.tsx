@@ -74,6 +74,8 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
       </span>
     ) : null;
   const flagged = (field: string) => (unverified.has(field) ? "auth-input needs-check" : "auth-input");
+  // the fiscal year field is checked when the period could not be read, or when the year was guessed from the end date and the text names another (B1)
+  const yearField = unverified.has("fiscal_year") ? "fiscal_year" : "period_end";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,9 +200,9 @@ export const CatalogForm: React.FC<CatalogFormProps> = ({ documentId, onClose, o
                   <div className="auth-field auth-field-col">
                     <label className="auth-label" htmlFor="catalog-year">
                       {c.fiscalYear} <span className="auth-required">*</span>
-                      {check("period_end")}
+                      {check(yearField)}
                     </label>
-                    <input id="catalog-year" className={flagged("period_end")} type="number" min={1990} max={new Date().getFullYear() + 1}
+                    <input id="catalog-year" className={flagged(yearField)} type="number" min={1990} max={new Date().getFullYear() + 1}
                            value={fiscalYear} onChange={(e) => setFiscalYear(e.target.value)} required aria-describedby="catalog-period-hint" />
                   </div>
                   <div className="auth-field auth-field-col">

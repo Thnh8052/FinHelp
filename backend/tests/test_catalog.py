@@ -1,6 +1,8 @@
 """Catalog line read at upload (services/ingestion/catalog.py): code-side fields and the fallback when the model is unavailable."""
 import json
 
+import pytest
+
 import httpx
 
 from app.modules.ingestion import catalog
@@ -128,3 +130,43 @@ async def test_catalog_through_the_api_uses_the_measured_prompt_and_the_same_che
 
     monkeypatch.setattr(catalog, "chat_completion", down)
     assert await catalog.read_catalog(pages) is None
+
+
+# ---------------------------------------------------------------- B1 (docs/VERSION_4/PLANNER_ERRORS_2026-11-26.md 8.1): a quarter's fiscal year guessed from its end date
+def _quarter_pages(labels):
+    return {1: "Salesforce, Inc.\nFor the quarterly period ended October 31, 2022", 2: " ".join(labels)}
+
+
+def _quarter_card(label="quarterly period ended October 31, 2022", doc_type="10-Q", period_end="2022-10-31"):
+    return {"entity": "Salesforce, Inc.", "doc_type": doc_type, "period_end": period_end, "fiscal_period": label}
+
+
+def test_a_quarter_whose_text_names_another_fiscal_year_is_flagged_for_the_image_read_or_the_user():
+    # Salesforce Q3 fiscal 2023 ends 31/10/2022: the text read copied no fiscal label, the end date gave 2022 (heldout_50, 26/11)
+    meta = catalog.card_metadata(_quarter_card(), _quarter_pages(["third quarter of fiscal 2023"] * 4 + ["fiscal 2022"]))
+    assert meta["fiscal_year"] == 2022 and "fiscal_year" in meta["catalog_unverified"]
+    assert catalog.needs_vlm(meta)  # the page images are read next; still unsure, the owner confirms before asking (G2)
+
+
+def test_fiscal_year_labels_count_in_their_written_forms():
+    pages = _quarter_pages(["fiscal 2023", "fiscal year 2023", "FY2023", "FY 2023"])
+    assert "fiscal_year" in catalog.card_metadata(_quarter_card(), pages)["catalog_unverified"]
+
+
+@pytest.mark.parametrize("labels", [
+    ["fiscal 2023"] * 2,  # printed fewer than 3 times
+    ["fiscal 2023"] * 4 + ["fiscal 2022"] * 3,  # not twice as often as the guessed year
+    ["fiscal 2022"] * 6,  # agrees with the guess
+    [],  # no label at all (Apple, Netflix, PayPal 10-Q)
+])
+def test_a_quarter_without_a_clear_other_label_keeps_its_guess_unflagged(labels):
+    meta = catalog.card_metadata(_quarter_card(), _quarter_pages(labels))
+    assert meta["fiscal_year"] == 2022 and meta["catalog_unverified"] == []
+
+
+def test_a_fiscal_year_read_from_the_label_or_an_annual_report_is_not_second_guessed():
+    many = _quarter_pages(["fiscal 2022"] * 20)  # Ulta, FedEx: reports print other years' labels more than their own
+    assert catalog.card_metadata(_quarter_card("Third Quarter Fiscal 2023"), many)["catalog_unverified"] == []
+    annual = _quarter_card("fiscal year ended May 31, 2023", "10-K", "2023-05-31")
+    assert catalog.card_metadata(annual, _quarter_pages(["FY2022"] * 20))["catalog_unverified"] == []
+
