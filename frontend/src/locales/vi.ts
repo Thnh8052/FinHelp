@@ -670,7 +670,7 @@ export const vi: TranslationSchema = {
       readRefused: "(từ chối: {why})",
       seconds: "{s} giây",
       waitWork: "chờ {wait} giây · {work} giây",
-      timesNote: "chờ trung vị {wait} giây (p90 {waitP90}), xử lý trung vị {work} giây (p90 {workP90})",
+      timesNote: "chờ trung vị {wait} giây (p90 {waitP90} giây), xử lý trung vị {work} giây (p90 {workP90} giây)",
       empty: "Chưa có báo cáo nào được tải lên.",
       noMatch: "Không có báo cáo khớp bộ lọc.",
       status: {

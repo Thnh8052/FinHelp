@@ -43,7 +43,7 @@ export const TokensPage: React.FC = () => {
         <UsageCharts series={data.series} tokensOnly />
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
         <Card className="min-w-0">
           <CardHeader title={k.byModel} icon={Cpu} />
           {data.by_model.length ? (
@@ -102,9 +102,9 @@ export const TokensPage: React.FC = () => {
                 <td className="px-5 py-3 text-fg">{p.steps.purposes[r.purpose] ?? r.purpose}</td>
                 <td className="px-5 py-3 text-right font-mono text-fg-2">
                   {fmt.number(r.calls)}
-                  {r.failed > 0 && <span className="ml-1 text-xs text-muted">{fill(k.failed, { n: r.failed })}</span>}
+                  {r.failed > 0 && <span className="ml-1 text-xs text-muted">{` (${fill(k.failed, { n: r.failed })})`}</span>}
                 </td>
-                <td className="px-5 py-3 text-right font-mono text-fg-2">{`${r.seconds_p50} / ${r.seconds_p90}`}</td>
+                <td className="px-5 py-3 text-right font-mono text-fg-2">{`${fmt.number(r.seconds_p50)} / ${fmt.number(r.seconds_p90)}`}</td>
                 <td className="px-5 py-3 text-right font-mono text-fg-2">{fmt.number(r.tokens)}</td>
                 <td className="px-5 py-3 text-right font-mono text-muted">{`${Math.round(r.share * 100)}%`}</td>
                 <td className="px-5 py-3 text-right font-mono text-fg-2">{r.cost_usd != null ? fmt.usd(r.cost_usd) : "—"}</td>
