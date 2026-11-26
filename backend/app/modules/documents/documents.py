@@ -35,6 +35,7 @@ from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.ingestion.chunk_repo import ChunkRepository
 from app.modules.documents.document_repo import DocumentRepository
+from app.modules.ingestion.fair_slots import turn_order
 from app.modules.ingestion.ingestion_job_repo import IngestionJobRepository
 from app.modules.auth.user import tier_spec
 from app.modules.auth.user_repo import UserRepository
@@ -79,9 +80,9 @@ class DocumentOut(BaseModel):
 
 
 def queue_positions(waiting_jobs: List[Dict[str, Any]]) -> Dict[str, int]:
-    """document_id -> how many waiting jobs were queued before it (the GPU parse slots are shared by every user, first come first served)."""
-    ordered = sorted(waiting_jobs, key=lambda j: j["queued_at"])
-    return {j["document_id"]: n for n, j in enumerate(ordered)}
+    """document_id -> how many waiting files go before it: the GPU parse slots are shared by every chat and handed out in turn between notebooks
+    (ingestion/fair_slots.py), each notebook's files in their order."""
+    return turn_order(waiting_jobs)
 
 
 class JobOut(BaseModel):
@@ -115,7 +116,7 @@ async def list_documents(
     docs = await DocumentRepository(db).get_by_notebook(notebook_id)
     ahead: Dict[str, int] = {}
     if any(d.status == "pending" for d in docs):  # only the order is read: other users' files are counted, never named
-        waiting = await db[collections.INGESTION_JOBS_COLLECTION].find({"status": "pending"}, {"document_id": 1, "queued_at": 1, "_id": 0}).to_list(None)
+        waiting = await db[collections.INGESTION_JOBS_COLLECTION].find({"status": "pending"}, {"document_id": 1, "notebook_id": 1, "queued_at": 1, "_id": 0}).to_list(None)
         ahead = queue_positions(waiting)
     return [DocumentOut.of(d, ahead.get(d.document_id) if d.status == "pending" else None) for d in docs]
 

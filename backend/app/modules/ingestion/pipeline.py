@@ -22,6 +22,7 @@ from app.modules.ingestion.ingestion_job_repo import IngestionJobRepository
 from app.modules.ingestion.chunker import FinancialChunkerService
 from app.modules.ingestion.catalog import needs_vlm, read_catalog, read_catalog_vlm, years_covered, years_printed
 from app.modules.ingestion.doc_header import company_candidates, extract_document_header
+from app.modules.ingestion.fair_slots import FairSlots
 from app.modules.ingestion.image_regions import read_regions_if_enabled
 from app.modules.ingestion.page_quality import rescue_if_enabled, start_early_ocr
 from app.modules.ingestion.parse_check import check_safely
@@ -92,7 +93,7 @@ async def _drain() -> None:
 
 # With a remote GPU no local model needs the card, so batching buys nothing: each file goes parse -> index on its own and can be
 # asked about as soon as it is done, whatever the other files are doing.
-_REMOTE_SLOTS = asyncio.Semaphore(REMOTE_PARALLEL_FILES)
+_REMOTE_SLOTS = FairSlots(REMOTE_PARALLEL_FILES)  # handed out in turn between notebooks (O1-b, 26/11): one chat's 13 files no longer hold up another's
 _REMOTE_TASKS: set = set()  # asyncio only keeps weak references to running tasks
 
 
@@ -178,7 +179,7 @@ class IngestionPipeline:
         if not settings.REMOTE_GPU_URL:
             return await PDFParserService.extract_pages(job.pdf_path, job.document_id, session, info)
         t0 = time.perf_counter()
-        async with _REMOTE_SLOTS:
+        async with _REMOTE_SLOTS.slot(job.notebook_id):
             info["slot_wait_s"] = round(time.perf_counter() - t0, 2)
             await self._start(job)
             return await PDFParserService.extract_pages(job.pdf_path, job.document_id, session, info)

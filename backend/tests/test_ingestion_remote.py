@@ -1,5 +1,6 @@
 """Bug #7: with a remote GPU a file is indexed as soon as it is parsed, whatever the other queued files are doing."""
 import asyncio
+from app.modules.ingestion.fair_slots import FairSlots
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -55,7 +56,7 @@ def test_a_remote_file_stays_pending_until_it_has_a_slot(monkeypatch):
     events = []
 
     async def scenario():
-        slots = asyncio.Semaphore(0)
+        slots = FairSlots(0)
         monkeypatch.setattr(ingestion, "_REMOTE_SLOTS", slots)
         pipeline, job = _prepared_pipeline(monkeypatch, events)
         task = asyncio.create_task(pipeline._prepare(job, None))
@@ -120,7 +121,7 @@ def test_remote_slot_is_held_for_the_parse_only(monkeypatch):
     monkeypatch.setattr(ingestion.FinancialChunkerService, "chunk_document", staticmethod(lambda *a: ["chunk"]))
 
     async def scenario():
-        monkeypatch.setattr(ingestion, "_REMOTE_SLOTS", asyncio.Semaphore(1))
+        monkeypatch.setattr(ingestion, "_REMOTE_SLOTS", FairSlots(1))
         second_parsing, indexed = asyncio.Event(), []
 
         async def extract(pdf_path, document_id, session, info):

@@ -62,3 +62,11 @@ async def test_the_document_list_gives_a_waiting_file_its_place_in_the_queue(mon
     monkeypatch.setattr(api, "DocumentRepository", Repo)
     out = await api.list_documents("nb", "usr", db)
     assert [(d.document_id, d.queue_ahead) for d in out] == [("mine", 2), ("done", None)]
+
+
+def test_the_place_in_the_queue_follows_the_turns_between_chats():
+    # O1-b: chat A queued three files, then chat B one: B's file is second, not fourth
+    t0 = datetime(2026, 11, 24, 5, 20, 40)
+    jobs = [{"document_id": d, "notebook_id": nb, "queued_at": t0 + timedelta(seconds=s)}
+            for d, nb, s in (("a1", "A", 0), ("a2", "A", 1), ("a3", "A", 2), ("b1", "B", 3))]
+    assert queue_positions(jobs) == {"a1": 0, "b1": 1, "a2": 2, "a3": 3}
