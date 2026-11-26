@@ -57,3 +57,13 @@ async def test_the_planner_choosing_every_company_keeps_answering_each_and_askin
     r = await orch._answer_one(QUESTION["en"], "nb", _scope(), per_source("en"))
     assert any(n.startswith(PER_SOURCE_PREFIX) for n in seen["notes"])
     assert r["understood"].startswith("I understood the question as about:") and "chooser_first" not in r["actions"]
+
+
+# ---------------------------------------------------------------- S5 (UI check 26/11): sources the user ticked or tagged are not "no company named"
+async def test_sources_the_user_ticked_drop_the_answer_each_and_ask_note(monkeypatch):
+    """The chooser sends the ticked reports as @ tags. The writer got both "the user tagged these sources: answer for them" and the input policy's
+    "named no company ... answer each source, then ask which one" listing every selected report, and the answer asked "which source did you mean?"."""
+    orch, seen = writing(monkeypatch, [PlanItem("revenue", ["amd", "nv"])])
+    await orch._answer_one(QUESTION["en"], "nb", _scope(), per_source("en"), mentions=["amd", "nv"])
+    assert not any(n.startswith(PER_SOURCE_PREFIX) for n in seen["notes"])
+    assert any(n.startswith("The user tagged these sources") for n in seen["notes"])

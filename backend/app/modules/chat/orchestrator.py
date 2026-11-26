@@ -187,7 +187,9 @@ class RAGWorkflowOrchestrator:
         what that line says is not asked of the answer again (a part of a message with several questions has none)."""
         targets: TargetDecision = decide_targets(query, [scope_doc(d) for d in scope], mentions, decision.lang == "vi", shown)
         # the later report a year comes from is in the understood line and in the targets' note: the input policy's "... and say so" would make three
-        notes = [n for n in decision.notes if not (shown and targets.from_later and n == PRIOR_YEAR_NOTE)] + targets.notes
+        # sources the user tagged or ticked are their choice: no "named no company ... answer each, then ask which one" beside "answer for them" (S5, 26/11)
+        notes = [n for n in decision.notes if not (shown and targets.from_later and n == PRIOR_YEAR_NOTE)
+                 and not (targets.rule == "mentions" and n.startswith(PER_SOURCE_PREFIX))] + targets.notes
         typed = [readable_label(d) for d in scope if d.metadata.user_override_unverified]
         if typed:
             if decision.lang == "vi":
