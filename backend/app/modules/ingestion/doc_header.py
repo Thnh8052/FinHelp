@@ -72,11 +72,16 @@ def _company(full: str) -> Tuple[Optional[str], Dict[str, int], Dict[str, str]]:
     return printed[next(iter(top))], top, printed
 
 
-def _form(full: str) -> Optional[str]:
+PRESS_PAGES = 3  # a release prints its headline and ticker on its first pages; a statement may say "reports its results in U.S. dollars" deep inside (O2, 26/11)
+
+
+def _form(full: str, head: Optional[str] = None) -> Optional[str]:
+    """`head`: the text of the first PRESS_PAGES pages, where the signs of a press release are looked for (the whole text when not given)."""
     c = {"10-K": len(re.findall(r"this\s+(?:Annual\s+)?Report\s+on\s+Form\s+10-K|this\s+Form\s+10-K|ANNUAL REPORT PURSUANT", full, re.I)),
          "10-Q": len(re.findall(r"this\s+(?:Quarterly\s+)?Report\s+on\s+Form\s+10-Q|this\s+Form\s+10-Q|QUARTERLY REPORT PURSUANT", full, re.I)),
          "8-K": len(re.findall(r"CURRENT REPORT PURSUANT|this\s+(?:Current\s+)?Report\s+on\s+Form\s+8-K|Date of earliest event reported", full, re.I))}
-    press = len(re.findall(r"\((?:NYSE|NASDAQ|Nasdaq|ASX)\s*:\s*[A-Z.]{1,6}\)|today (?:reported|announced)|press release|\breports?\b[^\n]{0,60}\bresults\b", full, re.I))
+    press = len(re.findall(r"\((?:NYSE|NASDAQ|Nasdaq|ASX)\s*:\s*[A-Z.]{1,6}\)|today (?:reported|announced)|press release|\breports?\b[^\n]{0,60}\bresults\b",
+                           full if head is None else head, re.I))
     if c["10-K"] + c["10-Q"] == 0 and not re.search(r"CURRENT REPORT PURSUANT|Date of earliest event", full, re.I):
         return "earnings release" if press else None
     return max(c, key=lambda k: c[k])
@@ -161,9 +166,10 @@ def extract_document_header(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
     """pages: parser output ({"page_number", "text"}). Returns company_name / report_type / fiscal_year (as the company names it) /
     fiscal_quarter, period_end, period_start (10-K, when the prior year-end is printed) and comparable_year (10-K) (None where the
     text does not say), and the display header "Company | form | FY2022 [Q2]"."""
-    full = "\n".join(_clean(page["text"]) for page in sorted(pages, key=lambda p: p["page_number"]))
+    ordered = sorted(pages, key=lambda p: p["page_number"])
+    full = "\n".join(_clean(page["text"]) for page in ordered)
     company, _, _ = _company(full)
-    form = _form(full)
+    form = _form(full, "\n".join(_clean(page["text"]) for page in ordered[:PRESS_PAGES]))
     fy, quarter, end, prev_end = _period(full, form)
     period = f"FY{fy}" + (f" Q{quarter}" if quarter else "") if fy else None
     annual = form == "10-K"

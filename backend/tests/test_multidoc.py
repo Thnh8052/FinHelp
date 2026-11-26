@@ -731,3 +731,21 @@ def test_extract_document_header_leaves_period_end_empty_when_the_date_is_not_pr
     h = extract_document_header([{"page_number": 1, "text": text}])
     assert h["report_type"] == "earnings release" and h["fiscal_year"] == 2022 and h["fiscal_quarter"] == 4
     assert h["period_end"] is None
+
+
+# O2 (26/11): the rule fallback called 12 of 36 non-SEC statements an earnings release because one sentence deep inside read
+# "The Company reports its financial results in U.S. dollars"; a release prints its headline and ticker on its first pages (3 pages: 1 of 36 wrong)
+def _pages(*texts):
+    return [{"page_number": i, "text": t} for i, t in enumerate(texts, 1)]
+
+
+def test_a_statement_mentioning_its_results_deep_inside_is_not_an_earnings_release():
+    pages = _pages("ENABLENCE TECHNOLOGIES INC.\nConsolidated Financial Statements\nFor the years ended June 30, 2026 and 2025",
+                   "Independent auditor's report", "Statement of financial position", "Notes",
+                   "The Company reports its financial results in U.S. dollars.")
+    assert extract_document_header(pages)["report_type"] is None
+
+
+def test_a_release_with_its_headline_on_the_first_pages_is_still_an_earnings_release():
+    pages = _pages("Acme Widgets (NYSE: ACME) today reported fourth quarter results.", "Segment table", "Outlook", "Reconciliation")
+    assert extract_document_header(pages)["report_type"] == "earnings release"
