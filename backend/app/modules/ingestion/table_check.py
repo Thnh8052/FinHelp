@@ -11,12 +11,20 @@ Measured 23/11 (160 report documents + the owner's 10 PDFs): 69 pages flagged, 3
 right on about 55 %. It misses a lot: 7 of 21 misread pages that signal 1 found are kept; lost tables and lost chart numbers are page_quality's checks,
 and rows that start with a number (the Fed Z.1 line numbers) are not judged.
 """
+import html
 import re
 
 import fitz  # PyMuPDF
 
-from app.modules.ingestion.postprocess.constants import PHRASE_GAP, SUPERSCRIPT_GAP, SUPERSCRIPT_RAISE, SUPERSCRIPT_RATIO, VALUE_GAP_TOLERANCE
-from app.modules.ingestion.postprocess.evidence import split_glued_marks
+from app.modules.ingestion.postprocess.constants import (
+    GLUED_MARK_GAP,
+    PHRASE_GAP,
+    SUPERSCRIPT_GAP,
+    SUPERSCRIPT_RAISE,
+    SUPERSCRIPT_RATIO,
+    VALUE_GAP_TOLERANCE,
+)
+from app.modules.ingestion.postprocess.evidence import is_footnote_ref, split_glued_marks
 from app.modules.ingestion.postprocess.tokens import is_marker, is_placeholder
 
 FLAG_MIN_WRONG, FLAG_MIN_SHARE = 2, 0.15
@@ -31,6 +39,9 @@ SYMBOLS = {"%", "(", ")", "-", "—", "–", "−"} | CURRENCY
 YEAR = re.compile(r"(19[5-9]\d|20[0-4]\d)")
 MARK = re.compile(r"\(\d{1,2}\)%?")  # "(1)%" reads like "(1) %" (a printed "(1) %" and an OCR "(1)%" are the same value, TRIED NP-63)
 DASH = str.maketrans({"–": "-", "−": "-"})
+SPACE_GROUP_NUM = re.compile(r"(?<!\d)(\d{1,3}(?:[ \u00a0\u2008\u2009\u202f]\d{3})+(?:\.\d+)?)(?!\d)")
+THIN_SPACES = re.compile(r"[\u00a0\u2008\u2009\u202f]+")
+MD_FOOTNOTE_LINK = re.compile(r"\[(\(\d{1,2}\))\]")
 
 
 def number(token: str):
@@ -79,20 +90,39 @@ def _drop_marks(words):
         h is not w and (number(h[4]) or is_placeholder(h[4])) and w[0] - SUPERSCRIPT_GAP <= h[2] <= w[0] + 1.0 and sits_on(w, h) for h in words))]
 
 
-def _segments(phrases):
+def _strip_trailing_currency(token: str) -> str:
+    """PDF columns with tight '$ -' spacing often glue '$' to the end of the previous value (e.g. '$(4.9)$')."""
+    if len(token) > 1 and token[-1] in CURRENCY and number(token[:-1]):
+        return token[:-1]
+    return token
+
+
+def _norm_space_numbers(text: str) -> str:
+    return SPACE_GROUP_NUM.sub(lambda m: re.sub(r"[ \u00a0\u2008\u2009\u202f]", "", m.group(1)), text)
+
+
+def _segments(phrases, fair_marks: bool = False):
     """phrases -> [(value units, raw number tokens)] per segment; prose (a segment touching a label at a word gap) is left out."""
-    segs, cur, prose, prev = [], [], False, None
+    segs, cur, prose, prev, col_break = [], [], False, None, False
     for tokens, gap in phrases:
-        kind, val = _unit(tokens)
+        clean_tokens = [_strip_trailing_currency(t) for t in tokens]
+        kind, val = _unit(clean_tokens)
         close = gap <= PHRASE_GAP
         if kind == "text":
             if cur:
                 segs.append((cur, prose or (close and prev == "value")))
                 cur = []
-            prev = "text"
+            prev, col_break = "text", False
         elif kind == "value":
             nums, marks = val
-            raw = [t for t in tokens if number(t)]
+            raw = [t for t in clean_tokens if number(t)]
+            if fair_marks:
+                # A negative "(12)" across a column gap, after "$" / standalone symbol column, or alone in a pipe cell is an amount, never a footnote mark.
+                is_md = gap == float("inf")
+                standalone_cell = is_md and len(nums) == 1
+                col_amount = not is_md and (col_break or gap > SUPERSCRIPT_GAP or clean_tokens[0] in CURRENCY)
+                if standalone_cell or col_amount:
+                    marks = False
             if not cur:
                 prose = close and prev == "text"
             if cur and marks:
@@ -100,9 +130,12 @@ def _segments(phrases):
                 cur[-1][2] += raw
             else:
                 cur.append([list(nums), marks, raw])
-            prev = "value"
-        elif not close:
-            prev = None
+            prev, col_break = "value", False
+        else:
+            if gap > SUPERSCRIPT_GAP or any(t in CURRENCY for t in clean_tokens):
+                col_break = True
+            if not close:
+                prev = None
     if cur:
         segs.append((cur, prose))
     out = []
@@ -131,20 +164,99 @@ def _page_lines(words):
     return lines
 
 
-def printed_rows(page: "fitz.Page", labelled: bool = True) -> list:
-    """The table rows of a PDF page: [value units] per row segment. `labelled`: only rows that start with a label (the table check); False also keeps
-    rows that start with a number (the Fed Z.1 line numbers; the re-read reason "defect", page_quality.py)."""
-    rows = []
-    for line in _page_lines(split_glued_marks(page, page.get_text("words"))):
+def _rotated_words(page: "fitz.Page") -> list:
+    """Words in visual reading coordinates, handling rotated landscape pages and glued superscript marks."""
+    raw_words = page.get_text("words")
+    if not page.rotation:
+        return split_glued_marks(page, raw_words)
+    m = page.rotation_matrix
+    cuts = []
+    for block in page.get_text("dict")["blocks"]:
+        for line in block.get("lines", []):
+            for host, mark in zip(line["spans"], line["spans"][1:]):
+                tail = mark["text"].strip()
+                if (host["text"][-1:].isdigit() and tail[:1].isdigit() and is_footnote_ref(tail)
+                        and mark["size"] <= SUPERSCRIPT_RATIO * host["size"]
+                        and host["origin"][1] - mark["origin"][1] >= SUPERSCRIPT_RAISE
+                        and mark["bbox"][0] - host["bbox"][2] < GLUED_MARK_GAP):
+                    hb, mb = fitz.Rect(host["bbox"]) * m, fitz.Rect(mark["bbox"]) * m
+                    cuts.append(((hb.x0, hb.y0, hb.x1, hb.y1), (mb.x0, mb.y0, mb.x1, mb.y1), tail))
+    rw = [(*((fitz.Rect(w[:4]) * m)[:4]), w[4], *w[5:]) for w in raw_words]
+    if not cuts:
+        return rw
+    out = []
+    for word in rw:
+        cut = next((c for c in cuts if word[0] < c[0][2] < word[2] and c[1][2] <= word[2] + 0.5
+                    and word[4].endswith(c[2]) and len(word[4]) > len(c[2])
+                    and c[0][1] < word[3] and c[0][3] > word[1]), None)
+        if cut is None:
+            out.append(word)
+        else:
+            (_, hy0, hx1, hy1), (mx0, my0, mx1, my1), tail = cut
+            out += [(word[0], hy0, hx1, hy1, word[4][:-len(tail)], *word[5:]), (mx0, my0, mx1, my1, tail, *word[5:])]
+    return out
+
+
+def _merge_spaced_thousands(line: list) -> list:
+    """Merge 3-digit grouped thousands (e.g. '1 000') printed left-to-right as separate PDF words within tight spacing."""
+    ordered = sorted(line, key=lambda w: w[0])
+    merged, k = [], 0
+    while k < len(ordered):
+        wk = ordered[k]
+        if re.fullmatch(r"\(?\d{1,3}", wk[4]):
+            acc, x1, j = wk[4], wk[2], k + 1
+            while j < len(ordered) and -0.5 <= (ordered[j][0] - x1) <= VALUE_GAP_TOLERANCE:
+                nxt = ordered[j][4]
+                if re.fullmatch(r"\d{3}\)?", nxt):
+                    acc += nxt
+                    x1 = max(x1, ordered[j][2])
+                    j += 1
+                    if nxt.endswith(")"):
+                        break
+                elif re.fullmatch(r"\d{3}\.\d+\)?", nxt):
+                    acc += nxt
+                    x1 = max(x1, ordered[j][2])
+                    j += 1
+                    break
+                else:
+                    break
+            if j > k + 1:
+                merged.append((wk[0], wk[1], x1, max(x[3] for x in ordered[k:j]), acc, *wk[5:]))
+                k = j
+                continue
+        merged.append(wk)
+        k += 1
+    return merged
+
+
+def _printed_rows_with_marks(page: "fitz.Page", labelled: bool = True, fair_marks: bool = False):
+    words = []
+    for w in _rotated_words(page):
+        t = _norm_space_numbers(w[4])
+        if THIN_SPACES.search(t):
+            t = THIN_SPACES.sub(" ", t).strip()
+        words.append((*w[:4], t, *w[5:]))
+    rows, had_dropped_marks = [], False
+    for line in _page_lines(words):
         line = [(*w[:4], w[4][0].translate(DASH) + w[4][1:] if w[4][1:2].isdigit() else w[4], *w[5:]) for w in line]
-        phrases = phrases_of(_drop_marks(line))
+        merged = _merge_spaced_thousands(line)
+        kept = _drop_marks(merged)
+        if len(kept) < len(merged):
+            had_dropped_marks = True
+        phrases = phrases_of(kept)
         if not phrases or (labelled and _unit(phrases[0][0])[0] != "text"):
             continue
-        for units, raw in _segments(phrases):
+        for units, raw in _segments(phrases, fair_marks=fair_marks):
             units = _undated(units, raw)
             if len(units) >= 2 and not all(YEAR.fullmatch(t.strip("(),.;:$")) or YEAR_TAIL.fullmatch(t) for t in raw):
                 rows.append(units)
-    return rows
+    return rows, had_dropped_marks
+
+
+def printed_rows(page: "fitz.Page", labelled: bool = True) -> list:
+    """The table rows of a PDF page: [value units] per row segment. `labelled`: only rows that start with a label (the table check); False also keeps
+    rows that start with a number (the Fed Z.1 line numbers; the re-read reason "defect", page_quality.py)."""
+    return _printed_rows_with_marks(page, labelled=labelled, fair_marks=False)[0]
 
 
 # Plan B7 (25/11, experiments rule_b7_rows.txt): two general sources of false "wrong rows" seen on the audit pages that no list shows (U1).
@@ -163,17 +275,41 @@ def _undated(units: list, raw: list) -> list:
     return [u for u in units if not set(u) <= dates] if dates else units
 
 
+def _norm_md_cell(cell: str) -> str:
+    cleaned = html.unescape(MD_FOOTNOTE_LINK.sub(r"\1", _norm_space_numbers(cell)))
+    return " ".join(_strip_trailing_currency(t) for t in cleaned.replace("\n", " ").split())
+
+
 def _md_rows(text: str) -> list:
-    return [[c.strip() for c in line.strip().strip("|").split("|")] for line in text.splitlines()
+    return [[_norm_md_cell(c.strip()) for c in line.strip().strip("|").split("|")] for line in text.splitlines()
             if line.startswith("|") and not re.fullmatch(r"[|\-:\s]+", line)]
+
+
+def _held_units(text: str, fair_marks: bool = False, allow_trailing_footnote: bool = False) -> set:
+    held = set()
+    for r in _md_rows(text):
+        for units, _ in _segments([(c.split(), float("inf")) for c in r], fair_marks=fair_marks):
+            if not units:
+                continue
+            held.add(tuple(units))
+            if allow_trailing_footnote and len(units) >= 3 and len(units[-1]) == 1 and re.fullmatch(r"\d{1,3}", units[-1][0]):
+                held.add(tuple(units[:-1]))
+    return held
 
 
 def wrong_rows(page: "fitz.Page", text: str, labelled: bool = True):
     """(printed rows (labelled ones by default), how many of them no Markdown row of `text` holds exactly)."""
     truth = printed_rows(page, labelled)
-    held = {tuple(units) for r in _md_rows(text)
-            for units, _ in _segments([(c.replace("\n", " ").split(), float("inf")) for c in r]) if units}
+    held = _held_units(text, fair_marks=False, allow_trailing_footnote=False)
     return len(truth), sum(1 for t in truth if tuple(t) not in held)
+
+
+def wrong_rows_pair(page: "fitz.Page", old_text: str, new_text: str, labelled: bool = True) -> tuple:
+    """Symmetrical comparison of Docling (`old_text`) vs OCR (`new_text`) against PDF rows without penalizing standalone negative cells or separated footnote columns."""
+    truth, had_dropped_marks = _printed_rows_with_marks(page, labelled=labelled, fair_marks=True)
+    held_old = _held_units(old_text, fair_marks=True, allow_trailing_footnote=had_dropped_marks)
+    held_new = _held_units(new_text, fair_marks=True, allow_trailing_footnote=had_dropped_marks)
+    return sum(1 for t in truth if tuple(t) not in held_old), sum(1 for t in truth if tuple(t) not in held_new)
 
 
 # ---------------------------------------------------------------- signal 2: defects of the Markdown tables (copy of remaining_errors.table_kinds)

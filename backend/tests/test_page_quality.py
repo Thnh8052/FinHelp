@@ -596,3 +596,75 @@ async def test_rescue_reads_the_broad_reasons_too(tmp_path):
 
     out, report = await rescue_pages(pdf, [page(1, SWAPPED)], read)
     assert sent == [[1]] and report["bad"] == {1: "rows"} and out[0]["text"] == RIGHT
+
+
+async def test_defect_repair_accepts_lower_defects_and_blocks_unlabelled_drop(tmp_path):
+    """z1 p86 pattern (defects lowered without adding wrong rows -> accepted) vs BCTN p170 pattern (dropped unlabelled value -> refused)."""
+    doc = fitz.open()
+    p = doc.new_page()
+    for idx in range(4):
+        y = 100 + 14 * idx
+        p.insert_text((72, y), f"{10 + idx}", fontsize=9)
+        p.insert_text((260, y), f"{1000 + idx}", fontsize=9)
+        p.insert_text((360, y), "2000", fontsize=9)  # repeated across rows so dropping one cell does not shrink unique-number set
+    pdf = tmp_path / "unlbl.pdf"
+    doc.save(str(pdf))
+
+    docling_fused = "\n".join(
+        ["| Code | 2025 | 2024 |", "|---|---|---|", "| 10 | 1000 2000 | |"]
+        + [f"| {10 + i} | {1000 + i} | 2000 |" for i in range(1, 4)]
+    )
+    chandra_clean = "\n".join(
+        ["| Code | 2025 | 2024 |", "|---|---|---|"]
+        + [f"| {10 + i} | {1000 + i} | 2000 |" for i in range(4)]
+    )
+    # Looks defect-free (no fused cells) and keeps unique figure count, yet dropped column 2024 on rows 2-3 (increases unlabelled wrong rows!)
+    chandra_dropped = "\n".join(
+        ["| Code | 2025 | 2024 |", "|---|---|---|"]
+        + [f"| {10 + i} | {1000 + i} | 2000 |" for i in range(2)]
+        + [f"| {10 + i} | {1000 + i} | |" for i in range(2, 4)]
+    )
+
+    async def clean_read(path, numbers):
+        return {1: chandra_clean}
+
+    async def drop_read(path, numbers):
+        return {1: chandra_dropped}
+
+    out, report = await rescue_pages(pdf, [page(1, docling_fused)], clean_read)
+    assert out[0]["text"] == chandra_clean and report["replaced"] == [1]
+    out, report = await rescue_pages(pdf, [page(1, docling_fused)], drop_read)
+    assert out[0]["text"] == docling_fused and report["rejected"] == {1: "more_wrong_rows"}
+
+
+async def test_fewer_figures_ignores_non_layer_glitches_and_allows_repeating_header_year(tmp_path):
+    """Boeing p19 / CVS p141 (ignore numbers not printed in PDF layer) and Z.1 (dropped repeating running-header year on line 1 or 2 when defects repaired)."""
+    doc = fitz.open()
+    for n in range(6):
+        p = doc.new_page()
+        p.insert_text((72, 26), f"{n + 100}", fontsize=9)
+        p.insert_text((72, 40), "Report, September 11, 2026", fontsize=9)
+        for idx, (label, a, b) in enumerate(FLAG_ROWS):
+            p.insert_text((72, 100 + 14 * idx), label, fontsize=9)
+            p.insert_text((280, 100 + 14 * idx), a, fontsize=9)
+            p.insert_text((380, 100 + 14 * idx), b, fontsize=9)
+    pdf = tmp_path / "hdr.pdf"
+    doc.save(str(pdf))
+
+    docling_with_extra_glitch = "Report, September 11, 2026\n\n201618\n\n" + ONE_FUSED
+    chandra_fixed_no_header_yr = "\n".join(["| | 2025 | 2024 |", "|---|---|---|"] + [f"| {label} | {a} | {b} |" for label, a, b in FLAG_ROWS])
+    chandra_dropped_real_figure = chandra_fixed_no_header_yr.replace(FLAG_ROWS[0][2], "")
+
+    pages_in = [page(n, RIGHT + "\nReport, September 11, 2026") for n in range(1, 7)]
+    pages_in[0] = page(1, docling_with_extra_glitch)
+
+    async def good_ocr(path, numbers):
+        return {1: chandra_fixed_no_header_yr}
+
+    async def lost_real(path, numbers):
+        return {1: chandra_dropped_real_figure}
+
+    out, report = await rescue_pages(pdf, pages_in, good_ocr)
+    assert report["replaced"] == [1] and out[0]["text"] == chandra_fixed_no_header_yr
+    out, report = await rescue_pages(pdf, pages_in, lost_real)
+    assert out[0]["text"] == docling_with_extra_glitch and report["rejected"] == {1: "fewer_figures"}

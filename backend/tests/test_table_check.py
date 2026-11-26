@@ -126,3 +126,104 @@ def test_a_small_percent_change_reads_the_same_with_or_without_a_space(tmp_path)
         for change in ("(1) %", "(1)%"):
             assert _wrong(pdf, md(change)) == 0, (pdf.name, change)
     assert _wrong(spaced, md("(2)%")) == 1  # a different value is still wrong
+
+
+def test_safe_format_normalization_and_space_thousands(tmp_path):
+    """Rotated pages, spaced thousands, trailing '$', HTML '&gt;', and markdown footnote links [(2)] read identically across parsers."""
+    from app.modules.ingestion.table_check import _norm_space_numbers, wrong_rows_pair
+    assert _norm_space_numbers("1\u202f037.50") == "1037.50"
+    doc = fitz.open()
+    page = doc.new_page()
+    y = 100
+    page.insert_text((72, y), "Adjusted balance", fontsize=9)
+    page.insert_text((260, y), "1", fontsize=9)
+    page.insert_text((267.5, y), "037", fontsize=9)
+    page.insert_text((340, y), "$(4.9)$", fontsize=9)
+    page.insert_text((420, y), ">(100)", fontsize=9)
+    page.insert_text((500, y), "2020 (2)", fontsize=9)
+    pdf = tmp_path / "fmt.pdf"
+    doc.save(str(pdf))
+
+    md_clean = "\n".join([
+        "| Item | A | B | C | Year |",
+        "|---|---|---|---|---|",
+        "| Adjusted balance | 1\u202f037 | $(4.9) | &gt;(100) | 2020 [(2)] |",
+    ])
+    with fitz.open(str(pdf)) as opened:
+        assert wrong_rows(opened[0], md_clean) == (1, 0)
+        assert wrong_rows_pair(opened[0], md_clean, md_clean) == (0, 0)
+
+
+def test_rotated_page_reads_tables_in_visual_coordinates(tmp_path):
+    doc = fitz.open()
+    page = doc.new_page(width=600, height=800)
+    # Draw unrotated coordinates that become horizontal left-to-right after set_rotation(90)
+    page.insert_text((100, 700), "Total equity", fontsize=9, rotate=90)
+    page.insert_text((100, 400), "1,250", fontsize=9, rotate=90)
+    page.insert_text((100, 300), "2,500", fontsize=9, rotate=90)
+    page.set_rotation(90)
+    pdf = tmp_path / "rot.pdf"
+    doc.save(str(pdf))
+    md = "| Item | 2025 | 2024 |\n|---|---|---|\n| Total equity | 1,250 | 2,500 |"
+    with fitz.open(str(pdf)) as opened:
+        assert wrong_rows(opened[0], md) == (1, 0)
+
+
+def test_wrong_rows_pair_does_not_penalize_clean_negatives_or_footnote_columns(tmp_path):
+    """Nike p84 / HSBC p353 pattern: standalone negative '(32)' across columns and separated Footnotes columns when PDF _drop_marks stripped the mark."""
+    from app.modules.ingestion.table_check import wrong_rows_pair
+    doc = fitz.open()
+    page = doc.new_page()
+    # Row 1 (Nike pattern): wide column gap negative numbers '(32)' and '(55)'
+    page.insert_text((72, 100), "Net change", fontsize=9)
+    page.insert_text((260, 100), "95", fontsize=9)
+    page.insert_text((340, 100), "$", fontsize=9)
+    page.insert_text((352, 100), "(55)", fontsize=9)
+    page.insert_text((440, 100), "(32)", fontsize=9)
+    # Row 2 (HSBC pattern): superscript small digit footnote '68' right next to '(48.00)' so _drop_marks strips '68' from PDF
+    page.insert_text((72, 130), "Diversified Fund", fontsize=9)
+    page.insert_text((260, 130), "100.00", fontsize=9)
+    page.insert_text((340, 130), "(48.00)", fontsize=9)
+    page.insert_text((373, 128), "68", fontsize=6)
+    pdf = tmp_path / "pair.pdf"
+    doc.save(str(pdf))
+
+    docling_buggy = "\n".join([
+        "| Item | A | B | C |",
+        "|---|---|---|---|",
+        "| Net change | 95 | $ (55 ) | (32 ) |",
+        "| Diversified Fund | 100.00 | (48.00)⁶⁸ | |",
+    ])
+    chandra_clean = "\n".join([
+        "| Item | A | B | C | Footnotes |",
+        "|---|---|---|---|---|",
+        "| Net change | 95 | $ (55) | (32) | |",
+        "| Diversified Fund | 100.00 | (48.00) | | 68 |",
+    ])
+    with fitz.open(str(pdf)) as opened:
+        # Clean negative '(55)' / '(32)' + separated '68' column must not lose to Docling's spaced '(55 )' / glued '⁶⁸'.
+        assert wrong_rows_pair(opened[0], docling_buggy, chandra_clean) == (0, 0)
+
+
+def test_spaced_thousands_respects_column_order_and_gap(tmp_path):
+    """Out-of-order PDF stream columns (HSBC p73) and narrow >=3.4pt adjacent columns (HSBC p354) must never merge into 6-digit numbers."""
+    doc = fitz.open()
+    page = doc.new_page()
+    # Row 1: right column '339' emitted before left column '290' on same y line
+    page.insert_text((72, 100), "Right before left", fontsize=9)
+    page.insert_text((340, 100), "339", fontsize=9)
+    page.insert_text((260, 100), "290", fontsize=9)
+    # Row 2: tight adjacent columns '151' (x1 ~ 275) and '130' at a 3.4pt gap (> VALUE_GAP_TOLERANCE = 3.0)
+    page.insert_text((72, 120), "Tight column pair", fontsize=9)
+    page.insert_text((260, 120), "151", fontsize=9)
+    page.insert_text((260 + page.get_text("words")[-1][2] - page.get_text("words")[-1][0] + 3.4, 120), "130", fontsize=9)
+    pdf = tmp_path / "cols.pdf"
+    doc.save(str(pdf))
+    md = "\n".join([
+        "| Item | A | B |",
+        "|---|---|---|",
+        "| Right before left | 290 | 339 |",
+        "| Tight column pair | 151 | 130 |",
+    ])
+    with fitz.open(str(pdf)) as opened:
+        assert wrong_rows(opened[0], md) == (2, 0)

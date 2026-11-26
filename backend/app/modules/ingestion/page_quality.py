@@ -28,8 +28,9 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.modules.ingestion.api_readers import read_chandra
 from app.modules.ingestion.page_confidence import reread_reason
+from app.modules.ingestion.postprocess.constants import NAV_HEADER_MIN_PAGES
 from app.modules.ingestion.postprocess.table_rebuild import lost_regions
-from app.modules.ingestion.table_check import FLAG_MIN_SHARE, FLAG_MIN_WRONG, table_defects, wrong_rows
+from app.modules.ingestion.table_check import FLAG_MIN_SHARE, FLAG_MIN_WRONG, table_defects, wrong_rows, wrong_rows_pair
 
 # Broad re-read reasons (owner-approved plan 24/11: "re-read broadly, tell users strictly"; rule_d1_reread_v2.txt, 40 pages, 17 accepted, 10 of 10 checked by
 # hand better, labelled rows right 336 -> 384 of 386 on them). Used only to choose pages to read again, never for the user's list (parse_check.py):
@@ -159,12 +160,67 @@ def start_early_ocr(pdf_path: Path) -> Optional["asyncio.Task[Early]"]:
     return asyncio.ensure_future(_read_early(pdf_path, read))
 
 
-def _fewer_wrong_rows(pdf_path: Path, texts: Dict[int, Tuple[str, str]]) -> set:
-    """The pages whose new text holds more of the PDF's printed table rows than the old one ({page: (old, new)})."""
+def _fewer_wrong_rows(pdf_path: Path, texts: Dict[int, Tuple[str, str]], reasons: Optional[Dict[int, str]] = None) -> set:
+    """The pages whose new text is cleaner than the old one: strictly fewer wrong rows under symmetrical OCR comparison, OR a defect-flagged page whose
+    table defects fell without adding wrong rows (labelled or unlabelled)."""
     if not texts:
         return set()
+    accepted = set()
     with fitz.open(str(pdf_path)) as doc:
-        return {n for n, (old, new) in texts.items() if wrong_rows(doc[n - 1], new)[1] < wrong_rows(doc[n - 1], old)[1]}
+        for n, (old, new) in texts.items():
+            page = doc[n - 1]
+            old_w, new_w = wrong_rows_pair(page, old, new)
+            if new_w < old_w:
+                accepted.add(n)
+            elif reasons and reasons.get(n) in ("defect", "table_check") and new_w <= old_w:
+                if table_defects(old) > 0 and table_defects(new) < table_defects(old):
+                    old_u, new_u = wrong_rows_pair(page, old, new, labelled=False)
+                    if new_u <= old_u:
+                        accepted.add(n)
+    return accepted
+
+
+def _running_header_years(doc: "fitz.Document") -> set:
+    """Four-digit years printed in running headers or footers repeated across NAV_HEADER_MIN_PAGES or more pages of `doc`."""
+    edge_counts: Counter = Counter()
+    for p in doc:
+        lines = [ln.strip() for ln in p.get_text().splitlines() if ln.strip()]
+        if not lines:
+            continue
+        for edge in set(lines[:2] + lines[-2:]):
+            for yr in re.findall(r"\b(?:19|20)\d\d\b", edge):
+                edge_counts[yr] += 1
+    return {yr for yr, cnt in edge_counts.items() if cnt >= NAV_HEADER_MIN_PAGES}
+
+
+def _enough_figures(pdf_path: Path, candidates: Dict[int, Tuple[str, str]], accepted_tables: set) -> set:
+    """Pages whose replacement keeps at least as many figures as Docling. On text-layer pages, compare against numbers actually printed in the PDF layer
+    (filtering carried headers / split glitches from Docling), and allow a dropped repeating running-header year when table defects were repaired."""
+    if not candidates:
+        return set()
+    kept = set()
+    header_years: Optional[set] = None
+    with fitz.open(str(pdf_path)) as doc:
+        for n, (old, new) in candidates.items():
+            layer = doc[n - 1].get_text() if 1 <= n <= len(doc) else ""
+            if len(re.sub(r"\s", "", layer)) < MIN_LAYER_CHARS:
+                if len(_numbers(new)) >= len(_numbers(old)):
+                    kept.add(n)
+                continue
+            layer_nums = _numbers(layer)
+            old_hits = _numbers(old) & layer_nums
+            new_hits = _numbers(new) & layer_nums
+            if len(new_hits) >= len(old_hits):
+                kept.add(n)
+                continue
+            dropped = old_hits - new_hits
+            if (n in accepted_tables and table_defects(old) > 0 and table_defects(new) < table_defects(old)
+                    and dropped and all(re.fullmatch(r"(?:19|20)\d\d", x) for x in dropped)):
+                if header_years is None:
+                    header_years = _running_header_years(doc)
+                if dropped <= header_years:
+                    kept.add(n)
+    return kept
 
 
 def _with_foreign_figures(pdf_path: Path, texts: Dict[int, str]) -> set:
@@ -223,28 +279,36 @@ async def rescue_pages(pdf_path: Path, pages: List[Dict[str, Any]], read: OcrRea
             report["error"] = type(exc).__name__
             logger.warning(f"OCR fallback skipped for {pdf_path.name}: {type(exc).__name__}: {str(exc)[:160]}")
     checked = {n for n, why in bad.items() if why in TABLE_REASONS and (read_pages.get(n) or "").strip()}
-    fewer = await asyncio.to_thread(_fewer_wrong_rows, pdf_path, {n: (p.get("text") or "", read_pages[n]) for p in pages if (n := p["page_number"]) in checked})
+    fewer = await asyncio.to_thread(_fewer_wrong_rows, pdf_path, {n: (p.get("text") or "", read_pages[n]) for p in pages if (n := p["page_number"]) in checked}, bad)
     replies = {n: read_pages[n] for n in bad if (read_pages.get(n) or "").strip()}
     foreign = await asyncio.to_thread(_with_foreign_figures, pdf_path, replies)
     chart = await asyncio.to_thread(_chart_text, pdf_path, replies)
-    out: List[Dict[str, Any]] = []
+    all_pages = sorted(pages + [{"page_number": n, "text": "", "pictures": []} for n in missing], key=lambda p: p["page_number"])
+    orig_by_page = {p["page_number"]: p.get("text") or "" for p in pages}
+    survivors: Dict[int, Tuple[str, str]] = {}
     rejected: Dict[int, str] = {}
-    for p in sorted(pages + [{"page_number": n, "text": "", "pictures": []} for n in missing], key=lambda p: p["page_number"]):
+    for p in all_pages:
         n = p["page_number"]
         text = (read_pages.get(n) or "").strip() if n in bad else ""
         if n in bad and not text:
             rejected[n] = "empty"
         elif n in foreign:  # figures the page does not print: the reader estimated them; the page keeps its text and stays on the user's list
-            text, rejected[n] = "", "foreign_numbers"
+            rejected[n] = "foreign_numbers"
         elif chart.get(n):  # a chart described in words the page does not print: the reader's own caption, refused like estimated figures
-            text, rejected[n] = "", "chart_text"
+            rejected[n] = "chart_text"
         elif n in checked and n not in fewer:  # a misread table is swapped only for one with fewer wrong rows
-            text, rejected[n] = "", "more_wrong_rows"
-        if text and len(_numbers(text)) >= len(_numbers(p.get("text") or "")):  # never swap in a text with fewer figures
-            out.append({**p, "text": text, "ocr": True})  # a scan whose reply describes a chart: nothing to compare with, so taken
+            rejected[n] = "more_wrong_rows"
+        elif text:
+            survivors[n] = (orig_by_page.get(n, ""), text)
+    enough = await asyncio.to_thread(_enough_figures, pdf_path, survivors, fewer)
+    out: List[Dict[str, Any]] = []
+    for p in all_pages:
+        n = p["page_number"]
+        if n in enough:  # a scan whose reply describes a chart: nothing to compare with, so taken
+            out.append({**p, "text": survivors[n][1], "ocr": True})
             report["replaced"].append(n)
         else:
-            if text:
+            if n in survivors:
                 rejected[n] = "fewer_figures"
             if n not in missing:  # a page still missing stays out: parse_check lists it as unread
                 out.append(p)
