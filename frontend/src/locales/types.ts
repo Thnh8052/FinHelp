@@ -649,6 +649,7 @@ export interface TranslationSchema {
       colShare: string;
       topUsers: string;
       topUsersNote: string;
+      noModel: string;
     };
     users: {
       title: string;

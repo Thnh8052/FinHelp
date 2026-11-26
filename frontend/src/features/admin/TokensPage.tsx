@@ -18,7 +18,7 @@ export const TokensPage: React.FC = () => {
   const completion = data.series.reduce((s, d) => s + d.completion_tokens, 0);
   const total = prompt + completion;
   const share = (n: number) => (total ? `${Math.round((n / total) * 100)}%` : "—");
-  const topUsers = data.users.filter((u) => u.total_tokens > 0).slice(0, 8);
+  const topUsers = data.top_users ?? [];
 
   return (
     <>
@@ -45,8 +45,8 @@ export const TokensPage: React.FC = () => {
           {data.by_model.length ? (
             <Table caption={k.byModel} head={[k.colModel, k.colQuestions, k.colTokens, k.colShare]} alignRight={[1, 2, 3]}>
               {data.by_model.map((m) => (
-                <tr key={m.model}>
-                  <td className="px-5 py-3 font-mono text-fg">{m.model}</td>
+                <tr key={m.model ?? "none"}>
+                  <td className={`px-5 py-3 text-fg ${m.model ? "font-mono" : "text-muted"}`}>{m.model ?? k.noModel}</td>
                   <td className="px-5 py-3 text-right font-mono text-fg-2">{fmt.number(m.questions)}</td>
                   <td className="px-5 py-3 text-right font-mono text-fg-2">{fmt.number(m.tokens)}</td>
                   <td className="px-5 py-3 text-right font-mono text-muted">{share(m.tokens)}</td>
@@ -62,14 +62,14 @@ export const TokensPage: React.FC = () => {
           {topUsers.length ? (
             <ol className="divide-y divide-line">
               {topUsers.map((u, i) => {
-                const pct = Math.max(2, Math.round((u.total_tokens / topUsers[0].total_tokens) * 100));
+                const pct = Math.max(2, Math.round((u.tokens / topUsers[0].tokens) * 100));
                 return (
-                  <li key={u.user_id} className="flex items-center gap-4 px-5 py-3">
+                  <li key={u.username ?? "guests"} className="flex items-center gap-4 px-5 py-3">
                     <span className="w-5 font-mono text-xs text-dim">{i + 1}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="truncate text-[13px] font-medium text-fg">@{u.username}</span>
-                        <span className="font-mono text-xs text-fg-2">{fmt.number(u.total_tokens)}</span>
+                        <span className="truncate text-[13px] font-medium text-fg">{u.username ? `@${u.username}` : p.guest}</span>
+                        <span className="font-mono text-xs text-fg-2">{fmt.number(u.tokens)}</span>
                       </div>
                       <div className="mt-1.5 h-1 rounded-full bg-hover" aria-hidden>
                         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: PROMPT }} />

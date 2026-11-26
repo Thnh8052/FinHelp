@@ -84,7 +84,10 @@ export interface AdminOverview {
     documents: { total: number; ready: number; processing: number; failed: number };
   };
   series: DayUsage[];
-  by_model: { model: string; questions: number; tokens: number }[];
+  /** model null: answers that called no model (fixed replies, refusals) */
+  by_model: { model: string | null; questions: number; tokens: number }[];
+  /** tokens used in the window per user; username null = guests */
+  top_users: { username: string | null; tokens: number }[];
   documents: AdminDocument[];
   flagged: AdminAnswer[];
   recent_answers: AdminAnswer[];

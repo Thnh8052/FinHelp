@@ -705,7 +705,8 @@ export const vi: TranslationSchema = {
       colTokens: "Token",
       colShare: "Tỷ trọng",
       topUsers: "Người dùng tiêu thụ nhiều nhất",
-      topUsersNote: "Tính trên toàn bộ thời gian",
+      topUsersNote: "Trong khoảng thời gian đang chọn",
+      noModel: "Không gọi mô hình (câu trả lời cố định)",
     },
     users: {
       title: "Tài khoản người dùng",

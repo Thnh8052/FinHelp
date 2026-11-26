@@ -56,6 +56,24 @@ async def _owner_labels(db: AsyncIOMotorDatabase, notebook_ids: List[str]) -> Di
     }
 
 
+def model_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Questions and tokens per model of the window; model None = answers that called no model (fixed replies, refusals), not an unknown model."""
+    return [{"model": row["_id"], "questions": row["questions"], "tokens": row["tokens"]} for row in rows]
+
+
+def top_users(rows: List[Dict[str, Any]], owners: Dict[str, Dict[str, Any]], limit: int = 8) -> List[Dict[str, Any]]:
+    """The users who used the most tokens in the window, from the tokens per notebook (`rows`) and who owns each notebook (_owner_labels). Guests have
+    no account: they are one row with username None. A notebook no longer stored is left out."""
+    tokens: Dict[Optional[str], int] = {}
+    for row in rows:
+        owner = owners.get(row["_id"])
+        if owner is None or not row["tokens"]:
+            continue
+        name = owner.get("username") if owner.get("owner_type") == "user" else None
+        tokens[name] = tokens.get(name, 0) + row["tokens"]
+    return [{"username": name, "tokens": n} for name, n in sorted(tokens.items(), key=lambda kv: -kv[1])[:limit]]
+
+
 async def _answers(db: AsyncIOMotorDatabase, query: Dict[str, Any], limit: int, newest_by: str = "created_at",
                    extra: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
     """Assistant answers matching `query`, newest first by `newest_by`, each with the question asked just before it and who asked. `extra` adds fields
@@ -125,6 +143,11 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
         {"$group": {"_id": "$model_used", "questions": {"$sum": 1}, "tokens": {"$sum": {"$ifNull": ["$token_usage.total_tokens", 0]}}}},
         {"$sort": {"tokens": -1}},
     ]).to_list(None)
+    per_notebook = await messages.aggregate([
+        {"$match": {"role": "assistant", "created_at": {"$gte": since}, **scope}},
+        {"$group": {"_id": "$notebook_id", "tokens": {"$sum": {"$ifNull": ["$token_usage.total_tokens", 0]}}}},
+    ]).to_list(None)
+    notebook_owners = await _owner_labels(db, [row["_id"] for row in per_notebook])
 
     # Documents: count per status, then the newest with their processing job and owner
     documents = db[collections.DOCUMENTS_COLLECTION]
@@ -165,7 +188,8 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
             },
         },
         "series": series,
-        "by_model": [{"model": row["_id"] or "unknown", "questions": row["questions"], "tokens": row["tokens"]} for row in by_model],
+        "by_model": model_rows(by_model),
+        "top_users": top_users(per_notebook, notebook_owners),  # in the window, like the rest of the tokens page (U1, 26/11)
         "documents": [
             {
                 "document_id": d["document_id"],

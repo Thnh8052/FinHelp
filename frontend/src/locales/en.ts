@@ -705,7 +705,8 @@ export const en: TranslationSchema = {
       colTokens: "Tokens",
       colShare: "Share",
       topUsers: "Top users by tokens",
-      topUsersNote: "All time",
+      topUsersNote: "In the selected window",
+      noModel: "No model call (fixed replies)",
     },
     users: {
       title: "User accounts",
