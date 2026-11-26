@@ -225,6 +225,12 @@ class Settings(BaseSettings):
     # starts until the next day (429 daily_budget_used). Per-account limits alone let many accounts spend without end (red-team 19/11, LLM10). A question
     # measured 19/11 used about 18,000 tokens, so 20,000,000 is about 1,100 questions, a few dollars at most. 0 = no ceiling.
     DAILY_TOKEN_BUDGET: int = 20_000_000
+    # Dollars per million tokens of the answer model, for the admin's cost figures (admin/overview.call_cost): prompt tokens served from the provider's
+    # cache, prompt tokens not cached, output tokens (reasoning included). Defaults = the peak prices every experiment budget used
+    # (experiments/scripts/gold_v2/make_plans_v2.PEAK); set the provider's current list in .env. The admin pages say the figures are estimates.
+    LLM_PRICE_HIT_PER_M: float = 0.006
+    LLM_PRICE_MISS_PER_M: float = 0.30
+    LLM_PRICE_OUTPUT_PER_M: float = 1.20
     # Remote GPU Worker (e.g. Google Colab / Kaggle T4 GPU via Cloudflare Tunnel)
     REMOTE_GPU_URL: Optional[str] = Field(default=None, repr=False)  # the worker has no password: whoever has the address can use it
 

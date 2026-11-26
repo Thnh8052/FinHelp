@@ -17,6 +17,8 @@ export function useFormat() {
   return {
     number: (n: number) => n.toLocaleString(locale),
     compact: (n: number) => new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }).format(n),
+    /** dollars; small amounts keep enough digits to be told apart (a guard call costs a fraction of a cent) */
+    usd: (n: number) => new Intl.NumberFormat(locale, { style: "currency", currency: "USD", maximumFractionDigits: n > 0 && n < 0.1 ? 4 : 2 }).format(n),
     seconds: (ms: number) => (ms / 1000).toLocaleString(locale, { maximumFractionDigits: 1 }),
     dateTime: (value: string | null) =>
       value ? parseUtc(value).toLocaleString(locale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—",

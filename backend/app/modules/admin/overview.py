@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.core.config import settings
 from app.infrastructure.database import collections
 from app.modules.chat.trace_stats import _pct
 
@@ -62,7 +63,7 @@ def model_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [{"model": row["_id"], "questions": row["questions"], "tokens": row["tokens"]} for row in rows]
 
 
-def purpose_rows(traces: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def purpose_rows(traces: List[Dict[str, Any]], prices: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
     """The model calls of the window per purpose (guard, plan, answer...: llm_client.chat_completion's `purpose`), most tokens first: calls, calls that did
     not end ok, seconds p50 / p90, prompt / completion tokens and the share of all tokens. Traces without llm_calls (before 20/11/2026) add nothing."""
     by: Dict[str, List[Dict[str, Any]]] = {}
@@ -76,11 +77,54 @@ def purpose_rows(traces: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         completion = sum(r.get("completion_tokens") or 0 for r in records)
         rows.append({"purpose": purpose, "calls": len(records), "failed": sum(r.get("status") != "ok" for r in records),
                      "seconds_p50": _pct(seconds, 50), "seconds_p90": _pct(seconds, 90),
-                     "prompt_tokens": prompt, "completion_tokens": completion, "tokens": prompt + completion})
+                     "prompt_tokens": prompt, "completion_tokens": completion, "tokens": prompt + completion,
+                     **({"cost_usd": round(sum(call_cost(r, prices) for r in records), 6)} if prices else {})})
     total = sum(r["tokens"] for r in rows)
     for r in rows:
         r["share"] = round(r["tokens"] / total, 3) if total else 0.0
     return sorted(rows, key=lambda r: -r["tokens"])
+
+
+def call_cost(record: Dict[str, Any], prices: Dict[str, float]) -> float:
+    """Dollars of one model call: cache hits, cache misses and output tokens at their own prices (dollars per million tokens; reasoning tokens are part
+    of the output). A record without the cache split counts its whole prompt as misses."""
+    hit, miss = record.get("prompt_cache_hit_tokens") or 0, record.get("prompt_cache_miss_tokens") or 0
+    if hit + miss == 0:
+        miss = record.get("prompt_tokens") or 0
+    return round((hit * prices["hit"] + miss * prices["miss"] + (record.get("completion_tokens") or 0) * prices["out"]) / 1e6, 6)
+
+
+def answer_cost(message: Dict[str, Any], prices: Dict[str, float]) -> tuple:
+    """(dollars, estimated) of one stored answer: the sum of its model calls, or for an answer stored before 20/11/2026 (no llm_calls) its token_usage with
+    the whole prompt at the cache-miss price (estimated: True)."""
+    calls = ((message.get("trace_info") or {}).get("llm_calls")) or []
+    if calls:
+        return round(sum(call_cost(c, prices) for c in calls), 6), False
+    usage = message.get("token_usage") or {}
+    if not (usage.get("prompt_tokens") or usage.get("completion_tokens")):
+        return 0.0, False
+    return call_cost(usage, prices), True
+
+
+def cost_rows(answers: List[Dict[str, Any]], owners: Dict[str, Dict[str, Any]], prices: Dict[str, float]) -> Dict[str, Any]:
+    """Dollars of the window: in all, per day (UTC), per model (None = no model call) and per user (None = guests), and the share of the answers with a
+    cost that were estimated from their tokens."""
+    total, per_day, by_model, by_user = 0.0, {}, {}, {}
+    paid = estimated = 0
+    for a in answers:
+        usd, guess = answer_cost(a, prices)
+        total += usd
+        paid += usd > 0
+        estimated += guess
+        day = a["created_at"].strftime("%Y-%m-%d")
+        per_day[day] = per_day.get(day, 0.0) + usd
+        by_model[a.get("model_used")] = by_model.get(a.get("model_used"), 0.0) + usd
+        owner = owners.get(a.get("notebook_id")) or {}
+        user = owner.get("username") if owner.get("owner_type") == "user" else None
+        by_user[user] = by_user.get(user, 0.0) + usd
+    rnd = lambda d: {k: round(v, 6) for k, v in d.items()}  # noqa: E731
+    return {"total_usd": round(total, 6), "estimated_share": round(estimated / paid, 3) if paid else 0.0,
+            "per_day": rnd(per_day), "by_model": rnd(by_model), "by_user": rnd(by_user)}
 
 
 def job_times(timings: Dict[str, Any]) -> Dict[str, Optional[float]]:
@@ -188,7 +232,14 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
         {"$group": {"_id": "$notebook_id", "tokens": {"$sum": {"$ifNull": ["$token_usage.total_tokens", 0]}}}},
     ]).to_list(None)
     notebook_owners = await _owner_labels(db, [row["_id"] for row in per_notebook])
-    window_answers = await messages.find({"role": "assistant", "created_at": {"$gte": since}, **scope}, {"trace_info.llm_calls": 1}).to_list(None)
+    window_answers = await messages.find({"role": "assistant", "created_at": {"$gte": since}, **scope},
+                                         {"trace_info.llm_calls": 1, "token_usage": 1, "created_at": 1, "notebook_id": 1, "model_used": 1}).to_list(None)
+    prices = {"hit": settings.LLM_PRICE_HIT_PER_M, "miss": settings.LLM_PRICE_MISS_PER_M, "out": settings.LLM_PRICE_OUTPUT_PER_M}
+    cost = cost_rows(window_answers, notebook_owners, prices)  # dollars at the configured prices (plan 26/11 3.1)
+    for day in series:
+        day["cost_usd"] = cost["per_day"].get(day["date"], 0.0)
+    models = [{**row, "cost_usd": cost["by_model"].get(row["model"], 0.0)} for row in model_rows(by_model)]
+    users_top = [{**row, "cost_usd": cost["by_user"].get(row["username"], 0.0)} for row in top_users(per_notebook, notebook_owners)]
 
     # Documents: count per status, then the newest with their processing job and owner
     documents = db[collections.DOCUMENTS_COLLECTION]
@@ -229,10 +280,11 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
             },
         },
         "series": series,
-        "by_model": model_rows(by_model),
-        "top_users": top_users(per_notebook, notebook_owners),
+        "by_model": models,
+        "top_users": users_top,  # in the window, like the rest of the tokens page (U1, 26/11)
+        "cost": {"total_usd": cost["total_usd"], "estimated_share": cost["estimated_share"], "prices": prices},
         "upload_times": upload_time_summary([job_times(j.get("timings") or {}) for j in jobs]),  # the listed uploads (O1, plan 3.3)
-        "by_purpose": purpose_rows([a.get("trace_info") or {} for a in window_answers]),  # tokens and seconds per kind of model call (plan 26/11 3.2)  # in the window, like the rest of the tokens page (U1, 26/11)
+        "by_purpose": purpose_rows([a.get("trace_info") or {} for a in window_answers], prices),  # tokens, seconds, dollars per kind of model call (plan 3.2)
         "documents": [
             {
                 "document_id": d["document_id"],

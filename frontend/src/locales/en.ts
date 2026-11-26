@@ -716,6 +716,10 @@ export const en: TranslationSchema = {
       colCalls: "Calls",
       colSeconds: "Seconds p50 / p90",
       failed: "{n} failed",
+      cost: "Estimated cost",
+      costSub: "At the configured prices; {p}% from token totals (answers before 20/11)",
+      priceNote: "Dollars per million tokens: cached input {hit}, other input {miss}, output {out} (set in the server settings)",
+      colCost: "≈ USD",
     },
     users: {
       title: "User accounts",

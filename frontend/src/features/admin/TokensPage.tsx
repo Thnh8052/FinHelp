@@ -22,7 +22,11 @@ export const TokensPage: React.FC = () => {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {data.cost && (
+          <KpiCard label={k.cost} value={fmt.usd(data.cost.total_usd)} icon={Coins}
+                   sub={fill(k.costSub, { p: Math.round(data.cost.estimated_share * 100) })} />
+        )}
         <KpiCard label={k.total} value={fmt.compact(total)} icon={Coins} sub={fill(p.kpi.inDays, { n: data.window_days })} />
         <KpiCard label={k.prompt} value={fmt.compact(prompt)} icon={Coins} sub={fill(k.share, { p: share(prompt) })} />
         <KpiCard label={k.completion} value={fmt.compact(completion)} icon={Coins} sub={fill(k.share, { p: share(completion) })} />
@@ -35,7 +39,7 @@ export const TokensPage: React.FC = () => {
       </div>
 
       <Card>
-        <CardHeader title={k.chartTitle} subtitle={k.costNote} icon={Activity} />
+        <CardHeader title={k.chartTitle} subtitle={data.cost ? fill(k.priceNote, { hit: data.cost.prices.hit, miss: data.cost.prices.miss, out: data.cost.prices.out }) : k.costNote} icon={Activity} />
         <UsageCharts series={data.series} tokensOnly />
       </Card>
 
@@ -43,13 +47,14 @@ export const TokensPage: React.FC = () => {
         <Card className="min-w-0">
           <CardHeader title={k.byModel} icon={Cpu} />
           {data.by_model.length ? (
-            <Table caption={k.byModel} head={[k.colModel, k.colQuestions, k.colTokens, k.colShare]} alignRight={[1, 2, 3]}>
+            <Table caption={k.byModel} head={[k.colModel, k.colQuestions, k.colTokens, k.colShare, k.colCost]} alignRight={[1, 2, 3, 4]}>
               {data.by_model.map((m) => (
                 <tr key={m.model ?? "none"}>
                   <td className={`px-5 py-3 text-fg ${m.model ? "font-mono" : "text-muted"}`}>{m.model ?? k.noModel}</td>
                   <td className="px-5 py-3 text-right font-mono text-fg-2">{fmt.number(m.questions)}</td>
                   <td className="px-5 py-3 text-right font-mono text-fg-2">{fmt.number(m.tokens)}</td>
                   <td className="px-5 py-3 text-right font-mono text-muted">{share(m.tokens)}</td>
+                  <td className="px-5 py-3 text-right font-mono text-fg-2">{m.cost_usd != null ? fmt.usd(m.cost_usd) : "—"}</td>
                 </tr>
               ))}
             </Table>
@@ -69,7 +74,10 @@ export const TokensPage: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-3">
                         <span className="truncate text-[13px] font-medium text-fg">{u.username ? `@${u.username}` : p.guest}</span>
-                        <span className="font-mono text-xs text-fg-2">{fmt.number(u.tokens)}</span>
+                        <span className="font-mono text-xs text-fg-2">
+                          {fmt.number(u.tokens)}
+                          {u.cost_usd != null && <span className="ml-2 text-muted">{fmt.usd(u.cost_usd)}</span>}
+                        </span>
                       </div>
                       <div className="mt-1.5 h-1 rounded-full bg-hover" aria-hidden>
                         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: PROMPT }} />
@@ -88,7 +96,7 @@ export const TokensPage: React.FC = () => {
       <Card className="min-w-0">
         <CardHeader title={k.byPurpose} subtitle={k.byPurposeNote} icon={Activity} />
         {data.by_purpose?.length ? (
-          <Table caption={k.byPurpose} head={[k.colPurpose, k.colCalls, k.colSeconds, k.colTokens, k.colShare]} alignRight={[1, 2, 3, 4]}>
+          <Table caption={k.byPurpose} head={[k.colPurpose, k.colCalls, k.colSeconds, k.colTokens, k.colShare, k.colCost]} alignRight={[1, 2, 3, 4, 5]}>
             {data.by_purpose.map((r) => (
               <tr key={r.purpose}>
                 <td className="px-5 py-3 text-fg">{p.steps.purposes[r.purpose] ?? r.purpose}</td>
@@ -99,6 +107,7 @@ export const TokensPage: React.FC = () => {
                 <td className="px-5 py-3 text-right font-mono text-fg-2">{`${r.seconds_p50} / ${r.seconds_p90}`}</td>
                 <td className="px-5 py-3 text-right font-mono text-fg-2">{fmt.number(r.tokens)}</td>
                 <td className="px-5 py-3 text-right font-mono text-muted">{`${Math.round(r.share * 100)}%`}</td>
+                <td className="px-5 py-3 text-right font-mono text-fg-2">{r.cost_usd != null ? fmt.usd(r.cost_usd) : "—"}</td>
               </tr>
             ))}
           </Table>

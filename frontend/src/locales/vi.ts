@@ -716,6 +716,10 @@ export const vi: TranslationSchema = {
       colCalls: "Số lần",
       colSeconds: "Giây p50 / p90",
       failed: "{n} lỗi",
+      cost: "Chi phí ước tính",
+      costSub: "Theo bảng giá cấu hình; {p}% tính từ tổng token (câu trả lời trước 20/11)",
+      priceNote: "Đô la cho 1 triệu token: đầu vào trúng cache {hit}, đầu vào khác {miss}, đầu ra {out} (đặt trong cấu hình máy chủ)",
+      colCost: "≈ USD",
     },
     users: {
       title: "Tài khoản người dùng",

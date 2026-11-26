@@ -88,15 +88,17 @@ export interface AdminOverview {
   };
   series: DayUsage[];
   /** model null: answers that called no model (fixed replies, refusals) */
-  by_model: { model: string | null; questions: number; tokens: number }[];
+  by_model: { model: string | null; questions: number; tokens: number; cost_usd?: number }[];
   /** tokens used in the window per user; username null = guests */
-  top_users: { username: string | null; tokens: number }[];
+  top_users: { username: string | null; tokens: number; cost_usd?: number }[];
+  /** dollars of the window at the configured prices (dollars per million tokens); estimated_share = answers costed from their tokens only */
+  cost?: { total_usd: number; estimated_share: number; prices: { hit: number; miss: number; out: number } };
   /** model calls of the window per purpose (guard, plan, answer...), most tokens first; only answers stored since 20/11/2026 have them */
   /** median / p90 seconds of the wait and of the work of the listed uploads (O1, 26/11/2026) */
   upload_times?: { files: number; wait_p50: number | null; wait_p90: number | null; work_p50: number | null; work_p90: number | null };
   by_purpose?: {
     purpose: string; calls: number; failed: number; seconds_p50: number; seconds_p90: number;
-    prompt_tokens: number; completion_tokens: number; tokens: number; share: number;
+    prompt_tokens: number; completion_tokens: number; tokens: number; share: number; cost_usd?: number;
   }[];
   documents: AdminDocument[];
   flagged: AdminAnswer[];

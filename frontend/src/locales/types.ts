@@ -659,6 +659,10 @@ export interface TranslationSchema {
       colCalls: string;
       colSeconds: string;
       failed: string;
+      cost: string;
+      costSub: string;
+      priceNote: string;
+      colCost: string;
     };
     users: {
       title: string;
