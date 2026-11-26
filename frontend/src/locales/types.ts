@@ -254,6 +254,7 @@ export interface TranslationSchema {
     excludeFromAnalysis: string;
     includeInAnalysis: string;
     queued: string;
+    queuedAhead: string;
     processingDots: string;
     pagesCount: string;
     tablesWarning: string;
@@ -598,6 +599,8 @@ export interface TranslationSchema {
       readAgain: string;
       readRefused: string;
       seconds: string;
+      waitWork: string;
+      timesNote: string;
       empty: string;
       noMatch: string;
       status: {

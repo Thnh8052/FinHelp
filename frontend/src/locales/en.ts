@@ -249,6 +249,7 @@ export const en: TranslationSchema = {
     excludeFromAnalysis: "Exclude from analysis",
     includeInAnalysis: "Include in analysis",
     queued: "Queued...",
+    queuedAhead: "Waiting, {n} files ahead",
     processingDots: "Processing...",
     pagesCount: "{n} pages",
     tablesWarning: "Some tables in this document may not have been read accurately. Delete and upload it again in a few minutes.",
@@ -655,6 +656,8 @@ export const en: TranslationSchema = {
       readAgain: "read again {done}/{sent} p.",
       readRefused: "(refused: {why})",
       seconds: "{s} s",
+      waitWork: "waited {wait} s · {work} s",
+      timesNote: "wait median {wait} s (p90 {waitP90} s), processing median {work} s (p90 {workP90} s)",
       empty: "No filings uploaded yet.",
       noMatch: "No filings match the filter.",
       status: {

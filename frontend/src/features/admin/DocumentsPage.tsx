@@ -71,7 +71,11 @@ export const DocumentsTable: React.FC<{ documents: AdminDocument[]; emptyText: s
               )}
             </td>
             <td className="whitespace-nowrap px-5 py-3 text-right font-mono text-fg-2">
-              {doc.duration_s != null ? fill(d.seconds, { s: fmt.number(Math.round(doc.duration_s)) }) : "—"}
+              {doc.work_s != null
+                ? doc.wait_s && doc.wait_s >= 1
+                  ? fill(d.waitWork, { wait: fmt.number(Math.round(doc.wait_s)), work: fmt.number(Math.round(doc.work_s)) })
+                  : fill(d.seconds, { s: fmt.number(Math.round(doc.work_s)) })
+                : doc.duration_s != null ? fill(d.seconds, { s: fmt.number(Math.round(doc.duration_s)) }) : "—"}
             </td>
             <td className="whitespace-nowrap px-5 py-3 text-muted">{fmt.dateTime(doc.created_at)}</td>
           </tr>
@@ -107,7 +111,13 @@ export const DocumentsPage: React.FC = () => {
     <Card>
       <CardHeader
         title={d.title}
-        subtitle={fill(d.pageNote, { shown: docs.length, total: data.totals.documents.total })}
+        subtitle={
+          fill(d.pageNote, { shown: docs.length, total: data.totals.documents.total }) +
+          (data.upload_times?.files
+            ? " · " + fill(d.timesNote, { wait: Math.round(data.upload_times.wait_p50 ?? 0), waitP90: Math.round(data.upload_times.wait_p90 ?? 0),
+                                          work: Math.round(data.upload_times.work_p50 ?? 0), workP90: Math.round(data.upload_times.work_p90 ?? 0) })
+            : "")
+        }
         icon={FileText}
       />
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">

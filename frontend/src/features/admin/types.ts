@@ -42,6 +42,9 @@ export interface AdminDocument extends Owner {
   progress_percent: number | null;
   chunks: number | null;
   duration_s: number | null;
+  /** waiting for the worker and a GPU parse slot, apart from the work (O1, 26/11/2026) */
+  wait_s?: number | null;
+  work_s?: number | null;
   created_at: string;
 }
 
@@ -89,6 +92,8 @@ export interface AdminOverview {
   /** tokens used in the window per user; username null = guests */
   top_users: { username: string | null; tokens: number }[];
   /** model calls of the window per purpose (guard, plan, answer...), most tokens first; only answers stored since 20/11/2026 have them */
+  /** median / p90 seconds of the wait and of the work of the listed uploads (O1, 26/11/2026) */
+  upload_times?: { files: number; wait_p50: number | null; wait_p90: number | null; work_p50: number | null; work_p90: number | null };
   by_purpose?: {
     purpose: string; calls: number; failed: number; seconds_p50: number; seconds_p90: number;
     prompt_tokens: number; completion_tokens: number; tokens: number; share: number;

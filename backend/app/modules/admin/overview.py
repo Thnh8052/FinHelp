@@ -83,6 +83,24 @@ def purpose_rows(traces: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sorted(rows, key=lambda r: -r["tokens"])
 
 
+def job_times(timings: Dict[str, Any]) -> Dict[str, Optional[float]]:
+    """Waiting (for the worker, then for one of the GPU parse slots) apart from the work of one upload. `total` counts both: a 2-page file that waited
+    1,820 s behind 12 others showed "1,862 s" (O1, 26/11). None for a job not finished."""
+    if timings.get("total") is None:
+        return {"wait_s": None, "work_s": None}
+    wait = round((timings.get("queue_wait") or 0.0) + (timings.get("docling_slot_wait_s") or 0.0), 2)
+    return {"wait_s": wait, "work_s": round(max(timings["total"] - wait, 0.0), 2)}
+
+
+def upload_time_summary(times: List[Dict[str, Optional[float]]]) -> Dict[str, Any]:
+    """Median and p90 of the wait and of the work over the finished uploads listed (job_times)."""
+    done = [t for t in times if t["wait_s"] is not None]
+    if not done:
+        return {"files": 0, "wait_p50": None, "wait_p90": None, "work_p50": None, "work_p90": None}
+    waits, works = [t["wait_s"] for t in done], [t["work_s"] for t in done]
+    return {"files": len(done), "wait_p50": _pct(waits, 50), "wait_p90": _pct(waits, 90), "work_p50": _pct(works, 50), "work_p90": _pct(works, 90)}
+
+
 def top_users(rows: List[Dict[str, Any]], owners: Dict[str, Dict[str, Any]], limit: int = 8) -> List[Dict[str, Any]]:
     """The users who used the most tokens in the window, from the tokens per notebook (`rows`) and who owns each notebook (_owner_labels). Guests have
     no account: they are one row with username None. A notebook no longer stored is left out."""
@@ -213,6 +231,7 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
         "series": series,
         "by_model": model_rows(by_model),
         "top_users": top_users(per_notebook, notebook_owners),
+        "upload_times": upload_time_summary([job_times(j.get("timings") or {}) for j in jobs]),  # the listed uploads (O1, plan 3.3)
         "by_purpose": purpose_rows([a.get("trace_info") or {} for a in window_answers]),  # tokens and seconds per kind of model call (plan 26/11 3.2)  # in the window, like the rest of the tokens page (U1, 26/11)
         "documents": [
             {
@@ -232,6 +251,7 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
                 "progress_percent": job_of.get(d["document_id"], {}).get("progress_percent"),
                 "chunks": job_of.get(d["document_id"], {}).get("extracted_chunks_count"),
                 "duration_s": (job_of.get(d["document_id"], {}).get("timings") or {}).get("total"),
+                **job_times(job_of.get(d["document_id"], {}).get("timings") or {}),  # wait_s / work_s: the wait for a parse slot is not work (O1)
                 # how the reading went (plan 24/11, channel D): pages read again, refused and why
                 "read_report": {k: v for k, v in (job_of.get(d["document_id"], {}).get("timings") or {}).items()
                                 if k in ("ocr_bad_pages", "ocr_replaced_pages", "ocr_rejected")},

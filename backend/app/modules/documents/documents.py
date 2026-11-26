@@ -30,6 +30,7 @@ from app.shared.rate_limit import spend_guest_allowance
 from app.core.config import settings
 from app.core.error_codes import Code, api_error
 from app.core.logging import logger
+from app.infrastructure.database import collections
 from app.infrastructure.database.mongodb import get_database
 from app.infrastructure.database.qdrant import get_qdrant_client
 from app.modules.ingestion.chunk_repo import ChunkRepository
@@ -66,14 +67,21 @@ class DocumentOut(BaseModel):
     pages_to_check: List[int] = []  # a table on these pages may be misread (parse_issues "tables")
     pages_unread: List[int] = []  # pages with no text: scanned and not read, or not returned by the parse (parse_issues "unread")
     pages_pictures_unread: List[int] = []  # a picture chosen for reading could not be read (parse_issues "figures", owner 24/11)
+    queue_ahead: Optional[int] = None  # a file still waiting: how many files (of every user) wait before it (O1, 26/11)
     created_at: Any
 
     @classmethod
-    def of(cls, doc: DocumentRecord) -> "DocumentOut":
+    def of(cls, doc: DocumentRecord, queue_ahead: Optional[int] = None) -> "DocumentOut":
         fields = doc.model_dump(exclude={"metadata", "parse_issues"})
         return cls(**fields, metadata=doc.metadata.model_dump(include=LISTED_METADATA), tables_may_be_inaccurate=doc.parsing_engine == "pymupdf_fallback",
                    pages_to_check=doc.parse_issues.get("tables", []), pages_unread=doc.parse_issues.get("unread", []),
-                   pages_pictures_unread=doc.parse_issues.get("figures", []))
+                   pages_pictures_unread=doc.parse_issues.get("figures", []), queue_ahead=queue_ahead)
+
+
+def queue_positions(waiting_jobs: List[Dict[str, Any]]) -> Dict[str, int]:
+    """document_id -> how many waiting jobs were queued before it (the GPU parse slots are shared by every user, first come first served)."""
+    ordered = sorted(waiting_jobs, key=lambda j: j["queued_at"])
+    return {j["document_id"]: n for n, j in enumerate(ordered)}
 
 
 class JobOut(BaseModel):
@@ -104,7 +112,12 @@ async def list_documents(
 ):
     """Lấy danh sách các tài liệu thuộc về Notebook chỉ định."""
     await require_notebook(db, notebook_id, user_id)
-    return [DocumentOut.of(d) for d in await DocumentRepository(db).get_by_notebook(notebook_id)]
+    docs = await DocumentRepository(db).get_by_notebook(notebook_id)
+    ahead: Dict[str, int] = {}
+    if any(d.status == "pending" for d in docs):  # only the order is read: other users' files are counted, never named
+        waiting = await db[collections.INGESTION_JOBS_COLLECTION].find({"status": "pending"}, {"document_id": 1, "queued_at": 1, "_id": 0}).to_list(None)
+        ahead = queue_positions(waiting)
+    return [DocumentOut.of(d, ahead.get(d.document_id) if d.status == "pending" else None) for d in docs]
 
 
 def _compute_sha256(file_path: Path) -> str:

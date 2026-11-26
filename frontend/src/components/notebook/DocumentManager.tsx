@@ -199,7 +199,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                       {/* A ready report shows what the catalog says it is (10-K, earnings release...); not yet catalogued: no label */}
                       {(() => {
                         const tag = doc.status === "pending"
-                          ? t.sourcesDrawer.queued
+                          ? doc.queue_ahead ? t.sourcesDrawer.queuedAhead.replace("{n}", String(doc.queue_ahead)) : t.sourcesDrawer.queued
                           : isProcessing
                           ? t.sourcesDrawer.processingDots
                           : isFailed

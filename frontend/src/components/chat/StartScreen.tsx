@@ -58,7 +58,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   ];
 
   const statusLabel = (d: DocumentRecord) =>
-    d.status === "pending" ? t.sourcesDrawer.queued
+    d.status === "pending" ? (d.queue_ahead ? t.sourcesDrawer.queuedAhead.replace("{n}", String(d.queue_ahead)) : t.sourcesDrawer.queued)
       : isDocProcessing(d) ? t.sourcesDrawer.processingDots
       : isDocFailed(d) ? t.sourcesDrawer.failedBadge
       : t.sourcesDrawer.statusReady;

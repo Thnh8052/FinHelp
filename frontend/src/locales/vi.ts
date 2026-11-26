@@ -249,6 +249,7 @@ export const vi: TranslationSchema = {
     excludeFromAnalysis: "Bỏ khỏi phân tích",
     includeInAnalysis: "Đưa vào phân tích",
     queued: "Đang xếp hàng...",
+    queuedAhead: "Đang chờ, còn {n} tài liệu trước",
     processingDots: "Đang xử lý...",
     pagesCount: "{n} trang",
     tablesWarning: "Một số bảng trong tài liệu này có thể chưa được đọc chính xác. Nên xóa và tải lên lại sau ít phút.",
@@ -655,6 +656,8 @@ export const vi: TranslationSchema = {
       readAgain: "đọc lại {done}/{sent} tr.",
       readRefused: "(từ chối: {why})",
       seconds: "{s} giây",
+      waitWork: "chờ {wait} giây · {work} giây",
+      timesNote: "chờ trung vị {wait} giây (p90 {waitP90}), xử lý trung vị {work} giây (p90 {workP90})",
       empty: "Chưa có báo cáo nào được tải lên.",
       noMatch: "Không có báo cáo khớp bộ lọc.",
       status: {

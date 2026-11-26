@@ -38,6 +38,8 @@ export interface DocumentRecord {
   pages_unread?: number[];
   /** Các trang có hình hoặc biểu đồ chưa đọc được. */
   pages_pictures_unread?: number[];
+  /** Still waiting: how many files (of every user) wait before it (O1, 26/11/2026). */
+  queue_ahead?: number | null;
   created_at: string;
 }
 
