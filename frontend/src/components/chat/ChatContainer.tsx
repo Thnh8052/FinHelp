@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { AskMode, ChatMessage, ChatStage, CitationItem, MentionOption } from "../../types/chat";
 import { SourceCard } from "./SourceCard";
-import { AnswerActions } from "./AnswerActions";
+import { AnswerActions, SourceChooser } from "./AnswerActions";
 import { displayNumbers, renumber } from "../../utils/citationNumbers";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { barIndex, STAGES, waitingText } from "./waiting";
@@ -439,6 +439,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     return <div className={`chat-click-mark ${isUser ? "on-question" : "on-answer"}`}>↻ {label}</div>;
                   })()}
                   {!isUser && msg.understood && <div className="chat-understood">{msg.understood}</div>}
+                  {!isUser && msg.actions?.chooser_first && !!msg.actions.chooser?.length && (msg.query || messages[index - 1]?.role === "user") && (
+                    <SourceChooser
+                      chooser={msg.actions.chooser}
+                      disabled={isLoading}
+                      startOpen
+                      onAsk={(sources) => onSendMessage(msg.query || messages[index - 1].content, sources, msg.message_id)}
+                    />
+                  )}
                   {isUser ? (
                     <div className="chat-message-text">{msg.content}</div>
                   ) : (

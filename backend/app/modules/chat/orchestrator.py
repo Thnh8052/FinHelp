@@ -19,8 +19,8 @@ from app.modules.documents.document_repo import DocumentRepository
 from app.modules.documents.document import DocumentRecord
 from app.modules.documents.catalog_edit import needs_confirmation
 from app.modules.generation.llm_client import REQUEST_CALLS, REQUEST_USAGE, LLMTruncatedError, LLMUnavailableError
-from app.modules.query_router.input_policy import (COMPARE_CUE, MSG, PRIOR_YEAR_NOTE, TERMINAL, Decision, SourceInfo, decide, detect_language, instruction_like,
-                                                   mentioned_sources, rewrite_followup)
+from app.modules.query_router.input_policy import (COMPARE_CUE, MSG, PER_SOURCE_PREFIX, PRIOR_YEAR_NOTE, TERMINAL, Decision, SourceInfo, decide, detect_language,
+                                                   instruction_like, mentioned_sources, rewrite_followup)
 from app.modules.query_router.focus import METRICS, Focus, build_focus, fill_from_focus, focus_view
 from app.modules.query_router import guard
 from app.modules.query_router.bridge import writer_note
@@ -28,7 +28,7 @@ from app.modules.query_router.catalog_route import company_key
 from app.modules.generation.conflicts import ANNUAL_FORMS, Report, conflict_notes
 from app.modules.query_router.planner import PlanItem, unlisted_companies
 from app.modules.query_router.catalog_route import company_key
-from app.modules.query_router.target_scope import TargetDecision, decide_targets, merge_understood, understood_line
+from app.modules.query_router.target_scope import TargetDecision, decide_targets, merge_understood, no_company_line, understood_line
 from app.modules.generation.citation_generator import CitationGenerator
 from app.modules.generation.answer_check import policy, review
 from app.modules.generation.generator import STRUCTURED_PROMPTS, generate_answer, split_answer
@@ -262,6 +262,12 @@ class RAGWorkflowOrchestrator:
         picture_flagged = [n for n, c in enumerate(retrieved, 1) if "picture_unread" in (c.get("flags") or [])]
         if picture_flagged:
             notes.append(picture_note(picture_flagged))
+        part = planner_chose_part(scope, found, targets)
+        if part and decision.action == "answer_per_source_and_ask":  # B2/S4: the line above the answer says which reports, the chooser offers the others
+            notes = [n for n in notes if not n.startswith(PER_SOURCE_PREFIX)] + [
+                f"The user named no company; the search chose {'; '.join(names.get(d, d) for d in part)}. Answer for them only. The line above your answer "
+                "already tells the user which reports were used and lets them pick others: do not ask which company or period they meant, and do not "
+                "mention the other selected reports."]
         two_step = writer_note(found.hop)  # MULTIHOP_ENABLED: the first step's result and its excerpts, to check and state before the second step
         if two_step:
             notes.append(two_step)
@@ -307,7 +313,9 @@ class RAGWorkflowOrchestrator:
         why: List[str] = []
         actions = answer_actions(scope, found, targets, status, short, unfinished, retry, why=why)
         understood = targets.understood
-        if not understood and len(scope) > 1 and plan:  # the planner chose: say which documents (CODE_MODEL_DECISIONS 2.2, option C)
+        if not understood and part:  # no company named and the planner chose some of them: say so, the chooser comes right under the line (B2)
+            understood = no_company_line([names.get(d, d) for d in part], decision.lang == "vi")
+        elif not understood and len(scope) > 1 and plan:  # the planner chose: say which documents (CODE_MODEL_DECISIONS 2.2, option C)
             understood = understood_line([names.get(d, d) for d in dict.fromkeys(d for p in plan for d in (p.document_ids or [x.document_id for x in found.scope]))],
                                          decision.lang == "vi")
         understood = merge_understood(asked, understood, decision.lang == "vi")
@@ -793,9 +801,8 @@ def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets:
     ids = [d.document_id for d in scope]
     planned = [d for d in dict.fromkeys(d for p in found.plan for d in (p.document_ids or [x.document_id for x in found.scope]))]
     used = targets.document_ids or planned or [d.document_id for d in found.scope]
-    company = {d.document_id: company_key(d.metadata.company_name or d.file_name) for d in scope}
-    chose_for_user = (targets.rule == "resolved" and bool(targets.alternatives)) or (
-        targets.rule == "none" and bool(found.plan) and len({company[d] for d in used if d in company}) < len(set(company.values())))
+    planner_part = bool(planner_chose_part(scope, found, targets))
+    chose_for_user = (targets.rule == "resolved" and bool(targets.alternatives)) or planner_part
     show = len(scope) > 1 and (chose_for_user or short or status == "clarify")
     labels = {d.document_id: found.labels.get(d.document_id) or document_label(d) for d in scope}
     twins = Counter(labels.values())  # a report saved under two names prints one label twice: the file name tells the rows apart
@@ -804,7 +811,18 @@ def answer_actions(scope: List[DocumentRecord], found: RetrievalResult, targets:
     search_more = {"prominent": bool(short or found.degraded)} if found.retrieved and ids and not unfinished else None
     reasons += [code for code, on in (("short", short and (show or search_more)), ("degraded", bool(found.degraded) and search_more), ("chose_for_user", chose_for_user and show),
                                      ("clarify", status == "clarify"), ("cut", unfinished == "cut"), ("outage", unfinished == "outage")) if on]
-    return {"chooser": chooser, "search_more": search_more, "edit_question": status == "clarify" or rephrase, "try_again": unfinished == "outage"}
+    return {"chooser": chooser, "search_more": search_more, "edit_question": status == "clarify" or rephrase, "try_again": unfinished == "outage",
+            **({"chooser_first": True} if planner_part and chooser else {})}  # under the line "the question names no company ...", above the answer (B2)
+
+
+def planner_chose_part(scope: List[DocumentRecord], found: RetrievalResult, targets: TargetDecision) -> List[str]:
+    """The reports the planner searched, when the question names no company (code chose nothing) and they belong to only some of the selected
+    companies; [] otherwise (docs/VERSION_4/PLANNER_ERRORS_2026-11-26.md 8.3)."""
+    if targets.rule != "none" or not found.plan:
+        return []
+    planned = list(dict.fromkeys(d for p in found.plan for d in (p.document_ids or [x.document_id for x in found.scope])))
+    company = {d.document_id: company_key(d.metadata.company_name or d.file_name) for d in scope}
+    return planned if len({company[d] for d in planned if d in company}) < len(set(company.values())) else []
 
 
 def _previews(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

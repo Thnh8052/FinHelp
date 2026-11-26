@@ -42,6 +42,14 @@ def test_the_planner_choosing_one_of_two_companies_for_a_question_naming_none_ge
     assert chooser(a) == [("cvs", True), ("jnj", False), ("amd", False)]  # several can be ticked, nothing is asked before the answer
 
 
+def test_the_chooser_comes_first_only_when_the_planner_chose_for_a_question_naming_no_company():
+    a = actions([CVS, JNJ, AMD], found([CVS, JNJ, AMD], [PlanItem("net earnings", ["cvs"])]))
+    assert a["chooser_first"] is True  # right under the line "the question names no company; I understood it as about ..." (B2, 26/11)
+    targets = TargetDecision(["cvs"], "I understood...", [{"document_id": "jnj", "label": "JNJ"}], rule="resolved")
+    assert "chooser_first" not in actions([CVS, JNJ], found([CVS], [PlanItem("revenue", ["cvs"])]), targets)  # code chose by a name: under the answer
+    assert "chooser_first" not in actions([CVS, JNJ], found([CVS, JNJ], [PlanItem("revenue", ["cvs", "jnj"])]), status="partial", short=True)
+
+
 def test_the_planner_choosing_every_company_needs_no_chooser():
     a = actions([CVS, JNJ], found([CVS, JNJ], [PlanItem("revenue", ["cvs", "jnj"])]))
     assert a["chooser"] == [] and a["search_more"] == {"prominent": False}

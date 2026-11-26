@@ -575,9 +575,18 @@ def decide(question: str, sources: Sequence[SourceInfo], notebook_docs: int, his
                 d.notes.append(f"The user named no company: treat the question as about ALL selected sources ({labels}); say so in one sentence.")
         else:
             d.action = "answer_per_source_and_ask"
-            d.notes.append(f"The user named no company and several sources are selected ({labels}). Answer separately for each source, labelling each answer with its company and fiscal period, "
-                           "then end by asking the user which source or period they meant.")
+            d.notes.append(per_source_note(labels))
     return d
+
+
+PER_SOURCE_PREFIX = "The user named no company and several sources are selected"
+
+
+def per_source_note(labels: str) -> str:
+    """The note of `answer_per_source_and_ask`. The orchestrator replaces it (by PER_SOURCE_PREFIX) when the planner searched only some of the companies:
+    that answer is for those reports, and the line above it lets the user pick others (B2, docs/VERSION_4/PLANNER_ERRORS_2026-11-26.md 8.3)."""
+    return (f"{PER_SOURCE_PREFIX} ({labels}). Answer separately for each source, labelling each answer with its company and fiscal period, "
+            "then end by asking the user which source or period they meant.")
 
 
 # ---------------------------------------------------------------- model-dependent helper: follow-up questions

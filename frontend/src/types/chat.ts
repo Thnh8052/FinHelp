@@ -64,6 +64,8 @@ export interface AnswerActions {
   edit_question?: boolean;
   try_again?: boolean;
   search_all?: boolean;
+  /** The chooser goes above the answer, under the line "the question names no company; I understood it as about ..." (B2, 26/11/2026). */
+  chooser_first?: boolean;
 }
 
 /** "analyzing": the model of the answer started to think (T6a); the page counts the seconds from there. */

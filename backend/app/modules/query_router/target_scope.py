@@ -60,6 +60,14 @@ def understood_line(labels: Sequence[str], vi: bool, extra: str = "") -> str:
     return (f"Tôi hiểu câu hỏi về: {listed}." if vi else f"I understood the question as about: {listed}.") + (f" {extra}" if extra else "")
 
 
+def no_company_line(labels: Sequence[str], vi: bool) -> str:
+    """The line above an answer to a question naming no company when the planner searched only some of the selected companies (B2, 26/11): it says so,
+    and the chooser right under it lets the user pick another company."""
+    listed = "; ".join(labels)
+    return (f"Câu hỏi không nêu tên công ty; tôi hiểu là về: {listed}. Muốn hỏi công ty khác, hãy chọn ngay bên dưới." if vi else
+            f"The question names no company; I understood it as about: {listed}. To ask about another company, pick it just below.")
+
+
 _ABOUT = {True: "Tôi hiểu câu hỏi về: ", False: "I understood the question as about: "}
 
 

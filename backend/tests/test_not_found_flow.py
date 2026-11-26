@@ -86,7 +86,8 @@ async def test_s3_an_answered_question_where_the_planner_chose_one_of_two_compan
     orch = answering(monkeypatch, "AMD net revenue was $25,785 million in 2024 [1].\n" + META % ("answered", "[1]"), PLAN_AMD_ONLY)
     r = await orch._answer_one("Which company had the higher revenue in 2024?", "nb", _scope(), Decision(lang="en"))
     assert r["alternatives"] == [] and r["actions"]["search_more"] == {"prominent": False}
-    assert [c["checked"] for c in r["actions"]["chooser"]] == [True, False] and r["understood"].startswith("I understood the question as about:")
+    assert [c["checked"] for c in r["actions"]["chooser"]] == [True, False]
+    assert r["understood"].startswith("The question names no company; I understood it as about:")  # B2, 26/11 (test_no_company_named.py)
 
 
 async def test_s3_one_selected_file_gets_no_s3_buttons(monkeypatch):

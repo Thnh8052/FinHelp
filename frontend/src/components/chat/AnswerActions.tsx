@@ -18,12 +18,10 @@ interface AnswerActionsProps {
  * Its children sit in the answer's toolbar (the wrapper is `display: contents`); the chooser takes the last line of it. */
 export const AnswerActions: React.FC<AnswerActionsProps> = ({ actions, disabled, onAsk, onEdit }) => {
   const { t } = useLanguage();
-  const chooser = actions.chooser || [];
+  // chooser_first: the chooser sits above the answer, under the line "the question names no company ..." (SourceChooser in ChatContainer)
+  const chooser = actions.chooser_first ? [] : actions.chooser || [];
   const prominent = !!actions.search_more?.prominent;
-  const [ticked, setTicked] = useState<string[]>(() => chooser.filter((c) => c.checked).map((c) => c.document_id));
-  const [open, setOpen] = useState(prominent);
   if (!chooser.length && !actions.search_more && !actions.edit_question && !actions.try_again && !actions.search_all) return null;
-  const toggle = (id: string) => setTicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   return (
     <div className="chat-answer-actions">
       {actions.try_again && (
@@ -52,23 +50,39 @@ export const AnswerActions: React.FC<AnswerActionsProps> = ({ actions, disabled,
           {t.workspace.editQuestion}
         </button>
       )}
-      {chooser.length > 0 && (
-        <details className="chat-chooser" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
-          <summary>{t.workspace.changeSources}</summary>
-          <fieldset>
-            <legend className="sr-only">{t.workspace.chooseSourcesLegend}</legend>
-            {chooser.map((c) => (
-              <label key={c.document_id} className="chat-chooser-row">
-                <input type="checkbox" checked={ticked.includes(c.document_id)} onChange={() => toggle(c.document_id)} disabled={disabled} />
-                <span>{c.label}</span>
-              </label>
-            ))}
-          </fieldset>
-          <button type="button" className="chat-answer-btn is-prominent" disabled={disabled || ticked.length === 0} onClick={() => onAsk(ticked)}>
-            {t.workspace.askAgainWith.replace("{n}", String(ticked.length))}
-          </button>
-        </details>
-      )}
+      {chooser.length > 0 && <SourceChooser chooser={chooser} disabled={disabled} startOpen={prominent} onAsk={onAsk} />}
     </div>
+  );
+};
+
+interface SourceChooserProps {
+  chooser: NonNullable<Actions["chooser"]>;
+  disabled: boolean;
+  startOpen: boolean;
+  onAsk: (sources: string[]) => void;
+}
+
+/** Every selected source, the ones the answer used ticked; several can be ticked and asked again (they become @ tags). */
+export const SourceChooser: React.FC<SourceChooserProps> = ({ chooser, disabled, startOpen, onAsk }) => {
+  const { t } = useLanguage();
+  const [ticked, setTicked] = useState<string[]>(() => chooser.filter((c) => c.checked).map((c) => c.document_id));
+  const [open, setOpen] = useState(startOpen);
+  const toggle = (id: string) => setTicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  return (
+    <details className="chat-chooser" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>{t.workspace.changeSources}</summary>
+      <fieldset>
+        <legend className="sr-only">{t.workspace.chooseSourcesLegend}</legend>
+        {chooser.map((c) => (
+          <label key={c.document_id} className="chat-chooser-row">
+            <input type="checkbox" checked={ticked.includes(c.document_id)} onChange={() => toggle(c.document_id)} disabled={disabled} />
+            <span>{c.label}</span>
+          </label>
+        ))}
+      </fieldset>
+      <button type="button" className="chat-answer-btn is-prominent" disabled={disabled || ticked.length === 0} onClick={() => onAsk(ticked)}>
+        {t.workspace.askAgainWith.replace("{n}", String(ticked.length))}
+      </button>
+    </details>
   );
 };
