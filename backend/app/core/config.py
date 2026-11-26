@@ -171,6 +171,7 @@ class Settings(BaseSettings):
     RERANK_WINDOW_MIN_TOKENS: int = 600  # TK-56: 400 -> 600 = 167 -> 160 pairs a question, +1/-0 on gold v2
     RERANK_WINDOW_WORDS: int = 200
     RERANK_WINDOW_STRIDE: int = 150
+    RERANK_WINDOW_TOP_K: int = 10  # windows only for the first K chunks of each search (first-stage order): 159 -> 130 pairs a question, +3/-0 on gold v2 (26/11)
     # The evidence gate (L15) is gone (owner 17/11/2026, docs/VERSION_4/TRIED.md TK-55): on TK-49 it saved 1 of 187 gold questions when the planner was right
     # and 1.2 / 4.9 / 4.3 points when it was wrong, for 35 more reranker pairs a question. A missed named document is repaired by R5, the rest by the user
     # (the "understood" line and its buttons). Copies: experiments/archive/removed_gate_2026-11-17.

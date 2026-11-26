@@ -83,3 +83,23 @@ async def test_a_long_text_chunk_is_also_scored_by_its_windows_and_keeps_its_bes
     assert any(len(t.split()) <= 200 and "headcount" in t for t in scored)  # a window of the long text chunk was scored
     assert not any(t != text["table"] and set(t.split()) == {"cell"} for t in scored)  # a chunk with a table is scored whole only
     assert chunks[0]["chunk_id"] == "long" and chunks[0]["content"] == long_text  # the best window's score ranks it; the whole chunk is sent
+
+
+def test_windows_only_for_the_first_ten_chunks_of_a_search():
+    assert settings.RERANK_WINDOW_TOP_K == 10  # 26/11 gold v2 (new parse): 159 -> 130 pairs a question, +3/-0 (AUDIT_RETRIEVAL_2026-11-26.md 3.2)
+
+
+async def test_a_long_text_chunk_past_the_first_k_of_its_search_is_scored_whole_only(monkeypatch):
+    late_text = " ".join(["filler"] * 300 + ["headcount", "was", "7,100"] + ["filler"] * 100)
+    long_text = " ".join(["other"] * 300 + ["revenue", "rose"] + ["other"] * 100)
+    by_document = {"d1": [("long", 0.9), ("short", 0.8), ("late", 0.7)]}  # "late" is third in the first-stage ranking
+    text = {"long": long_text, "short": "short text", "late": late_text}
+    svc = _planned(monkeypatch, by_document, text, lambda q, t: 0.5)
+    svc.chunk_repo = _TypedChunks(text, by_document, {}, {"long": 700, "short": 50, "late": 700})
+    monkeypatch.setattr(settings, "MULTIDOC_QUESTION_LANE_PER_DOC", False)
+    monkeypatch.setattr(settings, "RERANK_WINDOW_TOP_K", 2)
+    await svc.retrieve_planned("headcount?", [PlanItem("employees", ["d1"])], "nb", ["d1"])
+    scored = [t for q, t in svc.reranker.scored if q == "employees"]
+    assert any(len(t.split()) <= 200 and "revenue" in t for t in scored)  # first in its search: its windows are scored
+    assert late_text in scored and not any(t != late_text and "7,100" in t for t in scored)  # third: scored whole, no window
+

@@ -360,10 +360,10 @@ class HybridSearchService:
         heads = [[cid for cid in ranking[:top_n] if cid in text] for ranking in rankings]
         more = [(q, cid) for q, cid in extra if cid in text]
         pairs = list(dict.fromkeys([(item.query, cid) for item, head in zip(plan, heads) for cid in head] + more))  # one batched call for all searches
-        # TK-44: a long text chunk of a search's head is also scored by windows against that search's query (extra pairs stay whole)
+        # TK-44: a long text chunk among the first RERANK_WINDOW_TOP_K of a search's head is also scored by windows against that search's query (extra pairs stay whole)
         long_text = {c["chunk_id"] for c in hydrated if c["chunk_type"] != "table" and c["token_count"] > settings.RERANK_WINDOW_MIN_TOKENS} if settings.RERANK_WINDOWS_ENABLED else set()
         win = {(item.query, cid): windows(text[cid], settings.RERANK_WINDOW_WORDS, settings.RERANK_WINDOW_STRIDE)
-               for item, head in zip(plan, heads) for cid in head if cid in long_text}
+               for item, head in zip(plan, heads) for cid in head[: settings.RERANK_WINDOW_TOP_K] if cid in long_text}
         win_pairs = [(q, w) for (q, _), ws in win.items() for w in ws]
         sent = [(q, text[cid]) for q, cid in pairs] + win_pairs
         count_done("rerank_pairs", len(sent))
