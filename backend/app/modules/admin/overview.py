@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.infrastructure.database import collections
+from app.modules.chat.trace_stats import _pct
 
 DOCUMENT_LIMIT = 100
 MESSAGE_LIMIT = 100
@@ -59,6 +60,27 @@ async def _owner_labels(db: AsyncIOMotorDatabase, notebook_ids: List[str]) -> Di
 def model_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Questions and tokens per model of the window; model None = answers that called no model (fixed replies, refusals), not an unknown model."""
     return [{"model": row["_id"], "questions": row["questions"], "tokens": row["tokens"]} for row in rows]
+
+
+def purpose_rows(traces: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The model calls of the window per purpose (guard, plan, answer...: llm_client.chat_completion's `purpose`), most tokens first: calls, calls that did
+    not end ok, seconds p50 / p90, prompt / completion tokens and the share of all tokens. Traces without llm_calls (before 20/11/2026) add nothing."""
+    by: Dict[str, List[Dict[str, Any]]] = {}
+    for trace in traces:
+        for record in trace.get("llm_calls") or []:
+            by.setdefault(record.get("purpose") or "unspecified", []).append(record)
+    rows = []
+    for purpose, records in by.items():
+        seconds = [r.get("seconds") or 0.0 for r in records]
+        prompt = sum(r.get("prompt_tokens") or 0 for r in records)
+        completion = sum(r.get("completion_tokens") or 0 for r in records)
+        rows.append({"purpose": purpose, "calls": len(records), "failed": sum(r.get("status") != "ok" for r in records),
+                     "seconds_p50": _pct(seconds, 50), "seconds_p90": _pct(seconds, 90),
+                     "prompt_tokens": prompt, "completion_tokens": completion, "tokens": prompt + completion})
+    total = sum(r["tokens"] for r in rows)
+    for r in rows:
+        r["share"] = round(r["tokens"] / total, 3) if total else 0.0
+    return sorted(rows, key=lambda r: -r["tokens"])
 
 
 def top_users(rows: List[Dict[str, Any]], owners: Dict[str, Dict[str, Any]], limit: int = 8) -> List[Dict[str, Any]]:
@@ -148,6 +170,7 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
         {"$group": {"_id": "$notebook_id", "tokens": {"$sum": {"$ifNull": ["$token_usage.total_tokens", 0]}}}},
     ]).to_list(None)
     notebook_owners = await _owner_labels(db, [row["_id"] for row in per_notebook])
+    window_answers = await messages.find({"role": "assistant", "created_at": {"$gte": since}, **scope}, {"trace_info.llm_calls": 1}).to_list(None)
 
     # Documents: count per status, then the newest with their processing job and owner
     documents = db[collections.DOCUMENTS_COLLECTION]
@@ -189,7 +212,8 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
         },
         "series": series,
         "by_model": model_rows(by_model),
-        "top_users": top_users(per_notebook, notebook_owners),  # in the window, like the rest of the tokens page (U1, 26/11)
+        "top_users": top_users(per_notebook, notebook_owners),
+        "by_purpose": purpose_rows([a.get("trace_info") or {} for a in window_answers]),  # tokens and seconds per kind of model call (plan 26/11 3.2)  # in the window, like the rest of the tokens page (U1, 26/11)
         "documents": [
             {
                 "document_id": d["document_id"],

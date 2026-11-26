@@ -707,6 +707,12 @@ export const en: TranslationSchema = {
       topUsers: "Top users by tokens",
       topUsersNote: "In the selected window",
       noModel: "No model call (fixed replies)",
+      byPurpose: "By model call",
+      byPurposeNote: "Every call to the language model, by what it was for (answers since 20/11/2026)",
+      colPurpose: "Call",
+      colCalls: "Calls",
+      colSeconds: "Seconds p50 / p90",
+      failed: "{n} failed",
     },
     users: {
       title: "User accounts",

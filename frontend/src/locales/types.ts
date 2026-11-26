@@ -650,6 +650,12 @@ export interface TranslationSchema {
       topUsers: string;
       topUsersNote: string;
       noModel: string;
+      byPurpose: string;
+      byPurposeNote: string;
+      colPurpose: string;
+      colCalls: string;
+      colSeconds: string;
+      failed: string;
     };
     users: {
       title: string;

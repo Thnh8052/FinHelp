@@ -707,6 +707,12 @@ export const vi: TranslationSchema = {
       topUsers: "Người dùng tiêu thụ nhiều nhất",
       topUsersNote: "Trong khoảng thời gian đang chọn",
       noModel: "Không gọi mô hình (câu trả lời cố định)",
+      byPurpose: "Theo lời gọi mô hình",
+      byPurposeNote: "Mọi lời gọi mô hình ngôn ngữ, theo mục đích (câu trả lời từ 20/11/2026)",
+      colPurpose: "Lời gọi",
+      colCalls: "Số lần",
+      colSeconds: "Giây p50 / p90",
+      failed: "{n} lỗi",
     },
     users: {
       title: "Tài khoản người dùng",

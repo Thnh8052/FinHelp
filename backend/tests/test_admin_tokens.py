@@ -16,3 +16,24 @@ def test_top_users_add_up_their_notebooks_in_the_window_with_guests_as_one_row()
               "g2": {"owner_type": "guest", "username": None}, "nb4": {"owner_type": "user", "username": "cid"}}
     assert top_users(rows, owners) == [{"username": "bob", "tokens": 900}, {"username": "ann", "tokens": 800}, {"username": None, "tokens": 100}]  # "gone": deleted
     assert len(top_users([{"_id": f"n{i}", "tokens": i + 1} for i in range(12)], {f"n{i}": {"owner_type": "user", "username": f"u{i}"} for i in range(12)})) == 8
+
+
+# ---------------------------------------------------------------- by purpose (Langfuse groups usage by observation name; plan 26/11 3.2)
+def call(purpose, seconds, prompt, completion, status="ok", hit=0):
+    return {"purpose": purpose, "seconds": seconds, "status": status, "prompt_tokens": prompt, "completion_tokens": completion,
+            "prompt_cache_hit_tokens": hit, "prompt_cache_miss_tokens": prompt - hit}
+
+
+def test_model_calls_add_up_per_purpose_with_their_share_of_tokens_most_tokens_first():
+    from app.modules.admin.overview import purpose_rows
+
+    traces = [{"llm_calls": [call("guard", 1.0, 700, 10), call("plan", 2.0, 1200, 200), call("answer", 9.0, 15000, 1300)]},
+              {"llm_calls": [call("guard", 3.0, 800, 10, status="cancelled"), call("answer", 11.0, 14000, 1200)]},
+              {"intent": "greeting"}]  # an answer stored before 20/11 or without a model call adds nothing
+    rows = purpose_rows(traces)
+    assert [r["purpose"] for r in rows] == ["answer", "guard", "plan"]  # guard 1,520 tokens, plan 1,400
+    answer, guard = rows[0], rows[1]
+    assert answer["calls"] == 2 and answer["tokens"] == 31500 and answer["prompt_tokens"] == 29000 and answer["completion_tokens"] == 2500
+    assert answer["share"] == round(31500 / (31500 + 1400 + 1520), 3)
+    assert guard["calls"] == 2 and guard["failed"] == 1 and guard["seconds_p50"] == 2.0 and guard["seconds_p90"] == 2.8
+    assert purpose_rows([]) == []

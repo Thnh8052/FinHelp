@@ -88,6 +88,11 @@ export interface AdminOverview {
   by_model: { model: string | null; questions: number; tokens: number }[];
   /** tokens used in the window per user; username null = guests */
   top_users: { username: string | null; tokens: number }[];
+  /** model calls of the window per purpose (guard, plan, answer...), most tokens first; only answers stored since 20/11/2026 have them */
+  by_purpose?: {
+    purpose: string; calls: number; failed: number; seconds_p50: number; seconds_p90: number;
+    prompt_tokens: number; completion_tokens: number; tokens: number; share: number;
+  }[];
   documents: AdminDocument[];
   flagged: AdminAnswer[];
   recent_answers: AdminAnswer[];

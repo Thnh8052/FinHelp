@@ -84,6 +84,28 @@ export const TokensPage: React.FC = () => {
           )}
         </Card>
       </div>
+
+      <Card className="min-w-0">
+        <CardHeader title={k.byPurpose} subtitle={k.byPurposeNote} icon={Activity} />
+        {data.by_purpose?.length ? (
+          <Table caption={k.byPurpose} head={[k.colPurpose, k.colCalls, k.colSeconds, k.colTokens, k.colShare]} alignRight={[1, 2, 3, 4]}>
+            {data.by_purpose.map((r) => (
+              <tr key={r.purpose}>
+                <td className="px-5 py-3 text-fg">{p.steps.purposes[r.purpose] ?? r.purpose}</td>
+                <td className="px-5 py-3 text-right font-mono text-fg-2">
+                  {fmt.number(r.calls)}
+                  {r.failed > 0 && <span className="ml-1 text-xs text-muted">{fill(k.failed, { n: r.failed })}</span>}
+                </td>
+                <td className="px-5 py-3 text-right font-mono text-fg-2">{`${r.seconds_p50} / ${r.seconds_p90}`}</td>
+                <td className="px-5 py-3 text-right font-mono text-fg-2">{fmt.number(r.tokens)}</td>
+                <td className="px-5 py-3 text-right font-mono text-muted">{`${Math.round(r.share * 100)}%`}</td>
+              </tr>
+            ))}
+          </Table>
+        ) : (
+          <EmptyState title={p.chart.empty} />
+        )}
+      </Card>
     </>
   );
 };
