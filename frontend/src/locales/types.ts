@@ -545,6 +545,19 @@ export interface TranslationSchema {
       codes: Record<string, Record<string, string>>;
       purposes: Record<string, string>;
     };
+    quality: {
+      title: string;
+      subtitle: string;
+      missing: string;
+      refused: string;
+      notTraced: string;
+      userReport: string;
+      answers: string;
+      answersOfDay: string;
+      needsFix: string;
+      reviewedOk: string;
+      aria: string;
+    };
     kpi: {
       questions: string;
       tokens: string;

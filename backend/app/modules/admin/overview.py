@@ -127,6 +127,31 @@ def cost_rows(answers: List[Dict[str, Any]], owners: Dict[str, Dict[str, Any]], 
             "per_day": rnd(per_day), "by_model": rnd(by_model), "by_user": rnd(by_user)}
 
 
+QUALITY_LABELS = ("user_report", "not_found", "partial", "not_traced", "refused", "safety", "blocked")
+QUALITY_FIELDS = {"created_at": 1, "user_rating": 1, "latency_ms": 1, "admin_review": 1, "trace_info.answer_meta": 1, "trace_info.verification": 1,
+                  "trace_info.review": 1, "trace_info.degraded": 1, "trace_info.intent": 1, "trace_info.guard": 1}
+
+
+def quality_series(answers: List[Dict[str, Any]], days: List[str]) -> List[Dict[str, Any]]:
+    """Per day (UTC): the answers, how many meet each problem of the review queue (review.problem_labels: the queue's own conditions) and the admin's
+    verdicts ("Looks right" / "Needs a fix"). Days without answers are zeros."""
+    from app.modules.admin.review import problem_labels  # review imports this module
+
+    rows = {d: {"date": d, "answers": 0, **{label: 0 for label in QUALITY_LABELS}, "reviewed_ok": 0, "needs_fix": 0} for d in days}
+    for a in answers:
+        row = rows.get(a["created_at"].strftime("%Y-%m-%d"))
+        if row is None:
+            continue
+        row["answers"] += 1
+        for label in problem_labels(a):
+            if label in row:
+                row[label] += 1
+        verdict = (a.get("admin_review") or {}).get("status")
+        row["reviewed_ok"] += verdict == "ok"
+        row["needs_fix"] += verdict == "needs_fix"
+    return [rows[d] for d in days]
+
+
 def job_times(timings: Dict[str, Any]) -> Dict[str, Optional[float]]:
     """Waiting (for the worker, then for one of the GPU parse slots) apart from the work of one upload. `total` counts both: a 2-page file that waited
     1,820 s behind 12 others showed "1,862 s" (O1, 26/11). None for a job not finished."""
@@ -233,7 +258,7 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
     ]).to_list(None)
     notebook_owners = await _owner_labels(db, [row["_id"] for row in per_notebook])
     window_answers = await messages.find({"role": "assistant", "created_at": {"$gte": since}, **scope},
-                                         {"trace_info.llm_calls": 1, "token_usage": 1, "created_at": 1, "notebook_id": 1, "model_used": 1}).to_list(None)
+                                         {"trace_info.llm_calls": 1, "token_usage": 1, "notebook_id": 1, "model_used": 1, **QUALITY_FIELDS}).to_list(None)
     prices = {"hit": settings.LLM_PRICE_HIT_PER_M, "miss": settings.LLM_PRICE_MISS_PER_M, "out": settings.LLM_PRICE_OUTPUT_PER_M}
     cost = cost_rows(window_answers, notebook_owners, prices)  # dollars at the configured prices (plan 26/11 3.1)
     for day in series:
@@ -282,6 +307,7 @@ async def build_overview(db: AsyncIOMotorDatabase, days: int, user: Optional[str
         "series": series,
         "by_model": models,
         "top_users": users_top,  # in the window, like the rest of the tokens page (U1, 26/11)
+        "quality": quality_series(window_answers, [d["date"] for d in series]),  # problems of the review queue per day (plan 26/11 3.4)
         "cost": {"total_usd": cost["total_usd"], "estimated_share": cost["estimated_share"], "prices": prices},
         "upload_times": upload_time_summary([job_times(j.get("timings") or {}) for j in jobs]),  # the listed uploads (O1, plan 3.3)
         "by_purpose": purpose_rows([a.get("trace_info") or {} for a in window_answers], prices),  # tokens, seconds, dollars per kind of model call (plan 3.2)

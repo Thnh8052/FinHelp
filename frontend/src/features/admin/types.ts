@@ -94,6 +94,8 @@ export interface AdminOverview {
   /** dollars of the window at the configured prices (dollars per million tokens); estimated_share = answers costed from their tokens only */
   cost?: { total_usd: number; estimated_share: number; prices: { hit: number; miss: number; out: number } };
   /** model calls of the window per purpose (guard, plan, answer...), most tokens first; only answers stored since 20/11/2026 have them */
+  /** per day: answers, and how many meet each problem of the review queue, and the admin's verdicts (plan 26/11/2026 3.4) */
+  quality?: DayQuality[];
   /** median / p90 seconds of the wait and of the work of the listed uploads (O1, 26/11/2026) */
   upload_times?: { files: number; wait_p50: number | null; wait_p90: number | null; work_p50: number | null; work_p90: number | null };
   by_purpose?: {
@@ -145,4 +147,18 @@ export interface ReviewQueue {
   counts: Record<ReviewLabel, number>;
   open_total: number;
   window_days: number;
+}
+
+export interface DayQuality {
+  date: string;
+  answers: number;
+  user_report: number;
+  not_found: number;
+  partial: number;
+  not_traced: number;
+  refused: number;
+  safety: number;
+  blocked: number;
+  reviewed_ok: number;
+  needs_fix: number;
 }
