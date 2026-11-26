@@ -551,7 +551,7 @@ def test_documents_carry_no_internal_details(read_api, monkeypatch):
     response = read_api.get("/documents/notebook/nb")
 
     body = response.json()[0]
-    assert set(body) == {"document_id", "notebook_id", "file_name", "file_size_bytes", "page_count", "status", "metadata", "error_message", "tables_may_be_inaccurate", "pages_to_check", "pages_unread", "pages_pictures_unread", "created_at"}
+    assert set(body) == {"document_id", "notebook_id", "file_name", "file_size_bytes", "page_count", "status", "metadata", "error_message", "tables_may_be_inaccurate", "pages_to_check", "pages_unread", "pages_pictures_unread", "queue_ahead", "created_at"}  # queue_ahead: a count (O1, 26/11)
     assert set(body["metadata"]) == {"company_name", "ticker", "report_type", "fiscal_year", "fiscal_quarter", "catalog_unverified", "catalog_confirmed", "user_override_unverified"}
     assert body["tables_may_be_inaccurate"] is True and not any(word in response.text for word in ("internal-", "pymupdf"))
 

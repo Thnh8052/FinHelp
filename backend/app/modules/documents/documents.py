@@ -116,8 +116,11 @@ async def list_documents(
     docs = await DocumentRepository(db).get_by_notebook(notebook_id)
     ahead: Dict[str, int] = {}
     if any(d.status == "pending" for d in docs):  # only the order is read: other users' files are counted, never named
-        waiting = await db[collections.INGESTION_JOBS_COLLECTION].find({"status": "pending"}, {"document_id": 1, "notebook_id": 1, "queued_at": 1, "_id": 0}).to_list(None)
-        ahead = queue_positions(waiting)
+        try:
+            waiting = await db[collections.INGESTION_JOBS_COLLECTION].find({"status": "pending"}, {"document_id": 1, "notebook_id": 1, "queued_at": 1, "_id": 0}).to_list(None)
+            ahead = queue_positions(waiting)
+        except Exception as exc:  # the place in the queue is a courtesy: the list is shown without it
+            logger.warning(f"Queue positions not read: {type(exc).__name__}: {str(exc)[:120]}")
     return [DocumentOut.of(d, ahead.get(d.document_id) if d.status == "pending" else None) for d in docs]
 
 
